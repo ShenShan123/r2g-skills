@@ -79,3 +79,34 @@ def test_setup_margin_candidate_is_not_blindly_auto_applied():
     assert selected["id"] != "setup_slack_margin"
     forced = dsf._live_auto_strategy(plan, rank_first="setup_slack_margin")
     assert forced is not None and forced["id"] == "setup_slack_margin"
+
+
+def test_fmax_mode_minor_offers_period_relax_before_area_change():
+    """Fmax-mode projects own their clock: a minor post-route miss relaxes the
+    period (recorded chain) before any CORE_UTILIZATION change (2026-09-29 AIC
+    cohort: shake128 stalled at minor after utilization_reduce)."""
+    tcheck = {"tier": "minor", "wns_ns": -0.17, "clock_period_ns": 4.53}
+    plan = dsf.build_plan({}, {}, {"PLATFORM": "sky130hd", "CORE_UTILIZATION": "20"},
+                          check="timing", tcheck=tcheck, fmax_mode=True)
+    ids = [s["id"] for s in plan["strategies"]]
+    assert "period_relax" in ids
+    assert ids.index("period_relax") < ids.index("utilization_reduce")
+    pr = plan["strategies"][ids.index("period_relax")]
+    assert 4.53 < float(pr["sdc_edits"]["CLOCK_PERIOD"]) < 5.0
+
+
+def test_fixed_period_minor_never_relaxes_clock():
+    tcheck = {"tier": "minor", "wns_ns": -0.17, "clock_period_ns": 10.0}
+    plan = dsf.build_plan({}, {}, {"PLATFORM": "sky130hd", "CORE_UTILIZATION": "20"},
+                          check="timing", tcheck=tcheck, fmax_mode=False)
+    assert "period_relax" not in [s["id"] for s in plan["strategies"]]
+
+
+def test_is_fmax_mode_requires_ok_winner(tmp_path):
+    rep = tmp_path / "reports"
+    rep.mkdir()
+    assert dsf._is_fmax_mode(tmp_path) is False
+    (rep / "fmax_search.json").write_text(json.dumps({"status": "inconclusive"}))
+    assert dsf._is_fmax_mode(tmp_path) is False
+    (rep / "fmax_search.json").write_text(json.dumps({"status": "ok", "winner": {"period": 4.5}}))
+    assert dsf._is_fmax_mode(tmp_path) is True

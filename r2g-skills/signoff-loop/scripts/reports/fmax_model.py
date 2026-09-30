@@ -66,21 +66,28 @@ def rewrite_clk_period(sdc_text: str, period: float) -> str:
     return new
 
 
+def _as_model(sd: dict) -> dict:
+    return {"d_fp_pl": (sd["d_fp_pl"]["ns_p90"], sd["d_fp_pl"]["pct_p90"]),
+            "d_pl_fin": (sd["d_pl_fin"]["ns_p90"], sd["d_pl_fin"]["pct_p90"])}
+
+
 def select_model(entry: dict | None,
-                 n_min_family: int = N_MIN_FAMILY) -> tuple[dict | None, str]:
-    """Pick the deterioration model + provenance from a heuristics entry dict.
-    Below n_min_family samples, return (None, 'default-static…') so the caller
-    uses the cold-start defaults."""
+                 n_min_family: int = N_MIN_FAMILY,
+                 platform_entry: dict | None = None,
+                 n_min_platform: int = N_MIN_PLATFORM) -> tuple[dict | None, str]:
+    """Pick the deterioration model + provenance: the family model when it has
+    >= n_min_family samples, else the platform-pooled model when that has
+    >= n_min_platform, else (None, 'default-static…') -> cold-start defaults."""
     sd = (entry or {}).get("slack_deterioration")
+    n = (sd or {}).get("n", 0)
+    if sd and n >= n_min_family:
+        return _as_model(sd), f"learned(n={n},q=p90)"
+    psd = (platform_entry or {}).get("slack_deterioration")
+    pn = (psd or {}).get("n", 0)
+    if psd and pn >= n_min_platform:
+        return _as_model(psd), f"learned-platform(n={pn},q=p90; family n={n}<{n_min_family})"
     if not sd:
         return None, "default-static"
-    n = sd.get("n", 0)
-    if n >= n_min_family:
-        model = {
-            "d_fp_pl": (sd["d_fp_pl"]["ns_p90"], sd["d_fp_pl"]["pct_p90"]),
-            "d_pl_fin": (sd["d_pl_fin"]["ns_p90"], sd["d_pl_fin"]["pct_p90"]),
-        }
-        return model, f"learned(n={n},q=p90)"
     return None, f"default-static(family n={n}<{n_min_family})"
 
 
@@ -182,3 +189,72 @@ def search_loop(seed_period, floorplan_probe, place_probe, model=None, *,
         "fmax_place_proxy": 1.0 / place_proxy_period,
         "log": log,
     }
+
+
+# --- Post-search period relaxation chain (2026-09-27) ------------------------
+# The search winner is a placement proxy; when the confirming full flow misses
+# timing, the repair path (check_timing minor bump, diagnose period_relax) loosens
+# the SDC period. Without a record the manifest saw stamped != winner and called a
+# genuinely closed design unqualified. Each loosening is appended to
+# reports/fmax_search.json["relaxations"] as {from, to, source}; the manifest
+# accepts the stamped period only when that chain runs UNBROKEN from the winner,
+# every step strictly looser. Tightening, gaps, or an unrecorded hand edit still
+# disqualify — the chain is evidence, not a waiver.
+PERIOD_RTOL = 1e-3   # the SDC stamp rounds to ~6 significant digits
+
+
+def periods_match(a: float, b: float, rtol: float = PERIOD_RTOL) -> bool:
+    return abs(float(a) - float(b)) <= rtol * max(abs(float(b)), 1e-9)
+
+
+def add_relaxation(report: dict, old: float, new: float, source: str,
+                   ts: str | None = None) -> dict:
+    """Return a copy of an fmax_search report with one relaxation step appended."""
+    out = dict(report)
+    step = {"from": float(old), "to": float(new), "source": source}
+    if ts:
+        step["ts"] = ts
+    out["relaxations"] = list(report.get("relaxations") or []) + [step]
+    return out
+
+
+def resolve_confirmed_period(report: dict | None, stamped: float | None,
+                             rtol: float = PERIOD_RTOL) -> dict:
+    """Decide which period the stamped SDC legitimately represents.
+
+    Returns {period_source: 'search_winner'|'relaxed_chain'|None,
+             confirmed_period, relax_ratio, relaxations, chain_error}."""
+    winner = ((report or {}).get("winner") or {}).get("period")
+    steps = list((report or {}).get("relaxations") or [])
+    res = {"period_source": None, "confirmed_period": None, "relax_ratio": None,
+           "relaxations": steps, "chain_error": None}
+    if winner is None or stamped is None:
+        res["chain_error"] = "no search winner or no stamped period"
+        return res
+    if periods_match(stamped, winner, rtol):
+        res.update(period_source="search_winner", confirmed_period=float(stamped),
+                   relax_ratio=1.0)
+        return res
+    if not steps:
+        res["chain_error"] = "no recorded relaxation from the search winner"
+        return res
+    prev = float(winner)
+    for i, s in enumerate(steps):
+        try:
+            frm, to = float(s["from"]), float(s["to"])
+        except (KeyError, TypeError, ValueError):
+            res["chain_error"] = f"relaxation step {i} is malformed"
+            return res
+        if not periods_match(frm, prev, rtol):
+            res["chain_error"] = f"relaxation step {i} starts at {frm}, chain is at {prev}"
+            return res
+        if not (to > frm and not periods_match(to, frm, rtol)):
+            res["chain_error"] = f"relaxation step {i} is not a loosening ({frm} -> {to})"
+            return res
+        prev = to
+    if not periods_match(stamped, prev, rtol):
+        res["chain_error"] = f"relaxation chain ends at {prev}, SDC is stamped {stamped}"
+        return res
+    res.update(period_source="relaxed_chain", confirmed_period=float(stamped),
+               relax_ratio=float(stamped) / float(winner))
+    return res

@@ -664,3 +664,33 @@ def test_antenna_precondition_keeps_density_relief_elsewhere(monkeypatch):
                        {"PLATFORM": "sky130hd", "CORE_UTILIZATION": "40"}, set())
     ids = [s["id"] for s in plan["strategies"]]
     assert "antenna_density_relief" in ids and "antenna_diode_iters" not in ids
+
+
+def test_apply_period_relax_records_fmax_relaxation_chain(tmp_path):
+    """Fmax-mode project: a period_relax loosening is appended to fmax_search.json
+    so the signoff manifest can bind the stamped period back to the winner."""
+    p = _mk_timing_project(
+        tmp_path, sdc="set clk_period 4.0\n"
+                      "create_clock -name clk -period $clk_period [get_ports clk]\n")
+    (p / "reports" / "fmax_search.json").write_text(json.dumps(
+        {"status": "ok", "winner": {"period": 4.0}}))
+    r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "timing",
+                        "--apply", "period_relax"], capture_output=True, text=True,
+                       env=_isolated_knowledge_env(tmp_path))
+    assert r.returncode == 0, r.stderr
+    new_p = float(json.loads(r.stdout)["sdc_edits"]["CLOCK_PERIOD"])
+    rep = json.loads((p / "reports" / "fmax_search.json").read_text())
+    [step] = rep["relaxations"]
+    assert step["from"] == 4.0 and step["to"] == new_p and step["source"] == "period_relax"
+
+
+def test_apply_period_relax_without_fmax_search_writes_no_report(tmp_path):
+    """Fixed-period task (no Fmax search): nothing to extend, no report invented."""
+    p = _mk_timing_project(
+        tmp_path, sdc="set clk_period 4.0\n"
+                      "create_clock -name clk -period $clk_period [get_ports clk]\n")
+    r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "timing",
+                        "--apply", "period_relax"], capture_output=True, text=True,
+                       env=_isolated_knowledge_env(tmp_path))
+    assert r.returncode == 0, r.stderr
+    assert not (p / "reports" / "fmax_search.json").exists()

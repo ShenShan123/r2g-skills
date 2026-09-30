@@ -576,6 +576,9 @@ design_cases/<design-name>/
 11. Run timing gate: `scripts/reports/check_timing.py <project-dir>` — reads `reports/timing_check.json`:
     - `tier=clean`: proceed to step 12.
     - `tier=minor`: auto-fix clock period per `suggested_clock_period`, re-run step 9, then re-check.
+      In an Fmax-searched project, record the bump first
+      (`scripts/reports/fmax_search.py --record-relax <old> <new> check_timing_minor <project-dir>`)
+      or the signoff manifest cannot bind the new period to the search winner (failure-patterns P0-2b).
     - `tier=moderate/severe/unconstrained`: **stop, present options to user, wait for decision**.
     - Check `wns_tier` and `tns_tier` to explain which metric drove the tier.
 12. Run signoff checks (only after timing gate passes or user approves):

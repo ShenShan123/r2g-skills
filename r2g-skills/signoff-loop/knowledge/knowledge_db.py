@@ -559,6 +559,14 @@ def get_family_heuristics(family: str,
     return (fam.get("platforms") or {}).get(platform)
 
 
+def get_platform_heuristics(platform: str,
+                            heuristics_path: Path | str = DEFAULT_HEURISTICS_PATH
+                            ) -> dict[str, Any] | None:
+    """Platform-pooled entry (currently the Fmax slack-deterioration model)."""
+    data = _load_heuristics(heuristics_path)
+    return (data.get("platforms") or {}).get(platform)
+
+
 def get_closing_period(family: str, platform: str,
                        heuristics_path: Path | str = DEFAULT_HEURISTICS_PATH
                        ) -> dict[str, Any] | None:

@@ -100,6 +100,7 @@ def _p90(values: list[float]) -> float | None:
 
 
 _SENTINEL = 1e30
+PLATFORM_POOL_MAX_PERIOD_NS = 10.0   # platform-pooled Fmax model: short-period runs only
 
 
 def _quantile(values: list[float], q: float) -> float | None:
@@ -125,22 +126,13 @@ def _family_platform_entry(runs: list[dict]) -> dict | None:
                     if r.get("total_elapsed_s") is not None]
 
     cp_vals: list[float] = []
-    d_fp_pl_ns, d_fp_pl_pct, d_pl_fin_ns, d_pl_fin_pct = [], [], [], []
     for r in successes:
         period = r.get("clock_period_ns")
-        fp = r.get("floorplan_setup_ws")
-        pl = r.get("place_setup_ws")
         fin = r.get("finish_setup_ws")
         if fin is None:
             fin = r.get("wns_ns")
         if period is not None and fin is not None and fin < _SENTINEL:
             cp_vals.append(period - fin)
-        if (None not in (period, fp, pl, fin) and period > 0
-                and max(fp, pl, fin) < _SENTINEL):
-            d_fp_pl_ns.append(fp - pl)
-            d_fp_pl_pct.append((fp - pl) / period)
-            d_pl_fin_ns.append(pl - fin)
-            d_pl_fin_pct.append((pl - fin) / period)
 
     entry: dict = {
         "sample_size": len(runs),
@@ -170,15 +162,38 @@ def _family_platform_entry(runs: list[dict]) -> dict | None:
             "median": statistics.median(cp_vals),
             "n": len(cp_vals),
         }
-    if d_fp_pl_ns:
-        entry["slack_deterioration"] = {
-            "d_fp_pl": {"ns_p90": _quantile(d_fp_pl_ns, 0.90),
-                        "pct_p90": _quantile(d_fp_pl_pct, 0.90)},
-            "d_pl_fin": {"ns_p90": _quantile(d_pl_fin_ns, 0.90),
-                         "pct_p90": _quantile(d_pl_fin_pct, 0.90)},
-            "n": len(d_fp_pl_ns),
-        }
+    sd = _slack_deterioration(successes)
+    if sd:
+        entry["slack_deterioration"] = sd
     return entry
+
+
+def _slack_deterioration(successes: list[dict]) -> dict | None:
+    """p90 floorplan->place and place->finish setup-slack erosion (ns and % of period)
+    over successful runs carrying all three stage slacks — the Fmax-search model."""
+    d_fp_pl_ns, d_fp_pl_pct, d_pl_fin_ns, d_pl_fin_pct = [], [], [], []
+    for r in successes:
+        period = r.get("clock_period_ns")
+        fp = r.get("floorplan_setup_ws")
+        pl = r.get("place_setup_ws")
+        fin = r.get("finish_setup_ws")
+        if fin is None:
+            fin = r.get("wns_ns")
+        if (None not in (period, fp, pl, fin) and period > 0
+                and max(fp, pl, fin) < _SENTINEL):
+            d_fp_pl_ns.append(fp - pl)
+            d_fp_pl_pct.append((fp - pl) / period)
+            d_pl_fin_ns.append(pl - fin)
+            d_pl_fin_pct.append((pl - fin) / period)
+    if not d_fp_pl_ns:
+        return None
+    return {
+        "d_fp_pl": {"ns_p90": _quantile(d_fp_pl_ns, 0.90),
+                    "pct_p90": _quantile(d_fp_pl_pct, 0.90)},
+        "d_pl_fin": {"ns_p90": _quantile(d_pl_fin_ns, 0.90),
+                     "pct_p90": _quantile(d_pl_fin_pct, 0.90)},
+        "n": len(d_fp_pl_ns),
+    }
 
 
 def _resolve_event_symptom(e: dict) -> tuple[str, str]:
@@ -578,6 +593,25 @@ def learn(db_path: Path | str,
             plat = r.get("platform") or "unknown"
             groups.setdefault((fam, plat), []).append(r)
 
+        # Platform-pooled Fmax deterioration model: the fallback when a design's
+        # family has too few samples (most harvested designs map to no known family,
+        # so sky130hd searches ran on the static cold-start model and left ~0.19 ns
+        # of median post-route slack unused — 2026-09-29 AIC cohort).
+        # Pool ONLY the short-period regime the search operates in: the model is
+        # max(ns_floor, pct*period), so a ns p90 learned from 50-1000 ns runs becomes
+        # a huge floor at 2 ns (pre-cohort sky130hd pool: d_pl_fin ns_p90 = 0.43 ns vs
+        # ~0.01 ns measured at <= 5 ns).
+        platform_pool: dict[str, list[dict]] = {}
+        for r in rows:
+            per = r.get("clock_period_ns")
+            if _is_success(r) and per is not None and 0 < per <= PLATFORM_POOL_MAX_PERIOD_NS:
+                platform_pool.setdefault(r.get("platform") or "unknown", []).append(r)
+        platforms: dict[str, dict] = {}
+        for plat, succ in platform_pool.items():
+            sd = _slack_deterioration(succ)
+            if sd:
+                platforms[plat] = {"slack_deterioration": sd}
+
         families: dict[str, dict] = {}
         for (fam, plat), group_rows in groups.items():
             entry = _family_platform_entry(group_rows)
@@ -639,6 +673,7 @@ def learn(db_path: Path | str,
         "schema_version": 3,                       # decision-8 recipes projection
         "generation": gen,
         "families": families,
+        "platforms": platforms,
         "symptoms": _symptom_recipes_from_trajectories(trajectories),
         "recipes": _indexed_recipes(trajectories, class_of, score_of),
     }

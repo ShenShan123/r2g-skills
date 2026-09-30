@@ -4223,6 +4223,24 @@ about to overwrite" self-heal is added for one variable, the defect class is *th
 that didn't recall* — patch the loop, not the variable; and every pinned path must also
 be autodetectable, or the pin file is a single point of silent environmental collapse.
 
+### 29b. A host-wide env script overrode pinned tools — every synth failed on `stat -hierarchy` (2026-09-28)
+
+`_env.sh` documents "caller env > env files > ORFS env.sh > /opt/openroad_tools_env.sh >
+autodetect", but it *sourced* the two third-party scripts, and both `export` tool vars
+unconditionally. On the 203 host `/opt/openroad_tools_env.sh` sets
+`YOSYS_EXE=/opt/pdk_klayout_openroad/oss-cad-suite/bin/yosys` (0.51), so an exported or
+`env.local.sh`-pinned ORFS yosys 0.64 was silently replaced; ORFS `synth.tcl` calls
+`stat -hierarchy`, which 0.51 rejects ("Unknown option"), and all 8 designs of the Fmax pilot
+failed synth in 4 s — `fmax_search` then reported every design `inconclusive`
+(`place_probe_inconclusive`), which reads like a timing result, not an environment fault.
+**Fix:** `_env.sh` snapshots every already-set tool var (`OPENROAD_EXE YOSYS_EXE KLAYOUT_CMD
+MAGIC_EXE NETGEN_EXE STA_EXE IVERILOG_EXE VVP_EXE VERILATOR_EXE PDK_ROOT`) before sourcing
+the third-party scripts and restores them after, so orders 1–3 really outrank 4–5; unpinned
+vars still take the third-party value. Test:
+`eda-install/tests/test_bootstrap.py::test_env_sh_pinned_tools_survive_third_party_env_scripts`
+(fails on the old `_env.sh`). **Lesson:** an `inconclusive` Fmax search on *every* design of a
+batch is an environment alarm — check the probe's `1_2_yosys.log` before reading it as timing.
+
 ### 31. Crash-orphaned transient ledger states stranded designs FOREVER — round could end "ALL_DONE" with non-terminal designs (2026-07-09)
 
 Found by the sky130hs /r2g-debug tick's Step-0 gate after a host reboot: the ledger held
@@ -5054,6 +5072,52 @@ sha256s, the SDC digest + stamped period, the Fmax winner, the confirming run + 
 and a `strict_clean` verdict whose `strict_missing`/`constraint.missing` ENUMERATE what blocks
 (H3: the absent final-timing confirmation is named, never just the matching proxy/SDC periods).
 Test: `test_build_signoff_manifest.py`.
+
+### P0-2b — a timing-repaired Fmax run read as unqualified (2026-09-27)
+The manifest demanded `stamped SDC period == fmax_search winner` (rtol 1e-3). The winner is a
+placement proxy; when the confirming full flow missed timing, the repair path loosened the SDC
+(`check_timing` minor bump → `suggested_clock_period`, or `diagnose_signoff_fix` `period_relax`)
+and the design then closed clean — yet `constraint.qualified=false`, so every such design counted
+as a strict failure in Fmax-mode campaigns (success rate silently under-reported). **Guard:** each
+loosening is appended to `reports/fmax_search.json["relaxations"]` as `{from,to,source,ts}`
+(`fmax_search.record_period_relax` / `fmax_search.py --record-relax OLD NEW SOURCE <proj>`, called
+by `diagnose_signoff_fix.py` on any CLOCK_PERIOD increase and by `tools/run_sky130_design.sh` on
+the minor bump). `fmax_model.resolve_confirmed_period` qualifies the stamped period ONLY through
+an unbroken chain from the winner, every step strictly looser; a gap, a tightening, or an
+unrecorded hand edit still disqualifies with a named reason. The manifest records
+`period_source` (`search_winner`|`relaxed_chain`), `confirmed_period`, and `relax_ratio`
+(confirmed/winner) — report Fmax from `confirmed_period`, and the proxy's optimism from
+`relax_ratio`. An operator/agent who hand-applies a minor bump must record it the same way.
+Tests: `test_build_signoff_manifest.py` (chain cases), `test_fmax_search.py`,
+`test_diagnose_signoff_fix.py::test_apply_period_relax_records_fmax_relaxation_chain`.
+
+### P0-2c — Fmax-mode gaps found by the 161-design AIC cohort (2026-09-29)
+Three ways a design lost (or under-reported) its Fmax, none a design fault:
+(1) **Search before repair:** `fmax-drain` probes the template config, so a place
+abort (PPL-0024) made the search `inconclusive`; `run` then grew DIE_AREA and the
+design signed off at the seed period with no winner → `constraint.qualified=false`
+(RequestBlock1CH_BRIDGE, inputDMAfifo, hbm_controller). **Guard:** `engineer_loop
+fmax-retry` (re-search once after a config-editing repair, re-queue).
+(2) **Minor miss never relaxed:** `_timing_plan` offered `period_relax` only for
+moderate/severe, so shake128 (WNS −0.17 ns at the winner) burned
+`utilization_reduce` (an area change) and stopped at minor. **Guard:** Fmax-mode
+projects (ok `fmax_search.json`) get `period_relax` on minor too; fixed-period tasks
+unchanged. (3) **Static model on unknown families:** see orfs-playbook "Model
+selection" — platform-pooled fallback. Tests: `test_loop_fmax_drain.py::test_fmax_retry_*`,
+`test_diagnose_timing.py::test_fmax_mode_minor_*`/`test_fixed_period_minor_*`,
+`test_fmax_model.py::test_select_model_platform_fallback`.
+
+### P0-2d — Fmax probes leaked their ORFS scratch and filled the disk (2026-09-28/30)
+`fmax_search.cleanup_variants` removed each probe's project dir but not what ORFS wrote
+under `flow/{results,logs,objects,reports}/<platform>/<design>/<variant>` (~1 GB per
+probe on mid-size sky130hd designs). A 161-design Fmax campaign runs ~800 probes: on
+203 (shared 879 G root fs) it reached 100% on 2026-09-28 (3 designs corrupted, other
+users affected) and 88 G of orphaned probe dirs again on 2026-09-30. **Guard:**
+`cleanup_variants` now also deletes the variant's ORFS scratch, located via its
+`run-meta.json` `orfs_results` and only when that path's basename is the variant
+itself. Batch operators should still gate dispatch on free space. Tests:
+`test_fmax_search.py::test_cleanup_variants_removes_orfs_scratch`,
+`test_cleanup_variants_ignores_foreign_orfs_path`.
 
 ### P0-3 — green ENV with strict signoff impossible
 `check_env.sh` passed while nangate45 had no LVS deck and `ANTENNA_X1` carried

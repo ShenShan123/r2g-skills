@@ -10,6 +10,8 @@ predicted-signoff Fmax proxy; --verify runs one full signoff flow at the winner.
 Usage:
   fmax_search.py <project-dir> [platform] [--verify] [--keep-variants]
                  [--place-fast] [--probe-timeout N]
+  fmax_search.py --record-relax OLD NEW SOURCE <project-dir>
+      record a post-search SDC loosening so the manifest can bind it to the winner
 
 The search is sequential (one ORFS probe at a time). Cross-design parallelism
 is achieved by running multiple fmax_search.py invocations concurrently
@@ -258,8 +260,32 @@ def confirm_grid(t_star: float, place_probe, model=None, *, width=0.02, n=3) -> 
     return best_pass if best_pass is not None else hi
 
 
+def _orfs_scratch_dirs(variant: Path) -> list[Path]:
+    """ORFS results/logs/objects/reports dirs a probe variant wrote, read from its
+    run-meta.json `orfs_results` (<flow>/results/<platform>/<design>/<variant>)."""
+    import json
+    out = []
+    for meta in Path(variant).glob("backend/RUN_*/run-meta.json"):
+        try:
+            res = Path(json.loads(meta.read_text(encoding="utf-8")).get("orfs_results") or "")
+        except (OSError, ValueError):
+            continue
+        # Only a <flow>/results/<platform>/<design>/<this-variant> path is ours to delete.
+        if res.name != Path(variant).name or len(res.parts) < 4 or res.parents[2].name != "results":
+            continue
+        flow = res.parents[3]
+        rel = res.relative_to(flow / "results")
+        out += [flow / sub / rel for sub in ("results", "logs", "objects", "reports")]
+    return out
+
+
 def cleanup_variants(variants: list[Path]) -> None:
+    """Remove each probe variant AND the ORFS scratch it wrote: dropping only the
+    project dir leaked ~1 GB/probe under ORFS flow/{results,logs,objects,reports}
+    (2026-09-28/30 AIC runs on 203 filled the root fs; failure-patterns P0-2d)."""
     for v in variants:
+        for d in _orfs_scratch_dirs(v):
+            shutil.rmtree(d, ignore_errors=True)
         try:
             shutil.rmtree(v)
         except OSError:
@@ -313,6 +339,28 @@ def record_verify_triple(conn, *, design_name, design_family, platform, period,
     return rid
 
 
+def record_period_relax(project: Path, old: float, new: float, source: str) -> bool:
+    """Append one post-search loosening (old -> new) to reports/fmax_search.json so the
+    signoff manifest can bind a relaxed SDC period back to the search winner
+    (fmax_model.resolve_confirmed_period). No-op (False) when the project never ran an
+    Fmax search — a fixed-period task has no chain to extend. Atomic tmp -> rename."""
+    import json
+    import datetime as _dt
+    rep = Path(project) / "reports" / "fmax_search.json"
+    try:
+        data = json.loads(rep.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if data.get("status") != "ok" or not isinstance(data.get("winner"), dict):
+        return False
+    ts = _dt.datetime.now().astimezone().isoformat(timespec="seconds")
+    data = fm.add_relaxation(data, old, new, source, ts=ts)
+    tmp = rep.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    os.replace(tmp, rep)
+    return True
+
+
 def verify_winner(base: Path, platform: str, period: float) -> dict:
     """Run ONE full signoff flow at the winning period, read finish timing, and
     record the verified triple. Returns {'closed', 'finish_ws', ...}."""
@@ -361,7 +409,16 @@ def main() -> int:
     p.add_argument("--place-fast", action="store_true",
                    help="Whole-search PLACE_FAST mode (conservative lower bound).")
     p.add_argument("--probe-timeout", type=int, default=3600)
+    p.add_argument("--record-relax", nargs=3, metavar=("OLD", "NEW", "SOURCE"),
+                   help="append a post-search period loosening to fmax_search.json and exit")
     args = p.parse_args()
+
+    if args.record_relax:
+        old, new, source = args.record_relax
+        ok = record_period_relax(args.project, float(old), float(new), source)
+        print(f"fmax relax {old} -> {new} ({source}): "
+              f"{'recorded' if ok else 'skipped (no ok Fmax search report)'}")
+        return 0
 
     base = args.project.resolve()
     assert_safe_knobs(base)
@@ -370,7 +427,9 @@ def main() -> int:
     fam = knowledge_db.infer_family(
         _config_value(base / "constraints" / "config.mk", "DESIGN_NAME") or "",
         knowledge_db.load_families())
-    model, provenance = fm.select_model(knowledge_db.get_family_heuristics(fam, args.platform))
+    model, provenance = fm.select_model(
+        knowledge_db.get_family_heuristics(fam, args.platform),
+        platform_entry=knowledge_db.get_platform_heuristics(args.platform))
     seed = seed_period(base, args.platform, family=fam)
 
     created: list[Path] = []

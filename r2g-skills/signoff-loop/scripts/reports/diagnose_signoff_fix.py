@@ -488,7 +488,7 @@ def explain_ranking(plan: dict) -> list[str]:
 
 
 def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
-                 routing_clean: bool = False) -> dict:
+                 routing_clean: bool = False, fmax_mode: bool = False) -> dict:
     tier = tcheck.get("tier", "unknown")
     wns = tcheck.get("wns_ns")
     plan = {"check": "timing", "status": tier, "violation_count": None,
@@ -573,7 +573,14 @@ def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
             'rerun_from': 'synth', 'recheck': 'timing', 'auto_apply': True,
             'requires_ab_promotion': True, 'setup_scope_evidence': scope_evidence,
         })
-    if tier in ("moderate", "severe") and wns is not None:
+    # Fmax-mode projects (an ok reports/fmax_search.json) OWN their clock: the
+    # searched winner is a placement proxy, so a minor post-route miss is closed by
+    # loosening the period (recorded as a relaxation chain, failure-patterns P0-2b),
+    # not by an area change. Fixed-period tasks (e.g. Experiment 2's registered
+    # 10 ns) never relax on minor — that would change the task. (2026-09-29 AIC
+    # cohort: shake128 stalled at minor after utilization_reduce.)
+    relax_tiers = ("moderate", "severe", "minor") if fmax_mode else ("moderate", "severe")
+    if tier in relax_tiers and wns is not None:
         period = tcheck.get("clock_period_ns")
         if period:
             # Absorb the negative slack then add 5% margin (proven iccad2015
@@ -634,9 +641,19 @@ def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
     return plan
 
 
+def _is_fmax_mode(proj) -> bool:
+    """True when the project's clock is owned by an Fmax search (ok winner)."""
+    try:
+        rep = json.loads((Path(proj) / "reports" / "fmax_search.json").read_text())
+    except (OSError, ValueError):
+        return False
+    return rep.get("status") == "ok" and isinstance(rep.get("winner"), dict)
+
+
 def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
                exclude=(), recipes: dict | None = None,
-               tcheck: dict | None = None, route: dict | None = None) -> dict:
+               tcheck: dict | None = None, route: dict | None = None,
+               fmax_mode: bool = False) -> dict:
     """Pure: (drc.json, lvs.json, parsed config.mk) -> ordered fix plan dict.
     When `recipes` (a Tier-3 fix_recipes entry for this check/violation_class)
     is given, strategies are re-ranked by empirical clearance (fix_model)."""
@@ -652,7 +669,8 @@ def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
             routing_clean = route_status == "clean"
         else:
             routing_clean = (drc or {}).get("status") in ("clean", "clean_beol")
-        plan = _timing_plan(tcheck or {}, cfg, excl, routing_clean=routing_clean)
+        plan = _timing_plan(tcheck or {}, cfg, excl, routing_clean=routing_clean,
+                            fmax_mode=fmax_mode)
     elif check == "drc":
         plan = _drc_plan(drc or {}, cfg, excl)
     elif check == "route":
@@ -1450,7 +1468,7 @@ def main(argv=None) -> int:
             proj, check=args.check, drc=drc, lvs=lvs,
             heuristics=heuristics_path)
     plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes,
-                      tcheck=tcheck, route=route)
+                      tcheck=tcheck, route=route, fmax_mode=_is_fmax_mode(proj))
     if args.check == "drc" and "pin_side_rebalance" not in exclude:
         pin_strategy = _edge_localized_pin_strategy(proj, drc, cfg)
         if pin_strategy is not None:
@@ -1573,6 +1591,8 @@ def main(argv=None) -> int:
             cfg_path.write_text(apply_edits(cfg_text, strat["config_edits"]), encoding="utf-8")
         if sdc_new_p is not None:
             sdc_text = sdc_path.read_text(encoding="utf-8")
+            _m_old = _SDC_VAR_RE.search(sdc_text) or _SDC_LIT_RE.search(sdc_text)
+            sdc_old_p = _m_old.group(2) if _m_old else None
             if _SDC_VAR_RE.search(sdc_text):
                 sdc_text = _SDC_VAR_RE.sub(lambda m: m.group(1) + sdc_new_p, sdc_text)
             else:
@@ -1593,6 +1613,16 @@ def main(argv=None) -> int:
                 _sp.run(_ja, check=False)
             except Exception:
                 pass
+            # Fmax-mode projects: bind the loosening into fmax_search.json so the
+            # signoff manifest can trace the stamped period back to the search
+            # winner (no-op when the project never ran an Fmax search).
+            try:
+                if sdc_old_p is not None and float(sdc_new_p) > float(sdc_old_p):
+                    import fmax_search as _fs
+                    _fs.record_period_relax(proj, float(sdc_old_p), float(sdc_new_p),
+                                            strat["id"])
+            except Exception as _exc:             # fail-closed: manifest will disqualify
+                print(f"WARN: Fmax relaxation not recorded ({_exc})", file=sys.stderr)
         # Post-apply effect verification: re-read every touched file and confirm each
         # declared edit is REALLY there. A declared-but-unlanded edit (write raced,
         # regex drifted, block clobbered) must not report rc=0.

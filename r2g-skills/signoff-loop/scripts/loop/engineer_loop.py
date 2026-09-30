@@ -3186,6 +3186,65 @@ def fmax_drain(ledger_path: Path, *, platform: str | None = None,
     return sum(1 for r in results if isinstance(r, (int, float)))
 
 
+def fmax_retry(ledger_path: Path, *, platform: str | None = None,
+               max_workers: int = 1, place_fast: bool = True) -> int:
+    """Re-search Fmax for designs whose FIRST search was blocked by a backend abort
+    that the repair loop has since fixed, and re-queue them to flow at the winner.
+
+    fmax-drain runs BEFORE any repair, so a design whose place stage aborts at the
+    template config (e.g. PPL-0024: more IO pins than the die perimeter holds) gets
+    `inconclusive` — then `run` repairs it (pin_perimeter_floor grows DIE_AREA in
+    config.mk) and it signs off at the seed period with NO Fmax (2026-09-29 AIC
+    cohort: RequestBlock1CH_BRIDGE / inputDMAfifo / hbm_controller). Eligible: a
+    normal, `clean` design, inconclusive search, config.mk edited after the search
+    (a repair landed), not yet retried. The old report is kept as
+    fmax_search.pre_repair.json; one retry per design. Returns the re-queued count."""
+    led = Ledger(ledger_path)
+    led.reclaim_orphans()
+    led.reroot_project_paths()
+    todo = []
+    for e in led.entries():
+        if e.get("kind", "normal") != "normal" or e.get("state") != "clean":
+            continue
+        if e.get("fmax_retried") or (platform and e.get("platform") != platform):
+            continue
+        proj = Path(e["project_path"])
+        rep, cfg = proj / "reports" / "fmax_search.json", proj / "constraints" / "config.mk"
+        try:
+            status = json.loads(rep.read_text()).get("status")
+        except (OSError, ValueError):
+            continue
+        if status != "inconclusive" or not cfg.exists():
+            continue
+        if cfg.stat().st_mtime <= rep.stat().st_mtime:
+            continue                       # no repair landed since -> retry is pointless
+        todo.append(e)
+
+    def _one(e: dict):
+        proj = Path(e["project_path"])
+        rep = proj / "reports" / "fmax_search.json"
+        os.replace(rep, rep.with_name("fmax_search.pre_repair.json"))
+        try:
+            return _fmax_one(e, place_fast=place_fast)
+        except Exception:
+            return None
+
+    if max_workers > 1 and len(todo) > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            results = list(ex.map(_one, todo))
+    else:
+        results = [_one(e) for e in todo]
+    n = 0
+    for e, r in zip(todo, results):
+        if isinstance(r, (int, float)):
+            led.add({"design": e["design"], "project_path": e["project_path"],
+                     "platform": e.get("platform", "sky130hd"), "fmax_retried": True})
+            n += 1
+        else:
+            led.set_state(e["design"], "clean", fmax_retried=True)
+    return n
+
+
 def run(ledger_path: Path, *, max_designs: int | None = None,
         max_workers: int = 1, learn: bool = True) -> None:
     import knowledge_db
@@ -3265,6 +3324,13 @@ def main(argv=None) -> int:
                          "sequential; cap workers*NUM_CORES <= host cores)")
     pf.add_argument("--no-place-fast", action="store_true",
                     help="disable PLACE_FAST in the place probes (slower, more accurate)")
+    pr2 = sub.add_parser("fmax-retry",
+                         help="re-search Fmax for clean designs whose first search was "
+                              "blocked by a since-repaired backend abort, and re-queue them")
+    pr2.add_argument("--ledger", required=True, type=Path)
+    pr2.add_argument("--platform", default=None)
+    pr2.add_argument("--workers", type=int, default=1)
+    pr2.add_argument("--no-place-fast", action="store_true")
     pe = sub.add_parser("ab-enqueue",
                         help="force a (grandfathered) recipe into A/B candidate")
     pe.add_argument("--symptom", required=True)
@@ -3303,6 +3369,10 @@ def main(argv=None) -> int:
                        max_workers=args.workers, max_designs=args.max,
                        place_fast=not args.no_place_fast)
         print(f"fmax_drain characterized {n} design(s)")
+    elif args.cmd == "fmax-retry":
+        n = fmax_retry(args.ledger, platform=args.platform, max_workers=args.workers,
+                       place_fast=not args.no_place_fast)
+        print(f"fmax_retry re-queued {n} design(s)")
     elif args.cmd == "ab-enqueue":
         import knowledge_db
         import recipe_lifecycle
