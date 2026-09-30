@@ -51,6 +51,18 @@ if [[ "${R2G_IGNORE_ENV_LOCAL:-0}" != "1" && -f "$_R2G_SKILL_DIR/references/env.
   source "$_R2G_SKILL_DIR/references/env.local.sh"
 fi
 
+# Snapshot every tool value the caller or an env file already pinned. The
+# third-party scripts sourced below (ORFS env.sh, /opt/openroad_tools_env.sh)
+# export these UNCONDITIONALLY; without the restore, a host-wide script silently
+# replaced a pinned yosys 0.64 with an older 0.51 that rejects ORFS's
+# `stat -hierarchy`, failing every synth (failure-patterns #29b, 2026-09-28).
+_r2g_pin_vars=(OPENROAD_EXE YOSYS_EXE KLAYOUT_CMD MAGIC_EXE NETGEN_EXE STA_EXE
+               IVERILOG_EXE VVP_EXE VERILATOR_EXE PDK_ROOT)
+declare -A _r2g_pinned=()
+for _v in "${_r2g_pin_vars[@]}"; do
+  [[ -n "${!_v:-}" ]] && _r2g_pinned[$_v]="${!_v}"
+done
+
 # --- 2. Locate ORFS ------------------------------------------------------
 _r2g_find_orfs() {
   local candidates=(
@@ -96,6 +108,12 @@ if [[ -f /opt/openroad_tools_env.sh ]]; then
   # shellcheck disable=SC1091
   source /opt/openroad_tools_env.sh
 fi
+
+# Restore the pinned values (resolution order 1-3 outranks 4-5).
+for _v in "${!_r2g_pinned[@]}"; do
+  export "$_v=${_r2g_pinned[$_v]}"
+done
+unset _v _r2g_pinned _r2g_pin_vars
 
 # --- 4. Autodetect each tool binary --------------------------------------
 _r2g_detect() {
