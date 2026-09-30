@@ -778,6 +778,18 @@ class FrontierTests(unittest.TestCase):
             )
             self.assertEqual(db.provider_statuses(["github"])["github"]["status"], "CANARY_READY")
 
+    def test_expired_rate_limit_allows_one_discovery_recovery_probe(self):
+        with tempfile.TemporaryDirectory() as directory, frontier.FrontierDB(Path(directory) / "frontier.sqlite") as db:
+            db.update_provider_state(
+                "github", rate_limit_remaining=0,
+                rate_limit_reset="2000-01-01T00:00:00+00:00",
+                state_json=json.dumps({
+                    "status": "RATE_LIMITED", "source": "discovery_query",
+                }),
+            )
+            self.assertEqual(db.provider_statuses(["github"])["github"]["status"], "CANARY_READY")
+            self.assertEqual(db.discovery_eligible_providers(["github"], 0), ["github"])
+
     def test_v431_does_not_promote_success_evidence_before_reset(self):
         with tempfile.TemporaryDirectory() as directory, frontier.FrontierDB(Path(directory) / "frontier.sqlite") as db:
             db.update_provider_state(

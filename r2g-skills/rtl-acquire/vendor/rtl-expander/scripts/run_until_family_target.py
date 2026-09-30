@@ -76,6 +76,7 @@ def main() -> int:
     parser.add_argument("--large-xlarge-stretch-target", type=float, default=0.10)
     parser.add_argument("--objective-id", required=True)
     parser.add_argument("--providers", default="github,gitlab,codeberg,fusesoc")
+    parser.add_argument("--discovery-quota-reserve", type=int, default=100)
     parser.add_argument("--process-budget", type=int, default=600)
     parser.add_argument("--max-repo-seconds", type=int, default=900)
     parser.add_argument(
@@ -162,6 +163,7 @@ def main() -> int:
                 "--corpus-root", str(args.corpus_root), "--local-source-root", str(args.local_source_root),
                 "--factory-round-id", round_id, "--target-new-acquired", str(revision_target),
                 "--providers", args.providers, "--process-budget", str(args.process_budget),
+                "--discovery-quota-reserve", str(args.discovery_quota_reserve),
                 "--max-repo-seconds", str(args.max_repo_seconds),
                 "--marginal-large-xlarge-target", str(args.large_xlarge_soft_target),
                 "--marginal-large-xlarge-stretch", str(args.large_xlarge_stretch_target),

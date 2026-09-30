@@ -734,7 +734,14 @@ class FrontierDB:
 
     def discovery_eligible_providers(self, providers: list[str], quota_reserve: int = 100) -> list[str]:
         statuses = self.provider_statuses(providers, quota_reserve)
-        return [provider for provider in providers if statuses[provider]["status"] == "HEALTHY"]
+        # CANARY_READY means the recorded reset has expired, but no successful
+        # request has yet cleared the stale rate-limit evidence. Discovery must
+        # be allowed to make that bounded recovery probe when the frontier is
+        # empty; requiring an acquisition canary creates a permanent deadlock.
+        return [
+            provider for provider in providers
+            if statuses[provider]["status"] in {"HEALTHY", "CANARY_READY"}
+        ]
 
     def record_source_yield(self, provider: str, strategy: str, query_text: str, candidates: int, acquired: int = 0) -> None:
         source_key = f"{provider}:{strategy}:{query_text}"
