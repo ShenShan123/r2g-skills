@@ -5170,6 +5170,18 @@ named `<tag>_<hash>_<design>` collapse every design into family `<tag>` (one vot
 `ab_corpus_insufficient:1w0l` despite 3 wins). Name A/B projects by design, or add explicit
 `families.json` mappings before ingest.
 
+**Cohort application (AIC v2.2, 9 cohort residuals with this symptom, frozen recipe):** first
+pass exposed two fixer bugs that hid every win — (a) `fix_signoff --check both` graded DRC
+BEFORE the LVS phase, so the place-rerun left drc.json bound to the old layout and the
+manifest refused the design ("reports name 2 different runs" / `drc: status=None`); now the
+DRC (then LVS) verdict is re-graded when the newest GDS post-dates drc.json; (b) `apply_edits`
+REPLACED the auto block, so the timing fix that followed (`CORE_UTILIZATION`) dropped the
+`POST_GLOBAL_PLACE_TCL` hook and LVS regressed — edits now stack (same key overrides). With
+both fixed: LVS clean 8/9 (lumi_rx_ready: `recipe_no_effect`, not a feedthrough case) and
+3/3 designs with an Fmax winner reach strict signoff (apb2per, axicb_slv_switch,
+axi_ram_wr_rd_if). Tests: `test_apply_edits_stacks_on_accepted_fixes`,
+`test_fix_signoff_stale_baseline.py::test_lvs_phase_reflow_regrades_drc_on_new_layout`.
+
 ### P0-3 — green ENV with strict signoff impossible
 `check_env.sh` passed while nangate45 had no LVS deck and `ANTENNA_X1` carried
 `ANTENNADIFFAREA 0.0` (GRT-0246). **Guard:** `scripts/flow/platform_capability.py` probes, per
