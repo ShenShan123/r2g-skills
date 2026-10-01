@@ -726,3 +726,11 @@ def test_feedthrough_buffer_detected_from_netgen_report(tmp_path):
     lvs = {"status": "mismatch", "tool": "netgen", "log_info": {"report_file": str(rpt)}}
     plan = d.build_plan({}, lvs, {"PLATFORM": "sky130hd"}, check="lvs")
     assert [s["id"] for s in plan["strategies"]] == ["lvs_port_feedthrough_buffer"]
+
+
+def test_feedthrough_buffer_has_an_ab_application_path():
+    """A new catalog recipe missing from engineer_loop's known-apply set is PARKED as
+    a guaranteed no-op by ab-drain and can never be validated (2026-10-01)."""
+    import engineer_loop
+    assert engineer_loop._known_apply_strategy(None, "lvs_port_feedthrough_buffer")
+    assert "lvs_port_feedthrough_buffer" in engineer_loop._KNOWN_APPLY_STRATEGIES

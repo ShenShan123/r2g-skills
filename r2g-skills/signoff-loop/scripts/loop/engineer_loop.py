@@ -296,7 +296,7 @@ AB_INCONCLUSIVE_MAX = 3
 _KNOWN_APPLY_STRATEGIES = frozenset({
     "antenna_diode_repair", "antenna_diode_iters", "antenna_density_relief",
     "density_relief", "pin_side_rebalance", "route_relief", "lvs_resolve_unknown", "lvs_macro_cdl",
-    "beol_only_drc", "rerun_from_stage", "pdn_die_floor",
+    "beol_only_drc", "rerun_from_stage", "pdn_die_floor", "lvs_port_feedthrough_buffer",
 }) | _PLACE_STRATEGIES | _TIMING_STRATEGIES | _SYNTH_STRATEGIES
 
 
