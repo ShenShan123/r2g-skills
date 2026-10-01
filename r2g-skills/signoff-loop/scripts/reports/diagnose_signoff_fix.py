@@ -376,6 +376,49 @@ def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
     return plan
 
 
+FEEDTHROUGH_HOOK = (Path(__file__).resolve().parents[1] / "flow" / "orfs_hooks"
+                    / "buffer_port_feedthroughs.tcl")
+_PIN_MATCH_FAIL = re.compile(r"Top level cell failed pin matching", re.I)
+
+
+def _port_feedthrough_strategy(lvs: dict, cfg: dict) -> dict | None:
+    """Netgen 'Top level cell failed pin matching' with an otherwise matching netlist
+    is the port-alias case (failure-patterns "sky130 LVS" cause 5): a net that carries
+    2+ top-level ports (`assign out = in`, or outputs tied to one constant) cannot be
+    expressed in SPICE. The existing buffer_port_feedthroughs.tcl hook splits those
+    nets after the last remove_buffers; the repair wires it in and re-places. New
+    recipe -> A/B-gated (2026-10-01; found on the AIC Fmax cohort: 8 LVS residuals)."""
+    if cfg.get("POST_GLOBAL_PLACE_TCL"):
+        return None                         # a hook is already wired (maybe this one)
+    mclass = lvs.get("mismatch_class")
+    if mclass and mclass != "top_pin_mismatch":
+        return None                         # e.g. a geometry-proven pin-vs-PDN short
+    if mclass == "top_pin_mismatch" and FEEDTHROUGH_HOOK.exists():
+        return _feedthrough_recipe()
+    info = lvs.get("log_info") or {}
+    text = " ".join(str(x) for x in (info.get("errors") or []))
+    rpt = info.get("report_file") or lvs.get("report_file")
+    if rpt:
+        try:
+            text += Path(rpt).read_text(encoding="utf-8", errors="ignore")[-20000:]
+        except OSError:
+            pass
+    if not _PIN_MATCH_FAIL.search(text) or not FEEDTHROUGH_HOOK.exists():
+        return None
+    return _feedthrough_recipe()
+
+
+def _feedthrough_recipe() -> dict:
+    return {"id": "lvs_port_feedthrough_buffer",
+            "rationale": "Netgen reports 'Top level cell failed pin matching': a net carries "
+                         "2+ top-level ports (port-to-port assign or shared tie-off), which "
+                         "SPICE cannot express. Wire buffer_port_feedthroughs.tcl as "
+                         "POST_GLOBAL_PLACE_TCL and re-place so every such port gets its own net.",
+            "config_edits": {"POST_GLOBAL_PLACE_TCL": str(FEEDTHROUGH_HOOK)},
+            "rerun_from": "place", "recheck": "lvs", "auto_apply": True,
+            "requires_ab_promotion": True}
+
+
 def _lvs_plan(lvs: dict, cfg: dict, exclude: set) -> dict:
     status = lvs.get("status", "unknown")
     plan = {"check": "lvs", "status": status, "violation_count": lvs.get("mismatch_count"),
@@ -401,6 +444,12 @@ def _lvs_plan(lvs: dict, cfg: dict, exclude: set) -> dict:
         if s["id"] not in exclude:
             plan["strategies"].append(s)
         return plan
+    if status in ("mismatch", "fail", "failed"):
+        feedthrough = _port_feedthrough_strategy(lvs, cfg)
+        if feedthrough is not None:
+            if feedthrough["id"] not in exclude:
+                plan["strategies"].append(feedthrough)
+            return plan
     if status in ("fail", "failed"):
         errors = " ".join((lvs.get("log_info") or {}).get("errors", []))
         if KLAYOUT_CPP_CRASH.search(errors):

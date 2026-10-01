@@ -5138,6 +5138,18 @@ itself. Batch operators should still gate dispatch on free space. Tests:
 `test_fmax_search.py::test_cleanup_variants_removes_orfs_scratch`,
 `test_cleanup_variants_ignores_foreign_orfs_path`.
 
+### P0-2e — Netgen `top_pin_mismatch` had no repair at all (2026-10-01)
+`extract_lvs` reports Netgen failures as status `mismatch` (class `top_pin_mismatch` when
+"Top level cell failed pin matching"), but `_lvs_plan` only acted on `fail`/`failed`, so
+every such residual stopped with no strategy — 8 of the AIC Fmax cohort's residuals, all
+with port-to-port `assign`s or shared tie-offs. The fix (`buffer_port_feedthroughs.tcl`
+as `POST_GLOBAL_PLACE_TCL`, "sky130 LVS" cause 5) existed only as operator guidance.
+**Recipe:** `lvs_port_feedthrough_buffer` (wire the hook, re-run from place, recheck LVS)
+for `mismatch`/`fail` with class `top_pin_mismatch` (or the Netgen phrase when the class is
+absent) and no hook wired; never for other classes (e.g. a geometry-proven pin-vs-PDN
+short). New recipe → `requires_ab_promotion`: validated by A/B on designs OUTSIDE the
+cohort before live use. Tests: `test_diagnose_signoff_fix.py::test_*feedthrough*`.
+
 ### P0-3 — green ENV with strict signoff impossible
 `check_env.sh` passed while nangate45 had no LVS deck and `ANTENNA_X1` carried
 `ANTENNADIFFAREA 0.0` (GRT-0246). **Guard:** `scripts/flow/platform_capability.py` probes, per

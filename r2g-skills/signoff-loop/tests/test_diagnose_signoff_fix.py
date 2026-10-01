@@ -694,3 +694,35 @@ def test_apply_period_relax_without_fmax_search_writes_no_report(tmp_path):
                        env=_isolated_knowledge_env(tmp_path))
     assert r.returncode == 0, r.stderr
     assert not (p / "reports" / "fmax_search.json").exists()
+
+
+# ── LVS port-feedthrough recipe (2026-10-01) ─────────────────────────────────
+
+def test_top_pin_mismatch_offers_ab_gated_feedthrough_buffer():
+    """AIC Fmax cohort: 8 Netgen 'Top level cell failed pin matching' residuals had no
+    strategy (status 'mismatch' was not even actionable). The port-alias hook exists."""
+    lvs = {"status": "mismatch", "tool": "netgen", "mismatch_class": "top_pin_mismatch"}
+    plan = d.build_plan({}, lvs, {"PLATFORM": "sky130hd"}, check="lvs")
+    [s] = [s for s in plan["strategies"] if s["id"] == "lvs_port_feedthrough_buffer"]
+    assert s["config_edits"]["POST_GLOBAL_PLACE_TCL"].endswith("buffer_port_feedthroughs.tcl")
+    assert s["rerun_from"] == "place" and s["recheck"] == "lvs"
+    assert s["requires_ab_promotion"] is True
+
+
+def test_feedthrough_buffer_not_offered_for_other_lvs_classes_or_when_hooked():
+    cfg = {"PLATFORM": "sky130hd"}
+    short = {"status": "mismatch", "tool": "netgen", "mismatch_class": "pin_pdn_short"}
+    assert not [s for s in d.build_plan({}, short, cfg, check="lvs")["strategies"]
+                if s["id"] == "lvs_port_feedthrough_buffer"]
+    hooked = {**cfg, "POST_GLOBAL_PLACE_TCL": "/x/buffer_port_feedthroughs.tcl"}
+    pin = {"status": "mismatch", "tool": "netgen", "mismatch_class": "top_pin_mismatch"}
+    assert not [s for s in d.build_plan({}, pin, hooked, check="lvs")["strategies"]
+                if s["id"] == "lvs_port_feedthrough_buffer"]
+
+
+def test_feedthrough_buffer_detected_from_netgen_report(tmp_path):
+    rpt = tmp_path / "netgen_lvs.rpt"
+    rpt.write_text("...\nFinal result: Top level cell failed pin matching.\n")
+    lvs = {"status": "mismatch", "tool": "netgen", "log_info": {"report_file": str(rpt)}}
+    plan = d.build_plan({}, lvs, {"PLATFORM": "sky130hd"}, check="lvs")
+    assert [s["id"] for s in plan["strategies"]] == ["lvs_port_feedthrough_buffer"]
