@@ -306,6 +306,51 @@ def test_pin_side_scope_transfer_is_narrow_and_exact_status_wins(tmp_path: Path)
     conn.close()
 
 
+def test_untested_learner_candidate_does_not_veto_promoted_pin_transfer(tmp_path: Path):
+    """2026-09-30 AIC v2: pcie_7x / matmul (right-edge m3.2 at a tighter clock) were
+    classed bus_heavy, whose only exact row was a learner_diff candidate with no
+    A/B trial -- it vetoed the promoted wildcard pin_side_rebalance. Such a row
+    carries no verdict; any A/B-judged, shadow, parked or demoted row still wins."""
+    conn = knowledge_db.connect(tmp_path / "knowledge.sqlite")
+    knowledge_db.ensure_schema(conn)
+    sid, plat, strat_id = "04d38c5a585fd332", "sky130hd", "pin_side_rebalance"
+    recipe_lifecycle._set(conn, "promoted", "ab_corpus:2w0l", symptom_id=sid,
+                          design_class="*", platform=plat, strategy=strat_id)
+    exact = dict(symptom_id=sid, design_class="bus_heavy/small", platform=plat, strategy=strat_id)
+    recipe_lifecycle._set(conn, "candidate", "learner_diff", **exact)
+    conn.commit()
+    strategy = {"id": strat_id, "config_edits": {"PLACE_PINS_ARGS": "-exclude right:*"},
+                "geometry_evidence": {"rule": "m3.2", "side": "right", "edge_count": 4,
+                                      "edge_fraction": 1.0}}
+    args = dict(symptom_id=sid, design_class="bus_heavy/small", platform=plat)
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, strategy=strategy, **args) == (
+        "promoted", "platform_geometric_over_untested_candidate")
+    # no geometry proof -> the exact candidate still wins
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, strategy={**strategy, "geometry_evidence": {}}, **args) == (
+        "candidate", "exact")
+    # a non-geometric strategy keeps the strict exact rule
+    recipe_lifecycle._set(conn, "candidate", "learner_diff",
+                          **{**exact, "strategy": "density_relief"})
+    conn.commit()
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, strategy={**strategy, "id": "density_relief"}, **args) == (
+        "candidate", "exact")
+    # once the class has an A/B trial, its candidate verdict owns it again
+    conn.execute("INSERT INTO ab_trials (symptom_id, design_class, platform, strategy, verdict) "
+                 "VALUES (?,?,?,?,?)", (sid, "bus_heavy/small", plat, strat_id, "inconclusive"))
+    conn.commit()
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, strategy=strategy, **args) == ("candidate", "exact")
+    # shadow still vetoes
+    recipe_lifecycle._set(conn, "shadow", "ab_corpus:0w2l", **exact)
+    conn.commit()
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, strategy=strategy, **args) == ("shadow", "exact")
+    conn.close()
+
+
 def test_fixed_target_timing_candidates_are_visible_but_not_live():
     plan = dsf.build_plan(
         {}, {},

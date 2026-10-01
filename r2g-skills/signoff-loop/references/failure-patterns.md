@@ -5114,6 +5114,17 @@ unchanged, and fixed-period tasks never repeat it. Tests: `test_loop_fmax_drain.
 `test_diagnose_timing.py::test_fmax_mode_minor_*`/`test_fixed_period_minor_*`,
 `test_fmax_model.py::test_select_model_platform_fallback`,
 `test_diagnose_timing.py::test_fmax_mode_period_relax_*`.
+(5) **An untested learner candidate vetoed a validated transfer:** at a tighter Fmax clock
+pcie_7x / matmul (right-edge m3.2, exactly the pin_side_rebalance mechanism) were classed
+`bus_heavy/*`, whose only exact `recipe_status` row was a `learner_diff` candidate with
+zero `ab_trials`; "exact row always wins" let that no-verdict row veto the PROMOTED
+wildcard, so the loop stopped with no strategy (and tt_um_example / qmap fell back to an
+area-changing density_relief). **Guard:** for the approved geometric scope transfer only
+(`_PLATFORM_GEOMETRIC_SCOPE_TRANSFER` + proven edge geometry), an exact row that is a
+learner auto-enqueued candidate with no A/B trial no longer vetoes a promoted wildcard
+(match level `platform_geometric_over_untested_candidate`); shadow / parked / demoted /
+A/B-judged rows still win, and every other strategy keeps the strict exact rule. Test:
+`test_repair_policy_regressions.py::test_untested_learner_candidate_does_not_veto_promoted_pin_transfer`.
 
 ### P0-2d — Fmax probes leaked their ORFS scratch and filled the disk (2026-09-28/30)
 `fmax_search.cleanup_variants` removed each probe's project dir but not what ORFS wrote

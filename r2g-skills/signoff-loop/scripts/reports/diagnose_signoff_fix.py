@@ -1349,6 +1349,24 @@ def _prioritize_geometric_pin_strategy(plan: dict) -> None:
             return
 
 
+def _untested_learner_candidate(conn, recipe_lifecycle, *, symptom_id, design_class,
+                                platform, strategy) -> bool:
+    """True when the exact row is a learner auto-enqueued candidate with no A/B trial."""
+    row = conn.execute(
+        "SELECT status, provenance FROM recipe_status WHERE symptom_id=? AND "
+        "design_class=? AND platform=? AND strategy=?",
+        (symptom_id, design_class, platform, strategy)).fetchone()
+    if not row or row[0] != "candidate" or row[1] not in recipe_lifecycle._AUTO_LEARNER_PROVENANCE:
+        return False
+    try:
+        n = conn.execute(
+            "SELECT COUNT(*) FROM ab_trials WHERE symptom_id=? AND design_class=? AND "
+            "platform=? AND strategy=?", (symptom_id, design_class, platform, strategy)).fetchone()[0]
+    except Exception:
+        return False                       # unknown trial history -> keep the strict rule
+    return n == 0
+
+
 def _lifecycle_status_with_scope_transfer(conn, recipe_lifecycle, *,
                                           symptom_id: str,
                                           design_class: str,
@@ -1359,13 +1377,32 @@ def _lifecycle_status_with_scope_transfer(conn, recipe_lifecycle, *,
     The transfer is deliberately not a generic design-class wildcard.  It is
     available only for the Sky130HD m3.2 pin-placement mechanism and only when
     diagnosis has independently proved a unique edge concentration.  An exact
-    lifecycle row always wins, including an exact candidate/shadow verdict.
+    lifecycle row wins, including shadow/parked/demoted and A/B-judged candidates;
+    the one exception is a learner auto-enqueued candidate with no A/B trial, which
+    carries no verdict and so does not veto a promoted wildcard of this mechanism.
     """
     strategy_id = strategy.get("id", "")
     exact = recipe_lifecycle.get_status(
         conn, symptom_id=symptom_id, design_class=design_class,
         platform=platform, strategy=strategy_id, default=None)
+    if exact and not (exact == "candidate" and _untested_learner_candidate(
+            conn, recipe_lifecycle, symptom_id=symptom_id, design_class=design_class,
+            platform=platform, strategy=strategy_id)):
+        return exact, "exact"
     if exact:
+        # An exact row that is only an auto-enqueued, never-A/B-tested learner
+        # candidate carries no verdict for this class -- it must not veto the
+        # approved geometric scope transfer of a PROMOTED wildcard recipe (2026-09-30
+        # AIC v2: pcie_7x / matmul, right-edge m3.2 at a tighter clock, were blocked
+        # by a 'learner_diff' candidate for their bus_heavy class). Shadow, parked,
+        # demoted or A/B-judged candidates still win.
+        transfer_key = (symptom_id, platform, strategy_id)
+        if transfer_key in _PLATFORM_GEOMETRIC_SCOPE_TRANSFER and _has_pin_edge_geometry(strategy):
+            wild = recipe_lifecycle.get_status(
+                conn, symptom_id=symptom_id, design_class="*", platform=platform,
+                strategy=strategy_id, default=None)
+            if wild == "promoted":
+                return wild, "platform_geometric_over_untested_candidate"
         return exact, "exact"
 
     import setup_scope
