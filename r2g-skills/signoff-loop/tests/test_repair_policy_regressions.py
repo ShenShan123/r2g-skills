@@ -378,3 +378,30 @@ def test_fixed_target_timing_candidates_are_visible_but_not_live():
                        if strategy["id"] != "utilization_reduce"]
     }
     assert dsf._live_auto_strategy(fixed_task_plan) is None
+
+
+def test_lvs_feedthrough_mechanism_transfer_uses_wildcard_promotion(tmp_path: Path):
+    import symptom
+    sid = symptom.symptom_id(symptom.canonical_signature("lvs", "top_pin_mismatch", {}))
+    assert (sid, "sky130hd", "lvs_port_feedthrough_buffer") in dsf._MECHANISM_SCOPE_TRANSFER
+    conn = knowledge_db.connect(tmp_path / "knowledge.sqlite")
+    knowledge_db.ensure_schema(conn)
+    key = {"symptom_id": sid, "design_class": "*", "platform": "sky130hd",
+           "strategy": "lvs_port_feedthrough_buffer"}
+    strategy = {"id": "lvs_port_feedthrough_buffer"}
+
+    def status(design_class, platform="sky130hd", sid_=sid):
+        return dsf._lifecycle_status_with_scope_transfer(
+            conn, recipe_lifecycle, symptom_id=sid_, design_class=design_class,
+            platform=platform, strategy=strategy)
+
+    assert status("bus_heavy/large") == (None, None)          # nothing promoted yet
+    recipe_lifecycle._set(conn, "promoted", "test:ab_corpus", **key)
+    conn.commit()
+    assert status("bus_heavy/large") == ("promoted", "mechanism_class_transfer")
+    assert status("bus_heavy/large", platform="nangate45") == (None, None)
+    assert status("bus_heavy/large", sid_="64a358c75ba4b86b") == (None, None)
+    exact = {**key, "design_class": "bus_heavy/large"}
+    recipe_lifecycle._set(conn, "shadow", "test:exact_veto", **exact)
+    conn.commit()
+    assert status("bus_heavy/large") == ("shadow", "exact")    # exact evidence still wins

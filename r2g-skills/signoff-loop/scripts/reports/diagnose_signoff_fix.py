@@ -30,6 +30,15 @@ _PIN_EDGE_DRC_RULES = frozenset({"m3.2"})
 _PLATFORM_GEOMETRIC_SCOPE_TRANSFER = frozenset({
     ("04d38c5a585fd332", "sky130hd", "pin_side_rebalance"),
 })
+# Mechanism-gated class transfer (2026-10-01): a recipe whose catalog entry is ONLY
+# offered when the tool has named the mechanism (Netgen "Top level cell failed pin
+# matching" -> top_pin_mismatch) may use its '*'-class promotion for any design class,
+# because that promotion was won across several classes on independent designs.
+# Key = (symptom_id, platform, strategy); the symptom is the LVS one,
+# sha1(lvs, top_pin_mismatch, {})[:16].
+_MECHANISM_SCOPE_TRANSFER = frozenset({
+    ("a0d6b4c6ae5c8c4c", "sky130hd", "lvs_port_feedthrough_buffer"),
+})
 _SETUP_MARGIN_PLATFORMS = frozenset({"sky130hd"})
 _SETUP_MARGIN_NS = 0.2
 _SETUP_MARGIN_MAX_DEFICIT_NS = 0.2
@@ -1452,6 +1461,12 @@ def _lifecycle_status_with_scope_transfer(conn, recipe_lifecycle, *,
                 strategy=strategy_id, default=None)
             if wild == "promoted":
                 return wild, "platform_geometric_over_untested_candidate"
+        if transfer_key in _MECHANISM_SCOPE_TRANSFER:
+            wild = recipe_lifecycle.get_status(
+                conn, symptom_id=symptom_id, design_class="*", platform=platform,
+                strategy=strategy_id, default=None)
+            if wild == "promoted":
+                return wild, "mechanism_over_untested_candidate"
         return exact, "exact"
 
     import setup_scope
@@ -1460,6 +1475,11 @@ def _lifecycle_status_with_scope_transfer(conn, recipe_lifecycle, *,
         return (status, 'validated_setup_scope') if status else (None, None)
 
     transfer_key = (symptom_id, platform, strategy_id)
+    if transfer_key in _MECHANISM_SCOPE_TRANSFER:
+        wild = recipe_lifecycle.get_status(
+            conn, symptom_id=symptom_id, design_class="*", platform=platform,
+            strategy=strategy_id, default=None)
+        return (wild, "mechanism_class_transfer") if wild else (None, None)
     transfer_allowed = (
         transfer_key in _PLATFORM_GEOMETRIC_SCOPE_TRANSFER
         and _has_pin_edge_geometry(strategy)

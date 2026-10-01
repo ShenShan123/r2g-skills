@@ -734,3 +734,17 @@ def test_feedthrough_buffer_has_an_ab_application_path():
     import engineer_loop
     assert engineer_loop._known_apply_strategy(None, "lvs_port_feedthrough_buffer")
     assert "lvs_port_feedthrough_buffer" in engineer_loop._KNOWN_APPLY_STRATEGIES
+
+
+def test_ab_enqueue_refuses_lvs_recipe_under_timing_symptom(tmp_path):
+    import engineer_loop
+    import knowledge_db
+    conn = knowledge_db.connect(tmp_path / "k.sqlite")
+    knowledge_db.ensure_schema(conn)
+    conn.execute("INSERT INTO symptoms(symptom_id, check_type, class) VALUES "
+                 "('t1','timing','clean'), ('l1','lvs','top_pin_mismatch')")
+    why = engineer_loop._enqueue_check_mismatch(conn, "t1", "lvs_port_feedthrough_buffer")
+    assert why and "timing|clean" in why
+    assert engineer_loop._enqueue_check_mismatch(conn, "l1", "lvs_port_feedthrough_buffer") is None
+    assert engineer_loop._enqueue_check_mismatch(conn, "t1", "pin_side_rebalance") is None
+    assert engineer_loop._enqueue_check_mismatch(conn, "unknown", "lvs_x") is None

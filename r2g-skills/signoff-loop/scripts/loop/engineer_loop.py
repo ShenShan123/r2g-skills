@@ -424,6 +424,31 @@ def _symptom_check(conn, symptom_id: str | None, strategy: str | None = None) ->
     return "both"
 
 
+def _strategy_check(strategy: str | None) -> str | None:
+    """The signoff check a strategy repairs, when its name/catalog proves it."""
+    if strategy and strategy.startswith("lvs_"):
+        return "lvs"
+    if strategy in _TIMING_STRATEGIES:
+        return "timing"
+    return None
+
+
+def _enqueue_check_mismatch(conn, symptom_id: str, strategy: str) -> str | None:
+    """Why (symptom, strategy) can never match a live diagnosis, or None.
+
+    Live diagnosis looks a recipe up under the symptom of the check it is repairing,
+    so an LVS recipe enqueued under a TIMING symptom would be A/B-promoted on a key
+    no LVS plan ever reads (2026-10-01: lvs_port_feedthrough_buffer was first judged
+    under the run's timing|clean symptom)."""
+    want = _strategy_check(strategy)
+    row = conn.execute("SELECT check_type, class FROM symptoms WHERE symptom_id=?",
+                       (symptom_id,)).fetchone()
+    if want and row and row[0] and row[0] != want:
+        return (f"symptom {symptom_id} is {row[0]}|{row[1]} but {strategy} repairs "
+                f"{want}; enqueue it under the {want} symptom of the failing check")
+    return None
+
+
 def _run_fix(entry: dict) -> int:
     env = dict(os.environ)
     fix_args = [
@@ -3378,6 +3403,11 @@ def main(argv=None) -> int:
         import recipe_lifecycle
         conn = knowledge_db.connect()
         knowledge_db.ensure_schema(conn)
+        why = _enqueue_check_mismatch(conn, args.symptom, args.strategy)
+        if why:
+            conn.close()
+            print(f"ab-enqueue refused: {why}", file=sys.stderr)
+            return 2
         created = recipe_lifecycle.enqueue_candidate(
             conn, symptom_id=args.symptom, design_class=args.design_class,
             platform=args.platform, strategy=args.strategy)
