@@ -5103,9 +5103,17 @@ moderate/severe, so shake128 (WNS −0.17 ns at the winner) burned
 `utilization_reduce` (an area change) and stopped at minor. **Guard:** Fmax-mode
 projects (ok `fmax_search.json`) get `period_relax` on minor too; fixed-period tasks
 unchanged. (3) **Static model on unknown families:** see orfs-playbook "Model
-selection" — platform-pooled fallback. Tests: `test_loop_fmax_drain.py::test_fmax_retry_*`,
+selection" — platform-pooled fallback. (4) **One relax, then area changes:** a relax
+re-runs from synth, and the noisy re-placement can land worse (chacha20: WNS −0.17 ns at
+the 3.67 ns winner, relax to 3.89 ns, violators 40 → 101); `period_relax` was then
+excluded as "tried", so the loop spent its remaining iterations on non-clock strategies
+and stopped at minor. **Guard:** in Fmax mode `period_relax` stays available after use
+(`repeatable`), each repeat computed from the CURRENT period/WNS (no-improvement does not
+roll back) and bounded by `FMAX_RELAX_CAP` (1.20) × the search winner; the FIRST relax is
+unchanged, and fixed-period tasks never repeat it. Tests: `test_loop_fmax_drain.py::test_fmax_retry_*`,
 `test_diagnose_timing.py::test_fmax_mode_minor_*`/`test_fixed_period_minor_*`,
-`test_fmax_model.py::test_select_model_platform_fallback`.
+`test_fmax_model.py::test_select_model_platform_fallback`,
+`test_diagnose_timing.py::test_fmax_mode_period_relax_*`.
 
 ### P0-2d — Fmax probes leaked their ORFS scratch and filled the disk (2026-09-28/30)
 `fmax_search.cleanup_variants` removed each probe's project dir but not what ORFS wrote

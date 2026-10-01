@@ -110,3 +110,41 @@ def test_is_fmax_mode_requires_ok_winner(tmp_path):
     assert dsf._is_fmax_mode(tmp_path) is False
     (rep / "fmax_search.json").write_text(json.dumps({"status": "ok", "winner": {"period": 4.5}}))
     assert dsf._is_fmax_mode(tmp_path) is True
+
+
+def test_fmax_mode_period_relax_repeats_within_cap():
+    """2026-09-30 AIC v2: chacha20's single relax re-placed worse (40 -> 101
+    violators) and the loop spent its iterations on area. In Fmax mode
+    period_relax stays available after use, bounded by FMAX_RELAX_CAP x winner."""
+    tcheck = {"tier": "minor", "wns_ns": -0.10, "clock_period_ns": 3.894}
+    cfg = {"PLATFORM": "sky130hd", "CORE_UTILIZATION": "20"}
+    plan = dsf.build_plan({}, {}, cfg, check="timing", tcheck=tcheck, exclude=("period_relax",),
+                          fmax_mode=True, fmax_winner=3.66843)
+    pr = [s for s in plan["strategies"] if s["id"] == "period_relax"]
+    assert pr and pr[0]["repeatable"] is True
+    assert 3.894 < float(pr[0]["sdc_edits"]["CLOCK_PERIOD"]) <= 3.66843 * dsf.FMAX_RELAX_CAP
+
+
+def test_fmax_mode_period_relax_repeat_stops_at_cap_first_relax_unbounded():
+    tcheck = {"tier": "minor", "wns_ns": -0.30, "clock_period_ns": 4.30}
+    cfg = {"PLATFORM": "sky130hd", "CORE_UTILIZATION": "20"}
+    rep = dsf.build_plan({}, {}, cfg, check="timing", tcheck=tcheck, exclude=("period_relax",),
+                         fmax_mode=True, fmax_winner=3.66843)
+    assert "period_relax" not in [s["id"] for s in rep["strategies"]]    # 4.83 > 1.2 x 3.67
+    first = dsf.build_plan({}, {}, cfg, check="timing", tcheck=tcheck,
+                           fmax_mode=True, fmax_winner=3.66843)
+    assert "period_relax" in [s["id"] for s in first["strategies"]]      # first relax unchanged
+
+
+def test_fixed_period_period_relax_never_repeats():
+    tcheck = {"tier": "severe", "wns_ns": -1.2, "clock_period_ns": 4.0}
+    plan = dsf.build_plan({}, {}, {"PLATFORM": "nangate45", "CORE_UTILIZATION": "30"},
+                          check="timing", tcheck=tcheck, exclude=("period_relax",))
+    assert "period_relax" not in [s["id"] for s in plan["strategies"]]
+
+
+def test_fmax_winner_reads_ok_search_only(tmp_path):
+    rep = tmp_path / "reports"; rep.mkdir()
+    assert dsf._fmax_winner(tmp_path) is None
+    (rep / "fmax_search.json").write_text(json.dumps({"status": "ok", "winner": {"period": 3.5}}))
+    assert dsf._fmax_winner(tmp_path) == 3.5

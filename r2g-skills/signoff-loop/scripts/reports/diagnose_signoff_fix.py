@@ -487,8 +487,15 @@ def explain_ranking(plan: dict) -> list[str]:
     return lines
 
 
+# Fmax mode: period_relax may repeat (post-route repair is noisy -- one loosening can
+# land on a worse placement), but the cumulative loosening is capped relative to the
+# search winner so the "Fmax" never silently degrades into an arbitrary slow clock.
+FMAX_RELAX_CAP = 1.20
+
+
 def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
-                 routing_clean: bool = False, fmax_mode: bool = False) -> dict:
+                 routing_clean: bool = False, fmax_mode: bool = False,
+                 fmax_winner: float | None = None) -> dict:
     tier = tcheck.get("tier", "unknown")
     wns = tcheck.get("wns_ns")
     plan = {"check": "timing", "status": tier, "violation_count": None,
@@ -586,12 +593,23 @@ def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
             # Absorb the negative slack then add 5% margin (proven iccad2015
             # period_relax recipe: 3 att / 2 succ, 97.5% WNS reduction).
             relaxed = round((float(period) - float(wns)) * 1.05, 3)
-            strategies.append(
-                {"id": "period_relax",
-                 "rationale": f"Relax clock period {period} -> {relaxed} ns to "
-                              "absorb WNS with 5% margin (validated recipe).",
-                 "config_edits": {}, "sdc_edits": {"CLOCK_PERIOD": str(relaxed)},
-                 "rerun_from": "synth", "recheck": "timing", "auto_apply": True})
+            # The FIRST relax is unchanged (any tier that relaxes, any size); only a
+            # REPEAT -- possible in Fmax mode once period_relax was tried -- is
+            # bounded by the cumulative cap.
+            cap = (float(fmax_winner) * FMAX_RELAX_CAP
+                   if fmax_mode and fmax_winner else None)
+            repeat = "period_relax" in exclude
+            if not repeat or (cap is not None and relaxed <= cap):
+                strategies.append(
+                    {"id": "period_relax",
+                     "rationale": f"Relax clock period {period} -> {relaxed} ns to "
+                                  "absorb WNS with 5% margin (validated recipe).",
+                     "config_edits": {}, "sdc_edits": {"CLOCK_PERIOD": str(relaxed)},
+                     "rerun_from": "synth", "recheck": "timing", "auto_apply": True,
+                     # Fmax mode: may be re-applied after a noisy re-run (2026-09-30
+                     # AIC v2: chacha20's one relax re-placed worse, 40 -> 101
+                     # violators, and the loop then spent its iterations on area).
+                     "repeatable": cap is not None})
     strategies.append(
         {"id": "utilization_reduce",
          "rationale": "Lower CORE_UTILIZATION to give placement/CTS slack "
@@ -637,23 +655,34 @@ def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
              "config_edits": {"ABC_AREA": "0", "SYNTH_HIERARCHICAL": "0"},
              "sdc_edits": {}, "rerun_from": "synth", "recheck": "timing",
              "auto_apply": True, "requires_ab_promotion": True})
-    plan["strategies"] = [s for s in strategies if s["id"] not in exclude]
+    plan["strategies"] = [s for s in strategies
+                          if s["id"] not in exclude or s.get("repeatable")]
     return plan
+
+
+def _fmax_winner(proj) -> float | None:
+    """The Fmax search winner period when the project's clock is owned by an ok
+    search, else None (fixed-period task)."""
+    try:
+        rep = json.loads((Path(proj) / "reports" / "fmax_search.json").read_text())
+    except (OSError, ValueError):
+        return None
+    w = rep.get("winner") if rep.get("status") == "ok" else None
+    try:
+        return float(w["period"]) if isinstance(w, dict) else None
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def _is_fmax_mode(proj) -> bool:
     """True when the project's clock is owned by an Fmax search (ok winner)."""
-    try:
-        rep = json.loads((Path(proj) / "reports" / "fmax_search.json").read_text())
-    except (OSError, ValueError):
-        return False
-    return rep.get("status") == "ok" and isinstance(rep.get("winner"), dict)
+    return _fmax_winner(proj) is not None
 
 
 def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
                exclude=(), recipes: dict | None = None,
                tcheck: dict | None = None, route: dict | None = None,
-               fmax_mode: bool = False) -> dict:
+               fmax_mode: bool = False, fmax_winner: float | None = None) -> dict:
     """Pure: (drc.json, lvs.json, parsed config.mk) -> ordered fix plan dict.
     When `recipes` (a Tier-3 fix_recipes entry for this check/violation_class)
     is given, strategies are re-ranked by empirical clearance (fix_model)."""
@@ -670,7 +699,7 @@ def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
         else:
             routing_clean = (drc or {}).get("status") in ("clean", "clean_beol")
         plan = _timing_plan(tcheck or {}, cfg, excl, routing_clean=routing_clean,
-                            fmax_mode=fmax_mode)
+                            fmax_mode=fmax_mode, fmax_winner=fmax_winner)
     elif check == "drc":
         plan = _drc_plan(drc or {}, cfg, excl)
     elif check == "route":
@@ -1468,7 +1497,8 @@ def main(argv=None) -> int:
             proj, check=args.check, drc=drc, lvs=lvs,
             heuristics=heuristics_path)
     plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes,
-                      tcheck=tcheck, route=route, fmax_mode=_is_fmax_mode(proj))
+                      tcheck=tcheck, route=route, fmax_mode=_is_fmax_mode(proj),
+                      fmax_winner=_fmax_winner(proj))
     if args.check == "drc" and "pin_side_rebalance" not in exclude:
         pin_strategy = _edge_localized_pin_strategy(proj, drc, cfg)
         if pin_strategy is not None:
