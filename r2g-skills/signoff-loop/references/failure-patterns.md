@@ -5150,6 +5150,20 @@ absent) and no hook wired; never for other classes (e.g. a geometry-proven pin-v
 short). New recipe → `requires_ab_promotion`: validated by A/B on designs OUTSIDE the
 cohort before live use. Tests: `test_diagnose_signoff_fix.py::test_*feedthrough*`.
 
+**A/B result (2026-10-01, sky130hd, 4 non-cohort designs, k=2):** win on wb_arbiter_2,
+spirom_axi, core_soc (arm A mismatch ×2 → arm B LVS clean ×2, 1 fix iter); **inconclusive**
+on fft_freq_pipe — the hook inserted 0 buffers: its residual is whole output buses
+(`Fr[*]`/`Fi[*]`) with "no matching pin", i.e. constant/shared tie-off outputs, NOT port
+feedthroughs. The recipe correctly logs `recipe_no_effect` there; that sub-class still has
+no repair. Promoted `ab_corpus:3w0l` under the `*` class.
+Two harness gotchas found getting there: (1) a new catalog strategy must also be listed in
+`engineer_loop._KNOWN_APPLY_STRATEGIES`, else `ab-drain` parks it `nondivergent_unknown_strategy`
+and judges 0 trials (test `test_feedthrough_buffer_has_an_ab_application_path`); (2) the
+independent-subject vote keys on `runs.design_family`, which ingest infers from the
+project-dir PREFIX — batch dirs named `<tag>_<hash>_<design>` collapse every design into
+family `<tag>` (one vote; read `ab_corpus_insufficient:1w0l` despite 3 wins). Name A/B
+projects by design, or add explicit `families.json` mappings before ingest.
+
 ### P0-3 — green ENV with strict signoff impossible
 `check_env.sh` passed while nangate45 had no LVS deck and `ANTENNA_X1` carried
 `ANTENNADIFFAREA 0.0` (GRT-0246). **Guard:** `scripts/flow/platform_capability.py` probes, per
