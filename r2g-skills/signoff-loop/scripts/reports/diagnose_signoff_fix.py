@@ -821,8 +821,14 @@ def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | Non
 
 
 def apply_edits(config_text: str, edits: dict) -> str:
-    """Replace the marked auto-block with `edits` (idempotent; re-apply replaces)."""
-    out, skip = [], False
+    """Stack `edits` onto the marked auto-block (idempotent; a key already in the block
+    is overridden in place, every other accepted fix is KEPT).
+
+    The block holds the ACCEPTED fixes only -- a rejected attempt is rolled back from
+    the snapshot before the next apply -- so replacing it wholesale silently undid
+    earlier repairs: an LVS feedthrough hook dropped by the timing fix that followed
+    (2026-10-01 AIC v2.2, failure-patterns P0-2e)."""
+    out, skip, kept = [], False, {}
     for ln in config_text.splitlines():
         s = ln.strip()
         if s == BLOCK_START:
@@ -831,10 +837,15 @@ def apply_edits(config_text: str, edits: dict) -> str:
         if s == BLOCK_END:
             skip = False
             continue
-        if not skip:
-            out.append(ln)
+        if skip:
+            if s.startswith("export ") and "=" in s:
+                k, v = s[len("export "):].split("=", 1)
+                kept[k.strip()] = v.strip()
+            continue
+        out.append(ln)
+    kept.update({k: v for k, v in edits.items()})
     body = "\n".join(out).rstrip("\n")
-    block = [BLOCK_START] + [f"export {k} = {v}" for k, v in edits.items()] + [BLOCK_END]
+    block = [BLOCK_START] + [f"export {k} = {v}" for k, v in kept.items()] + [BLOCK_END]
     prefix = (body + "\n\n") if body else ""
     return prefix + "\n".join(block) + "\n"
 

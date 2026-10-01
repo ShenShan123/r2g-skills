@@ -748,3 +748,15 @@ def test_ab_enqueue_refuses_lvs_recipe_under_timing_symptom(tmp_path):
     assert engineer_loop._enqueue_check_mismatch(conn, "l1", "lvs_port_feedthrough_buffer") is None
     assert engineer_loop._enqueue_check_mismatch(conn, "t1", "pin_side_rebalance") is None
     assert engineer_loop._enqueue_check_mismatch(conn, "unknown", "lvs_x") is None
+
+
+def test_apply_edits_stacks_on_accepted_fixes():
+    """A later fix (timing) must not erase an earlier accepted one (LVS hook)."""
+    cfg = "export DESIGN_NAME = t\nexport CORE_UTILIZATION = 20\n"
+    lvs = d.apply_edits(cfg, {"POST_GLOBAL_PLACE_TCL": "/hooks/ft.tcl"})
+    both = d.apply_edits(lvs, {"CORE_UTILIZATION": "15"})
+    assert "export POST_GLOBAL_PLACE_TCL = /hooks/ft.tcl" in both
+    assert "export CORE_UTILIZATION = 15" in both
+    again = d.apply_edits(both, {"CORE_UTILIZATION": "12"})       # same key: override
+    assert again.count("CORE_UTILIZATION = 1") == 1 and "= 12" in again
+    assert again.count(d.BLOCK_START) == 1

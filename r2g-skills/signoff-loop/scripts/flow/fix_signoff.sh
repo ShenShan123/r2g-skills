@@ -788,6 +788,19 @@ _capture_vector "$REPORTS/.rv_session_start.json" "$CHECK"
 [[ "$CHECK" == "timing" ]] && fix_one timing || true
 [[ "$CHECK" == "drc" || "$CHECK" == "both" ]] && fix_one drc || true
 [[ "$CHECK" == "lvs" || "$CHECK" == "both" ]] && fix_one lvs || true
+# An LVS repair that re-flows (lvs_port_feedthrough_buffer reruns from place) leaves
+# drc.json describing a layout that no longer exists: the manifest then refuses the
+# design (two runs bound / no DRC status). Re-grade DRC on the new layout (fix_one's
+# baseline is staleness-aware and may repair), then re-grade LVS once if that in turn
+# re-flowed. Bounded: one extra pass, no LVS repair in it (2026-10-01, P0-2e).
+if [[ "$CHECK" == "both" ]]; then
+  _gds_now="$(ls -t "$PROJECT_DIR"/backend/RUN_*/final/*.gds 2>/dev/null | head -1 || true)"
+  if [[ -n "$_gds_now" && ( ! -f "$REPORTS/drc.json" || "$_gds_now" -nt "$REPORTS/drc.json" ) ]]; then
+    echo "[drc] layout re-flowed after DRC was graded (LVS repair) — re-grading DRC"
+    fix_one drc || true
+    _ensure_baseline lvs
+  fi
+fi
 
 # Markdown summary from the JSONL log
 python3 -c 'import json,sys
