@@ -1,0 +1,18 @@
+{
+  "source": "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24",
+  "files_sha256": {
+    "converters/claude.py": "4e6b8c7b72f64c583de677d53e51d5cd936b425f9814c8c2668f0822886f974d",
+    "converters/gpt.py": "10437550bded256c7c129c66c11b618db09cacc95feb3ec924ce6fb31350e689",
+    "converters/qwen.py": "3f6dd3b2c7fe43a9b5257a5639392febd92dea4825180cd7c0eebfc7ae37d78b",
+    "development_budget_comparison.json": "45309c7a52038521fcc0bf54ad5377ede7e7db21b7a594d7bc2a9da581cef542",
+    "development_protocol_zh.md": "54b6a9f981c6c10919744319202418682b4be59a746a862b28069d84127b899d",
+    "experiment4_failure_analysis_zh.md": "a0a178c7c578a96350608ce601f2a5d5760a543e0dcb97c853b7cf3535175c12",
+    "experiment4_final_report_zh.md": "b78d37b9f1a58977106cdf9d4a7e080170ae54688c7d91d15be719737e78cc38",
+    "failure_analysis_evidence.json": "e05b2202e8a11c9f19fb8ddf5960c5ec90037435abab5f0e5f54cfbdaf915cb5",
+    "fixed_test_results.json": "a10b5d105e331ac8e2feb57c7e02ff97584fd9192dff91b6c8698bd605bb819a",
+    "limits.json": "83a84c1a29cee1ee1c91d7cb951e076583426dee0debdbd8a64e74d85e6a77c6",
+    "readiness.json": "8fd2a199467eae9a413cd55cd005540968f4cdb9aa55b1d911bd6ae4895bfdb9",
+    "semantic_audit_summary.json": "fa8872f0d3cbfbf9b96c865e5588410fcc3fb33ba0597ec3da45872892f8ccd9"
+  },
+  "paper_source_modified": false
+}

@@ -1,0 +1,61 @@
+{
+  "attempt_count": 1,
+  "attempts": [
+    {
+      "action_failure_signature": [],
+      "action_metrics": {
+        "antenna_violations": 0,
+        "drc_violations": 0,
+        "hold_wns_ns": 0.481946,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": 9.32274
+      },
+      "action_result_sha256": "4ae39ae47dc83171cd7e918809d9764d3a8b543e8cdea21eda0a7e1ec7dcff53",
+      "arm_id": "full_r2g",
+      "baseline_failure_signature": [
+        "DRC:m3.2"
+      ],
+      "baseline_metrics": {
+        "antenna_violations": 0,
+        "drc_violations": 4,
+        "hold_wns_ns": 0.477563,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": 9.30182
+      },
+      "baseline_result_sha256": "20a6b1a63276407a159edb0982d3321a40ce035096c5f3d019ea73002d83c3c3",
+      "baseline_strict_clean": false,
+      "candidate_hash": "2790c9839644a7cddb93d5dad16f668407a75b6ed28b00d0b4ce8e4f766177c8",
+      "candidate_id": "pin_side_rebalance",
+      "clean_sentinel_regression": false,
+      "created_at": "2026-09-12T22:04:39.442341+00:00",
+      "drc_delta": -4.0,
+      "elapsed_seconds": 91.882,
+      "evidence_role": "post_development_supplement_not_heldout",
+      "failure_domain": "drc",
+      "hard_regression": false,
+      "infrastructure_complete": true,
+      "lvs_delta": 0.0,
+      "probe_returncode": 0,
+      "project": "/home/yangao/r2g_full_development_20260910/full_r2g_supplement_208/tasks/exp1_6a2b257650ce_reg_file/attempt_01",
+      "protected_task_digest_match": true,
+      "provenance_complete": true,
+      "route_delta": 0.0,
+      "rtl_family_id": "5b908f8bf03e6be6bc9d028a77b682369f8c9acd48643aac14cd8a78bc6e7710",
+      "schema_version": "experiment3-trial-evidence-1.0",
+      "split": "full_r2g_supplement",
+      "strict_clean_after_repair": true,
+      "task_id": "exp1_6a2b257650ce_reg_file",
+      "verdict": "win",
+      "wns_delta_ns": 0.02092000000000027
+    }
+  ],
+  "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_6a2b257650ce_reg_file/baseline",
+  "baseline_sha256": "20a6b1a63276407a159edb0982d3321a40ce035096c5f3d019ea73002d83c3c3",
+  "check": "drc",
+  "first_strategy": "pin_side_rebalance",
+  "status": "strict_clean",
+  "strict_clean": true,
+  "task_id": "exp1_6a2b257650ce_reg_file"
+}

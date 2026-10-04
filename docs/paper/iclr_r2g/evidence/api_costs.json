@@ -1,0 +1,357 @@
+{
+  "rate_date": "2026-09-17",
+  "currency": "USD",
+  "convention": "Uncached base-context reference prices; no context, regional or service-tier premiums; no cache, batch or off-peak discounts. Not actual gateway expenditure. Excludes EDA compute, engineering and unrecorded calls.",
+  "pricing": {
+    "gpt": {
+      "model": "GPT-5.6-sol",
+      "input_usd_per_million": "4",
+      "output_usd_per_million": "20",
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
+      "scope": "Published promotional base rate, available at least through 2026-11-21."
+    },
+    "claude": {
+      "model": "Claude Opus 5",
+      "input_usd_per_million": "5",
+      "output_usd_per_million": "25",
+      "source_url": "https://platform.claude.com/docs/en/models/opus-5/whats-new-opus-5",
+      "scope": "Standard inference."
+    },
+    "qwen": {
+      "model": "Qwen3.7-Max",
+      "input_usd_per_million": "2.5",
+      "output_usd_per_million": "7.5",
+      "source_url": "https://www.alibabacloud.com/help/en/model-studio/qwen3-7-max",
+      "scope": "Singapore international list rate, used consistently across campaigns."
+    },
+    "kimi": {
+      "model": "Kimi-K2.7-Code",
+      "input_usd_per_million": ".95",
+      "output_usd_per_million": "4",
+      "source_url": "https://platform.kimi.ai/",
+      "scope": "Standard inference."
+    },
+    "deepseek": {
+      "model": "DeepSeek-V4-Pro",
+      "input_usd_per_million": "1.32",
+      "output_usd_per_million": "3.96",
+      "source_url": "https://api-docs.deepseek.com/quick_start/pricing/?push_animated=1&show_loading=0&theme=light&webview_progress_bar=1",
+      "scope": "Peak list rate; off-peak discounts not applied."
+    },
+    "grok": {
+      "model": "grok-4.5",
+      "input_usd_per_million": "2",
+      "output_usd_per_million": "6",
+      "source_url": "https://docs.x.ai/developers/pricing",
+      "scope": "Global base-context rate."
+    },
+    "gemini": {
+      "model": "Gemini-3.1-Pro-Preview",
+      "input_usd_per_million": "2",
+      "output_usd_per_million": "12",
+      "source_url": "https://ai.google.dev/gemini-api/docs/gemini-3",
+      "scope": "Standard base-context rate."
+    }
+  },
+  "acquisition": {
+    "gpt": {
+      "input_tokens": 19813605,
+      "output_tokens": 171489,
+      "separate_reasoning_tokens": 0,
+      "total_tokens": 19985094,
+      "billed_output_tokens": 171489,
+      "reference_api_usd": 82.6842,
+      "display_usd": "$82.68"
+    },
+    "claude": {
+      "input_tokens": 19716357,
+      "output_tokens": 256013,
+      "separate_reasoning_tokens": 0,
+      "total_tokens": 19972370,
+      "billed_output_tokens": 256013,
+      "reference_api_usd": 104.98211,
+      "display_usd": "$104.98"
+    },
+    "qwen": {
+      "input_tokens": 19506155,
+      "output_tokens": 238341,
+      "separate_reasoning_tokens": 222612,
+      "total_tokens": 19967108,
+      "billed_output_tokens": 460953,
+      "reference_api_usd": 52.222535,
+      "display_usd": "$52.22"
+    },
+    "deepseek": {
+      "input_tokens": 19092150,
+      "output_tokens": 357730,
+      "separate_reasoning_tokens": 527152,
+      "total_tokens": 19977032,
+      "billed_output_tokens": 884882,
+      "reference_api_usd": 28.70577072,
+      "display_usd": "$28.71"
+    },
+    "gemini": {
+      "input_tokens": 19827310,
+      "output_tokens": 109802,
+      "separate_reasoning_tokens": 46328,
+      "total_tokens": 19983440,
+      "billed_output_tokens": 156130,
+      "reference_api_usd": 41.52818,
+      "display_usd": "$41.53"
+    },
+    "kimi": {
+      "input_tokens": 15407180,
+      "output_tokens": 479933,
+      "separate_reasoning_tokens": 230568,
+      "total_tokens": 16117681,
+      "billed_output_tokens": 710501,
+      "reference_api_usd": 17.478825,
+      "display_usd": "$17.48"
+    },
+    "grok": {
+      "input_tokens": 19466839,
+      "output_tokens": 136555,
+      "separate_reasoning_tokens": 387653,
+      "total_tokens": 19991047,
+      "billed_output_tokens": 524208,
+      "reference_api_usd": 42.078926,
+      "display_usd": "$42.08"
+    },
+    "r2g": {
+      "reference_api_usd": 0,
+      "display_usd": "$0.00",
+      "total_tokens": 0
+    }
+  },
+  "repair_learning": {
+    "gpt": {
+      "input_tokens": 28118,
+      "output_tokens": 3831,
+      "separate_reasoning_tokens": 0,
+      "total_tokens": 31949,
+      "billed_output_tokens": 3831,
+      "reference_api_usd": 0.189092,
+      "display_usd": "$0.19",
+      "calls": 6,
+      "max_input_tokens_per_call": 8878
+    },
+    "claude": {
+      "input_tokens": 31312,
+      "output_tokens": 2351,
+      "separate_reasoning_tokens": 0,
+      "total_tokens": 33663,
+      "billed_output_tokens": 2351,
+      "reference_api_usd": 0.215335,
+      "display_usd": "$0.22",
+      "calls": 6,
+      "max_input_tokens_per_call": 9777
+    },
+    "qwen": {
+      "input_tokens": 32045,
+      "output_tokens": 11579,
+      "separate_reasoning_tokens": 0,
+      "total_tokens": 43624,
+      "billed_output_tokens": 11579,
+      "reference_api_usd": 0.166955,
+      "display_usd": "$0.17",
+      "calls": 6,
+      "max_input_tokens_per_call": 10229
+    }
+  },
+  "repair_deployment": {
+    "gpt": {
+      "input_tokens": 37251,
+      "output_tokens": 19741,
+      "separate_reasoning_tokens": 0,
+      "total_tokens": 56992,
+      "billed_output_tokens": 19741,
+      "reference_api_usd": 0.543824,
+      "display_usd": "$0.54",
+      "calls": 37,
+      "max_input_tokens_per_call": 1449
+    },
+    "claude": {
+      "input_tokens": 34815,
+      "output_tokens": 15619,
+      "separate_reasoning_tokens": 0,
+      "total_tokens": 50434,
+      "billed_output_tokens": 15619,
+      "reference_api_usd": 0.56455,
+      "display_usd": "$0.56",
+      "calls": 30,
+      "max_input_tokens_per_call": 1785
+    },
+    "qwen": {
+      "input_tokens": 39781,
+      "output_tokens": 60235,
+      "separate_reasoning_tokens": 0,
+      "total_tokens": 100016,
+      "billed_output_tokens": 60235,
+      "reference_api_usd": 0.551215,
+      "display_usd": "$0.55",
+      "calls": 37,
+      "max_input_tokens_per_call": 1590
+    },
+    "m0": {
+      "reference_api_usd": 0,
+      "display_usd": "$0.00",
+      "total_tokens": 0
+    },
+    "m1": {
+      "reference_api_usd": 0,
+      "display_usd": "$0.00",
+      "total_tokens": 0
+    },
+    "m2": {
+      "reference_api_usd": 0,
+      "display_usd": "$0.00",
+      "total_tokens": 0
+    },
+    "m3": {
+      "reference_api_usd": 0,
+      "display_usd": "$0.00",
+      "total_tokens": 0
+    },
+    "full_r2g": {
+      "reference_api_usd": 0,
+      "display_usd": "$0.00",
+      "total_tokens": 0
+    }
+  },
+  "converter_development": {
+    "gpt": {
+      "input_tokens": 489086,
+      "output_tokens": 67351,
+      "separate_reasoning_tokens": 0,
+      "total_tokens": 556437,
+      "billed_output_tokens": 67351,
+      "reference_api_usd": 3.303364,
+      "display_usd": "$3.30",
+      "calls": 16,
+      "max_input_tokens_per_call": 49364
+    },
+    "claude": {
+      "input_tokens": 504183,
+      "output_tokens": 83339,
+      "separate_reasoning_tokens": 0,
+      "total_tokens": 587522,
+      "billed_output_tokens": 83339,
+      "reference_api_usd": 4.60439,
+      "display_usd": "$4.60",
+      "calls": 11,
+      "max_input_tokens_per_call": 54457
+    },
+    "qwen": {
+      "input_tokens": 345284,
+      "output_tokens": 225672,
+      "separate_reasoning_tokens": 0,
+      "total_tokens": 570956,
+      "billed_output_tokens": 225672,
+      "reference_api_usd": 2.55575,
+      "display_usd": "$2.56",
+      "calls": 15,
+      "max_input_tokens_per_call": 30547
+    },
+    "r2g": {
+      "reference_api_usd": null,
+      "display_usd": "n/a",
+      "scope": "Historical tool development not metered in this campaign."
+    }
+  },
+  "repair_learning_total_usd": 0.571382,
+  "sources_sha256": {
+    "/home/yangao/r2g_experiment1_final_archive_20260903/execution/methods/openai-vanilla/runner_state.json": "8d60f6ba6288e4dcc7d6e8f3079ad68c6bfe4dc9f9ccce4a382705e23553f523",
+    "/home/yangao/r2g_experiment1_final_archive_20260903/execution/methods/claude-vanilla/runner_state.json": "e0515dc1f4a99a470914cc68aa7d26c3725f51c6d829bb6f6eea101d5e6b4e3e",
+    "/home/yangao/r2g_experiment1_final_archive_20260903/execution/methods/qwen-vanilla/runner_state.json": "288c5e8fe2fd57b9af82e3f59ed1c8c971bc239dce956248f26453d16d5f3049",
+    "/home/yangao/r2g_experiment1_final_archive_20260903/execution/methods/deepseek-vanilla/runner_state.json": "69e4ce10ccf560428511f3bbe5e62354bf68e073d94fe739932236f6169160bc",
+    "/home/yangao/r2g_experiment1_final_archive_20260903/execution/methods/gemini-vanilla/runner_state.json": "c6c4c1341c515581229f2daa4e662e678a7eaeee5a02f2bb08dd9ebcf16e27d1",
+    "/home/yangao/r2g_experiment1_final_archive_20260903/execution/methods/kimi-vanilla/runner_state.json": "ce93b3cffa506b3b7561352669e1efb320cfe1e872df2287c15d7eb646bcb668",
+    "/home/yangao/r2g_exp3_formal_20260906/state/a_learning/token_ledgers/gpt.json": "37e0c5d417bcbc4373009486886a19f3f2ed7a5a8ea565c2a2b5db4f84a2dd3f",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/gpt/exp1_15998ea30bc1_aes_192/token_ledger.json": "7cb4b04685548183c98e78a3449b4bfcc15cab3035afd37d58e9950fb8e46fd6",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/gpt/exp1_17c9a0461ada_des_top/token_ledger.json": "efc3d8dc18cd122ee9a8424d002a2fd488be63af959af95b5b8530484afc13d0",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/gpt/exp1_18940142f78e_seqcordic/token_ledger.json": "fe31631c4930d1dbc53baf12856c844908d63b06c3cf56f8270ac5b246324b2b",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/gpt/exp1_1993adb0da90_timer_top/token_ledger.json": "4d87c43ee5bbcc7ce8dad896cedea680bf495d0e3f582e714c79e80830691aa6",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/gpt/exp1_250c441e570f_blake2s/token_ledger.json": "603de4b33ac0eea70391eb7f85099266fe88fbdad434b2ef23e3da6f0835a940",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/gpt/exp1_61c173a60608_iir_biquad_axis/token_ledger.json": "9281155a221f8a3b23df53f7d5a2370e33d0710d7631860ca186e6fa74cd8c71",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/gpt/exp1_6a2b257650ce_reg_file/token_ledger.json": "7689458d9a94d227763fd0d9766d6d917f7a3ed49d88353eb1cd914eb574d0e5",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/gpt/exp1_729416e93fdc_blake2s_core/token_ledger.json": "05ccc2069a1cc5c5d43c46fa95470e8429e88239eef8ce388c5bc1a02372140c",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/gpt/exp1_72c9fc843efb_wbuart/token_ledger.json": "b7d6c37952465e26604fd8fd40eb972a35ca5e5bf0cf28b45a67dc5e1b870bf9",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/gpt/exp1_95f132db328d_tanh/token_ledger.json": "fc178048daaaae6a86067f7b9ea69202da6bb71b90daf36425416c8fdd26e5e2",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/gpt/exp1_9e3f10826919_fft8_stream/token_ledger.json": "0034810c084a62d5ffcf3e266d533623881b2c2e4056908ffb9ad77ef8967c95",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/gpt/exp1_c3cb6ed47cb8_pipelined_iir/token_ledger.json": "43d5ea62aff1bf1bc3a9e71c45836c1b6036179d95d0ac050bd92e8062a0ce6e",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/gpt/exp1_d50060d8400c_picorv32/token_ledger.json": "daa646fb27a185f171eb4df548124e60b4e636a3a4faf0cf7a03aca8c3b49963",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_0/received_response.json": "f4888dcdf0646344d6ddf5ca2947f811881fb2be215729e755fa939e13963626",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_1/received_response.json": "d216d41a16f0664b585a9f0c594b9929725d089dbe4ebfb6c98bdba0d4828f32",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_10/received_response.json": "82426d95cf40c6a3cd3115bc110f0f246b68672ceb7d70fbcc16932c5e158e73",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_11/received_response.json": "9f5517b309ac7e9537acf8cfeafb345a842261d1d918aaf57903dc28130f4dc8",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_12/received_response.json": "22aa4a6728813ca8671d54e51637208147f2b4826454bbccee69f4cc4eb0cd2b",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_13/received_response.json": "b2aeac30128089d2d16e7aa63a3240c997ea50b0aad35b0a74521ac63bd38234",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_14/received_response.json": "5b930cdee3fc7d322be7a8e5963ffea149fb49c8cf42e2a743394d18279e2c1b",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_15/received_response.json": "3aece33495c06fd3b97301672af2707a8c9a6e57a106e677880656f85b1b41aa",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_2/received_response.json": "45390e2adf0aeb4df5e8cc7a8fc8b2ea985227d12d801dc4749ba6defa6ef6f2",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_3/received_response.json": "bfaac1517feb5f5f9901319a7ec07834f95f1a31e267bdab092d979de79c92d8",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_4/received_response.json": "0a9ebc95e54188befcf01a315d1cd466d82bcc2e4a76e8bc6ec8c34817240cac",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_5/received_response.json": "a1b1b9cf20e1b51705c734421b59b9257fadf5ab39e45ccca6d66d53bb917167",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_6/received_response.json": "f213966ec1d093a793ad461dec835f22f5f053565e311b532a7073ce6994dce7",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_7/received_response.json": "49a07530fe7b9adb8ba5db89f37bed5d1e3aeff5742902b1bbf80419837c5ea2",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_8/received_response.json": "4d40c010536c17f180d8857a8f4153340a6cf00af0c151a33683ce4aac300d09",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_9/received_response.json": "936c07d5e372d8497c89f2fe02ec73dc3553428bb21fbef716c966624c434db7",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/token_ledger.json": "aa16aaa07e5683b4fc81acecee3e92f1306907e13058790454e9d2e3c1a35d29",
+    "/home/yangao/r2g_exp3_formal_20260906/state/a_learning/token_ledgers/claude.json": "524689904fa55ba09e7db6a9063c811fda9830f64f466bafb34540646a5baafc",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/claude/exp1_15998ea30bc1_aes_192/token_ledger.json": "a1a8f8307b43bccbe280e05911ff8cc2cf105759046aadab5f202b0914325142",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/claude/exp1_17c9a0461ada_des_top/token_ledger.json": "52e8ec208e24af761a0f62f6383e5f7310a38afc7f59ffd830aa4ff370bf792a",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/claude/exp1_18940142f78e_seqcordic/token_ledger.json": "d57aa0c2af921df2a81672f4a7af8511e1f199335a9f9b35e543370bf3678510",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/claude/exp1_1993adb0da90_timer_top/token_ledger.json": "93d85b4b0e7a35b2ad21b081b3de2a533f10cbbd9a13c845c101ef4158583f72",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/claude/exp1_250c441e570f_blake2s/token_ledger.json": "bcd0ed679912bcbd69807d35b96a1412126924fac1f53096ca42effea644e09a",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/claude/exp1_61c173a60608_iir_biquad_axis/token_ledger.json": "1b182c2b1814626ec3c00a9c7d760c0bea43c97ebb70c8b88b2b23b1ba0aa12c",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/claude/exp1_6a2b257650ce_reg_file/token_ledger.json": "c6690d0acbced40138671aa5840e37a5acfa411a1d16e176f1ddf076b2b575c6",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/claude/exp1_729416e93fdc_blake2s_core/token_ledger.json": "9c54f30bac3e0c4028285d413fa14943721e8ca0fd4fdc36432994f60000c263",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/claude/exp1_72c9fc843efb_wbuart/token_ledger.json": "f733ed047a2930837cef15b39270f7587764b19b2a9ee061e46fd6a7f20d1257",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/claude/exp1_95f132db328d_tanh/token_ledger.json": "ae9ac8ede560ba9c6884019d463a594f1b7c5f14f8ef702bc252c411493a2cec",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/claude/exp1_9e3f10826919_fft8_stream/token_ledger.json": "0b1b79d4c9300d8c7bd0259f78d33d7d23019d0f766770f6712afaa021158b70",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/claude/exp1_c3cb6ed47cb8_pipelined_iir/token_ledger.json": "2597a55ed8d282c98e80b399d303651ce62fe8dec1aac6e3ac6cb46695d6674d",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/claude/exp1_d50060d8400c_picorv32/token_ledger.json": "b5c0fd233413b20531228bee744a29991e4abe810031753c8ee4a45b5522cbad",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_0/received_response.json": "38e5c35662b669de644479c29bbc1c1422fd2a69d42b51ba5999698b31530499",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_1/received_response.json": "cc7b51a82586c205271d6f8494a809d545de485bf5bef37212e18ab0a0e1c83b",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_10/received_response.json": "a834eef52503d7b468430111be9be83cdec66955d71adfabc98d748b06e225fe",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_2/received_response.json": "f7c785febb3df51e097d9d2e9b5461b93922a40f9dbf9cbeee7808e5d0791274",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_3/received_response.json": "a31acb6e492207b05e00c8aa8ea9669dc095547cd50f9a6e264547eb27d6b7ba",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_4/received_response.json": "c7801ec8c9b95015f329e3ec21a916938a1599b4d6cd3dc0d7b6957acdc72414",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_5/received_response.json": "d653f4a7811db45c1472319df121a5fe6cb6577b8cead44fc48b356421d0d3a5",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_6/received_response.json": "0e3fcbd4d6621903946787ddd2661be70d5a2fc7b284ac608bb8b94d1902e0b7",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_7/received_response.json": "783313b4f61aba9368c0a2923996db46ba9085f5143bb1ef7ac3faf1e2504b8a",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_8/received_response.json": "776330de25acc9f27bb161678d0846f39a04753bb56022de8d796863bb031643",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_9/received_response.json": "e29a223cee9bedfc1037eccbee11b4dc467d6562b95ec8e0150a0383253325ca",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/token_ledger.json": "d885302e39ec80ec0f6a225c6ac1e865094f9700f3c64dc1ef3f81af4557ef71",
+    "/home/yangao/r2g_exp3_formal_20260906/state/a_learning/token_ledgers/qwen.json": "cfe69f6006f6d8dc778b8398e1889557a336c680f09af06fd371d860dc23a613",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/qwen/exp1_15998ea30bc1_aes_192/token_ledger.json": "fc343be83a1cbf7f6ca48a38bd24fb8a156ac10b75eb2de43157db65efdc7c08",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/qwen/exp1_17c9a0461ada_des_top/token_ledger.json": "3383e079b07dfc8cdb7c8035d17723c52e1367993b8796544bd3956f49852016",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/qwen/exp1_18940142f78e_seqcordic/token_ledger.json": "fd8135d24b1fc5de1ba61ce5f2b3381050cab74c67fa601b70f8cd0333600f00",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/qwen/exp1_1993adb0da90_timer_top/token_ledger.json": "92d8e8150752e6ddee6170e90df1681a0a9b2fe0c5c81bdc696a01bb93cabafd",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/qwen/exp1_250c441e570f_blake2s/token_ledger.json": "15b4c4461e7c93f2ea6e874ff1e5af42c053851e504d64be65ae6a7306795a5a",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/qwen/exp1_61c173a60608_iir_biquad_axis/token_ledger.json": "40415cbc3499ce2c715c7b5de0266712f56ec9c6b987a98c1711b46de5d9a895",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/qwen/exp1_6a2b257650ce_reg_file/token_ledger.json": "7e8852bdedb0de93c1db387a20e54f8ef15b00a1c9f79c3e7553c5b72001f90e",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/qwen/exp1_729416e93fdc_blake2s_core/token_ledger.json": "ff732e4fbf02312c337629f3ff20f940d446a3bd1e9646bdf3c45743cb6a9227",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/qwen/exp1_72c9fc843efb_wbuart/token_ledger.json": "0f851af8fb7930d683243d6e28e98065f9150fda00b727ba02fbb91ca0e513e7",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/qwen/exp1_95f132db328d_tanh/token_ledger.json": "98fbab0320948f0778e1a54c9bcfd4cdc7d45b375233b5e43bbb4b08cf180bf4",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/qwen/exp1_9e3f10826919_fft8_stream/token_ledger.json": "06763e22834e727d430be29d1f230d201c20d1a6568d250acd8342ef8cfba1ef",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/qwen/exp1_c3cb6ed47cb8_pipelined_iir/token_ledger.json": "6b6a8289fedd93815745c1404e667c0729e23e4614cc22a68d9582d25414373b",
+    "/home/yangao/r2g_exp3_formal_20260906/state/pure_llm/qwen/exp1_d50060d8400c_picorv32/token_ledger.json": "d0762b9a3bf39567009b8a0877b6b2d6844d4e2511d57382c6ed8578175f2c1c",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_0/received_response.json": "c3ebb2a634478a49fff52f68ee173f55c07b0a20b0249a44bd64ce6cb3dc1715",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_1/received_response.json": "0f9bd0ce65b438f9ce8b1d00a3b167cca6da23f1574a4b73b81923ec037fedef",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_10/received_response.json": "ee7570ad47b2ff9248d990d99ca903456f2c49394d8b7b08107c5f0714c7c0cd",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_11/received_response.json": "59eed1d279baff2c6253264d99df2fb27bb359d7315eb5ae27a1df5adeb91ef8",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_12/received_response.json": "d7ee87965f41d3acf04be68907d811a9e85937b26a0ef112ecb75fe102751b28",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_13/received_response.json": "5110bf7663f4454d43e18447a5e58c5b1802008c4d1da62efe8407d5f3edbe58",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_14/received_response.json": "5199a8a96dcc751649905f50d88fc690e812effdcef5539316160af2e7bdfbd2",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_2/received_response.json": "0ee974da7ab095ce95c244614df06195bebc604424196b9fdb967d655958b8eb",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_3/received_response.json": "a69ab87ebd3c6651563ae1d96c75c0027368c653c5fbce289af3ac3a6a13e8fa",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_4/received_response.json": "d056495f837701a85c93d43900ac9602b2e54626c5d0430fc2a9ec6fc2e40f65",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_5/received_response.json": "67770c31efc28d816fa5aa2909d4d851b70a880d5eaeb1c6f0dc27355d0a611c",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_6/received_response.json": "40f3806ff83d8843a625e0e7ebcab714f4dbcd6020fb9fdf073a4da4349aa9e8",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_7/received_response.json": "b3014bd51bb6c2d9e420fd976788a21e1c72e05330e3276a7156bd384c8bb6ab",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_8/received_response.json": "36a5bb2e7ec27e5109a580a6847e241c6b8db7f841f1c9d20691bfbb7d260dd5",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_9/received_response.json": "4e4c2aaedb139d608f7884c568ffb8954538d5ca4ac9f2fb0e527b91a26cb136",
+    "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/token_ledger.json": "ba29ef961a71e55a4289e57ad30a370df8a52c751f2150c8907e675cc7ffd039"
+  }
+}

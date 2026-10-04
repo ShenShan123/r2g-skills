@@ -1,0 +1,36 @@
+{
+  "candidate_hash": "0567f934727d7b4a9d24b3235e8ce8ebe2c7f2726898cb28b0180b0c19de54f9",
+  "candidate_id": "pin_side_rebalance",
+  "candidate_version": 1,
+  "config_edits": {
+    "PLACE_PINS_ARGS": "-exclude right:*"
+  },
+  "failure_domain": "drc",
+  "native_selection": {
+    "auto_apply": true,
+    "config_edits": {
+      "PLACE_PINS_ARGS": "-exclude right:*"
+    },
+    "geometry_evidence": {
+      "coordinate_count": 60,
+      "die_bounds_um": [
+        0.0,
+        0.0,
+        1603.935,
+        1603.935
+      ],
+      "edge_count": 60,
+      "edge_fraction": 1.0,
+      "rule": "m3.2",
+      "side": "right"
+    },
+    "id": "pin_side_rebalance",
+    "lifecycle_match_level": "platform_geometric",
+    "lifecycle_status": "promoted",
+    "rationale": "60/60 m3.2 violations are concentrated at the right die edge. Exclude that side from automatic IO-pin placement, then rerun from floorplan without changing die area, clock, or the DRC deck.",
+    "recheck": "drc",
+    "requires_ab_promotion": true,
+    "rerun_from": "floorplan"
+  },
+  "rationale": "60/60 m3.2 violations are concentrated at the right die edge. Exclude that side from automatic IO-pin placement, then rerun from floorplan without changing die area, clock, or the DRC deck."
+}

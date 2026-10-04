@@ -1,0 +1,47 @@
+{
+  "schema_version": "experiment4-resource-limits-2.0",
+  "status": "frozen_prelaunch",
+  "frozen_at": "2026-09-08T10:46:24-07:00",
+  "toolchain": {
+    "orfs_root": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts",
+    "openroad_exe": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/tools/install/OpenROAD/bin/openroad",
+    "openroad_version": "26Q3-318-g6b9d7fb806",
+    "yosys_version": "0.64-8449dd470",
+    "platform": "sky130hd"
+  },
+  "converter_development": {
+    "rounds_per_model": 6,
+    "api_calls_per_model": 6,
+    "max_output_tokens_per_call": 32768,
+    "minimum_output_tokens_per_call": 4096,
+    "total_tokens_per_model": 400000,
+    "development_cases": 6,
+    "feedback_scope": "development_only_complete_static_lint_plus_bounded_runtime_diagnostics",
+    "feedback_max_signatures_per_case": 8,
+    "feedback_max_signature_chars": 240,
+    "early_stop_strict_passes": 6,
+    "freeze_selection": "best_development_round",
+    "max_converter_source_bytes": 200000
+  },
+  "hidden_evaluation": {
+    "cases": 24,
+    "llm_calls": 0,
+    "converter_frozen_before_test_ids_are_revealed": true,
+    "timeout_seconds_per_case": 3600,
+    "workers_initial": 1,
+    "workers_conditional_max": 2
+  },
+  "canary": {
+    "cases": 1,
+    "scored": false
+  },
+  "execution": {
+    "python_threads_per_case": 4,
+    "minimum_free_disk_gib": 30,
+    "maximum_live_iowait_percent_for_scale_up": 15,
+    "network_access_during_converter_execution": false,
+    "resume_policy": "skip_only_attested_completed_case",
+    "retain_failed_logs": true,
+    "compact_intermediate_csv_after_final_audit": false
+  }
+}

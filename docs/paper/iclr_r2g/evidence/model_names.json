@@ -1,0 +1,18 @@
+{
+  "models": {
+    "GPT": "GPT-5.6-sol",
+    "Claude": "Claude Opus 5",
+    "Qwen": "Qwen3.7-Max",
+    "Kimi": "Kimi-K2.7-Code",
+    "DeepSeek": "DeepSeek-V4-Pro",
+    "Grok": "grok-4.5",
+    "Gemini": "Gemini-3.1-Pro-Preview"
+  },
+  "sources": {
+    "/home/yangao/r2g_paper_experiment_materials_20260909/experiment1/results/experiment1_final_report_6llm_plus_r2g.json": "648e6c2f97991f6480d1e75fae51bb597a414012021449db1ccabbfa2e8cd70e",
+    "/home/yangao/r2g_paper_experiment_materials_20260909/experiment3/design_and_execution/reproducibility_snapshot/protocol/experiment3_model_routes.json": "6de877ef6dee89107154bc463ede4f2f4be81423d8e2a8a0f43f0dafa3fb13d4",
+    "/home/yangao/r2g_exp4_progressive_20260910/protocol/experiment4_model_routes.json": "32db95eba0dc24bcfeb9bd2cb2a0df32c9c88748db6e8c8941727fb2e4054516"
+  },
+  "grok_display_authority": "User confirmed with gateway that grok-4.5-build is grok-4.5; use grok-4.5 in manuscript without qualification.",
+  "numerical_results_changed": false
+}

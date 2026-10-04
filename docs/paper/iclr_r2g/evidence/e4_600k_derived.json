@@ -1,0 +1,635 @@
+{
+  "study": "600k fixed benchmark retest",
+  "sources": {
+    "evidence/e4_600k/experiment4_failure_analysis_zh.md": "a0a178c7c578a96350608ce601f2a5d5760a543e0dcb97c853b7cf3535175c12",
+    "evidence/e4_600k/development_protocol_zh.md": "54b6a9f981c6c10919744319202418682b4be59a746a862b28069d84127b899d",
+    "evidence/e4_600k/readiness.json": "8fd2a199467eae9a413cd55cd005540968f4cdb9aa55b1d911bd6ae4895bfdb9",
+    "evidence/e4_600k/failure_analysis_evidence.json": "e05b2202e8a11c9f19fb8ddf5960c5ec90037435abab5f0e5f54cfbdaf915cb5",
+    "evidence/e4_600k/material_manifest.json": "c7eaa47ba12dfd6a00eea857bf24bef712ede34450c6996bc3369c669aeea293",
+    "evidence/e4_600k/fixed_test_results.json": "a10b5d105e331ac8e2feb57c7e02ff97584fd9192dff91b6c8698bd605bb819a",
+    "evidence/e4_600k/semantic_audit_summary.json": "fa8872f0d3cbfbf9b96c865e5588410fcc3fb33ba0597ec3da45872892f8ccd9",
+    "evidence/e4_600k/semantic_feedback_source.py": "94613846ea5010a50aab9bbec0d26db7c14f5ae1438e0ea0180dc3c62d357baf",
+    "evidence/e4_600k/experiment4_final_report_zh.md": "b78d37b9f1a58977106cdf9d4a7e080170ae54688c7d91d15be719737e78cc38",
+    "evidence/e4_600k/development_budget_comparison.json": "45309c7a52038521fcc0bf54ad5377ede7e7db21b7a594d7bc2a9da581cef542"
+  },
+  "case_source_sha256": {
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_11fdcf2983bd_tt_um_control_top.json": "536ca843c1ed980f3e02ff77b9a7c4311d24b9d7af7c5daa2b834435fbb31e34",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_165715a1fca2_ip.json": "c6d6c445f7d26bd0332921536998483efdf3c9ec714ff05f8dc2dfbf76a07ce0",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_20fc119bebe3_trng_csprng_fifo.json": "3eb52a6fe38f75e15a7d0db9b671a6a1f29d57c0689a9cd9d8cd449104016760",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_22c54fb452cd_airi5c_gpio.json": "32fbe043ae516dff47dc355fed6218a01eecb76f49386bc949534d3ce63a7ee3",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_29e8cb8a15fe_sdram.json": "5c6de9188ea2d98f5941315cc970fb7fa11152e6dcf36ecd0341b08059045994",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_31f3bb19aec2_ahb_master.json": "1bdbb40dcf47d5c4f79bf4645df2fe59124a746596aa58c620e80272ba947ef7",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_3630af58e933_ber_tester.json": "2ad07d4162385fdbe45059b4a61bcb1a144222b5dc08e9366ed66f9227c24e94",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_46703930ac4c_axis_switch_v1_1_29_axis_switch.json": "93ab0188225204bb9f984cb55bb504a00bfc879670728e1185f7f5487b6863c6",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_49940d240660_blinking.json": "93aa966b2b4afe517ba7c94334df9d8ec1db8dbec9ffd1de0e9c3bf7c83f5815",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_57028fe4b343_DPPE_SA.json": "3cb98c34ed7808ade065fd6e25764466288b1266616db623b9bf5d8f85fd2de6",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_73ee95c9a809_cmd_engine.json": "dbb8649a258abd610fb221e336e899334f662f9069046edfcc63b3f956253e3f",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_7d52de3acdca_array_sys.json": "77f8357ca485a927df0ee2ab91a41e4daa95bb08d9879672c8d0abed736e9cd6",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_82f98df6bb1b_tt_um_obstacles_dino.json": "76cd95aeb354b53f39637f70ec2dc9ad01b3e61759f7095d9ee43e856f92cc64",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_8ce0ed4971e8_uart_tx.json": "e9afbb99d360ce6bacb15ef65338b1774fcc41a1587a7c5692fba4970b8833d2",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_900e047ec6dd_AxiStreamFifo.json": "907ee880609d7edefb75d1907c9f79debc29a00f6507db6e8a48eb492d4635d0",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_9305f00e3773_usb_top.json": "277273a816df513456542e07a7770b76ed990a3cc361dc9e40541bc8454ca398",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_a9fc70156187_dbg_bridge_uart.json": "0b55ca41d12a8ff996be90a756555eef075c8f43997c186be7726be64d5bac2d",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_b056a1e4b6d3_cic_decimator.json": "f363b8481fe0571f085fd2fec942d4b13602bbff373de46382ddc4393d3779f9",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_b126d34d9fd7_tt_um_uwasic_onboarding_aes.json": "390d70bfa20e5b1c11bf0cf13f9bb9ad79af47833f2bc887c7433ecab06c985b",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_cafb43e46e59_tt_um_cordic_sc.json": "0ac796c17f0468035f2f1dc03c67d86b20d405a04bf3f5cebedc358e56aa97ba",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_cb085be4ff4e_tt_um_underserved.json": "302d368ef7285b385ee04980802baac8d114b833cada797175b213635202567f",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_d36e424e0715_axil_adapter.json": "87e20eabca41cdb7d1e26a6cf34b442b421dac45be077b099f61dc527ede537b",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_da166bbae20c_xtea.json": "95eae566672190aeff4f6f7c13c28883fbccbb216d1f3d4a4041c668e7d74a4c",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/r2g-frozen-v3/exp1_f257e96af20b_control_rx_network_bridge.json": "93d3318ee0d878273af6c1982a5ecb99192840aed3a50ec70a1f7c8db9908468",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_11fdcf2983bd_tt_um_control_top.json": "ffdfb9464b8cc123a6e905c0846f04cd8130352ff9f9c3cd00476fc0df2f39e7",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_165715a1fca2_ip.json": "f8b80427084490efd5da6e7f625abd35bf3199253fcf26bcc8c0e83ec5af7d40",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_20fc119bebe3_trng_csprng_fifo.json": "e2c035b11c268e3890f54c56a15c8ccfe7ae18492994ee879a233514606dec1e",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_22c54fb452cd_airi5c_gpio.json": "071ef3ec3cb4463df484336fbded588d0fe7617159384fc6365e6e975f8c7afe",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_29e8cb8a15fe_sdram.json": "cab0414b89d59e883cfa0c7826e4cb0ebb088f90b44fd408e74860adfa2a4d3e",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_31f3bb19aec2_ahb_master.json": "722e98e0cd8bb98a0b4dcb0b36afb7575580c7c34b3e78484ae546bf8c8a45e8",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_3630af58e933_ber_tester.json": "ff6db0abf7ed8858f90c57d50855e2f69852c7dfae505e002fa848cf548378e7",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_46703930ac4c_axis_switch_v1_1_29_axis_switch.json": "279f0e58ab71c6c7585e53f07e0a75093fec47a3f54b080c850f76698293ea2f",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_49940d240660_blinking.json": "f845bea5d1b8e6121ff51418323d1db838a7842ba0033de0108f0ebb05381144",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_57028fe4b343_DPPE_SA.json": "ecd996a7483c505260d6fab7ea1a2ac87bab63ecbc6562aeb2c5cd59fbb8dff4",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_73ee95c9a809_cmd_engine.json": "927e04f4070fbf6895cf0da819c5bfc9cf585fb4eb602557caad82e241623b61",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_7d52de3acdca_array_sys.json": "16a1afb598befeb94cc3478eb07b63104d3fa8f08ffff71fc66733bfb1b075d0",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_82f98df6bb1b_tt_um_obstacles_dino.json": "6de7dd5c439ace442de90fabcc48abf131333cc047385def0ee5c39efeff54d0",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_8ce0ed4971e8_uart_tx.json": "d4634bcbf9fc6c8c4e5d3e7e7952f4612981719151986dcaa06ed5976e96ac96",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_900e047ec6dd_AxiStreamFifo.json": "1e77c6857957a98f98febe06bdb6c5c2a0fd9481a5a9650694c73d3005c513bd",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_9305f00e3773_usb_top.json": "d56a741fa1238fb638a2d73e207d6146063900b9bb34c479140880ac1af83c21",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_a9fc70156187_dbg_bridge_uart.json": "183c63f9764100a58345791c3323769b610ff1b0636213572ed5a13bee1f4ecf",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_b056a1e4b6d3_cic_decimator.json": "2757331c7c8a30d1455fb8d48bc55dd80fe54cbdaa2971a54d7f8e4a2e98b86a",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_b126d34d9fd7_tt_um_uwasic_onboarding_aes.json": "435738e2f5332f91b55f26c3018a5f99fd464c79e4c5f9bbd2607e3fd9c045ba",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_cafb43e46e59_tt_um_cordic_sc.json": "2e3125be8e0823da8d969f0f147f6db0064cacc7843f69582bc59178f4c427d3",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_cb085be4ff4e_tt_um_underserved.json": "8594e917869f08036100f3f5aa6169ae0aa6d2521dc5e522c834324465e1ba78",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_d36e424e0715_axil_adapter.json": "c1fb90ddea87209767eff4037944b24d28698ab7031eb5ac9c745a1cf6dc59c9",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_da166bbae20c_xtea.json": "3f13ba4dca9fdfad53380661cd8cc48d68238c4dfd1b6e6f7a26b410f8ff7844",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-gpt-frozen/exp1_f257e96af20b_control_rx_network_bridge.json": "c657fb85cc3298d916f47ed01e08f9265d660c4b3dae4354c6e68f94214dd650",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_11fdcf2983bd_tt_um_control_top.json": "b481f4787d6034963c97e6a7e838fd254906de605461ebcdbb939551fed323c3",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_165715a1fca2_ip.json": "a438c85f1e0f2e641cf04c42188f3e067bb051de301c9fbaed40a9985876ce59",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_20fc119bebe3_trng_csprng_fifo.json": "e771f1b08a5a3ee3d27b9d23c99f4c17a5f75a16bd9f597e9ad0479d698ea527",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_22c54fb452cd_airi5c_gpio.json": "82800851bd90817a76b36a8f10c840340024e7f737a901f5534438333c1c3b11",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_29e8cb8a15fe_sdram.json": "3ab3f7d503df4dbcab00ed65e5390086204cc8c88e579e6aa55335a7b3c605f0",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_31f3bb19aec2_ahb_master.json": "c838c38889b6c93eb98e0564dbe9dfa8eb18c755d47026d57422bb73e2f7b98b",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_3630af58e933_ber_tester.json": "0a7129f6c7eaaf34cfc76348d7af4b5225d813314065991895f404b5891b2dd5",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_46703930ac4c_axis_switch_v1_1_29_axis_switch.json": "b7057cfd51e0e154f7e1743a47ff897f869f4e717c8ada8507f74a7b85b55fb7",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_49940d240660_blinking.json": "68bb126094368de0ec8d87752f18092b1188cab0220d4958df0482678b68099f",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_57028fe4b343_DPPE_SA.json": "4d2b9393a03c35b9e03dea74a13a171212126f2ec072c48a41120964310a5df1",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_73ee95c9a809_cmd_engine.json": "6599016835641d6c9639c4ba14398be1b60f486656ecbebfaaa740333c4d81e0",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_7d52de3acdca_array_sys.json": "a206c2ca65166ceef2e17480e76ce315df42843c28ca858ebe34626d4beaa162",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_82f98df6bb1b_tt_um_obstacles_dino.json": "efaa59897c90090c3899053c865effbc8adbbfad061b6c1c75fe840e044fd466",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_8ce0ed4971e8_uart_tx.json": "051ffbdbfc23399251f212ece49cae85286b3813495a200c953965032751d177",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_900e047ec6dd_AxiStreamFifo.json": "e3712591fb74095d97c7545ad6a788e6c691be062d2d4dac57a0256597fc6af0",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_9305f00e3773_usb_top.json": "5e69757900d871af77a0424b75b637f17315a270cfd884f846fcbeae5861313d",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_a9fc70156187_dbg_bridge_uart.json": "3e81f2aeae3ab6b3208cda673ad63460fa177a6ddd4a07537f9faa3292f809d9",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_b056a1e4b6d3_cic_decimator.json": "7e5ce621caa49111555313b1a19f0e9a9a33d367be0eb44640321dde17b894dd",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_b126d34d9fd7_tt_um_uwasic_onboarding_aes.json": "8138b63129f8b6690f3b2129021a0456a38bf5a346bc9bccbde7a0a6653e4c21",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_cafb43e46e59_tt_um_cordic_sc.json": "3f7e79eaeee5b8b4f1b45bb0f41c66a49ea34e9a631f7d0817347dc27aefede4",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_cb085be4ff4e_tt_um_underserved.json": "e7631dc867bb9e3ff23cd0c9070fc2145a0643b8764225190f88306bcd58e9fd",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_d36e424e0715_axil_adapter.json": "c1deb56acbe916de975f23a6238cb05e3336834ea88a69db182547bbe7d528aa",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_da166bbae20c_xtea.json": "d89e329f308b6b5e05a1bf1bb5db02a9acd5f14dfb84b7f910fa039b72969533",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-claude-frozen/exp1_f257e96af20b_control_rx_network_bridge.json": "9cb1ce7052762be39d01192cdcd1387ec4f36132e14e44240bc14255c3478663",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_11fdcf2983bd_tt_um_control_top.json": "29f6bc9a8e729b60897e8aa03280c83f9b94a4d4847a5ac911ce4609f235f232",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_165715a1fca2_ip.json": "68a93b2340043aa5300a49919cd83c88d25cbc47d1fd4f9ee82de2a4d022843a",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_20fc119bebe3_trng_csprng_fifo.json": "14f3af5a2408a84c0ca13be72279872b9fa47cd074c20750fc7ebd5a15a7c6e8",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_22c54fb452cd_airi5c_gpio.json": "f25738b3decd0c1d75ffe652909c01a6d9208f68439531e3381240fa6d0101ee",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_29e8cb8a15fe_sdram.json": "7d919ba2d707f7b65be6da40c8aa43c925b569557f71dfcad016b994a217b5d8",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_31f3bb19aec2_ahb_master.json": "1053ba077704f2df98af6f600cb9c8ba23d904bd18906fdb0476b411b9078509",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_3630af58e933_ber_tester.json": "f23878b8b8393c21394bccada6bfc785b82e4839273d39e3947db0c650cf9fbb",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_46703930ac4c_axis_switch_v1_1_29_axis_switch.json": "d786a6cdec8a5e2fd59c96930993cf93d69cac3e07566b70225162b2bc91e2aa",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_49940d240660_blinking.json": "06a29cb770678197adc5475fd862e4d96afe0bfef9c06a3af106cc6444a15051",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_57028fe4b343_DPPE_SA.json": "e921792910776d5f98aff5b75fabedf28581d5288fd9a1128f51523242548c88",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_73ee95c9a809_cmd_engine.json": "67007443d54bac5c48fe1a7833cd502f74fb821bf18b447c01340ec61d4eb560",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_7d52de3acdca_array_sys.json": "43bdc773b0ea19f4e3f75809e32409cd26299f6cc234ed09be48018403ce74cd",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_82f98df6bb1b_tt_um_obstacles_dino.json": "7fdd4cdec7d6ae372efec8e0288982d4b9c2db6c976c9d1ca04a9a4231bd0921",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_8ce0ed4971e8_uart_tx.json": "de5a4a5078cd53774cf6b64f753117dea99270b6aea93308fb69819c6674d412",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_900e047ec6dd_AxiStreamFifo.json": "fefdbe22b7e8548c860eac8bc9bc5cf231d6fc6b0dda80f2f80c7199079b0109",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_9305f00e3773_usb_top.json": "e151f39b9b4adc13ce36a2957097742e36cab2b7d6649c97a962952e3b18f46a",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_a9fc70156187_dbg_bridge_uart.json": "2c766fbbcc0486971919e1b972a679bda6fa7c7c005b9b82f97bd0fbfb531638",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_b056a1e4b6d3_cic_decimator.json": "56e27704d8e025f9acfef5d046eb365c7e9c17a5e7583a4c768803775b0dc3db",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_b126d34d9fd7_tt_um_uwasic_onboarding_aes.json": "3d9b5a04309915a0238a31b0f78988aafec0e012197cd7a0d3a1817b2d7d8606",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_cafb43e46e59_tt_um_cordic_sc.json": "2df2843181c22c12452ff5aaf0d855e821ae92f19998b1fbdf2760951953b0f2",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_cb085be4ff4e_tt_um_underserved.json": "e6c0194244097f78d63591c72ca62e0ef19534fb636d50ddbdaaa2001d48e2f2",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_d36e424e0715_axil_adapter.json": "210dc985d6689d11a537edf816c0db901f697e850e2494cff9f1f451b8178eb2",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_da166bbae20c_xtea.json": "d7db72830c7b5d0916d347e9c428890d5145b9894a4c03e55a31c79f7271c1e3",
+    "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/reports/semantic/cases/llm-qwen-frozen/exp1_f257e96af20b_control_rx_network_bridge.json": "1d8dc8d2e7329b448b5501b00dd1c002e28d71fe4a7e1b40d9acfca88c7f124a"
+  },
+  "recomputed": {
+    "r2g-frozen-v3": {
+      "passes": 24,
+      "coverage": {
+        "identity": 1.0,
+        "topology": 1.0,
+        "numeric": 1.0,
+        "label": 1.0
+      },
+      "included_check_counts": {
+        "identity": 384,
+        "topology": 288,
+        "numeric": 696,
+        "label": 240
+      }
+    },
+    "llm-gpt-frozen": {
+      "passes": 0,
+      "coverage": {
+        "identity": 1.0,
+        "topology": 1.0,
+        "numeric": 0.2512373069459642,
+        "label": 0.13334176211661147
+      },
+      "included_check_counts": {
+        "identity": 384,
+        "topology": 288,
+        "numeric": 696,
+        "label": 240
+      }
+    },
+    "llm-claude-frozen": {
+      "passes": 0,
+      "coverage": {
+        "identity": 0.7363782077719168,
+        "topology": 0.6399522119159459,
+        "numeric": 0.08351384951139228,
+        "label": 0.0008720395866522181
+      },
+      "included_check_counts": {
+        "identity": 384,
+        "topology": 288,
+        "numeric": 936,
+        "label": 240
+      }
+    },
+    "llm-qwen-frozen": {
+      "passes": 0,
+      "coverage": {
+        "identity": 0.7238838906625126,
+        "topology": 0.6246895447180308,
+        "numeric": 0.0,
+        "label": 0.0
+      },
+      "included_check_counts": {
+        "identity": 384,
+        "topology": 288,
+        "numeric": 936,
+        "label": 432
+      }
+    }
+  },
+  "representative": {
+    "r2g-frozen-v3": {
+      "gate": {
+        "status": "PASS",
+        "evidence": {
+          "extra_examples": [],
+          "f1": 1.0,
+          "fn": 0,
+          "fp": 0,
+          "missing_examples": [],
+          "precision": 1.0,
+          "recall": 1.0,
+          "tp": 211
+        }
+      },
+      "pin": {
+        "status": "PASS",
+        "evidence": {
+          "extra_examples": [],
+          "f1": 1.0,
+          "fn": 0,
+          "fp": 0,
+          "missing_examples": [],
+          "precision": 1.0,
+          "recall": 1.0,
+          "tp": 644
+        }
+      },
+      "net.routed_wirelength_um": {
+        "status": "PASS",
+        "evidence": {
+          "examples": [],
+          "expected": 209,
+          "graph_entity_count": 215,
+          "graph_finite_labels": 212,
+          "incorrect": 0,
+          "mae": 2.7687355649323443e-07,
+          "matched": 209,
+          "max_abs_error": 4.8828125045474735e-06,
+          "missing": 0,
+          "report_expected_labels": 209,
+          "scope": "direct route nets with exact physical/logical endpoint identity"
+        }
+      },
+      "net.ground_cap_pF": {
+        "status": "PASS",
+        "evidence": {
+          "examples": [],
+          "expected": 207,
+          "graph_entity_count": 215,
+          "graph_finite_labels": 210,
+          "incorrect": 0,
+          "mae": 2.4742860220585016e-11,
+          "matched": 207,
+          "max_abs_error": 2.2095675462907582e-10,
+          "missing": 0,
+          "report_expected_labels": 207,
+          "scope": "direct route nets with exact physical/logical endpoint identity"
+        }
+      },
+      "pin.setup_slack_ns": {
+        "status": "PASS",
+        "evidence": {
+          "examples": [],
+          "expected": 27,
+          "graph_entity_count": 644,
+          "graph_finite_labels": 27,
+          "incorrect": 0,
+          "mae": 2.091019237924372e-07,
+          "matched": 27,
+          "max_abs_error": 4.196166987213701e-07,
+          "missing": 0,
+          "report_blocks": 27,
+          "report_expected_labels": 27,
+          "scope": "reported canonical data endpoints only; other labels unverified",
+          "unparsed_blocks": 0
+        }
+      },
+      "pin.hold_slack_ns": {
+        "status": "PASS",
+        "evidence": {
+          "examples": [],
+          "expected": 27,
+          "graph_entity_count": 644,
+          "graph_finite_labels": 27,
+          "incorrect": 0,
+          "mae": 1.8852728376370808e-08,
+          "matched": 27,
+          "max_abs_error": 2.8610229518832853e-08,
+          "missing": 0,
+          "report_blocks": 27,
+          "report_expected_labels": 27,
+          "scope": "reported canonical data endpoints only; other labels unverified",
+          "unparsed_blocks": 0
+        }
+      }
+    },
+    "llm-gpt-frozen": {
+      "gate": {
+        "status": "PASS",
+        "evidence": {
+          "extra_examples": [],
+          "f1": 1.0,
+          "fn": 0,
+          "fp": 0,
+          "missing_examples": [],
+          "precision": 1.0,
+          "recall": 1.0,
+          "tp": 211
+        }
+      },
+      "pin": {
+        "status": "PASS",
+        "evidence": {
+          "extra_examples": [],
+          "f1": 1.0,
+          "fn": 0,
+          "fp": 0,
+          "missing_examples": [],
+          "precision": 1.0,
+          "recall": 1.0,
+          "tp": 644
+        }
+      },
+      "net.routed_wirelength_um": {
+        "status": "FAIL",
+        "evidence": {
+          "examples": [
+            {
+              "actual": 2.765000104904175,
+              "expected": 52.94,
+              "key": "189"
+            },
+            {
+              "actual": 8.119999885559082,
+              "expected": 80.53,
+              "key": "95"
+            },
+            {
+              "actual": 2.190000057220459,
+              "expected": 132.87,
+              "key": "211"
+            }
+          ],
+          "expected": 209,
+          "graph_entity_count": 215,
+          "graph_finite_labels": 184,
+          "incorrect": 3,
+          "mae": 1.3992543132397348,
+          "matched": 181,
+          "max_abs_error": 130.67999994277955,
+          "missing": 28,
+          "report_expected_labels": 209,
+          "scope": "direct route nets with exact physical/logical endpoint identity"
+        }
+      },
+      "net.ground_cap_pF": {
+        "status": "FAIL",
+        "evidence": {
+          "examples": [
+            {
+              "actual": 0.0006288844160735607,
+              "expected": 0.0005958039000000001,
+              "key": "8"
+            },
+            {
+              "actual": 0.00036180848837830126,
+              "expected": 0.000328728,
+              "key": "6"
+            },
+            {
+              "actual": 0.0003211603907402605,
+              "expected": 0.00029457729999999996,
+              "key": "44"
+            },
+            {
+              "actual": 0.00046762480633333325,
+              "expected": 0.000457168,
+              "key": "131"
+            },
+            {
+              "actual": 0.0012835150118917227,
+              "expected": 0.000874628,
+              "key": "145"
+            }
+          ],
+          "expected": 207,
+          "graph_entity_count": 215,
+          "graph_finite_labels": 185,
+          "incorrect": 81,
+          "mae": 3.399614631694077e-05,
+          "matched": 181,
+          "max_abs_error": 0.0004951130335226058,
+          "missing": 26,
+          "report_expected_labels": 207,
+          "scope": "direct route nets with exact physical/logical endpoint identity"
+        }
+      },
+      "pin.setup_slack_ns": {
+        "status": "FAIL",
+        "evidence": {
+          "examples": [],
+          "expected": 27,
+          "graph_entity_count": 644,
+          "graph_finite_labels": 0,
+          "incorrect": 0,
+          "mae": null,
+          "matched": 0,
+          "max_abs_error": null,
+          "missing": 27,
+          "report_blocks": 27,
+          "report_expected_labels": 27,
+          "scope": "reported canonical data endpoints only; other labels unverified",
+          "unparsed_blocks": 0
+        }
+      },
+      "pin.hold_slack_ns": {
+        "status": "FAIL",
+        "evidence": {
+          "examples": [],
+          "expected": 27,
+          "graph_entity_count": 644,
+          "graph_finite_labels": 0,
+          "incorrect": 0,
+          "mae": null,
+          "matched": 0,
+          "max_abs_error": null,
+          "missing": 27,
+          "report_blocks": 27,
+          "report_expected_labels": 27,
+          "scope": "reported canonical data endpoints only; other labels unverified",
+          "unparsed_blocks": 0
+        }
+      }
+    },
+    "llm-claude-frozen": {
+      "gate": {
+        "status": "FAIL",
+        "evidence": {
+          "extra_examples": [],
+          "f1": 0.9316455696202531,
+          "fn": 27,
+          "fp": 0,
+          "missing_examples": [
+            "cnt_reg[0]$_SDFF_PP0_",
+            "cnt_reg[10]$_SDFF_PP0_",
+            "cnt_reg[11]$_SDFF_PP0_",
+            "cnt_reg[12]$_SDFF_PP0_",
+            "cnt_reg[13]$_SDFF_PP0_"
+          ],
+          "precision": 1.0,
+          "recall": 0.8720379146919431,
+          "tp": 184
+        }
+      },
+      "pin": {
+        "status": "FAIL",
+        "evidence": {
+          "extra_examples": [],
+          "f1": 0.9328914664457332,
+          "fn": 81,
+          "fp": 0,
+          "missing_examples": [
+            "('cnt_reg[0]$_SDFF_PP0_', 'CLK')",
+            "('cnt_reg[0]$_SDFF_PP0_', 'D')",
+            "('cnt_reg[0]$_SDFF_PP0_', 'Q')",
+            "('cnt_reg[10]$_SDFF_PP0_', 'CLK')",
+            "('cnt_reg[10]$_SDFF_PP0_', 'D')"
+          ],
+          "precision": 1.0,
+          "recall": 0.8742236024844721,
+          "tp": 563
+        }
+      },
+      "net.routed_wirelength_um": {
+        "status": "FAIL",
+        "evidence": {
+          "examples": [
+            {
+              "actual": 0.0,
+              "expected": 6.59,
+              "key": "8"
+            },
+            {
+              "actual": 0.0,
+              "expected": 2.73,
+              "key": "6"
+            },
+            {
+              "actual": 0.0,
+              "expected": 1.045,
+              "key": "202"
+            },
+            {
+              "actual": 0.0,
+              "expected": 3.08,
+              "key": "44"
+            },
+            {
+              "actual": 0.0,
+              "expected": 3.245,
+              "key": "81"
+            }
+          ],
+          "expected": 209,
+          "graph_entity_count": 215,
+          "graph_finite_labels": 215,
+          "incorrect": 207,
+          "mae": 12.52351674641149,
+          "matched": 209,
+          "max_abs_error": 132.87,
+          "missing": 0,
+          "report_expected_labels": 209,
+          "scope": "direct route nets with exact physical/logical endpoint identity"
+        }
+      },
+      "net.ground_cap_pF": {
+        "status": "FAIL",
+        "evidence": {
+          "examples": [
+            {
+              "actual": 0.0,
+              "expected": 0.0005958039000000001,
+              "key": "8"
+            },
+            {
+              "actual": 0.0,
+              "expected": 0.000328728,
+              "key": "6"
+            },
+            {
+              "actual": 0.0,
+              "expected": 8.87088e-05,
+              "key": "202"
+            },
+            {
+              "actual": 0.0,
+              "expected": 0.00029457729999999996,
+              "key": "44"
+            },
+            {
+              "actual": 0.0,
+              "expected": 0.000396606,
+              "key": "81"
+            }
+          ],
+          "expected": 207,
+          "graph_entity_count": 215,
+          "graph_finite_labels": 215,
+          "incorrect": 207,
+          "mae": 0.0011186164342995165,
+          "matched": 207,
+          "max_abs_error": 0.006319521999999999,
+          "missing": 0,
+          "report_expected_labels": 207,
+          "scope": "direct route nets with exact physical/logical endpoint identity"
+        }
+      },
+      "pin.setup_slack_ns": {
+        "status": "FAIL",
+        "evidence": {
+          "examples": [],
+          "expected": 27,
+          "graph_entity_count": 563,
+          "graph_finite_labels": 563,
+          "incorrect": 0,
+          "mae": null,
+          "matched": 0,
+          "max_abs_error": null,
+          "missing": 27,
+          "report_blocks": 27,
+          "report_expected_labels": 27,
+          "scope": "reported canonical data endpoints only; other labels unverified",
+          "unparsed_blocks": 0
+        }
+      },
+      "pin.hold_slack_ns": {
+        "status": "FAIL",
+        "evidence": {
+          "examples": [],
+          "expected": 27,
+          "graph_entity_count": 563,
+          "graph_finite_labels": 563,
+          "incorrect": 0,
+          "mae": null,
+          "matched": 0,
+          "max_abs_error": null,
+          "missing": 27,
+          "report_blocks": 27,
+          "report_expected_labels": 27,
+          "scope": "reported canonical data endpoints only; other labels unverified",
+          "unparsed_blocks": 0
+        }
+      }
+    },
+    "llm-qwen-frozen": {
+      "gate": {
+        "status": "FAIL",
+        "evidence": {
+          "extra_examples": [],
+          "f1": 0.9316455696202531,
+          "fn": 27,
+          "fp": 0,
+          "missing_examples": [
+            "cnt_reg[0]$_SDFF_PP0_",
+            "cnt_reg[10]$_SDFF_PP0_",
+            "cnt_reg[11]$_SDFF_PP0_",
+            "cnt_reg[12]$_SDFF_PP0_",
+            "cnt_reg[13]$_SDFF_PP0_"
+          ],
+          "precision": 1.0,
+          "recall": 0.8720379146919431,
+          "tp": 184
+        }
+      },
+      "pin": {
+        "status": "FAIL",
+        "evidence": {
+          "extra_examples": [],
+          "f1": 0.8396396396396396,
+          "fn": 178,
+          "fp": 0,
+          "missing_examples": [
+            "('_186_', 'A')",
+            "('_187_', 'A')",
+            "('_188_', 'A')",
+            "('_188_', 'B')",
+            "('_189_', 'A')"
+          ],
+          "precision": 1.0,
+          "recall": 0.7236024844720497,
+          "tp": 466
+        }
+      },
+      "net.routed_wirelength_um": {
+        "status": "UNASSESSABLE",
+        "evidence": {
+          "error": "'y_schema'"
+        }
+      },
+      "net.ground_cap_pF": {
+        "status": "UNASSESSABLE",
+        "evidence": {
+          "error": "'y_schema'"
+        }
+      },
+      "pin.setup_slack_ns": {
+        "status": "UNASSESSABLE",
+        "evidence": {
+          "error": "'y_schema'"
+        }
+      },
+      "pin.hold_slack_ns": {
+        "status": "UNASSESSABLE",
+        "evidence": {
+          "error": "'y_schema'"
+        }
+      }
+    }
+  }
+}

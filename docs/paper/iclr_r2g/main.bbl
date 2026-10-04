@@ -1,0 +1,110 @@
+\begin{thebibliography}{13}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Chai et~al.(2022)Chai, Zhao, Lin, Liu, Wang, and Huang]{circuitnet}
+Zhuomin Chai, Yuxiang Zhao, Yibo Lin, Wei Liu, Runsheng Wang, and Ru~Huang.
+\newblock {CircuitNet}: An open-source dataset for machine learning
+  applications in electronic design automation ({EDA}).
+\newblock \emph{Science China Information Sciences}, 2022.
+\newblock \doi{10.1007/s11432-022-3571-8}.
+
+\bibitem[Chowdhury et~al.(2021)Chowdhury, Tan, Karri, and Garg]{openabcd}
+Animesh~Basak Chowdhury, Benjamin Tan, Ramesh Karri, and Siddharth Garg.
+\newblock {OpenABC-D}: A large-scale dataset for machine learning guided
+  integrated circuit synthesis.
+\newblock arXiv:2110.11292, 2021.
+\newblock URL \url{https://arxiv.org/abs/2110.11292}.
+
+\bibitem[Deng et~al.(2026)Deng, Chen, Wei, Xing, Wen, Sun, and
+  Zhuo]{rtltogdsbench}
+Jinyuan Deng, Zhengrui Chen, Xufeng Wei, Tianyu Xing, Chenyi Wen, Qi~Sun, and
+  Cheng Zhuo.
+\newblock Can {AI} agents really complete {RTL-to-GDS}? lessons from
+  benchmarking tool-interactive {EDA} workflows.
+\newblock arXiv:2607.17528v3, 2026.
+\newblock URL \url{https://arxiv.org/abs/2607.17528v3}.
+
+\bibitem[Ghose et~al.(2026)Ghose, Kahng, Kundu, and Wang]{orfsagent}
+Amur Ghose, Andrew~B. Kahng, Sayak Kundu, and Zhiang Wang.
+\newblock {ORFS-agent}: Tool-using agents for chip design optimization.
+\newblock arXiv:2506.08332v3, 2026.
+\newblock URL \url{https://arxiv.org/abs/2506.08332v3}.
+
+\bibitem[Goldblatt et~al.(2026)Goldblatt, Pedroso, Modaresi, Sifferman, and
+  Guthaus]{hightide}
+Benjamin Goldblatt, Paolo Pedroso, Farhad Modaresi, Ethan Sifferman, and
+  Matthew~R. Guthaus.
+\newblock {HighTide}: An agent-curated open-source {VLSI} benchmark suite.
+\newblock arXiv:2606.04126, 2026.
+\newblock URL \url{https://arxiv.org/abs/2606.04126}.
+
+\bibitem[He et~al.(2024)He, Wu, Zhang, Yao, Zheng, Zheng, and Yu]{chateda}
+Zhuolun He, Haoyuan Wu, Xinyun Zhang, Xufeng Yao, Su~Zheng, Haisheng Zheng, and
+  Bei Yu.
+\newblock {ChatEDA}: A large language model powered autonomous agent for {EDA}.
+\newblock \emph{IEEE Transactions on Computer-Aided Design of Integrated
+  Circuits and Systems}, 2024.
+\newblock \doi{10.1109/TCAD.2024.3383347}.
+
+\bibitem[Liang et~al.(2023)Liang, Agnesina, Pradipta, Chhabria, and
+  Ren]{circuitops}
+Rongjian Liang, Anthony Agnesina, Geraldo Pradipta, Vidya~A. Chhabria, and
+  Haoxing Ren.
+\newblock Invited paper: {CircuitOps}: An {ML} infrastructure enabling
+  generative {AI} for {VLSI} circuit optimization.
+\newblock In \emph{IEEE/ACM International Conference on Computer Aided Design
+  (ICCAD)}, 2023.
+
+\bibitem[Liu et~al.(2026)Liu, Xu, Tang, Cao, and Ding]{postedabench}
+Pengju Liu, Nuo Xu, Jinwei Tang, Yu~Cao, and Caiwen Ding.
+\newblock Bridging the last mile of circuit design: {PostEDA-Bench}, a
+  hierarchical benchmark for {PPA} convergence and {DRC} fixing.
+\newblock arXiv:2605.06936v3, 2026.
+\newblock URL \url{https://arxiv.org/abs/2605.06936v3}.
+
+\bibitem[Qiu et~al.(2025)Qiu, Huang, Tao, Zhang, Li, Lai, Wang, Wang, and
+  Li]{aieda}
+Yihang Qiu, Zengrong Huang, Simin Tao, Hongda Zhang, Weiguo Li, Xinhua Lai, Rui
+  Wang, Weiqiang Wang, and Xingquan Li.
+\newblock {AiEDA}: An open-source {AI}-aided design library for
+  design-to-vector.
+\newblock arXiv:2511.05823, 2025.
+\newblock URL \url{https://arxiv.org/abs/2511.05823}.
+
+\bibitem[Shi et~al.(2025)Shi, Li, Ma, Zhou, Zheng, Liu, Pan, Zhou, Li, Zhu,
+  Yan, He, Xue, Jiang, Yang, Sun, Yang, Chen, Shi, Chu, Yang, and Xu]{forgeeda}
+Zhengyuan Shi, Zeju Li, Chengyu Ma, Yunhao Zhou, Ziyang Zheng, Jiawei Liu,
+  Hongyang Pan, Lingfeng Zhou, Kezhi Li, Jiaying Zhu, Lingwei Yan, Zhiqiang He,
+  Chenhao Xue, Wentao Jiang, Fan Yang, Guangyu Sun, Xiaoyan Yang, Gang Chen,
+  Chuan Shi, Zhufei Chu, Jun Yang, and Qiang Xu.
+\newblock {ForgeEDA}: A comprehensive multimodal dataset for advancing {EDA}.
+\newblock arXiv:2505.02016, 2025.
+\newblock URL \url{https://arxiv.org/abs/2505.02016}.
+
+\bibitem[Shrestha et~al.(2026)Shrestha, Aversa, and Savidis]{edaschemav2}
+Pratik Shrestha, Alec Aversa, and Ioannis Savidis.
+\newblock {EDA-Schema-V2}: A multimodal schema, open datasets, and benchmarks
+  for machine learning in digital physical design.
+\newblock arXiv:2605.06952, 2026.
+\newblock URL \url{https://arxiv.org/abs/2605.06952}.
+
+\bibitem[{The OpenROAD Project}(n.d.)]{openroad}
+{The OpenROAD Project}.
+\newblock {OpenROAD}: Open-source digital design infrastructure.
+\newblock \url{https://openroad.org/}, n.d.
+\newblock Accessed September 9, 2026.
+
+\bibitem[Zhou et~al.(2026)Zhou, Zou, Zhang, Yang, He, Zhou, Liu, Liu, Jin,
+  Shen, and Sun]{r2gbenchmark}
+Zewei Zhou, Jiajun Zou, Jiajia Zhang, Ao~Yang, Ruichao He, Haozheng Zhou,
+  Ao~Liu, Jiawei Liu, Leilei Jin, Shan Shen, and Daying Sun.
+\newblock {R2G}: A multi-view circuit graph benchmark suite from {RTL} to
+  {GDSII}.
+\newblock arXiv:2604.08810, 2026.
+\newblock URL \url{https://arxiv.org/abs/2604.08810}.
+
+\end{thebibliography}

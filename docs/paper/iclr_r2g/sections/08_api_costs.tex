@@ -1,0 +1,22 @@
+\section{API Cost Accounting}
+\label{app:api_costs}
+
+Dollar annotations use recorded token consumption and official public prices checked on September 17, 2026. They express a common \emph{uncached, base-context reference-price convention}, using standard inference and excluding cache/batch discounts, long-context and regional premiums, taxes, EDA compute, and engineering time. Thus, they compare the API resource requirements of the reported campaigns rather than reconstructing intermediary invoices. For input tokens $T_{\mathrm{in}}$, generated tokens $T_{\mathrm{out}}$, and prices per million tokens $p_{\mathrm{in}},p_{\mathrm{out}}$, we compute
+\[
+ C_{\mathrm{API}} = \bigl(T_{\mathrm{in}}p_{\mathrm{in}} + T_{\mathrm{out}}p_{\mathrm{out}}\bigr)/10^6.
+\]
+The acquisition runner records visible output and reasoning separately; both contribute to $T_{\mathrm{out}}$. Repair and converter-development ledgers already include reasoning in completion counts, which we count once.
+
+\paragraph{Reference prices.}
+Input/output USD per million tokens are
+\href{https://developers.openai.com/api/docs/models/gpt-5.6-sol}{GPT-5.6-sol}: 4/20;
+\href{https://platform.claude.com/docs/en/models/opus-5/whats-new-opus-5}{Claude Opus 5}: 5/25;
+\href{https://www.alibabacloud.com/help/en/model-studio/qwen3-7-max}{Qwen3.7-Max}: 2.50/7.50;
+\href{https://platform.kimi.ai/}{Kimi-K2.7-Code}: 0.95/4;
+\href{https://api-docs.deepseek.com/quick_start/pricing/}{DeepSeek-V4-Pro}: 1.32/3.96;
+\href{https://docs.x.ai/developers/pricing}{grok-4.5}: 2/6; and
+\href{https://ai.google.dev/gemini-api/docs/gemini-3}{Gemini-3.1-Pro-Preview}: 2/12.
+Model names link to the official sources. We use Qwen3.7-Max's Singapore international list rate and DeepSeek-V4-Pro's peak rate consistently. The GPT-5.6-sol rate is the published promotion available at least through November 21, 2026. These fixed reference rates do not infer request-level cache hits or pricing tiers from aggregate tokens.
+
+\paragraph{Campaign scope.}
+Acquisition annotations cover the recorded acquisition runs. Repair annotations cover the 13 challenge deployments; M0--M3 and Full R2G make no deployment-time LLM calls. The shared proposal phase for M1--M3 costs \$0.57: \$0.19 for GPT-5.6-sol, \$0.22 for Claude Opus 5, and \$0.17 for Qwen3.7-Max (total computed before rounding), across 109,236 tokens and 18 calls. Full R2G's historical library development is outside that proposal ledger. Conversion annotations cover the actual development usage under the 600,000-token ceiling; subsequent 24-design conversion and scoring invoke no LLM. R2G's earlier tool-development cost is unmetered and shown as n/a. A zero API annotation refers only to the indicated execution phase.

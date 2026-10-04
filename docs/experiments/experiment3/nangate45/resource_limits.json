@@ -1,0 +1,35 @@
+{
+  "schema_version": "experiment3-resource-limits-1.0",
+  "status": "frozen",
+  "frozen_at": "2026-09-18T00:00:00-07:00",
+  "confirmation": "user_confirmed_start",
+  "failure_domains": ["antenna_drc"],
+  "a_propose": {
+    "rounds": 3,
+    "api_calls_per_model_per_domain": 3,
+    "model_turns_per_model_total": 3,
+    "raw_proposals_per_call": 2,
+    "max_output_tokens_per_call": 2048,
+    "pooled_executions_per_domain_per_round": 4,
+    "exploratory_tasks_per_round": 4,
+    "active_candidates_per_domain": 8,
+    "total_tokens_per_model": 30000
+  },
+  "pure_llm": {
+    "api_calls_per_task": 3,
+    "model_turns_per_model_per_task": 3,
+    "executed_attempts_per_task": 3,
+    "max_output_tokens_per_call": 2048,
+    "total_tokens_per_model_per_task": 20000
+  },
+  "eda": {
+    "cores_per_trial": 4,
+    "timeout_seconds_per_trial": 7200,
+    "concurrent_trials_initial": 4,
+    "concurrent_trials_conditional_max": 4,
+    "cpu_sets": ["160-163", "164-167", "171-174", "175-178"],
+    "minimum_free_disk_gib": 30,
+    "maximum_live_iowait_percent_for_scale_up": 15,
+    "compact_after_trial": true
+  }
+}

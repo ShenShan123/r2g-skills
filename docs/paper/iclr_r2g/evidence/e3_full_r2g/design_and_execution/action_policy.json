@@ -1,0 +1,93 @@
+{
+  "schema_version": "r2g-repair-action-policy-1.0",
+  "policy_revision": "2026-08-24-hierarchical-synthesis-registration",
+  "purpose": "Recipe development policy for the fixed Sky130HD 100 MHz task. It preserves the registered clock and floorplan footprint.",
+  "allowed_numeric_knobs": {
+    "ABC_CLOCK_PERIOD_IN_PS": {
+      "minimum": 8000,
+      "maximum": 8000
+    },
+    "SETUP_SLACK_MARGIN": {
+      "minimum": 0.2,
+      "maximum": 0.2
+    }
+  },
+  "allowed_string_knobs": {
+    "ABC_AREA": ["0", "1"],
+    "ENABLE_PLACE_REPAIR_TIMING": ["1"],
+    "SYNTH_HIERARCHICAL": ["0", "1"],
+    "PLACE_PINS_ARGS": [
+      "-exclude left:*",
+      "-exclude right:*",
+      "-exclude top:*",
+      "-exclude bottom:*"
+    ]
+  },
+  "allowed_sdc_edits": {},
+  "registered_candidate_effects": {
+    "early_place_timing_repair": {
+      "effect_fingerprint": {
+        "ENABLE_PLACE_REPAIR_TIMING": "1"
+      },
+      "rationale": "Runs ORFS's documented placement-parasitic timing repair before CTS while preserving the registered 10 ns SDC, fixed floorplan footprint, routing layers, and complete strict-signoff check set.",
+      "protected_invariants": [
+        "clock_period",
+        "die_area",
+        "core_area",
+        "core_utilization",
+        "signoff_check_set",
+        "source_closure"
+      ],
+      "rollback": "unset ENABLE_PLACE_REPAIR_TIMING",
+      "promotion_scope": "development only until two-family, two-trial strict A/B evidence exists"
+    },
+    "abc_overdrive_8ns": {
+      "effect_fingerprint": {
+        "ABC_CLOCK_PERIOD_IN_PS": "8000"
+      },
+      "rationale": "Uses a stricter 8 ns internal ABC mapping target while retaining the registered 10 ns SDC, fixed floorplan footprint, routing layers, and complete strict-signoff check set.",
+      "protected_invariants": [
+        "clock_period",
+        "die_area",
+        "core_area",
+        "core_utilization",
+        "signoff_check_set",
+        "source_closure"
+      ],
+      "rollback": "unset ABC_CLOCK_PERIOD_IN_PS",
+      "promotion_scope": "development only until two-family, two-trial strict A/B evidence exists"
+    },
+    "abc_timing_mapping": {
+      "effect_fingerprint": {
+        "ABC_AREA": "0"
+      },
+      "rationale": "Switches a baseline area-biased ABC mapping to ORFS's timing-driven ABC mapping while retaining the registered 10 ns SDC, fixed floorplan footprint, routing layers, and complete strict-signoff check set.",
+      "protected_invariants": [
+        "clock_period",
+        "die_area",
+        "core_area",
+        "core_utilization",
+        "signoff_check_set",
+        "source_closure"
+      ],
+      "rollback": "restore ABC_AREA=1",
+      "promotion_scope": "development only until two-family, two-trial strict A/B evidence exists"
+    },
+    "hierarchical_synthesis_mapping": {
+      "effect_fingerprint": {
+        "SYNTH_HIERARCHICAL": "1"
+      },
+      "rationale": "Enables ORFS hierarchical synthesis while retaining the registered 10 ns SDC, fixed floorplan footprint, baseline ABC objective, routing layers, source closure, and complete strict-signoff check set.",
+      "protected_invariants": [
+        "clock_period",
+        "die_area",
+        "core_area",
+        "core_utilization",
+        "signoff_check_set",
+        "source_closure"
+      ],
+      "rollback": "unset SYNTH_HIERARCHICAL",
+      "promotion_scope": "development only until two-family, two-trial strict A/B evidence exists"
+    }
+  }
+}

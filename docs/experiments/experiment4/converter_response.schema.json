@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://r2g.local/schemas/experiment4-converter-response-1.0.json",
+  "title": "Experiment 4 converter response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "python_source"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "python_source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200000
+    }
+  }
+}

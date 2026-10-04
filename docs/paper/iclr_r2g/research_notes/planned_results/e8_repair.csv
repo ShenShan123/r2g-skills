@@ -1,0 +1,1 @@
+protocol_id,method,design_id,family_id,failure_domain,policy_covered,strict_clean_success,top1_success,orfs_trials,eda_seconds,llm_tokens,sentinel_regression,terminal_status,evidence_path

@@ -1,0 +1,47 @@
+{
+  "schema_version": "experiment4-resource-limits-3.0",
+  "status": "frozen_prelaunch",
+  "toolchain": {
+    "orfs_root": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts",
+    "openroad_exe": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/tools/install/OpenROAD/bin/openroad",
+    "yosys_exe": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/tools/install/yosys/bin/yosys",
+    "platform": "sky130hd"
+  },
+  "converter_development": {
+    "rounds_per_model": 6,
+    "api_calls_per_model": 6,
+    "max_output_tokens_per_call": 32768,
+    "minimum_output_tokens_per_call": 4096,
+    "total_tokens_per_model": 400000,
+    "development_cases": 6,
+    "feedback_scope": "development_only_complete_static_lint_plus_bounded_runtime_diagnostics",
+    "feedback_max_signatures_per_case": 8,
+    "feedback_max_signature_chars": 240,
+    "early_stop_strict_passes": 6,
+    "freeze_selection": "best_development_round",
+    "max_converter_source_bytes": 200000
+  },
+  "hidden_evaluation": {
+    "cases": 24,
+    "llm_calls": 0,
+    "converter_frozen_before_test_ids_are_revealed": true,
+    "timeout_seconds_per_case": 3600,
+    "workers_initial": 1,
+    "workers_conditional_max": 2
+  },
+  "semantic_evaluation": {
+    "audit_version": "experimental-semantic-audit-0.3",
+    "required_groups": ["alignment", "causal", "identity", "label", "mask", "numeric", "topology"],
+    "primary_metric": "semantic_usable_rate",
+    "unverified_dimensions_are_not_scored_as_correct": true
+  },
+  "execution": {
+    "python_threads_per_case": 4,
+    "minimum_free_disk_gib": 30,
+    "maximum_live_iowait_percent_for_scale_up": 15,
+    "network_access_during_converter_execution": false,
+    "resume_policy": "skip_only_attested_completed_case",
+    "retain_failed_logs": true,
+    "compact_intermediate_csv_after_final_audit": false
+  }
+}

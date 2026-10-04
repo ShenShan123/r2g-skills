@@ -1,0 +1,11 @@
+{
+  "attempt_count": 0,
+  "attempts": [],
+  "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_250c441e570f_blake2s/baseline",
+  "baseline_sha256": "1537c4d4e81905ce64b838ef045561aa544436181a58e805b6f77ce44408a632",
+  "check": "timing",
+  "first_strategy": null,
+  "status": "no_legal_native_strategy",
+  "strict_clean": false,
+  "task_id": "exp1_250c441e570f_blake2s"
+}

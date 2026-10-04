@@ -1,0 +1,32 @@
+{
+  "candidate_hash": "6f257c058ecf39d8b691d690a896e013cf7e8bda4df4659ca8943051fda57ca6",
+  "candidate_id": "hierarchical_place_timing_repair",
+  "candidate_version": 1,
+  "config_edits": {
+    "ENABLE_PLACE_REPAIR_TIMING": "1",
+    "SYNTH_HIERARCHICAL": "1"
+  },
+  "failure_domain": "timing",
+  "native_selection": {
+    "auto_apply": true,
+    "config_edits": {
+      "ENABLE_PLACE_REPAIR_TIMING": "1",
+      "SYNTH_HIERARCHICAL": "1"
+    },
+    "id": "hierarchical_place_timing_repair",
+    "lifecycle_match_level": "validated_setup_scope",
+    "lifecycle_status": "promoted",
+    "rationale": "Test hierarchy plus placement timing repair on routed Sky130HD area-mapped setup misses within 3 ns; no RTL or clock changes.",
+    "recheck": "timing",
+    "requires_ab_promotion": true,
+    "rerun_from": "synth",
+    "sdc_edits": {},
+    "setup_scope_evidence": {
+      "abc_area": "1",
+      "platform": "sky130hd",
+      "routing_clean": true,
+      "wns_ns": -2.96547
+    }
+  },
+  "rationale": "Test hierarchy plus placement timing repair on routed Sky130HD area-mapped setup misses within 3 ns; no RTL or clock changes."
+}

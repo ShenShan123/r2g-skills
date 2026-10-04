@@ -1,0 +1,153 @@
+{
+  "sources": {
+    "e1": {
+      "path": "/home/yangao/r2g_paper_experiment_materials_20260909/experiment1/results/experiment1_final_scores_6llm_plus_r2g.json",
+      "sha256": "02beb375e228db0df200e25caccdb7dc4926408bd8b910b7e7f893d95e7d491e"
+    },
+    "e3": {
+      "path": "/home/yangao/r2g_paper_experiment_materials_20260909/experiment3/results/experiment3_final_results.json",
+      "sha256": "13830cbbf1a79d8a7951e26c83c93df5f025713d279759145e06e6d93efefe47"
+    },
+    "e4": {
+      "path": "/home/yangao/r2g-skills/docs/paper/iclr_r2g/evidence/e4_600k/fixed_test_results.json",
+      "sha256": "a10b5d105e331ac8e2feb57c7e02ff97584fd9192dff91b6c8698bd605bb819a"
+    },
+    "audit": {
+      "path": "/home/yangao/r2g-skills/docs/paper/iclr_r2g/evidence/e4_600k/semantic_audit_summary.json",
+      "sha256": "fa8872f0d3cbfbf9b96c865e5588410fcc3fb33ba0597ec3da45872892f8ccd9"
+    }
+  },
+  "acquisition_yield": {
+    "method_ids": [
+      "r2g-expander-cold",
+      "openai-vanilla",
+      "claude-vanilla",
+      "qwen-vanilla",
+      "kimi-vanilla",
+      "deepseek-vanilla",
+      "grok-vanilla",
+      "gemini-vanilla"
+    ],
+    "qualified": [
+      200,
+      119,
+      113,
+      40,
+      23,
+      20,
+      16,
+      3
+    ],
+    "submitted": [
+      200,
+      124,
+      145,
+      54,
+      24,
+      23,
+      16,
+      3
+    ],
+    "unfilled": [
+      0,
+      76,
+      55,
+      146,
+      176,
+      177,
+      184,
+      197
+    ],
+    "denominator": 200,
+    "right_column": "qualified/submitted"
+  },
+  "repair_outcomes_cost": {
+    "method_ids": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "gpt",
+      "claude",
+      "qwen"
+    ],
+    "drc": [
+      0,
+      7,
+      7,
+      7,
+      3,
+      5,
+      2
+    ],
+    "setup": [
+      0,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    "trials": [
+      13,
+      25,
+      24,
+      7,
+      35,
+      25,
+      32
+    ],
+    "denominator": 13,
+    "m3_uncovered": 6
+  },
+  "conversion_semantics": {
+    "study": "600k fixed benchmark retest",
+    "metrics": {
+      "role": "fixed benchmark retest",
+      "methods": {
+        "r2g-frozen-v3": {
+          "semantic_passes": 24,
+          "cases": 24,
+          "coverage": {
+            "identity": 1.0,
+            "topology": 1.0,
+            "numeric": 1.0,
+            "label": 1.0
+          }
+        },
+        "llm-gpt-frozen": {
+          "semantic_passes": 0,
+          "cases": 24,
+          "coverage": {
+            "identity": 1.0,
+            "topology": 1.0,
+            "numeric": 0.2512373069459642,
+            "label": 0.13334176211661147
+          }
+        },
+        "llm-claude-frozen": {
+          "semantic_passes": 0,
+          "cases": 24,
+          "coverage": {
+            "identity": 0.7363782077719168,
+            "topology": 0.6399522119159459,
+            "numeric": 0.08351384951139228,
+            "label": 0.0008720395866522181
+          }
+        },
+        "llm-qwen-frozen": {
+          "semantic_passes": 0,
+          "cases": 24,
+          "coverage": {
+            "identity": 0.7238838906625126,
+            "topology": 0.6246895447180308,
+            "numeric": 0.0,
+            "label": 0.0
+          }
+        }
+      }
+    },
+    "derived_evidence": "evidence/e4_600k_derived.json"
+  }
+}

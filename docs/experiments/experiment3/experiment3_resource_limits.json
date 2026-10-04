@@ -1,0 +1,32 @@
+{
+  "schema_version": "experiment3-resource-limits-1.0",
+  "status": "frozen",
+  "frozen_at": "2026-09-06T07:14:53-07:00",
+  "confirmation": "user_confirmed",
+  "a_propose": {
+    "rounds": 3,
+    "api_calls_per_model_per_domain": 3,
+    "model_turns_per_model_total": 6,
+    "raw_proposals_per_call": 2,
+    "max_output_tokens_per_call": 2048,
+    "pooled_executions_per_domain_per_round": 4,
+    "active_candidates_per_domain": 8,
+    "total_tokens_per_model": 60000
+  },
+  "pure_llm": {
+    "api_calls_per_task": 3,
+    "model_turns_per_model_per_task": 3,
+    "executed_attempts_per_task": 3,
+    "max_output_tokens_per_call": 2048,
+    "total_tokens_per_model_per_task": 20000
+  },
+  "eda": {
+    "cores_per_trial": 4,
+    "timeout_seconds_per_trial": 7200,
+    "concurrent_trials_initial": 2,
+    "concurrent_trials_conditional_max": 3,
+    "minimum_free_disk_gib": 30,
+    "maximum_live_iowait_percent_for_scale_up": 15,
+    "compact_after_trial": true
+  }
+}

@@ -1,0 +1,392 @@
+1. Introduction
+Modern EDA workflows are long, tool-intensive, and difficult to operate reliably. A practical RTL-to-layout flow usually requires synthesis, floorplanning, placement, clock-tree synthesis, routing, extraction, DRC/LVS checking, timing analysis, and repeated diagnosis across heterogeneous tools. This high operational complexity raises the barrier for non-expert users and makes large-scale data generation difficult to reproduce.
+At the same time, machine learning for physical design depends on circuit corpora that are large, diverse, reproducible, and tied to meaningful physical labels. Recent work has already advanced several parts of this problem: DeepCircuitX, ForgeEDA, OpenRTLSet, and CircuitNet 3.0 expand open-source RTL corpora; EDALearn, ChiPBench, and HighTide provide reproducible RTL-to-signoff or RTL-to-GDS infrastructure; and Verilog-to-PyG, CircuitOps, AiEDA, EDA-Schema-V2, and R2G translate design artifacts into graph, vector, or multimodal learning representations. These results rule out a broad novelty claim based only on collecting RTL, running an EDA flow, or serializing graphs. The remaining research question is whether these capabilities can be integrated into a continual, failure-aware production loop that binds each graph sample to one qualified physical-design run and improves its own recovery policy through controlled evidence.
+We present Agentic RTL-to-Graph, an agentic system for constructing physical-design graph datasets from open-source RTL. The system is not positioned as the first RTL corpus, RTL-to-GDS flow, or circuit-graph converter. Instead, it operationalizes their difficult intersection: acquiring previously unseen RTL candidates, qualifying them for synthesis, promoting viable designs into ORFS-based physical implementation, diagnosing and recovering from flow failures, applying explicit signoff and provenance admission rules, and publishing training-ready multi-view graphs. The intended outcome is a campaign-scale data factory in which successful, rejected, and recovered runs all produce structured evidence rather than a collection assembled only from surviving designs.
+The central hypothesis is therefore narrower and testable: an evidence-gated agent can improve the yield and auditability of continual open-RTL-to-graph construction beyond a fixed scripted pipeline, without admitting graphs whose physical or provenance status is incomplete. This hypothesis requires evaluation of autonomy, recovery, admission precision, cross-design transfer, and production cost, rather than relying only on the number of generated designs.
+Core Contributions
+Core contribution
+Formulation
+Primary distinction
+Continual agentic candidate-to-graph production
+An agent-operated campaign discovers previously unseen open-source RTL, performs qualification and synthesis triage, promotes viable candidates into physical implementation, and emits multi-view graph samples while preserving structured records for accepted, rejected, and recovered runs.
+ForgeEDA, DeepCircuitX, OpenRTLSet, and CircuitNet 3.0 establish large RTL corpora, while HighTide establishes evolving agent-assisted benchmark curation. The distinction to test is a continuously operated candidate-to-graph loop rather than an offline corpus release or periodically curated suite.
+Signoff-aware and provenance-preserving graph admission
+Machine-readable admission rules bind synthesis, physical, signoff, feature, label, and graph artifacts to one run. Each admitted sample carries a manifest exposing physical checks, label coverage, artifact identity, and explicit caveats.
+AiEDA, CircuitOps, EDA-Schema-V2, and R2G establish rich design representations. The distinction to test is fail-closed publication based on run-consistent signoff and provenance evidence rather than accepting a sample because a final layout or convertible file exists.
+Evidence-gated self-improving execution
+Structured diagnosis, run history, negative evidence, and Recipe retrieval support adaptive recovery. A new or modified Recipe becomes eligible for live use only after matched A/B evaluation and lifecycle checks provide attributable positive evidence.
+OpenROAD Agent, Dr. RTL, VeriAgent, Trace2Skill, and HighTide establish feedback, skills, and memory in EDA. The distinction to test is policy learning governed by controlled evidence and promotion/demotion gates inside a dataset-production campaign.
+2. Related Work
+2.1 LLM Agents for RTL-to-GDS and ASIC Flow Automation
+Recent work has established several forms of agentic EDA automation. ChatEDA, IICPilot, MCP4EDA, AutoEDA, ASIC-Agent, NL2GDS, and Design Conductor demonstrate tool orchestration ranging from script generation to autonomous specification-to-GDS execution. OpenROAD Agent adds execution-guided script correction, while HighTide uses agent skills and per-design decision logs to maintain an evolving RTL-to-GDS benchmark suite. These systems make a generic claim of "LLM-controlled RTL-to-GDS" insufficient. The relevant distinction for the present work is its data-production objective and the coupling of acquisition, graph admission, and evidence-gated repair learning across many independent RTL subjects.
+Work
+Date
+Main focus
+Relation to this work
+ChatEDA
+2023-08-20
+LLM-powered autonomous interaction with EDA tools and RTL-to-GDS task decomposition.
+Foundational flow-agent baseline; it does not target continual graph-dataset admission.
+IICPilot
+2024-07-17
+Backend-design agent with script generation, DSE, tool invocation, and exception handling.
+Relevant to backend orchestration, but not to RTL corpus expansion or graph publication.
+OpenROAD Agent
+2025
+Execution-guided OpenROAD script generation with automatic error correction.
+Close to tool-feedback recovery; its unit of work is script correctness rather than dataset yield and admission.
+MCP4EDA
+2025-07-25
+MCP-based RTL-to-GDSII automation with backend-aware synthesis optimization.
+Close flow-orchestration baseline using supplied designs; no continual graph corpus is constructed.
+AutoEDA
+2025-08-01
+MCP-based natural-language control of EDA Tcl flows.
+Relevant as an open flow-agent baseline; it does not perform corpus acquisition or graph admission.
+ASIC-Agent
+2025-08-21
+Multi-agent RTL generation, verification, OpenLane hardening, and Caravel integration.
+Targets completion of an ASIC design task rather than continual dataset construction.
+NL2GDS
+2026-03-05
+Modular LLM-aided interface for an open-source RTL-to-GDS flow.
+Overlaps end-to-end tool access, but not open-RTL acquisition, graph output, or evidence-gated learning.
+Design Conductor
+2026-03-22
+Long-horizon autonomous specification-to-verified-GDSII design of a RISC-V CPU.
+Strongest autonomy comparison for one design objective; it does not build a continually expanding graph corpus.
+HighTide
+2026-06-02
+Agent-curated evolving VLSI suite with incremental RTL-to-GDS compilation and per-design decision logs.
+Closest benchmark-curation comparison; it does not publish multi-view graph samples or use A/B-gated Recipe promotion.
+PostEDA-Bench shifts evaluation from flow invocation to the post-EDA closure stage. It organizes 145 tasks across DRC-Essential, DRC-Reasoning, PPA-Mono, and PPA-Multi, with machine-checkable outcomes over open-source and commercial EDA flows. It therefore provides a closely related benchmark perspective for evaluating signoff diagnosis, DRC repair, and PPA convergence. In contrast, PostEDA-Bench evaluates agents on predefined post-EDA tasks, whereas the present system embeds diagnosis and repair as an internal quality-control loop within continuous RTL acquisition, physical implementation, and graph-dataset construction.
+2.2 Physical Design Datasets for Machine Learning
+Dataset and representation work now covers nearly every individual transformation required by an RTL-to-graph factory. OpenABC-D established large-scale synthesis trajectories; CircuitNet, EDALearn, ChiPBench, EDA-schema, and EDA-Schema-V2 provide stage-resolved physical-design data; Verilog-to-PyG and CircuitOps provide graph-oriented conversion infrastructure; DeepCircuitX, ForgeEDA, OpenRTLSet, and CircuitNet 3.0 substantially expand open RTL sources; AiEDA formalizes Design-to-Vector across graph, net, path, and patch granularities; and R2G standardizes five stage-aware circuit-graph views. The present work must therefore be evaluated on the integration and governance of continual production, not on any one of these already established components.
+Work
+Date
+Main focus
+Relation to this work
+OpenABC-D
+2021-10-21
+Large labeled AIG dataset generated from open designs and synthesis trajectories.
+Foundational synthesis-graph dataset; it does not cover physical implementation, signoff, or agentic acquisition.
+CircuitNet family
+2022-2026
+Large multi-stage, multimodal EDA datasets; CircuitNet 3.0 reports 8,659 validated open-source RTL designs and 15,863 augmented instances.
+Strong corpus-scale and cross-stage baseline; releases are curated datasets rather than a failure-aware agent that continually admits graph samples.
+Verilog-to-PyG
+2023-11-09
+Open framework that converts RTL representations to PyG and uses OpenROAD for labels and augmentation.
+Direct graph-conversion predecessor; it does not autonomously discover RTL or enforce per-run signoff/provenance admission.
+CircuitOps
+2023-11-30
+Tool-agnostic EDA-file extraction into labeled property graphs and customizable ML datasets.
+Strong graph-infrastructure baseline that assumes available design artifacts rather than operating an acquisition and recovery campaign.
+EDALearn
+2023-12-04
+Reproducible RTL-to-signoff benchmark across stages and technology nodes.
+Strong full-flow data baseline built from a benchmark suite; it does not provide continual acquisition or formal graph admission.
+EDA-schema
+2024-06-12
+A graph data-model schema and OpenROAD dataset spanning multiple physical-design stages.
+Strong schema-side comparison, but it does not implement an evolving open-RTL acquisition and agent-recovery loop.
+ChiPBench
+2024-07-03
+Twenty source-Verilog circuits with a reproducible full OpenROAD flow for final-PPA placement evaluation.
+Demonstrates end-to-end physical evaluation, but not graph-dataset construction or autonomous repair learning.
+DeepCircuitX
+2025-02-25
+More than 4,000 repository-level RTL projects, 140,000 files, synthesized netlists, PPA metrics, and layout-related modalities.
+Strong acquisition and synthesis-data prior art; its main objectives are RTL language modeling and PPA analysis rather than signoff-qualified graphs.
+ForgeEDA
+2025-05-04
+Internet collection and synthesis filtering of 1,189 RTL repositories, followed by synthesis, floorplanning, placement, and PyG graph generation.
+Closest data-construction competitor. It does not report a continual agentic failure-recovery loop, full route/signoff admission, or A/B-gated repair policy lifecycle.
+AiEDA
+2025-11-08
+Design-to-Vector framework spanning design, net, graph, path, and patch data; produces the approximately 600 GB iDATA collection.
+Closest vectorization and data-infrastructure framework; current public work uses prepared design sources and does not implement the present agent learning loop.
+R2G
+2026-04-09
+Five stage-aware graph views over 30 open-source IP cores with controlled GNN protocols.
+Closest graph-schema comparison; it is a benchmark suite rather than a continually operated acquisition and recovery agent.
+EDA-Schema-V2
+2026-05-07
+7,776 OpenROAD-generated physical-design instances across 18 circuits, four PDKs, and twelve prediction tasks.
+Closest open full-stage schema baseline, but diversity is produced by parameter sweeps over fixed benchmark circuits.
+OpenRTLSet
+2026-06-09
+131,000 fully open-source Verilog modules from traceable GitHub, translated HDL, and HLS sources.
+Strong open-RTL acquisition and licensing baseline; it targets RTL language-model training and does not perform physical implementation or graph admission.
+2.3 Self-improving and Tool-feedback EDA Agents
+A third line of work studies how EDA agents improve through execution feedback, memory, or reusable skills. OpenROAD Agent corrects generated scripts using tool errors; Dr. RTL distills reusable optimization skills from parallel tool-grounded trials; VeriAgent maintains evolving memory for PPA-aware RTL generation; Trace2Skill extracts skills from execution traces; and RTL-BenchMT applies agents to dynamic benchmark maintenance. HighTide also records per-design tuning rationale as long-term memory. These mechanisms are close to run-history diagnosis and Recipe reuse, but they optimize designs, scripts, tools, or benchmark cases rather than governing the admission and continual construction of physical-design graph samples.
+Work
+Date
+Main focus
+Relation to this work
+OpenROAD Agent
+2025
+Tool-in-the-loop correction of generated OpenROAD scripts.
+Relevant to execution feedback, but it learns script correction rather than dataset-production policies.
+AuDoPEDA
+2026-01-09
+Repository-grounded coding agent that modifies OpenROAD for QoR improvements.
+Improves the EDA tool itself rather than operating a graph-data campaign.
+VeriAgent
+2026-03-18
+Tool-integrated multi-agent RTL generation with evolving memory.
+Relevant to structured memory and feedback, but focused on PPA-aware RTL generation.
+Dr. RTL
+2026-04-16
+Tool-grounded RTL optimization with group-relative skill learning and a reusable skill library.
+Close to comparative skill learning; it optimizes RTL timing rather than governing graph publication.
+RTL-BenchMT
+2026-05-15
+Agent-assisted detection, repair, and dynamic maintenance of flawed or overfit RTL benchmark cases.
+Relevant to evolving benchmark quality, but not to physical-flow recovery or signoff-qualified graph construction.
+Trace2Skill
+2026-05-20
+Extraction and evolution of reusable skills from agent execution traces.
+Relevant to skill evolution; the downstream objective differs from dataset generation.
+Alpha-RTL
+2026-06-03
+RTL optimization through test-time training with syntax, simulation, and PPA rewards.
+Targets optimization of supplied designs rather than continual corpus construction.
+Closest prior-art envelope. No single paper defines the relevant comparison boundary. ForgeEDA is the closest work for Internet-scale RTL collection, synthesis, placement, and PyG graph generation; HighTide is the closest work for an evolving agent-curated RTL-to-GDS suite with persistent design rationale; AiEDA is the closest framework for full-flow data extraction and Design-to-Vector; and R2G is the closest benchmark for multi-view physical-design graphs. The defensible contribution must therefore be demonstrated as the combined mechanism: autonomous candidate-to-graph operation over previously unseen RTL, per-run signoff and provenance admission, and repair-policy learning whose live use is controlled by matched evidence and lifecycle gates. This is a bounded comparative claim and must be supported by implementation details and ablation results.
+3. Method
+The method is organized around the system architecture, continual RTL acquisition, signoff-aware physical implementation, evidence-gated learning, and qualified multi-view graph construction. The system combines an adaptive Agent with deterministic EDA stages and machine-readable transition gates. This separation allows campaign-scale autonomy while preserving reproducibility and preventing the Agent from bypassing synthesis, signoff, provenance, or dataset-admission requirements.
+3.1 System Architecture and Agentic Decision Loop
+Agentic RTL-to-Graph is a continual data-production system that transforms open-source RTL into signoff-aware, multi-view graph datasets. Before a campaign starts, the system detects host capabilities, resolves or provisions the required EDA tools and technology assets, pins the resulting environment, and verifies readiness. This deterministic prerequisite ensures that downstream stages share consistent tool, platform, and graph-generation dependencies; the experimental configuration is reported in Section 4.1.
+toolchain readiness
+-> open-source RTL acquisition and qualification
+-> physical implementation and signoff
+-> multi-view graph construction
+-> dataset admission and manifest publication
+-> run-history update and continued acquisition
+The architecture separates adaptive control from deterministic transformation. Repository processing, synthesis, physical implementation, signoff extraction, graph construction, and database updates are executed by deterministic programs. The Agent observes their structured outputs, selects the next admissible action, coordinates recovery, and escalates unresolved cases. Persistent state allows interrupted runs to resume and failed candidates to be retried without repeating completed work.
+The observation space includes candidate provenance, configuration readiness, stage completion, timing and routing summaries, DRC/LVS results, graph-quality reports, and run-history evidence. The action space includes acquiring or retrying a candidate, promoting a synthesis-qualified design, resuming an affected stage, applying an admissible Recipe, launching a controlled A/B trial, generating graphs, or escalating an unresolved case.
+observe structured artifacts
+-> classify the outcome or failure
+-> retrieve and rank admissible Recipes
+-> apply one bounded intervention
+-> rerun the affected stage
+-> evaluate signoff and dataset quality
+-> ingest the resulting evidence
+-> promote, demote, continue, or escalate
+Synthesis qualification controls entry into physical implementation, signoff and provenance evidence control entry into the formal graph corpus, and Recipe lifecycle state controls adaptive repair. These deterministic gates cannot be overridden by an Agent decision or an auxiliary score. Unknown symptoms and repeated non-convergence are recorded as escalations, allowing the campaign to continue with other designs rather than blocking globally.
+3.2 Autonomous RTL Acquisition and Candidate Qualification
+The acquisition stage continually expands the design pool beyond a fixed benchmark suite. It discovers public RTL repositories, materializes selected revisions, identifies candidate top modules and source bundles, and records repository URL, revision, source paths, language, license and filtering decisions. Incremental scan state prevents unchanged repositories from being repeatedly treated as new candidates.
+Each candidate is normalized into an isolated synthesis project and evaluated with a synthesis-only flow. The frontend resolves include files and parameters, attempts supported language conversion when necessary, and maps the design to the target cell library. Candidates are deduplicated at both the RTL and mapped-netlist levels so that renamed or reorganized copies do not inflate the corpus. A preliminary netlist graph and structural statistics provide an additional integrity check before physical implementation.
+Candidate outcomes are stored as explicit states rather than a binary repository-level decision. A qualified candidate has a valid mapped netlist, unique signatures, graph output, and complete provenance. Synthesis failures, conversion failures, duplicates, and excluded sources retain their reasons and remain available for analysis or policy-controlled retry. Quality scoring and publication eligibility prioritize useful and sufficiently complex designs while preserving an auditable record of rejected candidates.
+3.3 Signoff-aware Physical Implementation
+Synthesis-qualified candidates are promoted into self-contained physical-design projects. Promotion carries forward the validated RTL bundle, top module, frontend settings, target platform, and clock assumptions, then constructs the backend configuration and timing constraints. A readiness gate rejects incomplete or inconsistent projects before expensive physical implementation begins.
+The backend executes synthesis, floorplanning, placement, clock-tree synthesis, detailed routing, parasitic extraction, timing analysis, DRC, and LVS. Stage outcomes are represented by structured status records, allowing the campaign to resume from the affected stage and to distinguish design failures from incomplete or interrupted runs. Repair is bounded: each intervention is evaluated against the previous violation state, and repeated non-improvement terminates the local loop instead of consuming unbounded compute.
+The physical run produces a provenance-bound evidence package containing stage completion, configuration lineage, timing and routing summaries, parasitic availability, DRC/LVS status, antenna status, caveats, and failure classification. These records are consumed by both the learning loop and the graph-admission gate.
+3.4 Run-history Learning and A/B-gated Recipe Lifecycle
+After every complete, failed, or partial run, the system ingests the outcome, failure signature, violation snapshot, applied intervention, configuration lineage, and resulting quality metrics into a run-history store. For a known symptom, the Agent retrieves repair Recipes and ranks them using relevant evidence for the same check type, platform, symptom class, and design context. Raw logs and isolated successful runs are retained as evidence but are not treated as trusted policy by themselves.
+Recipe adoption follows an explicit lifecycle. New or modified Recipes remain non-live and are compared with a control configuration on matched subjects. The treatment arm must be provenance-complete, differ from the control only through the intended intervention, produce judgeable results, satisfy required usability and signoff criteria, and improve the target-aware outcome. Auxiliary outcome scores cannot compensate for an unusable result or a new regression.
+Verifiable net-positive evidence promotes a Recipe into live ranking; net-negative or regressive evidence moves it to shadow or demoted status; inconclusive evidence leaves it non-live. Live performance is monitored so that a previously promoted Recipe can be withdrawn after repeated regression. Cases outside the known symptom catalog are escalated for analysis and may yield new shadow Recipes for later controlled validation.
+3.5 Multi-view Graph Dataset Construction and Quality Control
+Graph construction begins only after the physical artifacts and their run provenance have been identified. The system extracts structural features from the mapped netlist and physical database and derives supervision signals from placement, routing, timing, parasitic, and signoff results. Missing or stale feature and label products are regenerated against the selected final layout before graph assembly.
+Dataset admission is controlled by a signoff gate. A formal sample requires a completed backend run, an acceptable DRC result, an acceptable or explicitly skipped LVS result, and no known residual routing violations. Missing, failed, stale, or provenance-inconsistent evidence blocks formal dataset generation. BEOL-only DRC, skipped LVS, incomplete antenna coverage, and timing violations are retained as explicit caveats rather than silently interpreted as full signoff. This policy separates dataset usability from the mere existence of a final DEF file.
+The output contains five related physical graph views. View b preserves gate, net, I/O-pin, and instance-pin nodes. View c folds instance pins, view d folds nets, view e retains pin-level entities after folding gates and nets, and view f represents net connectivity primarily between gates and I/O pins. These views expose different trade-offs between structural fidelity, graph size, and message-passing distance while sharing aligned design provenance and labels. A synthesis-netlist graph is also retained when available.
+Every generated sample is accompanied by a manifest that records design and platform identity, graph-view statistics, feature and label schemas, missing-label rates, RC coverage, signoff status, caveats, and artifact provenance. Downstream users can therefore select strict signoff-clean samples, include qualified samples with explicit caveats, or filter by label completeness without inferring quality from filenames alone.
+4. Experimental Setup and Evaluation Plan
+R2G Experiment1 ：RTL_Acquisition
+4.1 Toolchain Provisioning, Platforms, and Reproducibility
+Each campaign begins from a declared host environment and executes a deterministic readiness procedure that detects available capabilities, resolves missing dependencies, provisions the required tools and technology assets when permitted, pins the selected paths and versions, and verifies the resulting environment before any design enters the flow. The evaluated stack includes Yosys for synthesis, OpenROAD-flow-scripts and OpenROAD for physical implementation, KLayout, Netgen, and Magic for physical verification, OpenRCX for parasitic extraction, and PyTorch Geometric for graph serialization.
+The experimental record reports tool and platform versions, technology libraries and verification decks, host hardware, resource limits, random seeds, timeout and retry budgets, graph-environment dependencies, and the LLM configuration used by the Agent. Detailed installation commands and directory layouts remain in the artifact documentation; the paper reports the information required to reproduce the evaluated environment and interpret runtime or failure results.
+4.2 Evaluation Questions and Metrics
+The evaluation is organized around six research questions that test dataset production, reliability, data quality, diversity, downstream utility, and learning behavior. Continual-production claims are evaluated through a sustained campaign rather than isolated demonstration runs.
+RQ
+Question
+Primary evidence
+RQ1
+Can the system continually produce graph datasets from newly acquired open-source RTL?
+Campaign duration; searched and cloned repositories; candidate and qualified designs; synthesis, full-flow and signoff yields; cumulative b/c/d/e/f graph count; graph throughput per unit time.
+RQ2
+Does agentic recovery improve end-to-end robustness?
+Completion rate, stage-failure distribution, successful resumptions, bounded-repair outcomes, runtime and compute overhead, automatic recoveries, and human interventions.
+RQ3
+Does the quality gate prevent untrustworthy samples from entering the formal corpus?
+Counts of signoff-clean, qualified-with-caveats, blocked and rejected samples; tests with missing, stale, failed, or provenance-inconsistent evidence; label and RC coverage.
+RQ4
+Does autonomous acquisition expand structural and source diversity beyond fixed benchmarks?
+Independent repositories, licenses, design families, deduplicated netlist signatures, cell and net-count distributions, graph-size distributions, and source-category coverage.
+RQ5
+Are the generated graphs useful for downstream graph learning?
+GNN performance on selected physical-design labels, cross-design splits, b/c/d/e/f view comparison, label completeness, and generalization across source families.
+RQ6
+Does evidence-gated run-history learning improve over the course of a campaign?
+Recipe retrieval and application counts, A/B trials, promotion and demotion outcomes, pre/post success rate, time-to-recovery, repeated-failure rate, and avoided human interventions.
+4.3 Baselines and Ablation Design
+Dataset-side comparisons prioritize the closest functional neighbors rather than only similarly named systems. ForgeEDA tests overlap in Internet RTL collection and PyG dataset generation; AiEDA and CircuitOps test overlap in vectorization and graph-oriented data infrastructure; R2G tests multi-view graph construction; CircuitNet 3.0, EDA-Schema-V2, EDALearn, and ChiPBench test corpus scale, stage coverage, and reproducible physical-flow data; and HighTide tests evolving RTL-to-GDS curation and incremental execution. Flow-agent comparisons include reproducible systems such as AutoEDA and OpenROAD Agent, while Design Conductor provides a reference for long-horizon autonomous chip implementation. PostEDA-Bench remains a complementary reference for signoff diagnosis and repair rather than an end-to-end dataset-construction baseline. Comparisons should use compatible released artifacts and explicitly mark dimensions that cannot be reproduced from public code or data.
+Ablations isolate the contribution of continual acquisition, resumable stage control, structured diagnosis, run-history retrieval, A/B-gated Recipe promotion, and signoff-aware dataset admission. The evaluation compares the full system against variants without adaptive diagnosis, without learned Recipe retrieval, without A/B lifecycle control, without the signoff gate, and with a fixed design pool. Case studies report both successful recovery and non-convergent or rejected designs so that improvements are not inferred only from surviving samples.
+5. Conclusions and Limitations
+The expected conclusion is that agentic automation can be used not only to finish individual EDA tasks, but also to construct reusable training data for EDA-ML. By combining RTL acquisition, validation, physical implementation, signoff health tracking, and graph conversion, the system can provide a scalable path toward more diverse graph datasets.
+The main limitations should also be stated clearly. First, open-source RTL quality is uneven, and many repositories may fail due to missing dependencies, unsupported constructs, unclear top modules, or synthesis issues. Second, full physical implementation is computationally expensive and can fail due to routing, antenna, DRC, LVS, or tool-environment problems. Third, signoff coverage may vary by platform; for example, a design may pass BEOL-only DRC while full DRC or LVS remains unavailable or too expensive. Finally, the graph dataset quality depends on accurate feature extraction, label completeness, and manifest integrity, so downstream users must consume the quality metadata rather than treating every graph file as equally reliable.
+References and PDF Archive
+This table is maintained as a working literature index for the knowledge base. Bibliographic fields and links are verified here, while the final manuscript will use BibTeX-managed entries and numbered in-text citations. Publication dates and PDF archive links are retained on this page for internal literature management.
+Work
+Date
+Category
+Publication link
+PDF
+OpenABC-D: A Large-Scale Dataset for Machine Learning Guided Integrated Circuit Synthesis
+2021-10-21
+Synthesis graph dataset
+arXiv 2110.11292
+PDF
+CircuitNet: An Open-Source Dataset for Machine Learning Applications in EDA
+2022-08-01
+EDA ML dataset
+arXiv 2208.01040
+PDF
+ChatEDA: A Large Language Model Powered Autonomous Agent for EDA
+2023-08-20
+EDA flow agent
+arXiv 2308.10204
+PDF
+Verilog-to-PyG: A Framework for Graph Learning and Augmentation on RTL Designs
+2023-11-09
+RTL-to-PyG infrastructure
+arXiv 2311.05722
+PDF
+CircuitOps: An ML Infrastructure Enabling Generative AI for VLSI Circuit Optimization
+2023-11-30
+Graph data infrastructure
+NVIDIA Research
+PDF
+EDALearn: A Comprehensive RTL-to-Signoff EDA Benchmark for Democratized and Reproducible ML for EDA Research
+2023-12-04
+RTL-to-signoff benchmark
+arXiv 2312.01674
+PDF
+EDA-schema: A Graph Datamodel Schema and Open Dataset for Digital Design Automation
+2024-06-12
+Physical-design graph schema
+ACM DOI
+ACM
+Benchmarking End-To-End Performance of AI-Based Chip Placement Algorithms (ChiPBench)
+2024-07-03
+End-to-end OpenROAD benchmark
+arXiv 2407.15026
+PDF
+IICPilot
+2024-07-17
+Backend-design agent
+arXiv 2407.12576
+PDF
+DeepCircuitX: A Comprehensive Repository-Level Dataset for RTL Code Understanding, Generation, and PPA Analysis
+2025-02-25
+Repository-scale RTL dataset
+arXiv 2502.18297
+PDF
+ForgeEDA: A Comprehensive Multimodal Dataset for Advancing EDA
+2025-05-04
+Internet RTL and graph dataset
+arXiv 2505.02016
+PDF
+OpenROAD Agent: An Intelligent Self-Correcting Script Generator for OpenROAD
+2025
+Self-correcting EDA agent
+IEEE DOI
+PDF
+MCP4EDA
+2025-07-25
+MCP-based EDA flow
+arXiv 2507.19570
+PDF
+AutoEDA
+2025-08-01
+MCP-based EDA automation
+arXiv 2508.01012
+PDF
+ASIC-Agent
+2025-08-21
+Multi-agent ASIC design
+arXiv 2508.15940
+PDF
+AiEDA: An Open-Source AI-Aided Design Library for Design-to-Vector
+2025-11-08
+Design-to-Vector framework
+arXiv 2511.05823
+PDF
+AuDoPEDA: Automated QoR Improvement in OpenROAD with Coding Agents
+2026-01-09
+EDA tool-development agent
+arXiv 2601.06268
+PDF
+CircuitNet 3.0: A Multi-Modal Dataset with Task-Oriented Augmentation for AI-Driven Circuit Design
+2026
+Large open RTL multimodal dataset
+ICLR 2026
+PDF
+NL2GDS: LLM-Aided Interface for Open Source Chip Design
+2026-03-05
+Natural-language RTL-to-GDS interface
+arXiv 2603.05489
+PDF
+VeriAgent
+2026-03-18
+RTL-generation agent
+arXiv 2603.17613
+PDF
+Design Conductor: An Agent Autonomously Builds a 1.5 GHz Linux-Capable RISC-V CPU
+2026-03-22
+Autonomous specification-to-GDS
+arXiv 2603.08716
+PDF
+R2G: A Multi-View Circuit Graph Benchmark Suite from RTL to GDSII
+2026-04-09
+Multi-view circuit graph benchmark
+arXiv 2604.08810
+PDF
+Dr. RTL: Autonomous Agentic RTL Optimization through Tool-Grounded Self-Improvement
+2026-04-16
+RTL-optimization agent
+arXiv 2604.14989
+PDF
+PostEDA-Bench
+2026-05-07
+Signoff diagnosis and repair benchmark
+arXiv 2605.06936
+PDF
+EDA-Schema-V2
+2026-05-07
+Physical-design dataset and schema
+arXiv 2605.06952
+PDF
+RTL-BenchMT: Dynamic Maintenance of RTL Generation Benchmark Through Agent-Assisted Analysis and Revision
+2026-05-15
+Agent-maintained RTL benchmark
+arXiv 2605.15537
+PDF
+Rule2DRC: Benchmarking LLM Agents for DRC Script Synthesis with Execution-Guided Test Generation
+2026-05-15
+DRC-script benchmark
+arXiv 2605.15669
+PDF
+Trace2Skill
+2026-05-20
+Skill evolution
+arXiv 2605.21810
+PDF
+HighTide: An Agent-Curated Open-Source VLSI Benchmark Suite
+2026-06-02
+Evolving agent-curated RTL-to-GDS suite
+arXiv 2606.04126
+PDF
+Alpha-RTL
+2026-06-03
+RTL optimization
+arXiv 2606.05253
+PDF
+OpenRTLSet: A Fully Open-Source Dataset for Large Language Model-Based Verilog Module Design
+2026-06-09
+GitHub-scale open RTL corpus
+arXiv 2606.10285
+PDF
+Writing Notes
+The introduction should begin from the practical difficulty of EDA flows and the scarcity of reusable EDA-ML datasets. The related-work section should avoid claiming that EDA flow automation is new. Instead, it should explain that prior agents mainly automate or optimize design flows, while prior datasets mainly rely on fixed or curated design sources. The proposed system is positioned as a bridge between these two directions.
+The experimental section should identify at least one dataset-side baseline and one flow-agent-side baseline if reproducibility permits. EDA-Schema-V2 and CircuitNet are strong dataset-side comparisons. AutoEDA is a useful open-source flow-agent comparison. MCP4EDA is highly relevant conceptually, but code accessibility should be verified before using it as an executable baseline.

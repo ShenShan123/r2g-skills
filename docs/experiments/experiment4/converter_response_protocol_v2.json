@@ -1,0 +1,20 @@
+{
+  "schema_version": "experiment4-converter-response-protocol-2.0",
+  "encoding": "utf-8",
+  "format": "delimiter_envelope",
+  "allow_text_outside_envelope": false,
+  "sections": [
+    {
+      "begin": "===SUMMARY_BEGIN===",
+      "end": "===SUMMARY_END===",
+      "content": "plain_text"
+    },
+    {
+      "begin": "===PYTHON_SOURCE_BEGIN===",
+      "end": "===PYTHON_SOURCE_END===",
+      "content": "complete_python_source"
+    }
+  ],
+  "legacy_json_accepted_by_parser": true,
+  "legacy_json_requested_from_models": false
+}

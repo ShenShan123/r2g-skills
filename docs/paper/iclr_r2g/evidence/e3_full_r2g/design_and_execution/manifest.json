@@ -1,0 +1,111 @@
+{
+  "cores": 4,
+  "cpu_set": "128-131",
+  "evaluation": "Original run_trial strict_clean, no relaxed scoring",
+  "execution": "Native ranked and gated config actions; rollback to baseline between attempts",
+  "host": "208",
+  "llm_calls": 0,
+  "max_attempts_per_task": 3,
+  "online_learning": false,
+  "original_scores_modified": false,
+  "production_memory_modified": false,
+  "runner_sha256": "7888806e54c1721f71f37d49c000d7802b0dfb244c7ae63faaf82bcb53457ab5",
+  "snapshot_sha256": "21a64400786c84eacbe2cc98076f631806da536a7c52af4c48a3da32a3d0cdfa",
+  "source_exposure": "includes B-informed recipe development",
+  "tasks": [
+    {
+      "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_15998ea30bc1_aes_192/baseline",
+      "baseline_sha256": "21c55e62f2bcf744e95140e82e37e0953711626a65477b6c09610f6e243cae1c",
+      "check": "drc",
+      "first_strategy": "pin_side_rebalance",
+      "task_id": "exp1_15998ea30bc1_aes_192"
+    },
+    {
+      "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_17c9a0461ada_des_top/baseline",
+      "baseline_sha256": "559fc9647a629e5be9a80ecd248df296a722b4f41e113900375497b0274e3a0b",
+      "check": "drc",
+      "first_strategy": "pin_side_rebalance",
+      "task_id": "exp1_17c9a0461ada_des_top"
+    },
+    {
+      "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_18940142f78e_seqcordic/baseline",
+      "baseline_sha256": "2ac199cb8d61cb6d86bd249d089a9e64e3ddb665a7652eb6b1820a510db09921",
+      "check": "drc",
+      "first_strategy": "pin_side_rebalance",
+      "task_id": "exp1_18940142f78e_seqcordic"
+    },
+    {
+      "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_1993adb0da90_timer_top/baseline",
+      "baseline_sha256": "5e3579bfccdc8885decd6179304179b78f3c05b24957fa0995c9f69c7edb67b7",
+      "check": "drc",
+      "first_strategy": "pin_side_rebalance",
+      "task_id": "exp1_1993adb0da90_timer_top"
+    },
+    {
+      "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_250c441e570f_blake2s/baseline",
+      "baseline_sha256": "1537c4d4e81905ce64b838ef045561aa544436181a58e805b6f77ce44408a632",
+      "check": "timing",
+      "first_strategy": null,
+      "task_id": "exp1_250c441e570f_blake2s"
+    },
+    {
+      "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_61c173a60608_iir_biquad_axis/baseline",
+      "baseline_sha256": "6c5610e3a40b2f2a1abe65f0463e96ea2492e451b2fb6836cdf5c0fd9e0db122",
+      "check": "timing",
+      "first_strategy": "hierarchical_place_timing_repair",
+      "task_id": "exp1_61c173a60608_iir_biquad_axis"
+    },
+    {
+      "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_6a2b257650ce_reg_file/baseline",
+      "baseline_sha256": "20a6b1a63276407a159edb0982d3321a40ce035096c5f3d019ea73002d83c3c3",
+      "check": "drc",
+      "first_strategy": "pin_side_rebalance",
+      "task_id": "exp1_6a2b257650ce_reg_file"
+    },
+    {
+      "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_729416e93fdc_blake2s_core/baseline",
+      "baseline_sha256": "eea4cb52204267acdb2a73a158e7e35849aa2f39f55a8b3c75fa9fa373544326",
+      "check": "timing",
+      "first_strategy": "hierarchical_place_timing_repair",
+      "task_id": "exp1_729416e93fdc_blake2s_core"
+    },
+    {
+      "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_72c9fc843efb_wbuart/baseline",
+      "baseline_sha256": "41921cfa8eb67a5120fdbaa999710256d4ab4a00a2cc8821ecd2c9f6138f794f",
+      "check": "drc",
+      "first_strategy": "pin_side_rebalance",
+      "task_id": "exp1_72c9fc843efb_wbuart"
+    },
+    {
+      "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_95f132db328d_tanh/baseline",
+      "baseline_sha256": "292842dd55c10489ce0e6cbd2d5c2c29eea4badb2f49ee88d354f07fb395d563",
+      "check": "timing",
+      "first_strategy": null,
+      "task_id": "exp1_95f132db328d_tanh"
+    },
+    {
+      "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_9e3f10826919_fft8_stream/baseline",
+      "baseline_sha256": "f4354d8c87a980ad35aea9b5d685f6c8c8b869356dbe22e751f35cf9ddca5977",
+      "check": "timing",
+      "first_strategy": "hierarchical_place_timing_repair",
+      "task_id": "exp1_9e3f10826919_fft8_stream"
+    },
+    {
+      "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_c3cb6ed47cb8_pipelined_iir/baseline",
+      "baseline_sha256": "e2cd491d8de6e682ad97bc8c14ccbf7c1583dd03beac86b45d252d4a723370bb",
+      "check": "timing",
+      "first_strategy": "hierarchical_place_timing_repair",
+      "task_id": "exp1_c3cb6ed47cb8_pipelined_iir"
+    },
+    {
+      "baseline": "/home/yangao/r2g_exp2_baseline_revalidation_20260904/projects/exp1_d50060d8400c_picorv32/baseline",
+      "baseline_sha256": "c5abfd63d005c034ef6f4ccd8ae9b6b61a4be7d671b30ae8ffc750833134cdd3",
+      "check": "drc",
+      "first_strategy": "pin_side_rebalance",
+      "task_id": "exp1_d50060d8400c_picorv32"
+    }
+  ],
+  "timeout_seconds_per_attempt": 7200,
+  "trial_runner_sha256": "d7c00241d0fcebeeabba36433c067fec1f39511dc0084b386ef059236c186bc9",
+  "workers": 1
+}

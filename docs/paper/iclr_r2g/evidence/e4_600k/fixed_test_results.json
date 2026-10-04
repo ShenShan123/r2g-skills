@@ -1,0 +1,45 @@
+{
+  "role": "fixed benchmark retest",
+  "methods": {
+    "r2g-frozen-v3": {
+      "semantic_passes": 24,
+      "cases": 24,
+      "coverage": {
+        "identity": 1.0,
+        "topology": 1.0,
+        "numeric": 1.0,
+        "label": 1.0
+      }
+    },
+    "llm-gpt-frozen": {
+      "semantic_passes": 0,
+      "cases": 24,
+      "coverage": {
+        "identity": 1.0,
+        "topology": 1.0,
+        "numeric": 0.2512373069459642,
+        "label": 0.13334176211661147
+      }
+    },
+    "llm-claude-frozen": {
+      "semantic_passes": 0,
+      "cases": 24,
+      "coverage": {
+        "identity": 0.7363782077719168,
+        "topology": 0.6399522119159459,
+        "numeric": 0.08351384951139228,
+        "label": 0.0008720395866522181
+      }
+    },
+    "llm-qwen-frozen": {
+      "semantic_passes": 0,
+      "cases": 24,
+      "coverage": {
+        "identity": 0.7238838906625126,
+        "topology": 0.6246895447180308,
+        "numeric": 0.0,
+        "label": 0.0
+      }
+    }
+  }
+}

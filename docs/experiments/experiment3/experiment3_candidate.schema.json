@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://r2g.local/schemas/experiment3_candidate.schema.json",
+  "title": "Experiment 3 bounded repair candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "candidate_id",
+    "candidate_version",
+    "source_model",
+    "failure_domain",
+    "strategy",
+    "rationale",
+    "applicability",
+    "config_edits",
+    "action_policy_sha256"
+  ],
+  "properties": {
+    "candidate_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$"},
+    "candidate_version": {"type": "integer", "minimum": 1},
+    "source_model": {"type": "string", "minLength": 1},
+    "failure_domain": {"enum": ["drc_edge_pin", "setup_timing"]},
+    "strategy": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+    "action_policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "rationale": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "applicability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "required_failure_signatures"],
+      "properties": {
+        "platform": {"const": "sky130hd"},
+        "required_failure_signatures": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string"}
+        },
+        "requires_negative_setup_wns": {"type": "boolean"},
+        "requires_edge_concentration": {"type": "boolean"},
+        "notes": {"type": "string", "maxLength": 1000}
+      }
+    },
+    "config_edits": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 6,
+      "propertyNames": {
+        "enum": [
+          "ABC_AREA",
+          "ABC_CLOCK_PERIOD_IN_PS",
+          "PLACE_PINS_ARGS",
+          "ENABLE_PLACE_REPAIR_TIMING",
+          "SETUP_SLACK_MARGIN",
+          "SYNTH_HIERARCHICAL"
+        ]
+      },
+      "additionalProperties": {
+        "oneOf": [
+          {"enum": ["0", "1", "8000", "0.2"]},
+          {"enum": [
+            "-exclude left:*",
+            "-exclude right:*",
+            "-exclude top:*",
+            "-exclude bottom:*"
+          ]}
+        ]
+      }
+    }
+  }
+}

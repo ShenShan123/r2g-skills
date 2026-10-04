@@ -1,0 +1,35 @@
+{
+  "schema_version": "experiment3-model-routes-1.0",
+  "routes": [
+    {
+      "model_key": "gpt",
+      "display_model": "GPT-5.6 Sol",
+      "provider": "Codesuc",
+      "endpoint": "https://main-new.codesuc.top/v1/chat/completions",
+      "endpoint_env": "CODESUC_BASE_URL",
+      "api_key_env": "OPENAI_API_KEY",
+      "model_id": "gpt-5.6-sol",
+      "api_style": "openai_chat"
+    },
+    {
+      "model_key": "claude",
+      "display_model": "Claude Opus 5",
+      "provider": "Codesuc",
+      "endpoint": "https://main-new.codesuc.top/v1/chat/completions",
+      "endpoint_env": "CODESUC_BASE_URL",
+      "api_key_env": "CLAUDE_API_KEY",
+      "model_id": "claude-opus-5",
+      "api_style": "openai_chat"
+    },
+    {
+      "model_key": "qwen",
+      "display_model": "Qwen3.7 Max",
+      "provider": "Alibaba Cloud Model Studio",
+      "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+      "endpoint_env": "DASHSCOPE_BASE_URL",
+      "api_key_env": "QWEN_KEY",
+      "model_id": "qwen3.7-max",
+      "api_style": "openai_chat"
+    }
+  ]
+}

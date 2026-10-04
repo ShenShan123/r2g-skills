@@ -1,0 +1,30 @@
+\documentclass{article}
+\usepackage{iclr2027_conference,times}
+\usepackage[T1]{fontenc}
+\input{math_commands.tex}
+\usepackage{graphicx,booktabs,array,xcolor}
+\usepackage{hyperref}
+\usepackage{url}
+\hypersetup{hidelinks}
+\renewcommand{\arraystretch}{1.12}
+\title{\raggedright Agentic RTL-to-Graph: Evidence-Gated Dataset Construction with Frozen Repair Knowledge}
+\author{Anonymous authors}
+%\iclrfinalcopy % Keep disabled for anonymous review.
+\begin{document}
+\maketitle
+\begin{abstract}
+Constructing learning datasets from public RTL requires reliable source qualification, physical-design recovery, and preservation of circuit semantics across implementation stages. We present Agentic RTL-to-Graph, an evidence-gated workflow that connects these tasks through provenance-bound artifacts, frozen repair knowledge, and stage-aware graph construction. Repair proposals are validated on disjoint development designs and promoted into reusable recipes. The graph builder preserves canonical synthesis identities across four prediction stages and separates stage-permitted inputs from post-route supervision. Four complementary studies evaluate acquisition, repair transfer, graph conversion, and downstream utility. R2G qualifies all 200 requested RTL designs from 122 repositories in 33.52 hours, compared with 119 designs for the strongest of seven tool-enabled LLM baselines. On 13 held-out repair challenges, candidate reuse repairs eight designs; promoted recipes repair all seven covered DRC cases with seven flow trials and no deployment-time LLM calls. In a 24-design conversion benchmark, the strongest LLM-developed converter attains perfect audited identity and topology F1, yet only 25.12\% numerical feature and 13.33\% label correct coverage; R2G passes all seven semantic groups on every design. Finally, downstream models on 278 designs show that post-placement data reduces wirelength and effective-resistance MAE by 61.7\% and 35.8\% relative to post-synthesis inputs. Removing placement geometry increases their errors by 170.2\% and 55.0\%, respectively. These results establish graph conversion as an identity- and physics-preserving data construction task, alongside qualified acquisition and reusable repair.
+\end{abstract}
+\input{sections/01_introduction}
+\input{sections/02_method}
+\input{sections/03_evaluation}
+\input{sections/04_discussion}
+\label{sec:main_end}
+\input{sections/05_ai_use_statement}
+\bibliography{references}
+\bibliographystyle{iclr2027_conference}
+\appendix
+\input{sections/06_conversion_details}
+\input{sections/07_full_r2g}
+\input{sections/08_api_costs}
+\end{document}

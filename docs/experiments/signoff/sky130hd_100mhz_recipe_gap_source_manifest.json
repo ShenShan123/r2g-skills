@@ -1,0 +1,381 @@
+{
+  "schema_version": "r2g-recipe-gap-source-manifest-1.0",
+  "task": {
+    "platform": "sky130hd",
+    "target_frequency_mhz": 100,
+    "baseline": "current Default ORFS",
+    "signoff_mode": "fixed-target physical strict clean"
+  },
+  "source_priority": [
+    "current_git_bound_natural_replay",
+    "experiment1_qualified_rtl_union",
+    "requalified_expander_or_repair_pool",
+    "targeted_expander_acquisition",
+    "public_benchmark_or_regression_canary"
+  ],
+  "subjects": [
+    {
+      "id": "secworks_chacha",
+      "repo_url": "https://github.com/secworks/chacha",
+      "commit": "7eaba360df9fed9fc2db98d5f3df81cf01e5b604",
+      "role": "clean_control",
+      "evidence_status": "git_bound_current_replay_clean",
+      "notes": "Not eligible as a failure subject."
+    },
+    {
+      "id": "caravel_sha256_accelerator",
+      "repo_url": "https://github.com/cdragon123-code/caravel-sha256-accelerator",
+      "commit": "f29f637df31b56e267f4ba98983d02cc7e117742",
+      "role": "clean_control",
+      "evidence_status": "git_bound_current_replay_clean",
+      "notes": "Transient detailed-route violations are not terminal failure evidence."
+    },
+    {
+      "id": "secworks_blake2s",
+      "repo_url": "https://github.com/secworks/blake2s.git",
+      "commit": "dbecf482a6670fe0872621a8b25bf5b48efd9051",
+      "role": "candidate_timing_subject",
+      "evidence_status": "git_bound_current_setup_timing_failure_screened_negative",
+      "signature": ["SETUP_TIMING"],
+      "screening_strategy": "backend_aware_synth_retune",
+      "screened_effect_fingerprint": {
+        "ABC_AREA": "0",
+        "SYNTH_HIERARCHICAL": "0"
+      },
+      "screen_result": "strict_physical_nonclosure_setup_wns_regressed_-2.965470_to_-3.511650_ns",
+      "screened_nonpromoting_attempts": [
+        {
+          "effect_fingerprint": {
+            "SETUP_SLACK_MARGIN": "0.2"
+          },
+          "status": "screened_out_early_nonclosure",
+          "execution_integrity": "single_owner_unique_workspace",
+          "observation": "At the registered fast-screen boundary after floorplan, 509 setup endpoints remained and WNS was -5.521 ns, 2.556 ns worse than the -2.965470 ns baseline.",
+          "evidence_scope": "fast_screen_only",
+          "excluded_from": [
+            "negative_evidence",
+            "candidate_promotion",
+            "learning_ingest"
+          ],
+          "retry_requirement": "A genuinely distinct policy-legal effect and an independently replayed natural timing family; do not rename or repeat this effect."
+        }
+      ],
+      "invalid_execution_records": [
+        {
+          "effect_fingerprint": {
+            "SETUP_SLACK_MARGIN": "0.2"
+          },
+          "status": "invalid_orphan_cleanup_attempt",
+          "reason": "A child from the first contaminated workspace was still running; all Blake flows were terminated before this unique-workspace rerun reached a terminal report.",
+          "excluded_from": [
+            "failure_distribution",
+            "negative_evidence",
+            "candidate_promotion",
+            "learning_ingest"
+          ],
+          "retry_requirement": "Verify no old host process, materialize a fresh task ID/workspace, then classify only a terminal report."
+        },
+        {
+          "effect_fingerprint": {
+            "SETUP_SLACK_MARGIN": "0.2"
+          },
+          "status": "invalid_concurrent_workspace_attempt",
+          "reason": "Two overlapping invocations shared one ORFS workspace; placement temporary-log interference and a nonterminal return make both observations non-causal.",
+          "excluded_from": [
+            "failure_distribution",
+            "negative_evidence",
+            "candidate_promotion",
+            "learning_ingest"
+          ],
+          "retry_requirement": "Materialize a new task ID and project, verify no owner process, then execute exactly once."
+        },
+        {
+          "effect_fingerprint": {
+            "SETUP_SLACK_MARGIN": "0.2"
+          },
+          "status": "invalid_nonpersistent_runner_attempt",
+          "reason": "The isolated retry was reaped by the sandbox background-process lifecycle before it produced a terminal flow record.",
+          "excluded_from": [
+            "failure_distribution",
+            "negative_evidence",
+            "candidate_promotion",
+            "learning_ingest"
+          ],
+          "retry_requirement": "Use a persistent runner and a fresh task ID/workspace; classify only a terminal report."
+        }
+      ]
+    },
+    {
+      "id": "secworks_sha256_stream",
+      "repo_url": "https://github.com/secworks/sha256",
+      "commit": "837c5cc396f001d18f2c765721c585716eb439ae",
+      "role": "clean_control",
+      "evidence_status": "git_bound_current_replay_clean",
+      "notes": "Fixed-target physical strict clean: setup WNS +0.391975 ns, hold WNS +0.467271 ns."
+    },
+    {
+      "id": "astracore_matrix_accelerator",
+      "repo_url": "https://github.com/lakshya1-ops/astracore",
+      "commit": "c1eda4832320c1d0eee24f5cf312fd80c3a502bb",
+      "role": "clean_control",
+      "evidence_status": "git_bound_current_replay_clean",
+      "notes": "The Expander snapshot was discovery-only; the campaign recloned this exact commit. Fixed-target physical strict clean: setup WNS +0.597352 ns, hold WNS +0.434066 ns, with route/DRC/LVS/antenna clean and RCX complete."
+    },
+    {
+      "id": "crypto_accelerator_chip",
+      "repo_url": "https://github.com/asinghani/crypto-accelerator-chip",
+      "commit": "b9d244fb927aa23e74a5c80974c8887a2c3e6631",
+      "role": "admission_screen_example",
+      "evidence_status": "structural_timing_infeasible_operator_pruned",
+      "notes": "Do not ingest as Recipe negative evidence."
+    },
+    {
+      "id": "skaarler_sha256_hardware_accelerator",
+      "repo_url": "https://github.com/skaarler2005/sha256-hardware-accelerator",
+      "commit": "c67b70378270c27b347c21f47a7f523c1198c2c4",
+      "role": "candidate_timing_subject",
+      "evidence_status": "git_bound_current_setup_timing_failure",
+      "signature": ["SETUP_TIMING"],
+      "current_replay": {
+        "run_id": "RUN_2026-08-23_17-00-35_3335296_675f",
+        "protected_task_digest": "66ade3c1b2e55f86c31dfbe88fd188f212d444bd536ed307d30ceb8be8822149",
+        "setup_wns_ns": -2.00805,
+        "hold_wns_ns": 0.432527,
+        "route_violations": 0,
+        "drc_violations": 0,
+        "lvs_mismatches": 0,
+        "antenna_violations": 0,
+        "rcx": "complete"
+      },
+      "screened_nonpromoting_attempts": [
+        {
+          "effect_fingerprint": {
+            "SYNTH_HIERARCHICAL": "1"
+          },
+          "status": "terminal_partial_improvement_not_strict_clean",
+          "run_id": "RUN_2026-08-23_17-48-27_3348658_3716",
+          "execution_integrity": "single_owner_unique_workspace",
+          "setup_wns_ns": {
+            "baseline": -2.00805,
+            "candidate": -1.39329,
+            "delta": 0.61476
+          },
+          "global_checks": {
+            "route_violations": 0,
+            "drc_violations": 0,
+            "lvs_mismatches": 0,
+            "antenna_violations": 0,
+            "hold_wns_ns": 0.497376,
+            "rcx": "complete"
+          },
+          "excluded_from": [
+            "candidate_promotion",
+            "positive_learning_ingest"
+          ],
+          "next_step": "Only a diagnosis-justified non-equivalent effect or bounded combination may be screened; this partial improvement is not a success."
+        },
+        {
+          "effect_fingerprint": {
+            "ABC_AREA": "0"
+          },
+          "status": "terminal_setup_regression_not_strict_clean",
+          "run_id": "RUN_2026-08-23_19-05-35_3373704_7626",
+          "execution_integrity": "single_owner_unique_workspace",
+          "setup_wns_ns": {
+            "baseline": -2.00805,
+            "candidate": -3.21518,
+            "delta": -1.20713
+          },
+          "global_checks": {
+            "route_violations": 0,
+            "drc_violations": 0,
+            "lvs_mismatches": 0,
+            "antenna_violations": 0,
+            "hold_wns_ns": 0.456812,
+            "rcx": "complete"
+          },
+          "excluded_from": [
+            "candidate_promotion",
+            "positive_learning_ingest"
+          ],
+          "next_step": "Do not retry this exact effect under a new name; it is specific terminal non-promoting evidence."
+        }
+      ],
+      "notes": "Current, terminal, Git-bound natural failure. The two screened synthesis effects yielded partial improvement or regression, never strict closure; it is not yet an A/B arm or positive learning evidence."
+    },
+    {
+      "id": "ace2_absolute_rope_score_core",
+      "repo_url": "https://github.com/argus-aiteam/ace-2.git",
+      "commit": "af5dff46c9d752a75c5419e5d5f67b8f8741aff3",
+      "top_module": "ace2_absolute_rope_score_core",
+      "role": "candidate_timing_subject",
+      "evidence_status": "git_bound_current_setup_timing_failure",
+      "signature": ["SETUP_TIMING"],
+      "current_replay": {
+        "run_id": "RUN_2026-08-23_21-12-44_3490419_6dcf",
+        "protected_task_digest": "cb7be243f475a2fe9bd468eb3ffb53db92078c0b64c0a7bb5808370abe55e391",
+        "setup_wns_ns": -3.12182,
+        "hold_wns_ns": 0.466461,
+        "route_violations": 0,
+        "drc_violations": 0,
+        "lvs_mismatches": 0,
+        "antenna_violations": 0,
+        "rcx": "complete"
+      },
+      "notes": "Current, terminal, Git-bound natural setup-only failure. It shares an upstream repository with a separate clean ACE2 attention-score control but has a different top and exact source closure. No candidate screen or learner evidence exists yet."
+    }
+  ],
+  "historical_leads_without_replayable_source": [
+    "PDN-0185",
+    "GRT-0116",
+    "DPL-0036"
+  ],
+  "screened_rejections": [
+    {
+      "id": "exp1_cascade_soc",
+      "repo_url": "https://github.com/3more102/cascade-soc",
+      "commit": "36a1ab4a320efad303fdacac165f360f66f6f108",
+      "top_module": "cascade_soc",
+      "expander_candidate_id": "d_2a61be37d20ac2abc74f",
+      "evidence_status": "git_bound_macro_required_capacity_ineligible",
+      "failure": "largest inferred memory 65536 bits exceeds Default ORFS SYNTH_MEMORY_MAX_BITS=4096",
+      "reason_not_recipe_eligible": "Registered SYNTH-memory flip-flop expansion safety limit is 16384 bits; this subject requires a real RAM macro, which is outside the fixed no-macro task."
+    }
+  ],
+  "promotion_exclusions": [
+    "synthetic_stress_design",
+    "pre_tuned_benchmark_configuration",
+    "snapshot_without_commit_verification",
+    "environment_or_toolchain_failure",
+    "structural_timing_or_capacity_infeasibility",
+    "footprint_or_clock_relaxation_under_fixed_task_policy"
+  ],
+  "targeted_qualification_queue": [
+    {
+      "id": "exp1_ace2_attention_score_core",
+      "repo_url": "https://github.com/argus-aiteam/ace-2",
+      "commit": "af5dff46c9d752a75c5419e5d5f67b8f8741aff3",
+      "top_module": "ace2_attention_score_core",
+      "expander_candidate_id": "exp_d_3cdcc9f6f1edb1cb62a3",
+      "synth_only_mapped_cells": 6186,
+      "selection_rationale": "medium-scale attention datapath; independent timing and wide-bus source",
+      "evidence_status": "git_bound_current_replay_clean",
+      "current_replay_metrics": {
+        "setup_wns_ns": 1.45437,
+        "hold_wns_ns": 0.485204,
+        "route_violations": 0,
+        "drc_violations": 0,
+        "lvs_mismatches": 0,
+        "antenna_violations": 0,
+        "rcx": "complete"
+      }
+    },
+    {
+      "id": "exp1_cordic_sincos",
+      "repo_url": "https://github.com/efedemi/cordic-sincos",
+      "commit": "0d9e8d9984f1aafe5ab2ae0e289e30ac516f4001",
+      "top_module": "cordic",
+      "expander_candidate_id": "exp_d_41358158ac86d29cf893",
+      "synth_only_mapped_cells": 5168,
+      "selection_rationale": "medium-scale arithmetic datapath; independent timing family",
+      "evidence_status": "git_bound_current_replay_clean",
+      "current_replay_metrics": {
+        "setup_wns_ns": 6.47872,
+        "hold_wns_ns": 0.340208,
+        "route_violations": 0,
+        "drc_violations": 0,
+        "lvs_mismatches": 0,
+        "antenna_violations": 0,
+        "rcx": "complete"
+      }
+    },
+    {
+      "id": "exp1_tsa_systolic_memory_top",
+      "repo_url": "https://github.com/pearlypride/tsa-ai-chip",
+      "commit": "4b5b1a2cd3cf4928d4bab0049b0d33a704b7a4af",
+      "top_module": "tsa_fpga_top_mem_i8",
+      "expander_candidate_id": "exp_d_1f5a14297999f880353c",
+      "synth_only_mapped_cells": 12131,
+      "selection_rationale": "multi-file systolic/memory-style source; possible timing or capacity boundary",
+      "evidence_status": "git_bound_current_replay_clean",
+      "current_replay_metrics": {
+        "setup_wns_ns": 1.1327,
+        "hold_wns_ns": 0.475609,
+        "route_violations": 0,
+        "drc_violations": 0,
+        "lvs_mismatches": 0,
+        "antenna_violations": 0,
+        "rcx": "complete"
+      }
+    },
+    {
+      "id": "exp1_emaczero_icmp_echo",
+      "repo_url": "https://github.com/lcapossio/emaczero",
+      "commit": "7381ffbbe9add850a383d4aef7a325b0cbe4be75",
+      "top_module": "icmp_echo",
+      "expander_candidate_id": "exp_d_dc5f9e660948def853c8",
+      "synth_only_mapped_cells": 6373,
+      "selection_rationale": "network datapath from an independent repository; possible high-pin/routing family",
+      "evidence_status": "git_bound_current_replay_clean",
+      "current_replay_metrics": {
+        "setup_wns_ns": 4.4449,
+        "hold_wns_ns": 0.452432,
+        "route_violations": 0,
+        "drc_violations": 0,
+        "lvs_mismatches": 0,
+        "antenna_violations": 0,
+        "rcx": "complete"
+      }
+    },
+    {
+      "id": "exp1_cordic_core",
+      "repo_url": "https://github.com/tomer-harari/cordic-core",
+      "commit": "ec4f2e3bffd3a69d5e84494df92bf07abb839df9",
+      "top_module": "cordic",
+      "expander_candidate_id": "exp_d_f0abc0beb7395b8537f7",
+      "synth_only_mapped_cells": 7586,
+      "selection_rationale": "separate CORDIC implementation for cross-family timing comparison",
+      "evidence_status": "git_bound_current_replay_clean",
+      "current_replay_metrics": {
+        "setup_wns_ns": 6.24899,
+        "hold_wns_ns": 0.471589,
+        "route_violations": 0,
+        "drc_violations": 0,
+        "lvs_mismatches": 0,
+        "antenna_violations": 0,
+        "rcx": "complete"
+      }
+    },
+    {
+      "id": "historical_skaarler_sha256_current_default_replay",
+      "repo_url": "https://github.com/skaarler2005/sha256-hardware-accelerator",
+      "commit": "c67b70378270c27b347c21f47a7f523c1198c2c4",
+      "top_module": "top_sha256",
+      "selection_rationale": "Independent Git-bound SHA-256 implementation with a historical 100 MHz natural setup failure (WNS -3.21787 ns); must be replayed under the current production default before use.",
+      "evidence_status": "git_bound_current_setup_timing_failure",
+      "current_replay_project": "projects/skaarler_sha256_gitbound_current_baseline",
+      "current_replay_run_id": "RUN_2026-08-23_17-00-35_3335296_675f",
+      "current_result_scope": "terminal fixed-target physical signoff; setup-only nonclosure"
+    },
+    {
+      "id": "historical_ace2_rope_score_current_default_replay",
+      "repo_url": "https://github.com/argus-aiteam/ace-2.git",
+      "commit": "af5dff46c9d752a75c5419e5d5f67b8f8741aff3",
+      "top_module": "ace2_absolute_rope_score_core",
+      "selection_rationale": "Git-bound attention submodule with a historical 100 MHz setup failure, independent of the already clean ACE2 attention-score control.",
+      "evidence_status": "git_bound_current_setup_timing_failure",
+      "current_replay_project": "projects/ace2_rope_score_gitbound_current_baseline",
+      "current_replay_run_id": "RUN_2026-08-23_21-12-44_3490419_6dcf",
+      "current_result_scope": "terminal fixed-target physical signoff; setup-only nonclosure",
+      "current_replay_metrics": {
+        "setup_wns_ns": -3.12182,
+        "hold_wns_ns": 0.466461,
+        "route_violations": 0,
+        "drc_violations": 0,
+        "lvs_mismatches": 0,
+        "antenna_violations": 0,
+        "rcx": "complete"
+      }
+    }
+  ]
+}

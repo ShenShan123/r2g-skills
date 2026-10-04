@@ -1,0 +1,159 @@
+{
+  "e1_acquisition": {
+    "accounting_caveat": {
+      "comparability_note": "R2G time uses the adopted T22 accounting convention; LLM times are complete runner wall times. Time is secondary and is not used for the primary ranking.",
+      "linear_extrapolation_used": false,
+      "reported_total_hours": 33.52,
+      "reported_total_seconds": 120681,
+      "source_measurement": "T22_from_178_to_200"
+    },
+    "denominator": 200,
+    "rows": [
+      {
+        "display_name": "R2G-Expander Cold",
+        "method_id": "r2g-expander-cold",
+        "qualified": 200,
+        "qualified_per_hour": 5.97,
+        "reached_target": true,
+        "seconds_per_qualified": 603.4,
+        "wall_hours": 33.52
+      },
+      {
+        "display_name": "GPT-5.6-sol",
+        "method_id": "openai-vanilla",
+        "qualified": 119,
+        "qualified_per_hour": 14.37,
+        "reached_target": false,
+        "seconds_per_qualified": 250.6,
+        "wall_hours": 8.283
+      },
+      {
+        "display_name": "Claude Opus 5",
+        "method_id": "claude-vanilla",
+        "qualified": 113,
+        "qualified_per_hour": 12.09,
+        "reached_target": false,
+        "seconds_per_qualified": 297.7,
+        "wall_hours": 9.345
+      },
+      {
+        "display_name": "Qwen3.7-Max",
+        "method_id": "qwen-vanilla",
+        "qualified": 40,
+        "qualified_per_hour": 3.82,
+        "reached_target": false,
+        "seconds_per_qualified": 943.4,
+        "wall_hours": 10.482
+      },
+      {
+        "display_name": "Kimi-K2.7-Code",
+        "method_id": "kimi-vanilla",
+        "qualified": 23,
+        "qualified_per_hour": 3.49,
+        "reached_target": false,
+        "seconds_per_qualified": 1032.0,
+        "wall_hours": 6.594
+      },
+      {
+        "display_name": "DeepSeek-V4-Pro",
+        "method_id": "deepseek-vanilla",
+        "qualified": 20,
+        "qualified_per_hour": 2.77,
+        "reached_target": false,
+        "seconds_per_qualified": 1301.2,
+        "wall_hours": 7.229
+      },
+      {
+        "display_name": "Grok 4.5",
+        "method_id": "grok-vanilla",
+        "qualified": 16,
+        "qualified_per_hour": 1.51,
+        "reached_target": false,
+        "seconds_per_qualified": 2380.1,
+        "wall_hours": 10.578
+      },
+      {
+        "display_name": "Gemini-3.1-Pro-Preview",
+        "method_id": "gemini-vanilla",
+        "qualified": 3,
+        "qualified_per_hour": 1.32,
+        "reached_target": false,
+        "seconds_per_qualified": 2736.9,
+        "wall_hours": 2.281
+      }
+    ]
+  },
+  "e4_conversion": {
+    "designs": 24,
+    "per_design_ceiling_seconds": 3600,
+    "rows": [
+      {
+        "cases": 24,
+        "cpu_seconds_total": 1422.3,
+        "designs": 24,
+        "display_name": "R2G",
+        "feature_coverage": 1.0,
+        "label_coverage": 1.0,
+        "method_id": "r2g-frozen-v3",
+        "semantic_passes": 24,
+        "wall_seconds_max": 99.6,
+        "wall_seconds_median": 56.4,
+        "wall_seconds_total": 1473.6
+      },
+      {
+        "cases": 24,
+        "cpu_seconds_total": 226.0,
+        "designs": 24,
+        "display_name": "GPT-5.6-sol",
+        "feature_coverage": 0.2512373069459642,
+        "label_coverage": 0.13334176211661147,
+        "method_id": "llm-gpt-frozen",
+        "semantic_passes": 0,
+        "wall_seconds_max": 508.4,
+        "wall_seconds_median": 8.7,
+        "wall_seconds_total": 1894.9
+      },
+      {
+        "cases": 24,
+        "cpu_seconds_total": 211.8,
+        "designs": 24,
+        "display_name": "Claude Opus 5",
+        "feature_coverage": 0.08351384951139228,
+        "label_coverage": 0.0008720395866522181,
+        "method_id": "llm-claude-frozen",
+        "semantic_passes": 0,
+        "wall_seconds_max": 3.4,
+        "wall_seconds_median": 3.3,
+        "wall_seconds_total": 79.1
+      },
+      {
+        "cases": 24,
+        "cpu_seconds_total": 214.4,
+        "designs": 24,
+        "display_name": "Qwen3.7-Max",
+        "feature_coverage": 0.0,
+        "label_coverage": 0.0,
+        "method_id": "llm-qwen-frozen",
+        "semantic_passes": 0,
+        "wall_seconds_max": 3.6,
+        "wall_seconds_median": 3.3,
+        "wall_seconds_total": 80.5
+      }
+    ]
+  },
+  "schema_version": "r2g-effective-time-1.0",
+  "sources": {
+    "e1": {
+      "path": "/home/yangao/r2g_paper_experiment_materials_20260909/experiment1/results/experiment1_final_report_6llm_plus_r2g.json",
+      "sha256": "648e6c2f97991f6480d1e75fae51bb597a414012021449db1ccabbfa2e8cd70e"
+    },
+    "e4_scores": {
+      "path": "/home/yangao/r2g-skills/docs/paper/iclr_r2g/evidence/e4_600k/fixed_test_results.json",
+      "sha256": "a10b5d105e331ac8e2feb57c7e02ff97584fd9192dff91b6c8698bd605bb819a"
+    },
+    "e4_timing": {
+      "path": "/home/yangao/r2g_paper_experiment_materials_20260909/experiment4/results/experiment4_final_results.json",
+      "sha256": "1d5554b5fa6cdcf39802094f76ee2ee248aec88c8b8bda8a508e63c7c0c38ca0"
+    }
+  }
+}

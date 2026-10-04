@@ -1,0 +1,204 @@
+{
+  "status": "ready",
+  "role": "fixed benchmark retest, not novel unseen cohort",
+  "models": {
+    "gpt": {
+      "converter": "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/converters/gpt.py",
+      "sha256": "10437550bded256c7c129c66c11b618db09cacc95feb3ec924ce6fb31350e689",
+      "tokens": 556437,
+      "selected_round": 15,
+      "requests": [
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_0/request.json",
+          "sha256": "cd3250cc5080280543d80d38176d21e886c557b184109cd5433afafa017371f1"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_1/request.json",
+          "sha256": "77687d19febfdb1b68dc0f0a4ac80136ab459f8c8e1d5f22865c2e12c47c35bd"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_10/request.json",
+          "sha256": "4c30e93111e3b7ae5c17273f8be94efe35650cf514b9fc8d9261cc9e4a0ba6ee"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_11/request.json",
+          "sha256": "bae1319642df4b80a1adaca6449f8f00db56d03916def0c929686fae0f005f05"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_12/request.json",
+          "sha256": "e9a8687cb3fd9cb5d59c123e7db8a12a78bcff246febb30d712152b6f6347623"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_13/request.json",
+          "sha256": "358aa9e0dd97d6e0dfd380eac0391ed6239d011a7bc8c945791a0ca33bb16512"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_14/request.json",
+          "sha256": "ec65f0068d668c85f68545a05dd8e3e5f513c6cb1328cb41c9cc6a5a4b5ccf8d"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_15/request.json",
+          "sha256": "bf379dcd25d8c508501a3036350a34755e693a4f98dab33187b57f8b88397592"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_2/request.json",
+          "sha256": "296e021cb9e10326adf46d4226d7f463d3997d8591b68ed153e81453e9e37769"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_3/request.json",
+          "sha256": "cb52678381e0ccba19d94e85ad2c232ef182a37da57f3f8b2e31a2beca09c414"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_4/request.json",
+          "sha256": "92006ebc0ff8c3fe441c9c1329549525d1e195f41ba1185c9aedca11fe42a73e"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_5/request.json",
+          "sha256": "ddc1d490567d21860e539bbcfbb32b9a7a8caec48eec2e7552a3713837674b2e"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_6/request.json",
+          "sha256": "67904da531caa097ca55f8cc4a090c3acd1dbc1df4d2fa08dfa17a6a98da7eb8"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_7/request.json",
+          "sha256": "81038fa47de9375dc56f75b3e392c3683c5b9de792edae1f7712ed8c8c4981a9"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_8/request.json",
+          "sha256": "8b7832c8f8f503b0c06e56909e7d4186f817818808156707ebb160c6fd1612ef"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/gpt/round_9/request.json",
+          "sha256": "5626f0a16e5f03d614bd01e4d1a817160d7d7e75dfc88658058c739205d3f5a3"
+        }
+      ]
+    },
+    "claude": {
+      "converter": "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/converters/claude.py",
+      "sha256": "4e6b8c7b72f64c583de677d53e51d5cd936b425f9814c8c2668f0822886f974d",
+      "tokens": 587522,
+      "selected_round": 5,
+      "requests": [
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_0/request.json",
+          "sha256": "cd3250cc5080280543d80d38176d21e886c557b184109cd5433afafa017371f1"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_1/request.json",
+          "sha256": "387ee70f31e53ca082b9485b9f584a11c127d8a08b90bdcde7428b3f35e82920"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_10/request.json",
+          "sha256": "2e634af4692977764e42bd0a241125ba46d198833c64ea1168537e35bfef2ff7"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_2/request.json",
+          "sha256": "bf1ca1a00eb8f2f66e658968c99a15c45ace79a9ed6da81b53e30e975d1be27d"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_3/request.json",
+          "sha256": "4c0becc191408bea1a288b5fdebcb557637fc313e02d740437a817c6f44f1df4"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_4/request.json",
+          "sha256": "d48d014c0368537d6c0ec0c98e4712b3344a4839f6a9fa73085cb895751142e9"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_5/request.json",
+          "sha256": "9ec63537dd144126854f3e24fc448a8eeb0f84bdaaeb1e15d14dcb7392e8c9f0"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_6/request.json",
+          "sha256": "3d785e823450fcedd6ee12a5b52257c6bd871529ca3a2f80594b8a572498de0b"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_7/request.json",
+          "sha256": "14d188f4e39a786c57286f4f8ad0b41899ebfbd5de016df05b9461dd0987bc3d"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_8/request.json",
+          "sha256": "3dcf9317a3abe260e6af2e2de0c230d23b0dc96439d216089784c664531fcede"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/claude/round_9/request.json",
+          "sha256": "93e9287fb5f396734ccb9912ae83d394f92aa543ae6fc5bd9286fa8ef0a1a695"
+        }
+      ]
+    },
+    "qwen": {
+      "converter": "/home/yangao/r2g_exp4_progressive_20260910/fixed_test_24/converters/qwen.py",
+      "sha256": "3f6dd3b2c7fe43a9b5257a5639392febd92dea4825180cd7c0eebfc7ae37d78b",
+      "tokens": 570956,
+      "selected_round": 13,
+      "requests": [
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_0/request.json",
+          "sha256": "cd3250cc5080280543d80d38176d21e886c557b184109cd5433afafa017371f1"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_1/request.json",
+          "sha256": "fcf0ef33250ec94a3be227fbcc984fa296850629c237037e790c05ae846c495c"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_10/request.json",
+          "sha256": "7aa542245cd5d68ac2e918cb6431e2cfa8a2a0bdb26d064ba9b8a17fcdac8f81"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_11/request.json",
+          "sha256": "a22b7bfa07c824ecf0fa3e51b2b502e4f4dce35984f8ead354d3e60ea119639e"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_12/request.json",
+          "sha256": "0b1db7df35fb43a3997460941ed9feaf6951abc49762774aa9e1eb854dfc3cec"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_13/request.json",
+          "sha256": "b4360c18e7fd8c349a339d6957c372dcbbfcdd0e628a63ae00cfe70ef3dba1d4"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_14/request.json",
+          "sha256": "89e1c1ab7a10b722434d0cc1502c1a0ddf9f14aff3dfde33d51507e9d509f0fd"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_2/request.json",
+          "sha256": "18fed22eaeef9209df19a85cddc8fb7ac04b09a492c01bba13534ca7f36ccd43"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_3/request.json",
+          "sha256": "ed6418e6b8b6d9367b996a5897f64efecf6b1f45230bb2a0199dc2d3b7e8ef90"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_4/request.json",
+          "sha256": "4c453e44edd14b8b000b3c2f12289bdae38a5699c710cba7e79ad11428bc8d39"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_5/request.json",
+          "sha256": "08e414377d7c5bdc5a2bf60391c6148af39a18f18a675088d72ce1531e7a156f"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_6/request.json",
+          "sha256": "fc985f25e98e76d4d75935a29c6b6d614564d31212662b25e6901947a2261f13"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_7/request.json",
+          "sha256": "d72d22d2e80941887951a882474e94553409e1b3c9cd5621d04d566139270c7b"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_8/request.json",
+          "sha256": "a8cd18c14a9d6d00de76770de8a7c7ae6f22ad91762b5b9fe64621139ad9ffb3"
+        },
+        {
+          "path": "/home/yangao/r2g_exp4_progressive_20260910/converter_development/qwen/round_9/request.json",
+          "sha256": "c874667c127099fbd543e686bc2ccdef5d97c54df544875bae5336dff44abe72"
+        }
+      ]
+    }
+  },
+  "cases": 24,
+  "cohort_sha256": "f43763468a53ba73e0ec97f73059dc06c8a4a7cb5a0d3f2b56870f8ef60766bd",
+  "request_audit": "No fixed-test task IDs in model prompts; structured feedback cases restricted to development.",
+  "inputs": "Original input artifacts hash-verified; shared read-only by converters.",
+  "runtime": "/home/yangao/r2g_exp4_confirmatory_v3_20260909/runtime",
+  "referee_sha256": "660e5f3098304243e2ff1d38a5866776ef402b5e5b5926d270ed0c1b2d52e709"
+}
