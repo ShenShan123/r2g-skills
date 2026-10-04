@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "status": "development_pilot_complete",
+  "purpose": "Test whether random strict-clean parents plus one fixed 40 percent utilization challenge is an efficient controlled-replay construction rule.",
+  "cohort": {
+    "path": "docs/experiments/signoff/experiment2_controlled_repair_challenge_cohort_v1.json",
+    "sha256": "f3945151c08a5c777f826916589c27c0bd28185458528836c9d65a3f8a9a06cf"
+  },
+  "task_spec": {
+    "path": "docs/experiments/signoff/experiment2_task_spec.json",
+    "sha256": "ba2d137fb21710c94f1e706bbd321070d60785d36153eb2b9e53d459c3a127ba"
+  },
+  "challenge_core_utilization": 40,
+  "hidden_parent_core_utilization": 25,
+  "answerability_ceiling_seconds": 4800,
+  "summary": {
+    "fixtures": 8,
+    "completed_strict_clean_at_challenge": 6,
+    "development_cost_rejections": 2,
+    "admitted_controlled_challenges": 0,
+    "conclusion": "reject_random_parent_plus_uniform_fixed_strength_as_the_primary_pool_expansion_rule"
+  },
+  "completed": [
+    {"fixture_id": "axi_register", "size_bin": "small", "flow_elapsed_seconds": 299.579, "strict_clean": true, "validation_sha256": "490d46fbe657c6587c73dde3cab4f9a4673f2c2528e1d03ccce436a2bbdf776e"},
+    {"fixture_id": "axis_switch", "size_bin": "medium", "flow_elapsed_seconds": 490.194, "strict_clean": true, "validation_sha256": "1bf0147c26e82ef7e3f3b7beb0d164eb3ea0add1f329b3858df160fe5cb6716b"},
+    {"fixture_id": "emaczero_eth_stats", "size_bin": "medium", "flow_elapsed_seconds": 710.406, "strict_clean": true, "validation_sha256": "984f1868fa616c16e627c16c84687189507c9bf6e68505105a89fea61e55ff74"},
+    {"fixture_id": "Hazard3_hdl_hazard3_frontend", "size_bin": "medium", "flow_elapsed_seconds": 634.114, "strict_clean": true, "validation_sha256": "d8a60282077142385cccafbb7d52f81dd8ef6d63c9805e5259ee3124eaa61c3d"},
+    {"fixture_id": "ben_marshall_uart_tx", "size_bin": "small", "flow_elapsed_seconds": 154.401, "strict_clean": true, "validation_sha256": "b1bfe87ca375a477c2f86f3225e1a55190c9c76dc49754683135b41798c9b814"},
+    {"fixture_id": "cores_asram16_axi4_src_v_asram16_axi4", "size_bin": "medium", "flow_elapsed_seconds": 659.459, "strict_clean": true, "validation_sha256": "6c551aa46edc651d8fb8338e679a8699ce3709a621c9a9ab6bc1497788a1913a"}
+  ],
+  "cost_rejections": [
+    {
+      "fixture_id": "aes_core_top",
+      "size_bin": "large",
+      "observed_seconds_before_stop": 5093,
+      "terminal_label": "development_rejected_observed_runtime_above_answerability_ceiling",
+      "flow_log_sha256": "17f540074ffa7d717ae9119c5b0ad056e2b8010f0534c80302d33d38fb0b4aae"
+    },
+    {
+      "fixture_id": "secworks_chacha_core",
+      "size_bin": "large",
+      "observed_seconds_before_stop": 5156,
+      "terminal_label": "development_rejected_observed_runtime_above_answerability_ceiling",
+      "flow_log_sha256": "aabe4256c5a2ce03689e8f35b717acf72c7227127172a4b77c8666f8bf0c6c1c"
+    }
+  ],
+  "interpretation": [
+    "A completed strict-clean challenge is not repair-needed.",
+    "An interrupted over-budget development run is not a physical-failure label and is never admitted.",
+    "The replacement rule is risk-selected parents plus a preregistered bounded ladder and least-severe reproducible boundary selection."
+  ]
+}

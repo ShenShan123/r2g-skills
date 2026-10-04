@@ -1,0 +1,506 @@
+{
+  "experiment_id": "r2g-exp2-external-fixed100-repair-screen",
+  "fixtures": [
+    {
+      "candidate": {
+        "candidate_id": "freecores_auto_baud_tracking",
+        "category": "serial_timing_controller",
+        "commit": "252f927c9969bc938d2a9dc7a28bf8c296fa9c84",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [],
+        "include_dirs": [
+          "."
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original LGPL source header",
+          "repository_path": "auto_baud_with_tracking.v",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/auto_baud",
+        "rtl_files": [
+          "auto_baud_with_tracking.v",
+          "auto_baud.v"
+        ],
+        "selection_reason": "Independent baud measurement and tracking controller for the missing small bin",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/auto_baud",
+        "top_module": "auto_baud_with_tracking",
+        "top_parameters": {}
+      },
+      "clock_port": "clk_i",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "freecores_auto_baud_tracking",
+      "mapped_cells": 381,
+      "qualification": {
+        "closure_sha256": "943e36040bdbe954e4a21bec96fc865e27de8b4aeec80afb5fe69e37d202f819",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/external_repair_source_inventory_2026_08_11.json",
+        "inventory_sha256": "6692e18666250aef238be4255d9de8b0c2030a614f3c9f685f6e8ba5d3ef66dd",
+        "result_path": "/home/yangao/r2g_external_repair_synth_2026_08_11_run08/results/freecores_auto_baud_tracking/result.json",
+        "result_sha256": "e05070083bf545e597813c8b31e708faa8b7e5f3c3c8000f32e3598ada9bf754"
+      },
+      "reference_synth_area_um2": 4414.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "small"
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_tiny_spi",
+        "category": "serial_controller",
+        "commit": "562bf1fd8385410eedb91cec97bddeecee0ec0d9",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original LGPL source header",
+          "repository_path": "rtl/verilog/tiny_spi.v",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/tiny_spi",
+        "rtl_files": [
+          "rtl/verilog/tiny_spi.v"
+        ],
+        "selection_reason": "Independent compact SPI controller for the small size bin",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/tiny_spi",
+        "top_module": "tiny_spi",
+        "top_parameters": {}
+      },
+      "clock_port": "clk_i",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "freecores_tiny_spi",
+      "mapped_cells": 208,
+      "qualification": {
+        "closure_sha256": "32506c8775c2de831e7b19c41f96d09f9f13bd5e681eea3c5432aabb886894d2",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/external_repair_source_inventory_2026_08_11.json",
+        "inventory_sha256": "6692e18666250aef238be4255d9de8b0c2030a614f3c9f685f6e8ba5d3ef66dd",
+        "result_path": "/home/yangao/r2g_external_repair_synth_2026_08_11_run05/results/freecores_tiny_spi/result.json",
+        "result_sha256": "09b1a3482e698b39eba445725557fb61a0e8c17b4ecced4fa665cab6bb25ec7f"
+      },
+      "reference_synth_area_um2": 2267.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "small"
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_i2c_master_top",
+        "category": "serial_controller",
+        "commit": "3b067f00ccced753b0502024766a51f58f3e04bc",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/i2c_master_defines.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/i2c_master_top.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/i2c",
+        "rtl_files": [
+          "rtl/verilog/i2c_master_top.v",
+          "rtl/verilog/i2c_master_bit_ctrl.v",
+          "rtl/verilog/i2c_master_byte_ctrl.v"
+        ],
+        "selection_reason": "Independent Wishbone I2C controller with bit- and byte-level control",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/i2c",
+        "top_module": "i2c_master_top",
+        "top_parameters": {}
+      },
+      "clock_port": "wb_clk_i",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "freecores_i2c_master_top",
+      "mapped_cells": 1009,
+      "qualification": {
+        "closure_sha256": "65750a205e2cfdb97ff8474be0981e173c668126f17970a5c1e9a9f01b6a96cc",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/external_repair_source_inventory_2026_08_11.json",
+        "inventory_sha256": "6692e18666250aef238be4255d9de8b0c2030a614f3c9f685f6e8ba5d3ef66dd",
+        "result_path": "/home/yangao/r2g_external_repair_synth_2026_08_11_run01/results/freecores_i2c_master_top/result.json",
+        "result_sha256": "e297821ad632112ebc95095e3e85e88233d691a686c50b2ba967dc28403f1df6"
+      },
+      "reference_synth_area_um2": 10056.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_can_top",
+        "category": "network_controller",
+        "commit": "470f0e7ab174dfef01a05f5d5ad01f28f6f4dc17",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "bench/verilog/timescale.v",
+          "rtl/verilog/can_defines.v"
+        ],
+        "include_dirs": [
+          "bench/verilog",
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original LGPL source header",
+          "repository_path": "rtl/verilog/can_top.v",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/can",
+        "rtl_files": [
+          "rtl/verilog/can_top.v",
+          "rtl/verilog/can_acf.v",
+          "rtl/verilog/can_bsp.v",
+          "rtl/verilog/can_btl.v",
+          "rtl/verilog/can_crc.v",
+          "rtl/verilog/can_fifo.v",
+          "rtl/verilog/can_ibo.v",
+          "rtl/verilog/can_register.v",
+          "rtl/verilog/can_register_asyn.v",
+          "rtl/verilog/can_register_asyn_syn.v",
+          "rtl/verilog/can_register_syn.v",
+          "rtl/verilog/can_registers.v"
+        ],
+        "selection_reason": "Independent CAN controller with protocol state machines and filtering",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/can",
+        "top_module": "can_top",
+        "top_parameters": {}
+      },
+      "clock_port": "wb_clk_i",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "freecores_can_top",
+      "mapped_cells": 4936,
+      "qualification": {
+        "closure_sha256": "ca8a3dac9e66474615000f7b11c11dd8bbbe53a050436ee3614cd923229084e0",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/external_repair_source_inventory_2026_08_11.json",
+        "inventory_sha256": "6692e18666250aef238be4255d9de8b0c2030a614f3c9f685f6e8ba5d3ef66dd",
+        "result_path": "/home/yangao/r2g_external_repair_synth_2026_08_11_run02/results/freecores_can_top/result.json",
+        "result_sha256": "3d4f9346d55c2edd077daa624f8f4e4ceea109a59cde0b49eb81becb52e888c9"
+      },
+      "reference_synth_area_um2": 68043.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_uart16550",
+        "category": "serial_controller",
+        "commit": "2b0ad80d0968f201f95506854ad769c8a44abe2b",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/timescale.v",
+          "rtl/verilog/uart_defines.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original LGPL source header",
+          "repository_path": "rtl/verilog/uart_top.v",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/uart16550",
+        "rtl_files": [
+          "rtl/verilog/uart_top.v",
+          "rtl/verilog/raminfr.v",
+          "rtl/verilog/uart_debug_if.v",
+          "rtl/verilog/uart_receiver.v",
+          "rtl/verilog/uart_regs.v",
+          "rtl/verilog/uart_rfifo.v",
+          "rtl/verilog/uart_sync_flops.v",
+          "rtl/verilog/uart_tfifo.v",
+          "rtl/verilog/uart_transmitter.v",
+          "rtl/verilog/uart_wb.v"
+        ],
+        "selection_reason": "Independent UART with FIFOs, bus interface, and interrupt logic",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/uart16550",
+        "top_module": "uart_top",
+        "top_parameters": {}
+      },
+      "clock_port": "wb_clk_i",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "freecores_uart16550",
+      "mapped_cells": 2191,
+      "qualification": {
+        "closure_sha256": "07674c7505f93fc0612e59543d9f9537f0378ffc97fbb6510636fc103f046e63",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/external_repair_source_inventory_2026_08_11.json",
+        "inventory_sha256": "6692e18666250aef238be4255d9de8b0c2030a614f3c9f685f6e8ba5d3ef66dd",
+        "result_path": "/home/yangao/r2g_external_repair_synth_2026_08_11_run04/results/freecores_uart16550/result.json",
+        "result_sha256": "f1b8b36218ba26ab58055e958da5a7f843d70a5fcd04259613d2f72f8476dc67"
+      },
+      "reference_synth_area_um2": 27500.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_wb_conmax_top",
+        "category": "bus_interconnect",
+        "commit": "c2597a192e7c8220f7bcc34e5883c5551b9f086e",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/wb_conmax_defines.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/wb_conmax_top.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/wb_conmax",
+        "rtl_files": [
+          "rtl/verilog/wb_conmax_top.v",
+          "rtl/verilog/wb_conmax_arb.v",
+          "rtl/verilog/wb_conmax_master_if.v",
+          "rtl/verilog/wb_conmax_msel.v",
+          "rtl/verilog/wb_conmax_pri_dec.v",
+          "rtl/verilog/wb_conmax_pri_enc.v",
+          "rtl/verilog/wb_conmax_rf.v",
+          "rtl/verilog/wb_conmax_slave_if.v"
+        ],
+        "selection_reason": "Independent multi-master interconnect with dense arbitration and muxing",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/wb_conmax",
+        "top_module": "wb_conmax_top",
+        "top_parameters": {}
+      },
+      "clock_port": "clk_i",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "freecores_wb_conmax_top",
+      "mapped_cells": 30850,
+      "qualification": {
+        "closure_sha256": "b271a980862e44c1d2af51b8ba76bbe4c5fe59f97dce37490c6e550893d381b8",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/external_repair_source_inventory_2026_08_11.json",
+        "inventory_sha256": "6692e18666250aef238be4255d9de8b0c2030a614f3c9f685f6e8ba5d3ef66dd",
+        "result_path": "/home/yangao/r2g_external_repair_synth_2026_08_11_run01/results/freecores_wb_conmax_top/result.json",
+        "result_sha256": "30939e417f44b7a02bfc3bd46193f38a671ad33c128ae0e9aa07f9c194ef96eb"
+      },
+      "reference_synth_area_um2": 181149.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "large"
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_aes_cipher_top",
+        "category": "crypto_accelerator",
+        "commit": "0d81d6e0758c634c8db7c8348d7653fa20c58639",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/timescale.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/aes_cipher_top.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/aes_core",
+        "rtl_files": [
+          "rtl/verilog/aes_cipher_top.v",
+          "rtl/verilog/aes_inv_cipher_top.v",
+          "rtl/verilog/aes_inv_sbox.v",
+          "rtl/verilog/aes_key_expand_128.v",
+          "rtl/verilog/aes_rcon.v",
+          "rtl/verilog/aes_sbox.v"
+        ],
+        "selection_reason": "Independent compute-dense AES datapath with key expansion",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/aes_core",
+        "top_module": "aes_cipher_top",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "freecores_aes_cipher_top",
+      "mapped_cells": 12467,
+      "qualification": {
+        "closure_sha256": "24b5c4b5a7f11f520f2ce0ee5d82505ac0627387245a8fe1ae3e045f309b9c53",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/external_repair_source_inventory_2026_08_11.json",
+        "inventory_sha256": "6692e18666250aef238be4255d9de8b0c2030a614f3c9f685f6e8ba5d3ef66dd",
+        "result_path": "/home/yangao/r2g_external_repair_synth_2026_08_11_run01/results/freecores_aes_cipher_top/result.json",
+        "result_sha256": "8c4950edbff8116582287ee000db236a7da5bcb89245eb61189b0e3966db7aba"
+      },
+      "reference_synth_area_um2": 83849.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "large"
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_des3_perf",
+        "category": "crypto_accelerator",
+        "commit": "6f7865564a0cad10868ccd1d9988043c938fec6b",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [],
+        "include_dirs": [
+          "rtl/verilog/common",
+          "rtl/verilog/perf_opt"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/perf_opt/des3.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/des",
+        "rtl_files": [
+          "rtl/verilog/perf_opt/des3.v",
+          "rtl/verilog/common/crp.v",
+          "rtl/verilog/common/sbox1.v",
+          "rtl/verilog/common/sbox2.v",
+          "rtl/verilog/common/sbox3.v",
+          "rtl/verilog/common/sbox4.v",
+          "rtl/verilog/common/sbox5.v",
+          "rtl/verilog/common/sbox6.v",
+          "rtl/verilog/common/sbox7.v",
+          "rtl/verilog/common/sbox8.v",
+          "rtl/verilog/perf_opt/des.v",
+          "rtl/verilog/perf_opt/key_sel.v"
+        ],
+        "selection_reason": "Independent triple-DES datapath for the missing large bin",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/des",
+        "top_module": "des3",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "freecores_des3_perf",
+      "mapped_cells": 51249,
+      "qualification": {
+        "closure_sha256": "cba7912f4fb27b222dfcdcf4921b7cb11ac9fe81465254c1b12f8a347c0620e2",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/external_repair_source_inventory_2026_08_11.json",
+        "inventory_sha256": "6692e18666250aef238be4255d9de8b0c2030a614f3c9f685f6e8ba5d3ef66dd",
+        "result_path": "/home/yangao/r2g_external_repair_synth_2026_08_11_run07/results/freecores_des3_perf/result.json",
+        "result_sha256": "7de8d2fef2cc7c54cbf29ab0d4b8fd5766ddd458e6c6777ab5c2123e4c918d69"
+      },
+      "reference_synth_area_um2": 451194.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "large"
+    }
+  ],
+  "footprint_policy": {
+    "independent_feasibility": 17,
+    "initial": 25,
+    "maximum": 25,
+    "minimum": 8,
+    "mode": "bounded_core_utilization"
+  },
+  "platform": "sky130hd",
+  "repeatability_fixture_ids": [
+    "freecores_auto_baud_tracking",
+    "freecores_tiny_spi"
+  ],
+  "schema_version": "1.0",
+  "selection_policy": {
+    "environment_failures_admissible": false,
+    "full_r2g_results_used_for_admission": false,
+    "inventory_digest_bound": true,
+    "method": "independent-repository-source-closure-then-orfs-synth-then-physical-screen",
+    "multi_clock_candidates_in_main_cohort": false,
+    "repository_count": 8,
+    "vanilla_llm_results_used_for_admission": false
+  },
+  "status": "development_screen",
+  "target_clock_period_ns": 10,
+  "target_frequency_mhz": 100
+}

@@ -1,0 +1,227 @@
+{
+  "schema_version": "1.0",
+  "experiment_id": "r2g-exp2-orfs-signoff-pilot",
+  "status": "development_seen",
+  "platform": "sky130hd",
+  "reference_synthesis_period_ns": 10.0,
+  "footprint_policy": {
+    "target_reference_utilization": 0.35,
+    "core_margin_um": 10.0,
+    "rounding_um": 5.0,
+    "note": "Each fixed footprint was derived once from the independently qualified 10 ns synthesis area. It is immutable across methods and frequencies."
+  },
+  "repeatability_fixture_ids": [
+    "picorv32",
+    "ultraembedded_riscv_core"
+  ],
+  "fixtures": [
+    {
+      "id": "ben_marshall_uart_tx",
+      "size_bin": "small",
+      "mapped_cells": 167,
+      "reference_synth_area_um2": 1528.97,
+      "clock_port": "clk",
+      "die_area": [0.0, 0.0, 90.0, 90.0],
+      "core_area": [10.0, 10.0, 80.0, 80.0],
+      "candidate": {
+        "repo_url": "https://github.com/ben-marshall/uart",
+        "commit": "5fd2db850a41b65aa34f3a31c663fc8704c7abd8",
+        "top_module": "uart_tx",
+        "language": "verilog",
+        "rtl_files": ["rtl/uart_tx.v"],
+        "header_files": [],
+        "include_dirs": [],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "LICENSE", "spdx_id": "MIT"}
+      },
+      "qualification": {
+        "closure_sha256": "5451882931fb948bf0a47d238f24ef16e79ef1ee7a14e7eb80c26aa3973797a6",
+        "result_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/evaluation/openai-vanilla.batch1/ben_marshall_uart_tx/result.json"
+      }
+    },
+    {
+      "id": "emaczero_crc32",
+      "size_bin": "small",
+      "mapped_cells": 204,
+      "reference_synth_area_um2": 2382.28,
+      "clock_port": "clk",
+      "die_area": [0.0, 0.0, 105.0, 105.0],
+      "core_area": [10.0, 10.0, 95.0, 95.0],
+      "candidate": {
+        "repo_url": "https://github.com/lcapossio/emacZero",
+        "commit": "10b99cadd2847399cf4a5bea531c42071a3ae30f",
+        "top_module": "crc32",
+        "language": "verilog",
+        "rtl_files": ["rtl/crc32.v"],
+        "header_files": [],
+        "include_dirs": [],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "LICENSE", "spdx_id": "Apache-2.0"}
+      },
+      "qualification": {
+        "closure_sha256": "d3f65cec13ff75787fce82fa9e903105323cba5477ae11e1db352df13da75037",
+        "result_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/evaluation/qwen-vanilla.batch1/emaczero_crc32/result.json"
+      }
+    },
+    {
+      "id": "forencich_axi_interconnect",
+      "size_bin": "medium",
+      "mapped_cells": 2064,
+      "reference_synth_area_um2": 23420.0,
+      "clock_port": "clk",
+      "die_area": [0.0, 0.0, 280.0, 280.0],
+      "core_area": [10.0, 10.0, 270.0, 270.0],
+      "candidate": {
+        "repo_url": "https://github.com/alexforencich/verilog-axi",
+        "commit": "516bd5dadc3365b7f9e225d2af8fe0b8d804fe53",
+        "top_module": "axi_interconnect",
+        "language": "verilog",
+        "rtl_files": ["rtl/axi_interconnect.v", "rtl/arbiter.v", "rtl/priority_encoder.v"],
+        "header_files": [],
+        "include_dirs": [],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "COPYING", "spdx_id": "MIT"}
+      },
+      "qualification": {
+        "closure_sha256": "fda172b8380df04e544622666352c8c462b259deb54659c84fbaf7d4d4fbceaa",
+        "result_path": "/home/yangao/r2g_exp1_domestic_batch1_2026_08_01_protocol_v14_pilot_run02/evaluation/deepseek-vanilla.batch1/forencich_axi_interconnect/result.json"
+      }
+    },
+    {
+      "id": "cores_usb_device_src_v_usbf_device_core",
+      "size_bin": "medium",
+      "mapped_cells": 1020,
+      "reference_synth_area_um2": 10482.6,
+      "clock_port": "clk_i",
+      "die_area": [0.0, 0.0, 195.0, 195.0],
+      "core_area": [10.0, 10.0, 185.0, 185.0],
+      "candidate": {
+        "repo_url": "https://github.com/ultraembedded/cores",
+        "commit": "cf4d771b5fbfa5ba9a34d58b127af54832c17545",
+        "top_module": "usbf_device_core",
+        "language": "verilog",
+        "rtl_files": ["usb_device/src_v/usbf_device_core.v", "usb_device/src_v/usbf_sie_rx.v", "usb_device/src_v/usbf_sie_tx.v", "usb_device/src_v/usbf_crc16.v"],
+        "header_files": ["usb_device/src_v/usbf_defs.v"],
+        "include_dirs": ["usb_device/src_v"],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "usb_device/src_v/usbf_device_core.v", "spdx_id": "GPL-2.0-or-later"}
+      },
+      "qualification": {
+        "closure_sha256": "f956f2b99cda1896827d2aaf34e88d81843a89f7837b98dd2e3ab73e329b87a5",
+        "result_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/evaluation/r2g-pipeline.batch1/cores_usb_device_src_v_usbf_device_core/result.json"
+      }
+    },
+    {
+      "id": "picorv32",
+      "size_bin": "medium",
+      "mapped_cells": 6330,
+      "reference_synth_area_um2": 84031.8,
+      "clock_port": "clk",
+      "die_area": [0.0, 0.0, 510.0, 510.0],
+      "core_area": [10.0, 10.0, 500.0, 500.0],
+      "candidate": {
+        "repo_url": "https://github.com/YosysHQ/picorv32",
+        "commit": "a473fc8fca393771d83b0ffcf0b14db3393339d8",
+        "top_module": "picorv32",
+        "language": "verilog",
+        "rtl_files": ["picorv32.v"],
+        "header_files": [],
+        "include_dirs": [],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "COPYING", "spdx_id": "ISC"}
+      },
+      "qualification": {
+        "closure_sha256": "d75e7bb569209055bc233a7cee9c26bb18c88e8f658b6dcf6bcc0cd29bc9b270",
+        "result_path": "/home/yangao/r2g_exp1_domestic_batch1_2026_08_01_protocol_v14_pilot_run02/evaluation/deepseek-vanilla.batch1/picorv32/result.json"
+      }
+    },
+    {
+      "id": "sha256",
+      "size_bin": "large",
+      "mapped_cells": 11332,
+      "reference_synth_area_um2": 108015.0,
+      "clock_port": "clk",
+      "die_area": [0.0, 0.0, 580.0, 580.0],
+      "core_area": [10.0, 10.0, 570.0, 570.0],
+      "candidate": {
+        "repo_url": "https://github.com/secworks/sha256",
+        "commit": "837c5cc396f001d18f2c765721c585716eb439ae",
+        "top_module": "sha256",
+        "language": "verilog",
+        "rtl_files": ["src/rtl/sha256.v", "src/rtl/sha256_core.v", "src/rtl/sha256_k_constants.v", "src/rtl/sha256_w_mem.v"],
+        "header_files": [],
+        "include_dirs": [],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "LICENSE", "spdx_id": "BSD-2-Clause"}
+      },
+      "qualification": {
+        "closure_sha256": "9e8439f5e761e5cac4f4941ccbe65e35605a10ebda481ad157ddab11f65aef1a",
+        "result_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/evaluation/qwen-vanilla.batch1/sha256/result.json"
+      }
+    },
+    {
+      "id": "secworks_chacha_core",
+      "size_bin": "large",
+      "mapped_cells": 13093,
+      "reference_synth_area_um2": 104618.0,
+      "clock_port": "clk",
+      "die_area": [0.0, 0.0, 570.0, 570.0],
+      "core_area": [10.0, 10.0, 560.0, 560.0],
+      "candidate": {
+        "repo_url": "https://github.com/secworks/chacha",
+        "commit": "7eaba360df9fed9fc2db98d5f3df81cf01e5b604",
+        "top_module": "chacha_core",
+        "language": "verilog",
+        "rtl_files": ["src/rtl/chacha_core.v", "src/rtl/chacha_qr.v"],
+        "header_files": [],
+        "include_dirs": [],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "LICENSE", "spdx_id": "BSD-2-Clause"}
+      },
+      "qualification": {
+        "closure_sha256": "055fbde9adf7fe630c6cc83048c7ca6da295a1f310dfe431e32492e16596f691",
+        "result_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/evaluation/openai-vanilla.batch1/secworks_chacha_core/result.json"
+      }
+    },
+    {
+      "id": "ultraembedded_riscv_core",
+      "size_bin": "large",
+      "mapped_cells": 19955,
+      "reference_synth_area_um2": 172108.0,
+      "clock_port": "clk_i",
+      "die_area": [0.0, 0.0, 725.0, 725.0],
+      "core_area": [10.0, 10.0, 715.0, 715.0],
+      "candidate": {
+        "repo_url": "https://github.com/ultraembedded/riscv",
+        "commit": "7ae6f803e30f78c6ea3121e73c3adf50ff912730",
+        "top_module": "riscv_core",
+        "language": "verilog",
+        "rtl_files": ["core/riscv/riscv_core.v", "core/riscv/riscv_alu.v", "core/riscv/riscv_csr.v", "core/riscv/riscv_csr_regfile.v", "core/riscv/riscv_decode.v", "core/riscv/riscv_decoder.v", "core/riscv/riscv_divider.v", "core/riscv/riscv_exec.v", "core/riscv/riscv_fetch.v", "core/riscv/riscv_issue.v", "core/riscv/riscv_lsu.v", "core/riscv/riscv_mmu.v", "core/riscv/riscv_multiplier.v", "core/riscv/riscv_pipe_ctrl.v", "core/riscv/riscv_regfile.v", "core/riscv/riscv_trace_sim.v", "core/riscv/riscv_xilinx_2r1w.v"],
+        "header_files": ["core/riscv/riscv_defs.v"],
+        "include_dirs": ["core/riscv"],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "LICENSE", "spdx_id": "BSD-3-Clause"}
+      },
+      "qualification": {
+        "closure_sha256": "74dfd2bafbda3c151f1ee0b1af51b2c7812db80ef3a6e475c76d42e5be6ff8bb",
+        "result_path": "/home/yangao/r2g_exp1_domestic_batch1_2026_08_01_protocol_v14_pilot_run02/evaluation/deepseek-vanilla.batch1/ultraembedded_riscv_core/result.json"
+      }
+    }
+  ]
+}

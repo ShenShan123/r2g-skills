@@ -1,0 +1,420 @@
+{
+  "experiment_id": "r2g-exp2-fixed100-repair-screen",
+  "fixtures": [
+    {
+      "candidate": {
+        "commit": "8beb231738a9a783665388df503386059629ac30",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "MIT License file at repo root",
+          "repository_path": "LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/chiragt14/DSP-FIR-Lowpass-Filter",
+        "rtl_files": [
+          "src/fir_lpf"
+        ],
+        "top_module": "fir_lpf",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "fir_lpf",
+      "mapped_cells": 403,
+      "qualification": {
+        "closure_sha256": "79efe1ef0684b7a0a617fc8b4e00d7101343296816b5075037511a2c015dc7ec",
+        "result_path": "/home/yangao/r2g_exp1_rescore_2026_08_02_conditional_closure_v1_retry/evaluation/glm-vanilla.batch1/fir_lpf/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_rescore_2026_08_02_conditional_closure_v1_retry/submissions/glm-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 7346.0,
+      "screening": {
+        "admission_rule": "At the frozen 100 MHz target, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization, then an independent preregistered 17% utilization run must be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "small"
+    },
+    {
+      "candidate": {
+        "commit": "1b867e53af738e4a8bc7c839ca2f1c07f40382dc",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "MIT license header in each RTL file",
+          "repository_path": "rtl/uart.v",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/alexforencich/verilog-uart",
+        "rtl_files": [
+          "rtl/uart.v",
+          "rtl/uart_rx.v",
+          "rtl/uart_tx.v"
+        ],
+        "top_module": "uart",
+        "top_parameters": {
+          "DATA_WIDTH": 8
+        }
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "uart_axis",
+      "mapped_cells": 529,
+      "qualification": {
+        "closure_sha256": "09e25393fdfa1cd0774f47bbfbde9583a2a504f73575b2fc8ce60bc2dfe98d65",
+        "result_path": "/home/yangao/r2g_exp1_rescore_2026_08_02_conditional_closure_v1_retry/evaluation/glm-vanilla.batch1/uart_axis/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_rescore_2026_08_02_conditional_closure_v1_retry/submissions/glm-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 4562.0,
+      "screening": {
+        "admission_rule": "At the frozen 100 MHz target, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization, then an independent preregistered 17% utilization run must be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "small"
+    },
+    {
+      "candidate": {
+        "commit": "10b99cadd2847399cf4a5bea531c42071a3ae30f",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Apache License 2.0 in repo root",
+          "repository_path": "LICENSE",
+          "spdx_id": "Apache-2.0"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/lcapossio/emacZero",
+        "rtl_files": [
+          "rtl/net/icmp_echo.v"
+        ],
+        "top_module": "icmp_echo",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "emaczero_icmp_echo",
+      "mapped_cells": 6373,
+      "qualification": {
+        "closure_sha256": "cd5cdd49e11b276cedb2f26768551933e42894b6a0fcd72c9181acbd30c7981a",
+        "result_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/evaluation/qwen-vanilla.batch1/emaczero_icmp_echo/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/submissions/qwen-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 91934.0,
+      "screening": {
+        "admission_rule": "At the frozen 100 MHz target, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization, then an independent preregistered 17% utilization run must be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "commit": "f46074a88576e1d7e2fc6cfae14a664dc593a2d8",
+        "defines": [],
+        "header_files": [
+          "rtl/verilog/mor1kx-defines.v",
+          "rtl/verilog/mor1kx-sprs.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "normalized_from:LICENSE",
+          "repository_path": "LICENSE",
+          "spdx_id": "CERN-OHL-W-2.0"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/openrisc/mor1kx",
+        "rtl_files": [
+          "rtl/verilog/mor1kx_dmmu.v",
+          "rtl/verilog/mor1kx_true_dpram_sclk.v"
+        ],
+        "top_module": "mor1kx_dmmu",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "mor1kx_rtl_verilog_mor1kx_dmmu",
+      "mapped_cells": 6629,
+      "qualification": {
+        "closure_sha256": "3269e56588b8c79e2536fa0cd1c4f6c3717a49e69323b8136ba2e5f6b5241ead",
+        "result_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/evaluation/r2g-pipeline.batch1/mor1kx_rtl_verilog_mor1kx_dmmu/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/submissions/r2g-pipeline.batch1.json"
+      },
+      "reference_synth_area_um2": 158093.0,
+      "screening": {
+        "admission_rule": "At the frozen 100 MHz target, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization, then an independent preregistered 17% utilization run must be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "commit": "a03492a6000ca0185c615060b171bda64806a7bb",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Source file headers contain Apache 2.0 license text",
+          "repository_path": "src_v/ddr3_axi.v",
+          "spdx_id": "Apache-2.0"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/ultraembedded/core_ddr3_controller",
+        "rtl_files": [
+          "src_v/ddr3_axi.v",
+          "src_v/ddr3_axi_pmem.v",
+          "src_v/ddr3_axi_retime.v",
+          "src_v/ddr3_core.v",
+          "src_v/ddr3_dfi_seq.v"
+        ],
+        "top_module": "ddr3_axi",
+        "top_parameters": {}
+      },
+      "clock_port": "clk_i",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "ddr3_ctrl",
+      "mapped_cells": 7152,
+      "qualification": {
+        "closure_sha256": "fc3389d4fb823deb990824eabf8a2a28707273f4c866541ddd5b45abfb42ff27",
+        "result_path": "/home/yangao/r2g_exp1_rescore_2026_08_02_conditional_closure_v1_retry/evaluation/glm-vanilla.batch1/ddr3_ctrl/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_rescore_2026_08_02_conditional_closure_v1_retry/submissions/glm-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 117659.0,
+      "screening": {
+        "admission_rule": "At the frozen 100 MHz target, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization, then an independent preregistered 17% utilization run must be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "commit": "80dc4718e1dcbbdb4b0dd1bdb393d8f7b98981dc",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LICENSE contains BSD 2-clause redistribution conditions and disclaimer.",
+          "repository_path": "LICENSE",
+          "spdx_id": "BSD-2-Clause"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/secworks/aes",
+        "rtl_files": [
+          "src/rtl/aes_core.v",
+          "src/rtl/aes_encipher_block.v",
+          "src/rtl/aes_decipher_block.v",
+          "src/rtl/aes_key_mem.v",
+          "src/rtl/aes_sbox.v",
+          "src/rtl/aes_inv_sbox.v"
+        ],
+        "top_module": "aes_core",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "secworks_aes_core",
+      "mapped_cells": 20392,
+      "qualification": {
+        "closure_sha256": "4c3bbc1ea8600538c06622e855faec739958c99253b47d37650a2460b4468782",
+        "result_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/evaluation/openai-vanilla.batch1/secworks_aes_core/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/submissions/openai-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 164804.0,
+      "screening": {
+        "admission_rule": "At the frozen 100 MHz target, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization, then an independent preregistered 17% utilization run must be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "large"
+    },
+    {
+      "candidate": {
+        "commit": "0820b0b03d3c1e431337025dbce05abbf3b8c741",
+        "defines": [],
+        "header_files": [
+          "rtl/axicb_checker.sv"
+        ],
+        "include_dirs": [
+          "rtl"
+        ],
+        "language": "systemverilog",
+        "license_evidence": {
+          "note": "MIT License, Copyright (c) 2021 Damien Pretet",
+          "repository_path": "LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/dpretet/axi-crossbar",
+        "rtl_files": [
+          "rtl/axicb_crossbar_top.sv",
+          "rtl/axicb_mst_if.sv",
+          "rtl/axicb_slv_if.sv",
+          "rtl/axicb_switch_top.sv",
+          "rtl/axicb_mst_switch.sv",
+          "rtl/axicb_slv_switch.sv",
+          "rtl/axicb_mst_switch_rd.sv",
+          "rtl/axicb_mst_switch_wr.sv",
+          "rtl/axicb_slv_switch_rd.sv",
+          "rtl/axicb_slv_switch_wr.sv",
+          "rtl/axicb_round_robin.sv",
+          "rtl/axicb_round_robin_core.sv",
+          "rtl/axicb_scfifo.sv",
+          "rtl/axicb_scfifo_ram.sv",
+          "rtl/axicb_scfifo_regfile.sv",
+          "rtl/axicb_pipeline.sv",
+          "rtl/axicb_slv_ooo.sv"
+        ],
+        "top_module": "axicb_crossbar_top",
+        "top_parameters": {}
+      },
+      "clock_port": "aclk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "axicb_crossbar",
+      "mapped_cells": 36846,
+      "qualification": {
+        "closure_sha256": "958e151b482782ec72f39138266a74a8a83b634e3b2030d2e20b4c24581ee2d0",
+        "result_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/evaluation/qwen-vanilla.batch1/axicb_crossbar/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/submissions/qwen-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 676176.0,
+      "screening": {
+        "admission_rule": "At the frozen 100 MHz target, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization, then an independent preregistered 17% utilization run must be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "large"
+    },
+    {
+      "candidate": {
+        "commit": "f90ca0067d40aac95dbbea1dd0a14d0a950fe785",
+        "defines": [],
+        "header_files": [
+          "src_v/audio_defs.v"
+        ],
+        "include_dirs": [
+          "src_v"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Repository LICENSE is the GNU General Public License Version 2, June 1991 text.",
+          "repository_path": "LICENSE",
+          "spdx_id": "GPL-2.0-only"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/ultraembedded/core_audio",
+        "rtl_files": [
+          "src_v/audio.v",
+          "src_v/audio_defs.v",
+          "src_v/audio_fifo.v",
+          "src_v/audio_i2s.v",
+          "src_v/audio_spdif.v",
+          "src_v/audio_dac.v",
+          "src_v/spdif_core.v",
+          "src_v/sigma_dac.v"
+        ],
+        "top_module": "audio",
+        "top_parameters": {}
+      },
+      "clock_port": "clk_i",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "ultraembedded_core_audio",
+      "mapped_cells": 109681,
+      "qualification": {
+        "closure_sha256": "064fa3bd3d108b2bc116e3166df68018f52ae4285eefd0ca0135bef82a988c25",
+        "result_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/evaluation/openai-vanilla.batch1/ultraembedded_core_audio/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/submissions/openai-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 2536483.0,
+      "screening": {
+        "admission_rule": "At the frozen 100 MHz target, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization, then an independent preregistered 17% utilization run must be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "large"
+    }
+  ],
+  "footprint_policy": {
+    "independent_feasibility": 17,
+    "initial": 25,
+    "maximum": 25,
+    "minimum": 8,
+    "mode": "bounded_core_utilization",
+    "note": "One preregistered policy is applied uniformly to every screened RTL."
+  },
+  "platform": "sky130hd",
+  "repeatability_fixture_ids": [
+    "emaczero_icmp_echo",
+    "secworks_aes_core"
+  ],
+  "schema_version": "1.0",
+  "selection_policy": {
+    "environment_failures_admissible": false,
+    "full_r2g_results_used_for_admission": false,
+    "method": "neutral_default_orfs_only",
+    "smoke_fixture_ids": [
+      "fir_lpf",
+      "uart_axis",
+      "emaczero_icmp_echo"
+    ],
+    "source_inventory_sha256_bound_in_campaign": true,
+    "vanilla_llm_results_used_for_admission": false
+  },
+  "status": "development_screen",
+  "target_clock_period_ns": 10,
+  "target_frequency_mhz": 100
+}

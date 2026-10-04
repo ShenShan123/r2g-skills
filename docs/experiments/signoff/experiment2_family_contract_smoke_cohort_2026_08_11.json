@@ -1,0 +1,174 @@
+{
+  "schema_version": "1.1",
+  "experiment_id": "r2g-exp2-family-contract-smoke-2026-08-11",
+  "cohort_kind": "family_contract_smoke",
+  "status": "development_seen",
+  "platform": "sky130hd",
+  "target_frequency_mhz": 100,
+  "strict_clean_scope": "fixed_target_physical_signoff",
+  "paper_score_eligible": false,
+  "purpose": "Exercise repair recovery, clean-sentinel non-regression, evidence binding, and the fixed-target evaluator before formal cohort freeze.",
+  "repair_pool_manifest": {
+    "path": "docs/experiments/signoff/repair_needed_pool_inventory_2026_08_09.json",
+    "sha256": "16b7e41407ccbf372174c2fd9768e4f0bd459dcecbd0dcccc04db779b578733a"
+  },
+  "repeatability_fixture_ids": [
+    "fuxi_nt35510_footprint_repair",
+    "hazard3_frontend_clean_sentinel"
+  ],
+  "fixtures": [
+    {
+      "id": "fuxi_nt35510_footprint_repair",
+      "role": "repair_needed",
+      "family_id": "footprint_congestion",
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "normalized_failure_signature": ["drc", "route"],
+      "size_bin": "small",
+      "mapped_cells": 226,
+      "reference_synth_area_um2": 2668,
+      "clock_port": "clk",
+      "footprint_policy": {
+        "mode": "bounded_core_utilization",
+        "initial": 25,
+        "minimum": 8,
+        "maximum": 25
+      },
+      "candidate": {
+        "repo_url": "https://github.com/MaxXSoft/Fuxi",
+        "commit": "4cea31bb2228ed247d1ea7ed162568ad4d7ef250",
+        "top_module": "nt35510_apb_adapter_v1_0",
+        "language": "verilog",
+        "rtl_files": ["soc/peripherals/lcd/nt35510_controller/src/nt35510_apb_adapter_v1_0.v"],
+        "header_files": [],
+        "include_dirs": ["soc/peripherals/lcd/nt35510_controller/src"],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "source_checkout_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/sources/Fuxi_soc_peripherals_lcd_nt35510_controller_src_nt35510_apb_adapter_v1_0",
+        "license_evidence": {"repository_path": "LICENSE", "spdx_id": "GPL-3.0-only"}
+      },
+      "qualification": {"closure_sha256": "41893e92df05c7019b22cf123cb79db8a9c0532b4c84b7b8543781ae60ad7cfc"},
+      "admission_evidence": {
+        "baseline_runs": [
+          {"path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/methods/openai-vanilla/Fuxi_soc_peripherals_lcd_nt35510_controller_src_nt35510_apb_adapter_v1_0/validations/validation_01.json", "sha256": "71b37db0865f7d0cc4e765d2711b2ecf3b5284cbbd4cc17fcf9b288ccf9aff20"},
+          {"path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/methods/qwen-vanilla/Fuxi_soc_peripherals_lcd_nt35510_controller_src_nt35510_apb_adapter_v1_0/validations/validation_01.json", "sha256": "c1d43861b71947f295b586a27c0a15bbf2cf7a1a4667f19114333bf42909ef38"}
+        ],
+        "witness": {"path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/methods/deepseek-vanilla/Fuxi_soc_peripherals_lcd_nt35510_controller_src_nt35510_apb_adapter_v1_0/validations/validation_01.json", "sha256": "d735c9b30f6cc83a5362269b0f9655df5fd33fa2f97fa5de9f715b6536a95811"},
+        "witness_action": {"CORE_UTILIZATION": 17}
+      }
+    },
+    {
+      "id": "can_fifo_footprint_repair",
+      "role": "repair_needed",
+      "family_id": "footprint_congestion",
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "normalized_failure_signature": ["drc"],
+      "size_bin": "medium",
+      "mapped_cells": 5906,
+      "clock_port": "clk",
+      "footprint_policy": {
+        "mode": "bounded_core_utilization",
+        "initial": 20,
+        "minimum": 8,
+        "maximum": 20
+      },
+      "candidate": {
+        "repo_url": "https://github.com/dpiegdon/verilog-can",
+        "commit": "0744cb837db7a55c21d9d546fde1f30fc26de00f",
+        "top_module": "can_fifo",
+        "language": "verilog",
+        "rtl_files": ["can_fifo.v"],
+        "header_files": ["can_top_defines.v"],
+        "include_dirs": ["."],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "source_checkout_path": "/home/yangao/r2g_exp2_retrospective_repair_screen_2026_08_09_v18c/sources/can_fifo",
+        "license_evidence": {"repository_path": "LICENSE", "spdx_id": "LGPL-2.1-or-later"}
+      },
+      "qualification": {"closure_sha256": "3d2cf60fc138db2b4e8d5e007c4e9d8418e310ff6f388de8e28685974e259a50"},
+      "admission_evidence": {
+        "baseline_runs": [
+          {"path": "/home/yangao/r2g_exp2_retrospective_repair_screen_2026_08_09_v18c/methods/openai-vanilla/can_fifo/validations/validation_01.json", "sha256": "eca52d04e519edc8048ceb7eb59760344132e6ad4af21f546c257a7b37fcc1b8"},
+          {"path": "/home/yangao/r2g_exp2_retrospective_repair_screen_2026_08_09_v18c/methods/qwen-vanilla/can_fifo/validations/validation_01.json", "sha256": "9e56313f358048944e841ea1739175d25a83d727070ad47330da7262000677b5"}
+        ],
+        "witness": {"path": "/home/yangao/r2g_exp2_retrospective_repair_screen_2026_08_09_v18c/methods/deepseek-vanilla/can_fifo/validations/validation_01.json", "sha256": "688bcfa3c538b21433227a055c296adc58a12028a2ba6a913176aa6b990a41c5"},
+        "witness_action": {"CORE_UTILIZATION": 12}
+      }
+    },
+    {
+      "id": "uart_tx_clean_sentinel",
+      "role": "clean_sentinel",
+      "family_id": null,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "normalized_failure_signature": [],
+      "size_bin": "small",
+      "mapped_cells": 167,
+      "reference_synth_area_um2": 1529,
+      "clock_port": "clk",
+      "footprint_policy": {
+        "mode": "bounded_core_utilization",
+        "initial": 25,
+        "minimum": 8,
+        "maximum": 25
+      },
+      "candidate": {
+        "repo_url": "https://github.com/ben-marshall/uart",
+        "commit": "5fd2db850a41b65aa34f3a31c663fc8704c7abd8",
+        "top_module": "uart_tx",
+        "language": "verilog",
+        "rtl_files": ["rtl/uart_tx.v"],
+        "header_files": [],
+        "include_dirs": [],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "source_checkout_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22a/sources/ben_marshall_uart_tx",
+        "license_evidence": {"repository_path": "LICENSE", "spdx_id": "MIT"}
+      },
+      "qualification": {"closure_sha256": "5451882931fb948bf0a47d238f24ef16e79ef1ee7a14e7eb80c26aa3973797a6"},
+      "admission_evidence": {
+        "baseline_runs": [
+          {"path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22a/methods/openai-vanilla/ben_marshall_uart_tx/validations/validation_01.json", "sha256": "00b4ff4a51659fbfbcb862525bc5c27a40fc4218951c20f2e7c6ea8e19e6833b"}
+        ]
+      }
+    },
+    {
+      "id": "hazard3_frontend_clean_sentinel",
+      "role": "clean_sentinel",
+      "family_id": null,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "normalized_failure_signature": [],
+      "size_bin": "medium",
+      "mapped_cells": 1770,
+      "reference_synth_area_um2": 14981,
+      "clock_port": "clk",
+      "footprint_policy": {
+        "mode": "bounded_core_utilization",
+        "initial": 25,
+        "minimum": 8,
+        "maximum": 25
+      },
+      "candidate": {
+        "repo_url": "https://github.com/Wren6991/Hazard3",
+        "commit": "8af992930f71a69b0e06c38734c1094f41a05ca0",
+        "top_module": "hazard3_frontend",
+        "language": "verilog",
+        "rtl_files": ["hdl/hazard3_frontend.v", "hdl/hazard3_instr_decompress.v"],
+        "header_files": ["hdl/hazard3_config.vh", "hdl/hazard3_config_inst.vh", "hdl/rv_opcodes.vh"],
+        "include_dirs": ["hdl"],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "source_checkout_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/sources/Hazard3_hdl_hazard3_frontend",
+        "license_evidence": {"repository_path": "LICENSE", "spdx_id": "Apache-2.0"}
+      },
+      "qualification": {"closure_sha256": "63453f2a42b86b49a28a658d79e12370aa80cc0f86ae1070bd3f85e904ee196a"},
+      "admission_evidence": {
+        "baseline_runs": [
+          {"path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/methods/openai-vanilla/Hazard3_hdl_hazard3_frontend/validations/validation_01.json", "sha256": "7d24c975173803a1e91b59c0f6128a53a4f8c2a12ef8d4803c726d8266cbc2e1"}
+        ]
+      }
+    }
+  ]
+}

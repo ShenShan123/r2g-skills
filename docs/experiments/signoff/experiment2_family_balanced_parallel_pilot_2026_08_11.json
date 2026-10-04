@@ -1,0 +1,563 @@
+{
+  "cohort_kind": "family_balanced_pilot",
+  "experiment_id": "r2g-exp2-family-balanced-parallel-pilot",
+  "fixtures": [
+    {
+      "action_policy": {
+        "allowed_numeric_knobs": [
+          "CORE_UTILIZATION"
+        ],
+        "allowed_string_knobs": {}
+      },
+      "admission_evidence": {
+        "baseline_runs": [
+          {
+            "path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/methods/openai-vanilla/Fuxi_soc_peripherals_lcd_nt35510_controller_src_nt35510_apb_adapter_v1_0/validations/validation_01.json",
+            "sha256": "71b37db0865f7d0cc4e765d2711b2ecf3b5284cbbd4cc17fcf9b288ccf9aff20"
+          },
+          {
+            "path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/methods/qwen-vanilla/Fuxi_soc_peripherals_lcd_nt35510_controller_src_nt35510_apb_adapter_v1_0/validations/validation_01.json",
+            "sha256": "c1d43861b71947f295b586a27c0a15bbf2cf7a1a4667f19114333bf42909ef38"
+          }
+        ],
+        "witness": {
+          "path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/methods/deepseek-vanilla/Fuxi_soc_peripherals_lcd_nt35510_controller_src_nt35510_apb_adapter_v1_0/validations/validation_01.json",
+          "sha256": "d735c9b30f6cc83a5362269b0f9655df5fd33fa2f97fa5de9f715b6536a95811"
+        },
+        "witness_action": {
+          "CORE_UTILIZATION": 17
+        }
+      },
+      "candidate": {
+        "commit": "4cea31bb2228ed247d1ea7ed162568ad4d7ef250",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [
+          "soc/peripherals/lcd/nt35510_controller/src"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "repository_path": "LICENSE",
+          "spdx_id": "GPL-3.0-only"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/MaxXSoft/Fuxi",
+        "rtl_files": [
+          "soc/peripherals/lcd/nt35510_controller/src/nt35510_apb_adapter_v1_0.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/sources/Fuxi_soc_peripherals_lcd_nt35510_controller_src_nt35510_apb_adapter_v1_0",
+        "top_module": "nt35510_apb_adapter_v1_0",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "family_id": "footprint_congestion",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "fuxi_nt35510_footprint_repair",
+      "mapped_cells": 226,
+      "normalized_failure_signature": [
+        "drc",
+        "route"
+      ],
+      "qualification": {
+        "closure_sha256": "41893e92df05c7019b22cf123cb79db8a9c0532b4c84b7b8543781ae60ad7cfc"
+      },
+      "reference_synth_area_um2": 2668,
+      "role": "repair_needed",
+      "size_bin": "small",
+      "strict_clean_scope": "fixed_target_physical_signoff"
+    },
+    {
+      "action_policy": {
+        "allowed_numeric_knobs": [
+          "CORE_UTILIZATION"
+        ],
+        "allowed_string_knobs": {}
+      },
+      "admission_evidence": {
+        "baseline_runs": [
+          {
+            "path": "/home/yangao/r2g_exp2_retrospective_repair_screen_2026_08_09_v18c/methods/openai-vanilla/can_fifo/validations/validation_01.json",
+            "sha256": "eca52d04e519edc8048ceb7eb59760344132e6ad4af21f546c257a7b37fcc1b8"
+          },
+          {
+            "path": "/home/yangao/r2g_exp2_retrospective_repair_screen_2026_08_09_v18c/methods/qwen-vanilla/can_fifo/validations/validation_01.json",
+            "sha256": "9e56313f358048944e841ea1739175d25a83d727070ad47330da7262000677b5"
+          }
+        ],
+        "witness": {
+          "path": "/home/yangao/r2g_exp2_retrospective_repair_screen_2026_08_09_v18c/methods/deepseek-vanilla/can_fifo/validations/validation_01.json",
+          "sha256": "688bcfa3c538b21433227a055c296adc58a12028a2ba6a913176aa6b990a41c5"
+        },
+        "witness_action": {
+          "CORE_UTILIZATION": 12
+        }
+      },
+      "candidate": {
+        "commit": "0744cb837db7a55c21d9d546fde1f30fc26de00f",
+        "defines": [],
+        "header_files": [
+          "can_top_defines.v"
+        ],
+        "include_dirs": [
+          "."
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "repository_path": "LICENSE",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/dpiegdon/verilog-can",
+        "rtl_files": [
+          "can_fifo.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_retrospective_repair_screen_2026_08_09_v18c/sources/can_fifo",
+        "top_module": "can_fifo",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "family_id": "footprint_congestion",
+      "footprint_policy": {
+        "initial": 20,
+        "maximum": 20,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "can_fifo_footprint_repair",
+      "mapped_cells": 5906,
+      "normalized_failure_signature": [
+        "drc"
+      ],
+      "qualification": {
+        "closure_sha256": "3d2cf60fc138db2b4e8d5e007c4e9d8418e310ff6f388de8e28685974e259a50"
+      },
+      "role": "repair_needed",
+      "size_bin": "medium",
+      "strict_clean_scope": "fixed_target_physical_signoff"
+    },
+    {
+      "action_policy": {
+        "allowed_numeric_knobs": [],
+        "allowed_string_knobs": {},
+        "explicit_area": {
+          "core_margin_um": 10,
+          "maximum_die_perimeter_um": 3123.6479999999997,
+          "minimum_die_perimeter_um": 2603.04
+        }
+      },
+      "admission_evidence": {
+        "baseline_runs": [
+          {
+            "path": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_baseline_1/repair_family_probe_result.json",
+            "sha256": "638a2cfdb4a1be87017b96800e622d25cbdd151d0adcaf50ea4aad722df4558d"
+          },
+          {
+            "path": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_baseline_2/repair_family_probe_result.json",
+            "sha256": "e93c89e120e021474896977c62abfa2cee913f3799537ae612c53ee5106a3a92"
+          }
+        ],
+        "family_evidence": {
+          "path": "/home/yangao/r2g-skills/docs/experiments/signoff/evidence/2026_08_10/axi_pin_sky130hd_pin_perimeter.json",
+          "sha256": "755d046ccb21106bb9fce159f89d0a8dc87218eef05d5e448e0c203b4cb2b52f"
+        },
+        "witness": {
+          "path": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_witness/repair_family_probe_result.json",
+          "sha256": "3e4b252615f056aa5c93425642740e948960ee5482ccd6a57af917f9b234e008"
+        }
+      },
+      "candidate": {
+        "commit": "516bd5dadc3365b7f9e225d2af8fe0b8d804fe53",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "repository_path": "COPYING",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/alexforencich/verilog-axi",
+        "rtl_files": [
+          "rtl/axi_interconnect.v",
+          "rtl/arbiter.v",
+          "rtl/priority_encoder.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_signoff_canary_2026_08_08_v17/sources/forencich_axi_interconnect",
+        "top_module": "axi_interconnect",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "family_id": "pin_perimeter",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 25,
+        "mode": "bounded_explicit_area"
+      },
+      "id": "axi_interconnect_pin_repair",
+      "initial_config_edits": {
+        "CORE_UTILIZATION": 25
+      },
+      "mapped_cells": 2064,
+      "qualification": {
+        "closure_sha256": "fda172b8380df04e544622666352c8c462b259deb54659c84fbaf7d4d4fbceaa"
+      },
+      "role": "repair_needed",
+      "size_bin": "medium",
+      "strict_clean_scope": "fixed_target_physical_signoff"
+    },
+    {
+      "action_policy": {
+        "allowed_numeric_knobs": [],
+        "allowed_string_knobs": {},
+        "explicit_area": {
+          "core_margin_um": 10,
+          "maximum_die_perimeter_um": 2480.64,
+          "minimum_die_perimeter_um": 2067.2
+        }
+      },
+      "admission_evidence": {
+        "baseline_runs": [
+          {
+            "path": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_mux_pin_sky130hd_baseline_1/repair_family_probe_result.json",
+            "sha256": "96df2e89045469948aa1aac3158591dca5c0585dd5885ef671444a885f93faee"
+          },
+          {
+            "path": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_mux_pin_sky130hd_baseline_2/repair_family_probe_result.json",
+            "sha256": "24d3095fa4d20d57c618f9c3b45558c0efe4da34fe59a5a7c75ac9ed6ce23019"
+          }
+        ],
+        "family_evidence": {
+          "path": "/home/yangao/r2g-skills/docs/experiments/signoff/evidence/2026_08_10/ip_mux_sky130hd_pin_perimeter.json",
+          "sha256": "0303369fa4edbf140ed3cd2c66682b58ef3aa2ef6bf86dd4e583f865734274ae"
+        },
+        "witness": {
+          "path": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_mux_pin_sky130hd_witness/repair_family_probe_result.json",
+          "sha256": "7e38c7498f22f8b5cee8505b9caafa01115b62590c766f81b19df7ace9cc1488"
+        }
+      },
+      "candidate": {
+        "commit": "77320a9471d19c7dd383914bc049e02d9f4f1ffb",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "repository_path": "COPYING",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/alexforencich/verilog-ethernet",
+        "rtl_files": [
+          "rtl/ip_mux.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_e2e_validation_sources_2026_07_29/verilog-ethernet",
+        "top_module": "ip_mux",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "family_id": "pin_perimeter",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 25,
+        "mode": "bounded_explicit_area"
+      },
+      "id": "ip_mux_pin_repair",
+      "initial_config_edits": {
+        "CORE_UTILIZATION": 25
+      },
+      "mapped_cells": 738,
+      "qualification": {
+        "closure_sha256": "3114139dd240c999215fa187fe4227d13c793c3fcb14ef320c349c08fcf1a128"
+      },
+      "role": "repair_needed",
+      "size_bin": "small",
+      "strict_clean_scope": "fixed_target_physical_signoff"
+    },
+    {
+      "action_policy": {
+        "allowed_numeric_knobs": [],
+        "allowed_string_knobs": {
+          "PLACE_PINS_ARGS": [
+            "-exclude left:*",
+            "-exclude right:*",
+            "-exclude top:*",
+            "-exclude bottom:*"
+          ]
+        }
+      },
+      "admission_evidence": {
+        "baseline_runs": [
+          {
+            "path": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_1/repair_family_probe_result.json",
+            "sha256": "7dbb3ada22a8a626ecc8641273b1c39269938678d89b4d73dd2d0d63153eb5b9"
+          },
+          {
+            "path": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_2/repair_family_probe_result.json",
+            "sha256": "39b7622c948d19a6f70ec5a5c893eae89c7e7c30ee82f1d824f6a969fbf289d0"
+          }
+        ],
+        "family_evidence": {
+          "path": "/home/yangao/r2g-skills/docs/experiments/signoff/evidence/2026_08_11/siliconcompiler_gcd_sky130hd_rule_specific_drc.json",
+          "sha256": "fe22a7edb34f937f60b4a9e56dca18f39ece21c3830c94ced41d8cb83d9b9115"
+        },
+        "witness": {
+          "path": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_witness_exclude_right/repair_family_probe_result.json",
+          "sha256": "c53ea290a30f82a9c4f25548aaaa9fd9d4ff215b13f9ef9da5147755acac9cdc"
+        }
+      },
+      "candidate": {
+        "commit": "ecb9cb43192c6895620ea0926eb874052755a39c",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "repository_path": "LICENSE",
+          "spdx_id": "Apache-2.0"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/siliconcompiler/siliconcompiler",
+        "rtl_files": [
+          "examples/gcd/gcd.v"
+        ],
+        "top_module": "gcd",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "family_id": "rule_specific_drc",
+      "footprint_policy": {
+        "initial": 30.0,
+        "maximum": 30.0,
+        "minimum": 30.0,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "siliconcompiler_gcd_drc_repair",
+      "initial_config_edits": {
+        "ABC_AREA": 0,
+        "CORE_UTILIZATION": 30
+      },
+      "mapped_cells": 295,
+      "qualification": {
+        "closure_sha256": "254af84e947d9298b2b083085574a70bc11a1bc580cba3eff4e29366f9c62813"
+      },
+      "role": "repair_needed",
+      "size_bin": "small",
+      "strict_clean_scope": "fixed_target_physical_signoff"
+    },
+    {
+      "action_policy": {
+        "allowed_numeric_knobs": [],
+        "allowed_string_knobs": {
+          "PLACE_PINS_ARGS": [
+            "-exclude left:*",
+            "-exclude right:*",
+            "-exclude top:*",
+            "-exclude bottom:*"
+          ]
+        }
+      },
+      "admission_evidence": {
+        "baseline_runs": [
+          {
+            "path": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_1/repair_family_probe_result.json",
+            "sha256": "682154a29ae34373d5d3d2b6cb4a3583f763674b957813ae17a57c3b8861b59c"
+          },
+          {
+            "path": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_2/repair_family_probe_result.json",
+            "sha256": "da5c878f179868601cc5104e0260826a6dfb493b8d434b54c71e7d5dcb531ec7"
+          }
+        ],
+        "family_evidence": {
+          "path": "/home/yangao/r2g-skills/docs/experiments/signoff/evidence/2026_08_11/sdram_axi_sky130hd_rule_specific_drc.json",
+          "sha256": "1722b93e66d982685713f575ff063f9f9fc0e896493f5e94d7825e8038b10f94"
+        },
+        "witness": {
+          "path": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_witness_exclude_right/repair_family_probe_result.json",
+          "sha256": "41f1bd8d9cde9211487dff47ba5e37150a5de7e81123400ef7abf2df94795710"
+        }
+      },
+      "candidate": {
+        "commit": "c4becd60f0ce9ada991d894e36036b9429446922",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "repository_path": "LICENSE",
+          "spdx_id": "GPL-3.0-only"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/ultraembedded/core_sdram_axi4",
+        "rtl_files": [
+          "src_v/sdram_axi.v",
+          "src_v/sdram_axi_core.v",
+          "src_v/sdram_axi_pmem.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22a/sources/ultraembedded_sdram_axi",
+        "top_module": "sdram_axi",
+        "top_parameters": {}
+      },
+      "clock_port": "clk_i",
+      "family_id": "rule_specific_drc",
+      "footprint_policy": {
+        "initial": 25.0,
+        "maximum": 25.0,
+        "minimum": 25.0,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "sdram_axi_drc_repair",
+      "initial_config_edits": {
+        "ABC_AREA": 1,
+        "CORE_UTILIZATION": 25
+      },
+      "mapped_cells": 1893,
+      "qualification": {
+        "closure_sha256": "8bd4b9ecc1a8f1932fd96fc4202768e6fc0aed5204d3d98ff25a22bad20da741"
+      },
+      "role": "repair_needed",
+      "size_bin": "medium",
+      "strict_clean_scope": "fixed_target_physical_signoff"
+    },
+    {
+      "action_policy": {
+        "allowed_numeric_knobs": [
+          "CORE_UTILIZATION"
+        ],
+        "allowed_string_knobs": {}
+      },
+      "admission_evidence": {
+        "baseline_runs": [
+          {
+            "path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22a/methods/openai-vanilla/ben_marshall_uart_tx/validations/validation_01.json",
+            "sha256": "00b4ff4a51659fbfbcb862525bc5c27a40fc4218951c20f2e7c6ea8e19e6833b"
+          }
+        ]
+      },
+      "candidate": {
+        "commit": "5fd2db850a41b65aa34f3a31c663fc8704c7abd8",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "repository_path": "LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/ben-marshall/uart",
+        "rtl_files": [
+          "rtl/uart_tx.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22a/sources/ben_marshall_uart_tx",
+        "top_module": "uart_tx",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "family_id": null,
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "uart_tx_clean_sentinel",
+      "mapped_cells": 167,
+      "normalized_failure_signature": [],
+      "qualification": {
+        "closure_sha256": "5451882931fb948bf0a47d238f24ef16e79ef1ee7a14e7eb80c26aa3973797a6"
+      },
+      "reference_synth_area_um2": 1529,
+      "role": "clean_sentinel",
+      "size_bin": "small",
+      "strict_clean_scope": "fixed_target_physical_signoff"
+    },
+    {
+      "action_policy": {
+        "allowed_numeric_knobs": [
+          "CORE_UTILIZATION"
+        ],
+        "allowed_string_knobs": {}
+      },
+      "admission_evidence": {
+        "baseline_runs": [
+          {
+            "path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/methods/openai-vanilla/Hazard3_hdl_hazard3_frontend/validations/validation_01.json",
+            "sha256": "7d24c975173803a1e91b59c0f6128a53a4f8c2a12ef8d4803c726d8266cbc2e1"
+          }
+        ]
+      },
+      "candidate": {
+        "commit": "8af992930f71a69b0e06c38734c1094f41a05ca0",
+        "defines": [],
+        "header_files": [
+          "hdl/hazard3_config.vh",
+          "hdl/hazard3_config_inst.vh",
+          "hdl/rv_opcodes.vh"
+        ],
+        "include_dirs": [
+          "hdl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "repository_path": "LICENSE",
+          "spdx_id": "Apache-2.0"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/Wren6991/Hazard3",
+        "rtl_files": [
+          "hdl/hazard3_frontend.v",
+          "hdl/hazard3_instr_decompress.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/sources/Hazard3_hdl_hazard3_frontend",
+        "top_module": "hazard3_frontend",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "family_id": null,
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "hazard3_frontend_clean_sentinel",
+      "mapped_cells": 1770,
+      "normalized_failure_signature": [],
+      "qualification": {
+        "closure_sha256": "63453f2a42b86b49a28a658d79e12370aa80cc0f86ae1070bd3f85e904ee196a"
+      },
+      "reference_synth_area_um2": 14981,
+      "role": "clean_sentinel",
+      "size_bin": "medium",
+      "strict_clean_scope": "fixed_target_physical_signoff"
+    }
+  ],
+  "platform": "sky130hd",
+  "repeatability_fixture_ids": [
+    "uart_tx_clean_sentinel",
+    "hazard3_frontend_clean_sentinel"
+  ],
+  "schema_version": "1.0",
+  "selection_policy": {
+    "antenna_excluded_reason": "available strict evidence is Nangate45, not Sky130HD",
+    "clean_sentinels": 2,
+    "distinct_repositories": true,
+    "repair_families": [
+      "footprint_congestion",
+      "pin_perimeter",
+      "rule_specific_drc"
+    ],
+    "repair_tasks_per_family": 2,
+    "timing_excluded_reason": "available strict evidence uses 172/460 MHz, not the frozen 100 MHz target"
+  },
+  "status": "development_only",
+  "target_clock_period_ns": 10,
+  "target_frequency_mhz": 100
+}

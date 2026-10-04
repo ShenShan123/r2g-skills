@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "operator_family": "footprint_relief",
+  "witness_utilization": 17,
+  "max_repair_area_ratio": 1.67,
+  "evidence_role": "development held-out operator validation",
+  "fixtures": [
+    {
+      "fixture_id": "logikbench_blocks_jesd204b",
+      "design_key": "65aa715f42fac4aa82e142cef305e4b3ee3a3e220229a9204d2aba211808ce0b",
+      "witness": {
+        "strict_clean": true,
+        "evidence_integrity": true,
+        "validation_sha256": "85bc24a8a1e675fd9b80548c181bc61077601e2a2618d6c8e8ea332cf97011d3"
+      },
+      "levels": [
+        {
+          "utilization": 25,
+          "runs": [
+            {
+              "run_id": "7454ae1a2d3472784c8813f283635d43394b02301f11e0d88c9321838fa9d953",
+              "strict_clean": false,
+              "evidence_integrity": true,
+              "environment_failure": false,
+              "protected_input_failure": false,
+              "normalized_physical_signature": ["drc"]
+            },
+            {
+              "run_id": "738412f16530cf4a44f70d6d0716605bda9e3b0fd15df617fdf6221a47b3f458",
+              "strict_clean": false,
+              "evidence_integrity": true,
+              "environment_failure": false,
+              "protected_input_failure": false,
+              "normalized_physical_signature": ["drc"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

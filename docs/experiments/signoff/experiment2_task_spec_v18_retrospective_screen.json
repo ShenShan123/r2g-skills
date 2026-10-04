@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "experiment_id": "r2g-exp2-retrospective-repair-screen",
+  "platform": "sky130hd",
+  "task": "Reproduce a historical physical failure twice under Default ORFS, then establish independent strict-clean feasibility with one preregistered bounded utilization action.",
+  "methods": ["default-orfs-primary", "default-orfs-repeat", "independent-feasibility"],
+  "protected": {
+    "platform": "sky130hd",
+    "source_closure": true,
+    "top_module": true,
+    "clock_identity": true,
+    "initial_core_utilization": true,
+    "core_utilization_bounds": true,
+    "explicit_die_and_core_area_forbidden": true,
+    "standard_cell_library": true,
+    "signoff_rule_decks": true,
+    "timing_exceptions_forbidden": ["set_false_path", "set_multicycle_path", "set_disable_timing"],
+    "check_disabling_forbidden": true
+  },
+  "common_action_domain": {
+    "CORE_UTILIZATION": {
+      "available_to_all_later_comparison_methods": true,
+      "fixture_specific_bounds": true,
+      "area_growth_must_be_reported": true
+    }
+  },
+  "admission": {
+    "default_orfs_independent_repeats": 2,
+    "same_normalized_non_environment_failure_required": true,
+    "independent_feasibility_strict_clean_required": true,
+    "global_regression_allowed": false,
+    "historical_result_alone_is_sufficient": false
+  },
+  "strict_clean_gates": [
+    "complete_synthesis_floorplan_place_cts_route_finish_lineage",
+    "route_violations_zero",
+    "full_deck_drc_violations_zero",
+    "lvs_clean",
+    "setup_wns_nonnegative_and_tns_zero",
+    "hold_wns_nonnegative_and_tns_zero",
+    "antenna_violations_zero",
+    "rcx_spef_complete",
+    "same_run_digest_bound_provenance"
+  ]
+}

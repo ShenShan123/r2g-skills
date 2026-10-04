@@ -1,0 +1,165 @@
+{
+  "budgets": {
+    "cpu_cores": 4,
+    "infrastructure_clean_reruns": 2,
+    "mandatory_untouched_baseline_flows_per_method_design": 1,
+    "max_concurrent_orfs_flows": 4,
+    "max_model_turns_per_vanilla_method_design": 50,
+    "max_orfs_flows_per_method_design": 4,
+    "maximum_post_baseline_repair_flows_per_method_design": 3,
+    "parallel_execution_scope": "development_pilot_only",
+    "provider_total_tokens_per_vanilla_method": 2400000,
+    "provider_total_tokens_per_vanilla_method_design": 300000,
+    "wall_time_seconds_per_method_design": 14400
+  },
+  "cohort_contract": {
+    "blinded_public_task_ids": true,
+    "clean_sentinel_requires": [
+      "one_digest_bound_default_orfs_strict_clean_run"
+    ],
+    "development_family_balance": {
+      "clean_sentinel": 2,
+      "footprint_congestion": 2,
+      "pin_perimeter": 2,
+      "rule_specific_drc": 2
+    },
+    "development_smoke_is_not_a_paper_result": true,
+    "internal_family_labels_hidden_from_method": true,
+    "objective_tracks_reported_separately": [
+      "fixed_goal",
+      "resource_tradeoff",
+      "clean_sentinel"
+    ],
+    "primary_outcomes": [
+      "repair_recovery_rate",
+      "clean_sentinel_non_regression_rate"
+    ],
+    "repair_needed_requires": [
+      "two_digest_bound_default_orfs_failures_with_the_same_non_environment_signature",
+      "one_digest_bound_independent_strict_clean_witness",
+      "registered_family_and_allowlisted_effect"
+    ],
+    "roles": [
+      "repair_needed",
+      "clean_sentinel"
+    ]
+  },
+  "execution_interface": {
+    "baseline_first": {
+      "baseline_counts_against_orfs_budget": true,
+      "initial_config_digest_must_match": true,
+      "mutation_before_baseline_validation_forbidden": true,
+      "raw_strict_validation_record_required": true
+    },
+    "common_action_policy_enforced_before_every_flow": true,
+    "common_low_level_actions": [
+      "inspect_state",
+      "read_project_file",
+      "set_orfs_knob",
+      "set_floorplan_area",
+      "set_orfs_string_knob",
+      "run_complete_orfs_flow",
+      "validate_checkpoint",
+      "lock_checkpoint",
+      "submit_first_clean"
+    ],
+    "validator_returns_repair_advice": false,
+    "vanilla_forbidden": [
+      "r2g_recipe",
+      "r2g_memory",
+      "r2g_diagnosis",
+      "r2g_ranking",
+      "r2g_knowledge_database"
+    ]
+  },
+  "experiment_id": "r2g-exp2-v2-baseline-first-development-pilot",
+  "final_evaluation": {
+    "checkpoint_must_be_locked_first": true,
+    "fail_closed_on_missing_unknown_skipped_timeout_or_digest_mismatch": true,
+    "fixed_goal_and_resource_tradeoff_not_collapsed_into_one_primary_score": true,
+    "independent_signoff_rerun": true,
+    "post_result_checkpoint_replacement_forbidden": true,
+    "rebuild_protected_sdc": true,
+    "resource_intervention_reported_independently": true
+  },
+  "graph_publication_clean_is_separate": true,
+  "knowledge_isolation": {
+    "cross_fixture_learning": false,
+    "frozen_seed_is_read_only_and_separate_from_working_state": true,
+    "full_r2g_agent_runtime_isolated_per_design": true,
+    "full_r2g_starts_from_frozen_snapshot": true,
+    "mutable_state_isolated_per_method_design": true,
+    "vanilla_starts_from_empty_state": true
+  },
+  "methods": [
+    "openai-vanilla",
+    "qwen-vanilla",
+    "deepseek-vanilla",
+    "full-r2g"
+  ],
+  "parallel_resource_policy": {
+    "cpu_affinity_required": true,
+    "cpus_per_method": 4,
+    "method_cpu_sets": {
+      "deepseek-vanilla": "8-11",
+      "full-r2g": "12-15",
+      "openai-vanilla": "0-3",
+      "qwen-vanilla": "4-7"
+    },
+    "wall_time_is_development_only": true
+  },
+  "platform": "sky130hd",
+  "protected": {
+    "check_disabling_forbidden": true,
+    "clock_identity": true,
+    "footprint_policy": true,
+    "platform": "sky130hd",
+    "signoff_rule_decks": true,
+    "source_closure": true,
+    "standard_cell_library": true,
+    "target_clock_period_ns": 10,
+    "target_frequency_mhz": 100,
+    "timing_exceptions_forbidden": [
+      "set_false_path",
+      "set_multicycle_path",
+      "set_disable_timing"
+    ],
+    "top_module": true
+  },
+  "protocol_version": "baseline_first_v2",
+  "public_validator": {
+    "does_not_return": [
+      "root_cause_diagnosis",
+      "repair_parameter_recommendations",
+      "recipe_results"
+    ],
+    "name": "validate_checkpoint",
+    "returns": [
+      "per_gate_status",
+      "raw_metrics",
+      "evidence_paths"
+    ],
+    "runtime_counts_against_campaign_budget": true
+  },
+  "schema_version": "1.3-development-v2",
+  "strict_clean_gates": [
+    "complete_synthesis_floorplan_place_cts_route_finish_lineage",
+    "route_violations_zero",
+    "full_deck_drc_violations_zero",
+    "lvs_clean",
+    "setup_wns_nonnegative_and_tns_zero",
+    "hold_wns_nonnegative_and_tns_zero",
+    "antenna_violations_zero",
+    "rcx_spef_complete",
+    "same_run_digest_bound_provenance"
+  ],
+  "strict_clean_scope": "fixed_target_physical_signoff",
+  "target": {
+    "frequency_mhz": 100,
+    "frequency_search_forbidden": true,
+    "per_rtl_frequency_selection_forbidden": true,
+    "period_ns": 10,
+    "stop_after_first_strict_clean": true
+  },
+  "task": "For each blinded frozen RTL task, first run and strictly validate the untouched baseline, then use only registered actions to reach the first strict-clean Sky130HD checkpoint at 100 MHz within the remaining budget."
+}

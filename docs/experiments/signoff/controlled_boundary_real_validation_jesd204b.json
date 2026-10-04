@@ -1,0 +1,23 @@
+{
+  "max_repair_area_ratio": 1.67,
+  "operator_family": "footprint_relief",
+  "results": [
+    {
+      "challenge_utilization": 25.0,
+      "fixture_id": "logikbench_blocks_jesd204b",
+      "normalized_physical_signature": [
+        "drc"
+      ],
+      "repair_area_ratio": 1.4705882352941178,
+      "run_ids": [
+        "7454ae1a2d3472784c8813f283635d43394b02301f11e0d88c9321838fa9d953",
+        "738412f16530cf4a44f70d6d0716605bda9e3b0fd15df617fdf6221a47b3f458"
+      ],
+      "status": "selected_controlled_boundary",
+      "witness_utilization": 17.0
+    }
+  ],
+  "schema_version": 1,
+  "selected_count": 1,
+  "witness_utilization": 17.0
+}

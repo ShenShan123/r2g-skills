@@ -1,0 +1,975 @@
+{
+  "candidates": [
+    {
+      "candidate": {
+        "candidate_id": "freecores_wb_dma_top",
+        "category": "dma_controller",
+        "commit": "56126339e2cef66c8769c3f8516ba7222063e851",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/wb_dma_defines.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/wb_dma_top.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/wb_dma",
+        "rtl_files": [
+          "rtl/verilog/wb_dma_top.v",
+          "rtl/verilog/wb_dma_ch_arb.v",
+          "rtl/verilog/wb_dma_ch_pri_enc.v",
+          "rtl/verilog/wb_dma_ch_rf.v",
+          "rtl/verilog/wb_dma_ch_sel.v",
+          "rtl/verilog/wb_dma_de.v",
+          "rtl/verilog/wb_dma_inc30r.v",
+          "rtl/verilog/wb_dma_pri_enc_sub.v",
+          "rtl/verilog/wb_dma_rf.v",
+          "rtl/verilog/wb_dma_wb_if.v",
+          "rtl/verilog/wb_dma_wb_mast.v",
+          "rtl/verilog/wb_dma_wb_slv.v"
+        ],
+        "selection_reason": "Independent medium-complexity DMA controller with arbitration and FIFOs",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/wb_dma",
+        "top_module": "wb_dma_top",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_wb_dma_top",
+      "clock_ports": [
+        "clk_i"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "56126339e2cef66c8769c3f8516ba7222063e851",
+      "header_file_count": 1,
+      "repository": "https://github.com/freecores/wb_dma",
+      "rtl_file_count": 12
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_i2c_master_top",
+        "category": "serial_controller",
+        "commit": "3b067f00ccced753b0502024766a51f58f3e04bc",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/i2c_master_defines.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/i2c_master_top.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/i2c",
+        "rtl_files": [
+          "rtl/verilog/i2c_master_top.v",
+          "rtl/verilog/i2c_master_bit_ctrl.v",
+          "rtl/verilog/i2c_master_byte_ctrl.v"
+        ],
+        "selection_reason": "Independent Wishbone I2C controller with bit- and byte-level control",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/i2c",
+        "top_module": "i2c_master_top",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_i2c_master_top",
+      "clock_ports": [
+        "wb_clk_i"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "3b067f00ccced753b0502024766a51f58f3e04bc",
+      "header_file_count": 1,
+      "repository": "https://github.com/freecores/i2c",
+      "rtl_file_count": 3
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_uart16550",
+        "category": "serial_controller",
+        "commit": "2b0ad80d0968f201f95506854ad769c8a44abe2b",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/timescale.v",
+          "rtl/verilog/uart_defines.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original LGPL source header",
+          "repository_path": "rtl/verilog/uart_top.v",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/uart16550",
+        "rtl_files": [
+          "rtl/verilog/uart_top.v",
+          "rtl/verilog/raminfr.v",
+          "rtl/verilog/uart_debug_if.v",
+          "rtl/verilog/uart_receiver.v",
+          "rtl/verilog/uart_regs.v",
+          "rtl/verilog/uart_rfifo.v",
+          "rtl/verilog/uart_sync_flops.v",
+          "rtl/verilog/uart_tfifo.v",
+          "rtl/verilog/uart_transmitter.v",
+          "rtl/verilog/uart_wb.v"
+        ],
+        "selection_reason": "Independent UART with FIFOs, bus interface, and interrupt logic",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/uart16550",
+        "top_module": "uart_top",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_uart16550",
+      "clock_ports": [
+        "wb_clk_i"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "2b0ad80d0968f201f95506854ad769c8a44abe2b",
+      "header_file_count": 2,
+      "repository": "https://github.com/freecores/uart16550",
+      "rtl_file_count": 10
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_can_top",
+        "category": "network_controller",
+        "commit": "470f0e7ab174dfef01a05f5d5ad01f28f6f4dc17",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "bench/verilog/timescale.v",
+          "rtl/verilog/can_defines.v"
+        ],
+        "include_dirs": [
+          "bench/verilog",
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original LGPL source header",
+          "repository_path": "rtl/verilog/can_top.v",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/can",
+        "rtl_files": [
+          "rtl/verilog/can_top.v",
+          "rtl/verilog/can_acf.v",
+          "rtl/verilog/can_bsp.v",
+          "rtl/verilog/can_btl.v",
+          "rtl/verilog/can_crc.v",
+          "rtl/verilog/can_fifo.v",
+          "rtl/verilog/can_ibo.v",
+          "rtl/verilog/can_register.v",
+          "rtl/verilog/can_register_asyn.v",
+          "rtl/verilog/can_register_asyn_syn.v",
+          "rtl/verilog/can_register_syn.v",
+          "rtl/verilog/can_registers.v"
+        ],
+        "selection_reason": "Independent CAN controller with protocol state machines and filtering",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/can",
+        "top_module": "can_top",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_can_top",
+      "clock_ports": [
+        "wb_clk_i"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "470f0e7ab174dfef01a05f5d5ad01f28f6f4dc17",
+      "header_file_count": 2,
+      "repository": "https://github.com/freecores/can",
+      "rtl_file_count": 12
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_simple_spi_top",
+        "category": "serial_controller",
+        "commit": "61c39a5f79fd8477d78f7b04edf6d9d530a904af",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/simple_spi_top.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/simple_spi",
+        "rtl_files": [
+          "rtl/verilog/simple_spi_top.v",
+          "rtl/verilog/fifo4.v"
+        ],
+        "selection_reason": "Independent SPI controller with compact FIFO pressure",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/simple_spi",
+        "top_module": "simple_spi_top",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_simple_spi_top",
+      "clock_ports": [
+        "clk_i"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "61c39a5f79fd8477d78f7b04edf6d9d530a904af",
+      "header_file_count": 0,
+      "repository": "https://github.com/freecores/simple_spi",
+      "rtl_file_count": 2
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_wb_conmax_top",
+        "category": "bus_interconnect",
+        "commit": "c2597a192e7c8220f7bcc34e5883c5551b9f086e",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/wb_conmax_defines.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/wb_conmax_top.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/wb_conmax",
+        "rtl_files": [
+          "rtl/verilog/wb_conmax_top.v",
+          "rtl/verilog/wb_conmax_arb.v",
+          "rtl/verilog/wb_conmax_master_if.v",
+          "rtl/verilog/wb_conmax_msel.v",
+          "rtl/verilog/wb_conmax_pri_dec.v",
+          "rtl/verilog/wb_conmax_pri_enc.v",
+          "rtl/verilog/wb_conmax_rf.v",
+          "rtl/verilog/wb_conmax_slave_if.v"
+        ],
+        "selection_reason": "Independent multi-master interconnect with dense arbitration and muxing",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/wb_conmax",
+        "top_module": "wb_conmax_top",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_wb_conmax_top",
+      "clock_ports": [
+        "clk_i"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "c2597a192e7c8220f7bcc34e5883c5551b9f086e",
+      "header_file_count": 1,
+      "repository": "https://github.com/freecores/wb_conmax",
+      "rtl_file_count": 8
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_aes_cipher_top",
+        "category": "crypto_accelerator",
+        "commit": "0d81d6e0758c634c8db7c8348d7653fa20c58639",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/timescale.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/aes_cipher_top.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/aes_core",
+        "rtl_files": [
+          "rtl/verilog/aes_cipher_top.v",
+          "rtl/verilog/aes_inv_cipher_top.v",
+          "rtl/verilog/aes_inv_sbox.v",
+          "rtl/verilog/aes_key_expand_128.v",
+          "rtl/verilog/aes_rcon.v",
+          "rtl/verilog/aes_sbox.v"
+        ],
+        "selection_reason": "Independent compute-dense AES datapath with key expansion",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/aes_core",
+        "top_module": "aes_cipher_top",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_aes_cipher_top",
+      "clock_ports": [
+        "clk"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "0d81d6e0758c634c8db7c8348d7653fa20c58639",
+      "header_file_count": 1,
+      "repository": "https://github.com/freecores/aes_core",
+      "rtl_file_count": 6
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_usb1_core",
+        "category": "usb_controller",
+        "commit": "bc57a9b2cf3e5913b548bcd73c0dd3de49280a20",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/timescale.v",
+          "rtl/verilog/usb1_defines.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/usb1_core.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/usb1_funct",
+        "rtl_files": [
+          "rtl/verilog/usb1_core.v",
+          "rtl/verilog/usb1_crc16.v",
+          "rtl/verilog/usb1_crc5.v",
+          "rtl/verilog/usb1_ctrl.v",
+          "rtl/verilog/usb1_fifo2.v",
+          "rtl/verilog/usb1_idma.v",
+          "rtl/verilog/usb1_pa.v",
+          "rtl/verilog/usb1_pd.v",
+          "rtl/verilog/usb1_pe.v",
+          "rtl/verilog/usb1_pl.v",
+          "rtl/verilog/usb1_rom1.v",
+          "rtl/verilog/usb1_utmi_if.v"
+        ],
+        "selection_reason": "Independent USB function core with protocol, DMA, FIFO, and UTMI logic",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/usb1_funct",
+        "top_module": "usb1_core",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_usb1_core",
+      "clock_ports": [
+        "clk_i"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "bc57a9b2cf3e5913b548bcd73c0dd3de49280a20",
+      "header_file_count": 2,
+      "repository": "https://github.com/freecores/usb1_funct",
+      "rtl_file_count": 12
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_ethmac",
+        "category": "network_controller",
+        "commit": "dd26899086edf3b797d2775ef9502d204a9a8149",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/ethmac_defines.v",
+          "rtl/verilog/timescale.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original LGPL source header",
+          "repository_path": "rtl/verilog/ethmac.v",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/ethmac",
+        "rtl_files": [
+          "rtl/verilog/ethmac.v",
+          "rtl/verilog/eth_clockgen.v",
+          "rtl/verilog/eth_cop.v",
+          "rtl/verilog/eth_crc.v",
+          "rtl/verilog/eth_fifo.v",
+          "rtl/verilog/eth_maccontrol.v",
+          "rtl/verilog/eth_macstatus.v",
+          "rtl/verilog/eth_miim.v",
+          "rtl/verilog/eth_outputcontrol.v",
+          "rtl/verilog/eth_random.v",
+          "rtl/verilog/eth_receivecontrol.v",
+          "rtl/verilog/eth_register.v",
+          "rtl/verilog/eth_registers.v",
+          "rtl/verilog/eth_rxaddrcheck.v",
+          "rtl/verilog/eth_rxcounters.v",
+          "rtl/verilog/eth_rxethmac.v",
+          "rtl/verilog/eth_rxstatem.v",
+          "rtl/verilog/eth_shiftreg.v",
+          "rtl/verilog/eth_spram_256x32.v",
+          "rtl/verilog/eth_top.v",
+          "rtl/verilog/eth_transmitcontrol.v",
+          "rtl/verilog/eth_txcounters.v",
+          "rtl/verilog/eth_txethmac.v",
+          "rtl/verilog/eth_txstatem.v",
+          "rtl/verilog/eth_wishbone.v",
+          "rtl/verilog/xilinx_dist_ram_16x32.v"
+        ],
+        "selection_reason": "Multi-clock extension case for Ethernet MAC CDC and memory structures",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/ethmac",
+        "top_module": "ethmac",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_ethmac",
+      "clock_ports": [
+        "wb_clk_i",
+        "mtx_clk_pad_i",
+        "mrx_clk_pad_i"
+      ],
+      "cohort_scope": "extension",
+      "commit": "dd26899086edf3b797d2775ef9502d204a9a8149",
+      "header_file_count": 2,
+      "repository": "https://github.com/freecores/ethmac",
+      "rtl_file_count": 26
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_mem_ctrl",
+        "category": "memory_controller",
+        "commit": "b1b55b3ca99d8a4303eda6acfac6eb545f670b6f",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/mc_defines.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/mc_top.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/mem_ctrl",
+        "rtl_files": [
+          "rtl/verilog/mc_top.v",
+          "rtl/verilog/mc_adr_sel.v",
+          "rtl/verilog/mc_cs_rf.v",
+          "rtl/verilog/mc_dp.v",
+          "rtl/verilog/mc_incn_r.v",
+          "rtl/verilog/mc_mem_if.v",
+          "rtl/verilog/mc_obct.v",
+          "rtl/verilog/mc_obct_top.v",
+          "rtl/verilog/mc_rd_fifo.v",
+          "rtl/verilog/mc_refresh.v",
+          "rtl/verilog/mc_rf.v",
+          "rtl/verilog/mc_timing.v",
+          "rtl/verilog/mc_wb_if.v"
+        ],
+        "selection_reason": "Multi-clock extension case for external memory control",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/mem_ctrl",
+        "top_module": "mc_top",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_mem_ctrl",
+      "clock_ports": [
+        "clk_i",
+        "mc_clk_i"
+      ],
+      "cohort_scope": "extension",
+      "commit": "b1b55b3ca99d8a4303eda6acfac6eb545f670b6f",
+      "header_file_count": 1,
+      "repository": "https://github.com/freecores/mem_ctrl",
+      "rtl_file_count": 13
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_vga_enh_top",
+        "category": "display_controller",
+        "commit": "6baa0f08e50457dc528ec877420e97e3eea68233",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/timescale.v",
+          "rtl/verilog/vga_defines.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/vga_enh_top.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/vga_lcd",
+        "rtl_files": [
+          "rtl/verilog/vga_enh_top.v",
+          "rtl/verilog/generic_dpram.v",
+          "rtl/verilog/generic_spram.v",
+          "rtl/verilog/vga_clkgen.v",
+          "rtl/verilog/vga_colproc.v",
+          "rtl/verilog/vga_csm_pb.v",
+          "rtl/verilog/vga_cur_cregs.v",
+          "rtl/verilog/vga_curproc.v",
+          "rtl/verilog/vga_fifo.v",
+          "rtl/verilog/vga_fifo_dc.v",
+          "rtl/verilog/vga_pgen.v",
+          "rtl/verilog/vga_tgen.v",
+          "rtl/verilog/vga_vtim.v",
+          "rtl/verilog/vga_wb_master.v",
+          "rtl/verilog/vga_wb_slave.v"
+        ],
+        "selection_reason": "Multi-clock extension case with line buffers and display timing",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/vga_lcd",
+        "top_module": "vga_enh_top",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_vga_enh_top",
+      "clock_ports": [
+        "wb_clk_i",
+        "clk_p_i"
+      ],
+      "cohort_scope": "extension",
+      "commit": "6baa0f08e50457dc528ec877420e97e3eea68233",
+      "header_file_count": 2,
+      "repository": "https://github.com/freecores/vga_lcd",
+      "rtl_file_count": 15
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_pci_bridge32",
+        "category": "bus_bridge",
+        "commit": "6afbb5a067308b9537cbdc683ccb5992358429d8",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/timescale.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original LGPL source header",
+          "repository_path": "rtl/verilog/pci_bridge32.v",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/pci",
+        "rtl_files": [
+          "rtl/verilog/pci_bridge32.v",
+          "rtl/verilog/bus_commands.v",
+          "rtl/verilog/pci_async_reset_flop.v",
+          "rtl/verilog/pci_cbe_en_crit.v",
+          "rtl/verilog/pci_conf_cyc_addr_dec.v",
+          "rtl/verilog/pci_conf_space.v",
+          "rtl/verilog/pci_constants.v",
+          "rtl/verilog/pci_cur_out_reg.v",
+          "rtl/verilog/pci_delayed_sync.v",
+          "rtl/verilog/pci_delayed_write_reg.v",
+          "rtl/verilog/pci_frame_crit.v",
+          "rtl/verilog/pci_frame_en_crit.v",
+          "rtl/verilog/pci_frame_load_crit.v",
+          "rtl/verilog/pci_in_reg.v",
+          "rtl/verilog/pci_io_mux.v",
+          "rtl/verilog/pci_io_mux_ad_en_crit.v",
+          "rtl/verilog/pci_io_mux_ad_load_crit.v",
+          "rtl/verilog/pci_irdy_out_crit.v",
+          "rtl/verilog/pci_mas_ad_en_crit.v",
+          "rtl/verilog/pci_mas_ad_load_crit.v",
+          "rtl/verilog/pci_mas_ch_state_crit.v",
+          "rtl/verilog/pci_master32_sm.v",
+          "rtl/verilog/pci_master32_sm_if.v",
+          "rtl/verilog/pci_out_reg.v",
+          "rtl/verilog/pci_par_crit.v",
+          "rtl/verilog/pci_parity_check.v",
+          "rtl/verilog/pci_pci_decoder.v",
+          "rtl/verilog/pci_pci_tpram.v",
+          "rtl/verilog/pci_pcir_fifo_control.v",
+          "rtl/verilog/pci_pciw_fifo_control.v",
+          "rtl/verilog/pci_pciw_pcir_fifos.v",
+          "rtl/verilog/pci_perr_crit.v",
+          "rtl/verilog/pci_perr_en_crit.v",
+          "rtl/verilog/pci_ram_16x40d.v",
+          "rtl/verilog/pci_rst_int.v",
+          "rtl/verilog/pci_serr_crit.v",
+          "rtl/verilog/pci_serr_en_crit.v",
+          "rtl/verilog/pci_spoci_ctrl.v",
+          "rtl/verilog/pci_sync_module.v",
+          "rtl/verilog/pci_synchronizer_flop.v",
+          "rtl/verilog/pci_target32_clk_en.v",
+          "rtl/verilog/pci_target32_devs_crit.v",
+          "rtl/verilog/pci_target32_interface.v",
+          "rtl/verilog/pci_target32_sm.v",
+          "rtl/verilog/pci_target32_stop_crit.v",
+          "rtl/verilog/pci_target32_trdy_crit.v",
+          "rtl/verilog/pci_target_unit.v",
+          "rtl/verilog/pci_user_constants.v",
+          "rtl/verilog/pci_wb_addr_mux.v",
+          "rtl/verilog/pci_wb_decoder.v",
+          "rtl/verilog/pci_wb_master.v",
+          "rtl/verilog/pci_wb_slave.v",
+          "rtl/verilog/pci_wb_slave_unit.v",
+          "rtl/verilog/pci_wb_tpram.v",
+          "rtl/verilog/pci_wbr_fifo_control.v",
+          "rtl/verilog/pci_wbs_wbb3_2_wbb2.v",
+          "rtl/verilog/pci_wbw_fifo_control.v",
+          "rtl/verilog/pci_wbw_wbr_fifos.v"
+        ],
+        "selection_reason": "Large multi-clock extension case with PCI/Wishbone CDC",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/pci",
+        "top_module": "pci_bridge32",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_pci_bridge32",
+      "clock_ports": [
+        "wb_clk_i",
+        "pci_clk_i"
+      ],
+      "cohort_scope": "extension",
+      "commit": "6afbb5a067308b9537cbdc683ccb5992358429d8",
+      "header_file_count": 1,
+      "repository": "https://github.com/freecores/pci",
+      "rtl_file_count": 58
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_ac97_top",
+        "category": "audio_controller",
+        "commit": "a47e1fd5a2c5b9eb962b4790ab31873772b457e5",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/ac97_defines.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/ac97_top.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/ac97",
+        "rtl_files": [
+          "rtl/verilog/ac97_top.v",
+          "rtl/verilog/ac97_cra.v",
+          "rtl/verilog/ac97_dma_if.v",
+          "rtl/verilog/ac97_dma_req.v",
+          "rtl/verilog/ac97_fifo_ctrl.v",
+          "rtl/verilog/ac97_in_fifo.v",
+          "rtl/verilog/ac97_int.v",
+          "rtl/verilog/ac97_out_fifo.v",
+          "rtl/verilog/ac97_prc.v",
+          "rtl/verilog/ac97_rf.v",
+          "rtl/verilog/ac97_rst.v",
+          "rtl/verilog/ac97_sin.v",
+          "rtl/verilog/ac97_soc.v",
+          "rtl/verilog/ac97_sout.v",
+          "rtl/verilog/ac97_wb_if.v"
+        ],
+        "selection_reason": "Multi-clock audio extension case with CDC and FIFOs",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/ac97",
+        "top_module": "ac97_top",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_ac97_top",
+      "clock_ports": [
+        "clk_i",
+        "bit_clk_pad_i"
+      ],
+      "cohort_scope": "extension",
+      "commit": "a47e1fd5a2c5b9eb962b4790ab31873772b457e5",
+      "header_file_count": 1,
+      "repository": "https://github.com/freecores/ac97",
+      "rtl_file_count": 15
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_gpio_top",
+        "category": "peripheral_controller",
+        "commit": "73eafb007e6718b1503d17ae3e0c06139109d345",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "bench/verilog/timescale.v",
+          "rtl/verilog/gpio_defines.v"
+        ],
+        "include_dirs": [
+          "bench/verilog",
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original LGPL source header",
+          "repository_path": "rtl/verilog/gpio_top.v",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/gpio",
+        "rtl_files": [
+          "rtl/verilog/gpio_top.v"
+        ],
+        "selection_reason": "Independent compact Wishbone GPIO controller for the small size bin",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/gpio",
+        "top_module": "gpio_top",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_gpio_top",
+      "clock_ports": [
+        "wb_clk_i"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "73eafb007e6718b1503d17ae3e0c06139109d345",
+      "header_file_count": 2,
+      "repository": "https://github.com/freecores/gpio",
+      "rtl_file_count": 1
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_tiny_spi",
+        "category": "serial_controller",
+        "commit": "562bf1fd8385410eedb91cec97bddeecee0ec0d9",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original LGPL source header",
+          "repository_path": "rtl/verilog/tiny_spi.v",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/tiny_spi",
+        "rtl_files": [
+          "rtl/verilog/tiny_spi.v"
+        ],
+        "selection_reason": "Independent compact SPI controller for the small size bin",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/tiny_spi",
+        "top_module": "tiny_spi",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_tiny_spi",
+      "clock_ports": [
+        "clk_i"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "562bf1fd8385410eedb91cec97bddeecee0ec0d9",
+      "header_file_count": 0,
+      "repository": "https://github.com/freecores/tiny_spi",
+      "rtl_file_count": 1
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_sha256",
+        "category": "crypto_accelerator",
+        "commit": "f90e67a6040d7dd5de54188ed0b8b7ec05d4ac85",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [],
+        "include_dirs": [
+          "rtl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/sha256.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/sha_core",
+        "rtl_files": [
+          "rtl/sha256.v",
+          "rtl/sha1.v",
+          "rtl/sha512.v"
+        ],
+        "selection_reason": "Independent compute-dense SHA-256 datapath for the large size bin",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/sha_core",
+        "top_module": "sha256",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_sha256",
+      "clock_ports": [
+        "clk_i"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "f90e67a6040d7dd5de54188ed0b8b7ec05d4ac85",
+      "header_file_count": 0,
+      "repository": "https://github.com/freecores/sha_core",
+      "rtl_file_count": 3
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_spi_top",
+        "category": "serial_controller",
+        "commit": "1b8aa4c54bd72cc9668f52aafd35698da3378098",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [
+          "rtl/verilog/spi_defines.v",
+          "rtl/verilog/timescale.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original LGPL source header",
+          "repository_path": "rtl/verilog/spi_top.v",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/spi",
+        "rtl_files": [
+          "rtl/verilog/spi_top.v",
+          "rtl/verilog/spi_clgen.v",
+          "rtl/verilog/spi_shift.v"
+        ],
+        "selection_reason": "Independent compact Wishbone SPI controller for the missing small bin",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/spi",
+        "top_module": "spi_top",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_spi_top",
+      "clock_ports": [
+        "wb_clk_i"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "1b8aa4c54bd72cc9668f52aafd35698da3378098",
+      "header_file_count": 2,
+      "repository": "https://github.com/freecores/spi",
+      "rtl_file_count": 3
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_des3_perf",
+        "category": "crypto_accelerator",
+        "commit": "6f7865564a0cad10868ccd1d9988043c938fec6b",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [],
+        "include_dirs": [
+          "rtl/verilog/common",
+          "rtl/verilog/perf_opt"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original source-header grant and disclaimer",
+          "repository_path": "rtl/verilog/perf_opt/des3.v",
+          "spdx_id": "LicenseRef-OpenCores-Permissive"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/des",
+        "rtl_files": [
+          "rtl/verilog/perf_opt/des3.v",
+          "rtl/verilog/common/crp.v",
+          "rtl/verilog/common/sbox1.v",
+          "rtl/verilog/common/sbox2.v",
+          "rtl/verilog/common/sbox3.v",
+          "rtl/verilog/common/sbox4.v",
+          "rtl/verilog/common/sbox5.v",
+          "rtl/verilog/common/sbox6.v",
+          "rtl/verilog/common/sbox7.v",
+          "rtl/verilog/common/sbox8.v",
+          "rtl/verilog/perf_opt/des.v",
+          "rtl/verilog/perf_opt/key_sel.v"
+        ],
+        "selection_reason": "Independent triple-DES datapath for the missing large bin",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/des",
+        "top_module": "des3",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_des3_perf",
+      "clock_ports": [
+        "clk"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "6f7865564a0cad10868ccd1d9988043c938fec6b",
+      "header_file_count": 0,
+      "repository": "https://github.com/freecores/des",
+      "rtl_file_count": 12
+    },
+    {
+      "candidate": {
+        "candidate_id": "freecores_auto_baud_tracking",
+        "category": "serial_timing_controller",
+        "commit": "252f927c9969bc938d2a9dc7a28bf8c296fa9c84",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "pinned-external-repair-source-scout",
+        "header_files": [],
+        "include_dirs": [
+          "."
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Pinned original LGPL source header",
+          "repository_path": "auto_baud_with_tracking.v",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/auto_baud",
+        "rtl_files": [
+          "auto_baud_with_tracking.v",
+          "auto_baud.v"
+        ],
+        "selection_reason": "Independent baud measurement and tracking controller for the missing small bin",
+        "source_checkout_path": "/home/yangao/r2g_repair_new_sources_2026_08_11/opencores/auto_baud",
+        "top_module": "auto_baud_with_tracking",
+        "top_parameters": {}
+      },
+      "candidate_id": "freecores_auto_baud_tracking",
+      "clock_ports": [
+        "clk_i"
+      ],
+      "cohort_scope": "main_single_clock",
+      "commit": "252f927c9969bc938d2a9dc7a28bf8c296fa9c84",
+      "header_file_count": 0,
+      "repository": "https://github.com/freecores/auto_baud",
+      "rtl_file_count": 2
+    }
+  ],
+  "counts": {
+    "candidates": 19,
+    "extension": 5,
+    "main_single_clock": 14,
+    "repositories": 19
+  },
+  "created_at": "2026-08-11T07:50:56-07:00",
+  "purpose": "Independent-repository candidate pool for fixed-100-MHz repair-needed screening",
+  "schema_version": "1.0",
+  "source_spec": "/home/yangao/r2g-skills/docs/experiments/signoff/external_repair_source_spec_2026_08_11.json"
+}

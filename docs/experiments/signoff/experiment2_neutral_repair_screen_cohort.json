@@ -1,0 +1,501 @@
+{
+  "experiment_id": "r2g-exp2-neutral-repair-screen",
+  "fixtures": [
+    {
+      "candidate": {
+        "commit": "1ab581969f8ea2f794072a144b55cd74e5a54f34",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Root LICENSE file at pinned commit is the MIT license text.",
+          "repository_path": "LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/nandland/spi-master",
+        "rtl_files": [
+          "Verilog/source/SPI_Master.v"
+        ],
+        "top_module": "SPI_Master",
+        "top_parameters": {}
+      },
+      "clock_port": "i_Clk",
+      "core_area": [
+        10,
+        10,
+        85,
+        85
+      ],
+      "die_area": [
+        0,
+        0,
+        95,
+        95
+      ],
+      "id": "nandland_spi_master",
+      "mapped_cells": 146,
+      "neutral_screen": {
+        "admission_rule": "Default ORFS must first demonstrate a lower strict-clean point, then reproduce the same non-environment failure at the first failing ladder point twice.",
+        "frequency_ladder_mhz": [
+          200,
+          300,
+          400,
+          500
+        ]
+      },
+      "qualification": {
+        "closure_sha256": "ebb3ac778d1ab5fdc06c4e00235b858e544e45fb3fdda0a8f13c5eb203eb883c",
+        "result_path": "/home/yangao/r2g_exp1_domestic_batch1_2026_08_01_protocol_v14_pilot_run02/evaluation/deepseek-vanilla.batch1/nandland_spi_master/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_domestic_batch1_2026_08_01_protocol_v14_pilot_run02/submissions/deepseek-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 1765.0,
+      "size_bin": "small"
+    },
+    {
+      "candidate": {
+        "commit": "41e8aeedfd1e9ad5f95902c5b0dfc83d1c99e5d2",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LICENSE at pinned commit 41e8aee states ISC License",
+          "repository_path": "LICENSE",
+          "spdx_id": "ISC"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/olofk/serv",
+        "rtl_files": [
+          "rtl/serv_aligner.v",
+          "rtl/serv_alu.v",
+          "rtl/serv_bufreg.v",
+          "rtl/serv_bufreg2.v",
+          "rtl/serv_compdec.v",
+          "rtl/serv_csr.v",
+          "rtl/serv_ctrl.v",
+          "rtl/serv_debug.v",
+          "rtl/serv_decode.v",
+          "rtl/serv_immdec.v",
+          "rtl/serv_mem_if.v",
+          "rtl/serv_rf_if.v",
+          "rtl/serv_rf_ram.v",
+          "rtl/serv_rf_ram_if.v",
+          "rtl/serv_rf_top.v",
+          "rtl/serv_state.v",
+          "rtl/serv_top.v"
+        ],
+        "top_module": "serv_top",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "core_area": [
+        10,
+        10,
+        165,
+        165
+      ],
+      "die_area": [
+        0,
+        0,
+        175,
+        175
+      ],
+      "id": "serv",
+      "mapped_cells": 683,
+      "neutral_screen": {
+        "admission_rule": "Default ORFS must first demonstrate a lower strict-clean point, then reproduce the same non-environment failure at the first failing ladder point twice.",
+        "frequency_ladder_mhz": [
+          200,
+          300,
+          400,
+          500
+        ]
+      },
+      "qualification": {
+        "closure_sha256": "eaadebad277fcd77e6514bd34b29c36f6234828954313bdcffc87c8a159c4b3a",
+        "result_path": "/home/yangao/r2g_exp1_domestic_batch1_2026_08_01_protocol_v14_pilot_run02/evaluation/deepseek-vanilla.batch1/serv/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_domestic_batch1_2026_08_01_protocol_v14_pilot_run02/submissions/deepseek-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 8258.0,
+      "size_bin": "small"
+    },
+    {
+      "candidate": {
+        "commit": "56cad6bd40982e213b86e0810f5934080d128c7c",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LICENSE contains GNU GENERAL PUBLIC LICENSE Version 2, June 1991.",
+          "repository_path": "LICENSE",
+          "spdx_id": "GPL-2.0-only"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/hwstar/bdcmotor",
+        "rtl_files": [
+          "control.v",
+          "spi.v",
+          "tachcounter.v",
+          "pwm8.v",
+          "system.v",
+          "bdcmotorchannel.v",
+          "root.v"
+        ],
+        "top_module": "root",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "core_area": [
+        10,
+        10,
+        225,
+        225
+      ],
+      "die_area": [
+        0,
+        0,
+        235,
+        235
+      ],
+      "id": "hwstar_bdcmotor_root",
+      "mapped_cells": 1200,
+      "neutral_screen": {
+        "admission_rule": "Default ORFS must first demonstrate a lower strict-clean point, then reproduce the same non-environment failure at the first failing ladder point twice.",
+        "frequency_ladder_mhz": [
+          100,
+          150,
+          200,
+          250
+        ]
+      },
+      "qualification": {
+        "closure_sha256": "44fa284cd90bcef47664af026113519ddaaaec5cf3ca19c3255815a2e0cbb96a",
+        "result_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/evaluation/openai-vanilla.batch1/hwstar_bdcmotor_root/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/submissions/openai-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 15699.0,
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "commit": "516bd5dadc3365b7f9e225d2af8fe0b8d804fe53",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "COPYING at repository root contains MIT license text by Alex Forencich at pinned commit.",
+          "repository_path": "COPYING",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/alexforencich/verilog-axi",
+        "rtl_files": [
+          "rtl/axi_cdma.v"
+        ],
+        "top_module": "axi_cdma",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "core_area": [
+        10,
+        10,
+        480,
+        480
+      ],
+      "die_area": [
+        0,
+        0,
+        490,
+        490
+      ],
+      "id": "forencich_axi_cdma",
+      "mapped_cells": 4048,
+      "neutral_screen": {
+        "admission_rule": "Default ORFS must first demonstrate a lower strict-clean point, then reproduce the same non-environment failure at the first failing ladder point twice.",
+        "frequency_ladder_mhz": [
+          100,
+          150,
+          200,
+          250
+        ]
+      },
+      "qualification": {
+        "closure_sha256": "898594f8e62af9bc3c16d2cd259acd238e56c82df0cab1c7e25ad7c6575ceb59",
+        "result_path": "/home/yangao/r2g_exp1_domestic_batch1_2026_08_01_protocol_v14_pilot_run02/evaluation/deepseek-vanilla.batch1/forencich_axi_cdma/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_domestic_batch1_2026_08_01_protocol_v14_pilot_run02/submissions/deepseek-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 76608.0,
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "commit": "50f82f4ca2f8194fd47d8360270ac7dd141d53d1",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Repository LICENSE text is BSD 2-clause at pinned commit.",
+          "repository_path": "LICENSE",
+          "spdx_id": "BSD-2-Clause"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/secworks/sha1",
+        "rtl_files": [
+          "src/rtl/sha1_core.v",
+          "src/rtl/sha1_w_mem.v"
+        ],
+        "top_module": "sha1_core",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "core_area": [
+        10,
+        10,
+        405,
+        405
+      ],
+      "die_area": [
+        0,
+        0,
+        415,
+        415
+      ],
+      "id": "secworks_sha1_core",
+      "mapped_cells": 6521,
+      "neutral_screen": {
+        "admission_rule": "Default ORFS must first demonstrate a lower strict-clean point, then reproduce the same non-environment failure at the first failing ladder point twice.",
+        "frequency_ladder_mhz": [
+          100,
+          150,
+          200,
+          250
+        ]
+      },
+      "qualification": {
+        "closure_sha256": "70e15a54531feacd2d65e2ff2f6c797b50e43674d25586159c6bcfe99f1f500d",
+        "result_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/evaluation/openai-vanilla.batch1/secworks_sha1_core/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/submissions/openai-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 54104.0,
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "commit": "6c03ab0095d0c5a3f202375db329886c89d1443d",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LICENSE contains MIT License text.",
+          "repository_path": "LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/ahegazy/aes",
+        "rtl_files": [
+          "src/AddRoundKey.v",
+          "src/r_con.v",
+          "src/ShiftRows.v",
+          "src/s_box.v",
+          "src/subBytes.v",
+          "src/singleKeyExpansion.v",
+          "src/encryption_top.v",
+          "src/MixColumns.v"
+        ],
+        "top_module": "AES_encryption",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "core_area": [
+        10,
+        10,
+        595,
+        595
+      ],
+      "die_area": [
+        0,
+        0,
+        605,
+        605
+      ],
+      "id": "ahegazy_aes_encryption",
+      "mapped_cells": 17483,
+      "neutral_screen": {
+        "admission_rule": "Default ORFS must first demonstrate a lower strict-clean point, then reproduce the same non-environment failure at the first failing ladder point twice.",
+        "frequency_ladder_mhz": [
+          50,
+          75,
+          100,
+          125
+        ]
+      },
+      "qualification": {
+        "closure_sha256": "060be05ce973075b593864c015a81a11d2b3810be72e4ff9cf2298f819cf5b6a",
+        "result_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/evaluation/openai-vanilla.batch1/ahegazy_aes_encryption/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/submissions/openai-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 118714.0,
+      "size_bin": "large"
+    },
+    {
+      "candidate": {
+        "commit": "0820b0b03d3c1e431337025dbce05abbf3b8c741",
+        "defines": [],
+        "header_files": [
+          "rtl/axicb_checker.sv"
+        ],
+        "include_dirs": [
+          "rtl"
+        ],
+        "language": "systemverilog",
+        "license_evidence": {
+          "note": "MIT License, Copyright (c) 2021 Damien Pretet",
+          "repository_path": "LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/dpretet/axi-crossbar",
+        "rtl_files": [
+          "rtl/axicb_crossbar_top.sv",
+          "rtl/axicb_mst_if.sv",
+          "rtl/axicb_slv_if.sv",
+          "rtl/axicb_switch_top.sv",
+          "rtl/axicb_mst_switch.sv",
+          "rtl/axicb_slv_switch.sv",
+          "rtl/axicb_mst_switch_rd.sv",
+          "rtl/axicb_mst_switch_wr.sv",
+          "rtl/axicb_slv_switch_rd.sv",
+          "rtl/axicb_slv_switch_wr.sv",
+          "rtl/axicb_round_robin.sv",
+          "rtl/axicb_round_robin_core.sv",
+          "rtl/axicb_scfifo.sv",
+          "rtl/axicb_scfifo_ram.sv",
+          "rtl/axicb_scfifo_regfile.sv",
+          "rtl/axicb_pipeline.sv",
+          "rtl/axicb_slv_ooo.sv"
+        ],
+        "top_module": "axicb_crossbar_top",
+        "top_parameters": {}
+      },
+      "clock_port": "aclk",
+      "core_area": [
+        10,
+        10,
+        1400,
+        1400
+      ],
+      "die_area": [
+        0,
+        0,
+        1410,
+        1410
+      ],
+      "id": "axicb_crossbar",
+      "mapped_cells": 36846,
+      "neutral_screen": {
+        "admission_rule": "Default ORFS must first demonstrate a lower strict-clean point, then reproduce the same non-environment failure at the first failing ladder point twice.",
+        "frequency_ladder_mhz": [
+          50,
+          75,
+          100,
+          125
+        ]
+      },
+      "qualification": {
+        "closure_sha256": "958e151b482782ec72f39138266a74a8a83b634e3b2030d2e20b4c24581ee2d0",
+        "result_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/evaluation/qwen-vanilla.batch1/axicb_crossbar/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/submissions/qwen-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 676176.0,
+      "size_bin": "large"
+    },
+    {
+      "candidate": {
+        "commit": "5c934c323c8673e2cb905e6631407ad7458ce3cc",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LICENSE contains MIT License text.",
+          "repository_path": "LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/mcjtag/eth_switch",
+        "rtl_files": [
+          "hdl/axis_interconnect.v",
+          "hdl/channel_in.v",
+          "hdl/eth_switch.v",
+          "hdl/mactable.v",
+          "hdl/mactable_dpcam.v"
+        ],
+        "top_module": "eth_switch",
+        "top_parameters": {}
+      },
+      "clock_port": "aclk",
+      "core_area": [
+        10,
+        10,
+        3245,
+        3245
+      ],
+      "die_area": [
+        0,
+        0,
+        3255,
+        3255
+      ],
+      "id": "mcjtag_eth_switch",
+      "mapped_cells": 181789,
+      "neutral_screen": {
+        "admission_rule": "Default ORFS must first demonstrate a lower strict-clean point, then reproduce the same non-environment failure at the first failing ladder point twice.",
+        "frequency_ladder_mhz": [
+          50,
+          75,
+          100,
+          125
+        ]
+      },
+      "qualification": {
+        "closure_sha256": "60dc88daa43cfdf8eb259669d01bb9908da881ff11bdcd79058ea1a73e28f673",
+        "result_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/evaluation/openai-vanilla.batch1/mcjtag_eth_switch/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/submissions/openai-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 3654224.0,
+      "size_bin": "large"
+    }
+  ],
+  "footprint_policy": {
+    "core_margin_um": 10,
+    "note": "Derived mechanically from the frozen 10 ns synthesis area before screening.",
+    "rounding_um": 5,
+    "target_reference_utilization": 0.35
+  },
+  "platform": "sky130hd",
+  "reference_synthesis_period_ns": 10,
+  "repeatability_fixture_ids": [
+    "forencich_axi_cdma",
+    "ahegazy_aes_encryption"
+  ],
+  "schema_version": "1.0",
+  "selection_policy": {
+    "environment_failures_admissible": false,
+    "full_r2g_results_used_for_admission": false,
+    "method": "neutral_default_orfs_only",
+    "smoke_fixture_ids": [
+      "nandland_spi_master",
+      "forencich_axi_cdma",
+      "ahegazy_aes_encryption"
+    ],
+    "source_inventory_sha256_bound_in_campaign": true,
+    "vanilla_llm_results_used_for_admission": false
+  },
+  "status": "development_screen"
+}

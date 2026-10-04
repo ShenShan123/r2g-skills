@@ -1,0 +1,102 @@
+{
+  "schema_version": "repair-family-real-probe-summary-1.0",
+  "generated_at": "2026-08-11",
+  "scope": "development validation of the repair-needed RTL task-pool construction method",
+  "production_agent_code_changed": false,
+  "versions": {
+    "r2g_commit": "1915dc9b7fde2783637bde3d51fadeca44679c83",
+    "orfs_commit": "a5ff7ef7dac4338e6e5fad7710b85fc6c8f3503c",
+    "openroad": "26Q3-318-g6b9d7fb806",
+    "yosys": "0.64-8449dd470",
+    "klayout": "0.29.12",
+    "netgen": "1.5.272",
+    "magic": "8.3.464",
+    "primary_platform": "sky130hd"
+  },
+  "evaluator_contract": {
+    "strict_clean_scope": "fixed_target_physical_signoff",
+    "required_complete_stages": ["synth", "floorplan", "place", "cts", "route", "finish"],
+    "required_clean_checks": ["route", "full_drc", "lvs", "setup", "hold", "antenna", "rcx"],
+    "required_binding": ["source_closure", "repo_commit", "sdc", "config", "toolchain", "run", "reports", "artifacts"],
+    "baseline_repeats": 2,
+    "require_identical_normalized_failure": true,
+    "require_allowlisted_isolated_effect": true,
+    "publication_strict_clean_required": false,
+    "reason_publication_clean_is_separate": "Experiment 2/3 uses a preregistered fixed target; graph publication additionally requires acquisition and Fmax/constraint provenance."
+  },
+  "support_matrix": {
+    "footprint_congestion": {"verified_pairs": 6, "minimum_for_family_claim": 3, "threshold_met": true, "evidence_source": "repair_needed_pool_inventory_2026_08_09.json"},
+    "pin_perimeter": {"verified_pairs": 3, "minimum_for_family_claim": 3, "threshold_met": true},
+    "rule_specific_drc": {"verified_pairs": 3, "minimum_for_family_claim": 3, "threshold_met": true},
+    "timing_closure": {"verified_pairs": 2, "minimum_for_family_claim": 3, "threshold_met": false},
+    "antenna_closure": {"verified_pairs": 3, "minimum_for_family_claim": 3, "threshold_met": true},
+    "pdn_floorplan": {"verified_pairs": 1, "minimum_for_family_claim": 3, "threshold_met": false}
+  },
+  "schema_1_1_evidence": [
+    "evidence/2026_08_10/axi_pin_sky130hd_pin_perimeter.json",
+    "evidence/2026_08_10/ip_mux_sky130hd_pin_perimeter.json",
+    "evidence/2026_08_10/ip_demux_sky130hd_pin_perimeter.json",
+    "evidence/2026_08_10/i2c_master_axil_nangate45_antenna_closure.json",
+    "evidence/2026_08_10/ftdi_bridge_nangate45_antenna_closure.json",
+    "evidence/2026_08_11/wbuart_nangate45_antenna_closure.json",
+    "evidence/2026_08_11/siliconcompiler_gcd_sky130hd_rule_specific_drc.json",
+    "evidence/2026_08_11/jesd204b_sky130hd_rule_specific_drc.json",
+    "evidence/2026_08_11/sdram_axi_sky130hd_rule_specific_drc.json",
+    "evidence/2026_08_11/axi_interconnect_sky130hd_timing_460.json",
+    "evidence/2026_08_11/jesd204b_sky130hd_timing_172.json",
+    "evidence/2026_08_11/simple_i2c_slave_sky130hd_pdn_floorplan.json"
+  ],
+  "key_admitted_results": [
+    {
+      "family": "timing_closure",
+      "design": "axi_interconnect",
+      "target_frequency_mhz": 460,
+      "baseline_setup_wns_ns": [-0.0180278, -0.0180278],
+      "witness_setup_wns_ns": 0.00176459,
+      "effect": ["SETUP_SLACK_MARGIN"]
+    },
+    {
+      "family": "timing_closure",
+      "design": "jesd204b",
+      "target_frequency_mhz": 172,
+      "baseline_setup_wns_ns": [-0.0160414, -0.0160414],
+      "witness_setup_wns_ns": 0.081974,
+      "effect": ["SETUP_SLACK_MARGIN"]
+    },
+    {
+      "family": "pdn_floorplan",
+      "design": "i2c_slave_controller",
+      "baseline_available_width_um": 5.98,
+      "minimum_required_grid_width_um": 42.4,
+      "witness_available_width_um": 50.0,
+      "effect": ["DIE_AREA", "CORE_AREA"]
+    }
+  ],
+  "rejected_or_near_miss": [
+    {"case": "simple_i2c antenna nomination", "reason": "baseline is clean on the current toolchain; stale historical nomination"},
+    {"case": "axil_interconnect antenna probe", "reason": "concurrent PPL-0024 confounds the target failure"},
+    {"case": "udp_mux antenna probe", "reason": "272 violations reduced to 6, but witness is not strict clean"},
+    {"case": "sdram_axi timing at 286 and 310 MHz", "reason": "both baseline repeats are timing-clean; cannot be admitted as repair-needed"},
+    {"case": "random clean parents at uniform 40 percent utilization", "reason": "0 of 8 admitted; six remained clean and two exceeded the answerability budget"},
+    {"case": "blind small-RTL PDN nominations", "reason": "multiple candidates were baseline-clean; actual PDN-0185 evidence is required for nomination"}
+  ],
+  "test_result": {
+    "pytest_cases": 30,
+    "passed": 30,
+    "registry_lint": "pass",
+    "collection_support_audit": "pass",
+    "schema_1_1_evidence_files": 12,
+    "schema_1_1_validation": "pass"
+  },
+  "conclusion": {
+    "construction_method_validated": true,
+    "prospective_benchmark_pool_frozen": false,
+    "families_meeting_claim_threshold": 4,
+    "next_requirements": [
+      "run one outcome-unknown prospective funnel and report yield with uncertainty and cost",
+      "obtain one additional timing pair or narrow the timing claim",
+      "obtain two additional PDN pairs or retain PDN as development-only",
+      "freeze leakage-safe repository and design-family splits before method evaluation"
+    ]
+  }
+}

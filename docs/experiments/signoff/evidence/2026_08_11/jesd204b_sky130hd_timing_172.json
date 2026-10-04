@@ -1,0 +1,342 @@
+{
+  "admission": {
+    "failures": [],
+    "status": "pass"
+  },
+  "baseline_runs": [
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_1",
+            "sky130hd",
+            "repair_probe_jesd204b_timing_172_baseline_1"
+          ],
+          "elapsed_seconds": 394.314,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/jesd_timing172_baseline_1/run_orfs.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_1",
+            "sky130hd",
+            "--check",
+            "both",
+            "--max-iters",
+            "0",
+            "--variant",
+            "repair_probe_jesd204b_timing_172_baseline_1"
+          ],
+          "elapsed_seconds": 121.71,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/jesd_timing172_baseline_1/strict_signoff.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "python3",
+            "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_1",
+            "--run-dir",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_1/backend/RUN_2026-08-11_02-23-32_1982332_5bfa",
+            "--mode",
+            "strict",
+            "--def",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_1/backend/RUN_2026-08-11_02-23-32_1982332_5bfa/final/6_final.def"
+          ],
+          "elapsed_seconds": 0.068,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/jesd_timing172_baseline_1/signoff_gate.log",
+          "returncode": 3
+        }
+      ],
+      "completed_at": "2026-08-11T09:41:35.058218+00:00",
+      "config_sha256": "16c6aa589383208ccfc0b86b8a98fb91187520a49b059369d2859b6b3dad70ad",
+      "constraint_attestation": {
+        "config_sha256": "16c6aa589383208ccfc0b86b8a98fb91187520a49b059369d2859b6b3dad70ad",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "8f061a05372e8d20aba0f815a35e33a07004c24aed4c43a4ce64792ef79c6246",
+        "status": "bound",
+        "target_frequency_mhz": 172.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_1/repair_family_probe_input.json",
+        "input_manifest_sha256": "86cd641d79d6ab967ebbe874e7ea735867c66a896343243d479038612345c665",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_1",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_1/repair_family_probe_result.json",
+        "result_sha256": "b90b30cf089ce751ddae96c76faab3bc397b9c312268b633029049f8ec80c66a"
+      },
+      "family_id": "timing_closure",
+      "metrics": {
+        "antenna_violations": 0,
+        "drc_violations": 0,
+        "hold_wns_ns": 0.376199,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": -0.0160414
+      },
+      "normalized_failure_signature": [
+        "SETUP_TIMING"
+      ],
+      "protected_task_digest": "aecd2109d5ac360f7faa8d89b99d927c878925216c4f93759a7909bad5f5e33d",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": "clean",
+        "lvs": "clean",
+        "ppa": null,
+        "rcx": "complete",
+        "route": "clean",
+        "signoff_gate": "pass_with_caveats",
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_1/backend/RUN_2026-08-11_02-23-32_1982332_5bfa",
+      "run_id": "RUN_2026-08-11_02-23-32_1982332_5bfa",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "jesd204b_timing_172",
+      "variant": "baseline_1"
+    },
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_2",
+            "sky130hd",
+            "repair_probe_jesd204b_timing_172_baseline_2"
+          ],
+          "elapsed_seconds": 394.195,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/jesd_timing172_baseline_2/run_orfs.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_2",
+            "sky130hd",
+            "--check",
+            "both",
+            "--max-iters",
+            "0",
+            "--variant",
+            "repair_probe_jesd204b_timing_172_baseline_2"
+          ],
+          "elapsed_seconds": 122.821,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/jesd_timing172_baseline_2/strict_signoff.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "python3",
+            "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_2",
+            "--run-dir",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_2/backend/RUN_2026-08-11_02-23-32_1982364_2b22",
+            "--mode",
+            "strict",
+            "--def",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_2/backend/RUN_2026-08-11_02-23-32_1982364_2b22/final/6_final.def"
+          ],
+          "elapsed_seconds": 0.076,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/jesd_timing172_baseline_2/signoff_gate.log",
+          "returncode": 3
+        }
+      ],
+      "completed_at": "2026-08-11T09:41:35.117708+00:00",
+      "config_sha256": "7bb0e925140ecef3118b4bb320a77eb64da9649760f3933d9bcd76a399a9ddb4",
+      "constraint_attestation": {
+        "config_sha256": "7bb0e925140ecef3118b4bb320a77eb64da9649760f3933d9bcd76a399a9ddb4",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "8f061a05372e8d20aba0f815a35e33a07004c24aed4c43a4ce64792ef79c6246",
+        "status": "bound",
+        "target_frequency_mhz": 172.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_2/repair_family_probe_input.json",
+        "input_manifest_sha256": "48cacf530e62497c6f472d719905d165942599f35fbf53f74430e4c84af21d2a",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_2",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_2/repair_family_probe_result.json",
+        "result_sha256": "d15c6a32faf932a4e7336b89047fc5fac19380155eaeb145ce2398a207245b70"
+      },
+      "family_id": "timing_closure",
+      "metrics": {
+        "antenna_violations": 0,
+        "drc_violations": 0,
+        "hold_wns_ns": 0.376199,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": -0.0160414
+      },
+      "normalized_failure_signature": [
+        "SETUP_TIMING"
+      ],
+      "protected_task_digest": "aecd2109d5ac360f7faa8d89b99d927c878925216c4f93759a7909bad5f5e33d",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": "clean",
+        "lvs": "clean",
+        "ppa": null,
+        "rcx": "complete",
+        "route": "clean",
+        "signoff_gate": "pass_with_caveats",
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_baseline_2/backend/RUN_2026-08-11_02-23-32_1982364_2b22",
+      "run_id": "RUN_2026-08-11_02-23-32_1982364_2b22",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "jesd204b_timing_172",
+      "variant": "baseline_2"
+    }
+  ],
+  "effect": {
+    "after": {
+      "SETUP_SLACK_MARGIN": "0.2"
+    },
+    "before": {
+      "SETUP_SLACK_MARGIN": {
+        "absent": true
+      }
+    },
+    "changed_knobs": [
+      "SETUP_SLACK_MARGIN"
+    ]
+  },
+  "family_id": "timing_closure",
+  "schema_version": "repair-family-evidence-1.1",
+  "task": {
+    "check_set": [
+      "orfs",
+      "route",
+      "drc",
+      "lvs",
+      "setup",
+      "hold",
+      "antenna",
+      "rcx"
+    ],
+    "clock_port": "clk",
+    "license_evidence": {
+      "sha256": "8b4e41bc2cab0a8036b58ec7bce229ab774fb42d7e9fdf6715223f48d30ea313",
+      "size": 1088,
+      "source_relative_path": "LICENSE",
+      "spdx_id": "MIT",
+      "status": "allow"
+    },
+    "platform": "sky130hd",
+    "protected_task_digest": "aecd2109d5ac360f7faa8d89b99d927c878925216c4f93759a7909bad5f5e33d",
+    "sdc_sha256": "8f061a05372e8d20aba0f815a35e33a07004c24aed4c43a4ce64792ef79c6246",
+    "signoff_mode": "strict",
+    "source_commit": "62fc37ec58451c7d8813d7d3e3e1d7a1377c9082",
+    "source_digest": "8e005bc42daf372a0dc6a4e887dd8de1373621a216172ba8891466079693eea8",
+    "source_provenance_status": "repo_commit_and_bytes_bound",
+    "source_repo_url": "https://github.com/zeroasiccorp/logikbench",
+    "target_frequency_mhz": 172.0,
+    "top_module": "jesd204b"
+  },
+  "witness_run": {
+    "commands": [
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_witness_margin0p2",
+          "sky130hd",
+          "repair_probe_jesd204b_timing_172_witness_margin0p2"
+        ],
+        "elapsed_seconds": 384.921,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/jesd_timing172_witness_margin0p2/run_orfs.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_witness_margin0p2",
+          "sky130hd",
+          "--check",
+          "both",
+          "--max-iters",
+          "0",
+          "--variant",
+          "repair_probe_jesd204b_timing_172_witness_margin0p2"
+        ],
+        "elapsed_seconds": 125.269,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/jesd_timing172_witness_margin0p2/strict_signoff.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "python3",
+          "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_witness_margin0p2",
+          "--run-dir",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_witness_margin0p2/backend/RUN_2026-08-11_02-23-32_1982438_7501",
+          "--mode",
+          "strict",
+          "--def",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_witness_margin0p2/backend/RUN_2026-08-11_02-23-32_1982438_7501/final/6_final.def"
+        ],
+        "elapsed_seconds": 0.071,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/jesd_timing172_witness_margin0p2/signoff_gate.log",
+        "returncode": 0
+      }
+    ],
+    "completed_at": "2026-08-11T09:41:35.184061+00:00",
+    "config_sha256": "273eb56c6faed2d709d4e3ada4d26ca9c9a5b196829b7415abc6b9a31af4db03",
+    "constraint_attestation": {
+      "config_sha256": "273eb56c6faed2d709d4e3ada4d26ca9c9a5b196829b7415abc6b9a31af4db03",
+      "mode": "fixed_registered_target",
+      "sdc_sha256": "8f061a05372e8d20aba0f815a35e33a07004c24aed4c43a4ce64792ef79c6246",
+      "status": "bound",
+      "target_frequency_mhz": 172.0
+    },
+    "environment_failure": false,
+    "evidence_binding": {
+      "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_witness_margin0p2/repair_family_probe_input.json",
+      "input_manifest_sha256": "98ec486c1786186a8d62b69b99914fa3edfadb8fab355943ee7e372a2dd8f5c1",
+      "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_witness_margin0p2",
+      "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_witness_margin0p2/repair_family_probe_result.json",
+      "result_sha256": "3e4cd87ec83bb3a74b4082c13be15b973ea1104b3d8d05717a37afd2aa69372e"
+    },
+    "family_id": "timing_closure",
+    "metrics": {
+      "antenna_violations": 0,
+      "drc_violations": 0,
+      "hold_wns_ns": 0.374217,
+      "lvs_mismatches": 0,
+      "route_violations": 0,
+      "setup_wns_ns": 0.081974
+    },
+    "normalized_failure_signature": [],
+    "protected_task_digest": "aecd2109d5ac360f7faa8d89b99d927c878925216c4f93759a7909bad5f5e33d",
+    "publication_strict_clean": false,
+    "report_status": {
+      "drc": "clean",
+      "lvs": "clean",
+      "ppa": null,
+      "rcx": "complete",
+      "route": "clean",
+      "signoff_gate": "pass",
+      "signoff_manifest": null,
+      "timing_check": null
+    },
+    "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/jesd_timing172_witness_margin0p2/backend/RUN_2026-08-11_02-23-32_1982438_7501",
+    "run_id": "RUN_2026-08-11_02-23-32_1982438_7501",
+    "schema_version": "repair-family-probe-result-1.1",
+    "strict_clean": true,
+    "strict_clean_scope": "fixed_target_physical_signoff",
+    "task_id": "jesd204b_timing_172",
+    "variant": "witness_margin0p2"
+  }
+}

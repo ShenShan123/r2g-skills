@@ -1,0 +1,168 @@
+{
+  "failures": [],
+  "schema_version": "repair-family-support-audit-1.0",
+  "status": "pass",
+  "support": {
+    "antenna_closure": {
+      "design_identities": [
+        {
+          "commit": "f43a6b83c3a70fb2ac0696a45c5545b233fb860b",
+          "repo_url": "https://github.com/ZipCPU/wbuart32",
+          "top_module": "wbuart"
+        },
+        {
+          "commit": "a65be4045e898a52e791c6ee71f8f79a7cd2e129",
+          "repo_url": "https://github.com/alexforencich/verilog-i2c.git",
+          "top_module": "i2c_master_axil"
+        },
+        {
+          "commit": "d099493a9a2d63cb599980ea27ee4e638f86725f",
+          "repo_url": "https://github.com/ultraembedded/core_ftdi_bridge.git",
+          "top_module": "ftdi_bridge"
+        }
+      ],
+      "distinct_repositories": 3,
+      "minimum_for_claim": 3,
+      "schema_1_1_evidence_files": [
+        "docs/experiments/signoff/evidence/2026_08_10/ftdi_bridge_nangate45_antenna_closure.json",
+        "docs/experiments/signoff/evidence/2026_08_10/i2c_master_axil_nangate45_antenna_closure.json",
+        "docs/experiments/signoff/evidence/2026_08_11/wbuart_nangate45_antenna_closure.json"
+      ],
+      "threshold_met": true,
+      "verified_independent_designs": 3
+    },
+    "footprint_congestion": {
+      "design_identities": [
+        {
+          "commit": "4cea31bb2228ed247d1ea7ed162568ad4d7ef250",
+          "repo_url": "https://github.com/MaxXSoft/Fuxi",
+          "top_module": "nt35510_apb_adapter_v1_0"
+        },
+        {
+          "commit": "77320a9471d19c7dd383914bc049e02d9f4f1ffb",
+          "repo_url": "https://github.com/alexforencich/verilog-ethernet",
+          "top_module": "eth_mac_mii"
+        },
+        {
+          "commit": "0744cb837db7a55c21d9d546fde1f30fc26de00f",
+          "repo_url": "https://github.com/dpiegdon/verilog-can",
+          "top_module": "can_fifo"
+        },
+        {
+          "commit": "f46074a88576e1d7e2fc6cfae14a664dc593a2d8",
+          "repo_url": "https://github.com/openrisc/mor1kx",
+          "top_module": "mor1kx_ctrl_prontoespresso"
+        },
+        {
+          "commit": "c4becd60f0ce9ada991d894e36036b9429446922",
+          "repo_url": "https://github.com/ultraembedded/core_sdram_axi4",
+          "top_module": "sdram_axi"
+        },
+        {
+          "commit": "62fc37ec58451c7d8813d7d3e3e1d7a1377c9082",
+          "repo_url": "https://github.com/zeroasiccorp/logikbench",
+          "top_module": "jesd204b"
+        }
+      ],
+      "distinct_repositories": 6,
+      "minimum_for_claim": 3,
+      "schema_1_1_evidence_files": [],
+      "threshold_met": true,
+      "verified_independent_designs": 6
+    },
+    "pdn_floorplan": {
+      "design_identities": [
+        {
+          "commit": "123c10d0de7e53e2a328a3ded73ad2394f8c6bb6",
+          "repo_url": "https://github.com/mitya1337/Simple_I2C",
+          "top_module": "i2c_slave_controller"
+        }
+      ],
+      "distinct_repositories": 1,
+      "minimum_for_claim": 3,
+      "schema_1_1_evidence_files": [
+        "docs/experiments/signoff/evidence/2026_08_11/simple_i2c_slave_sky130hd_pdn_floorplan.json"
+      ],
+      "threshold_met": false,
+      "verified_independent_designs": 1
+    },
+    "pin_perimeter": {
+      "design_identities": [
+        {
+          "commit": "516bd5dadc3365b7f9e225d2af8fe0b8d804fe53",
+          "repo_url": "https://github.com/alexforencich/verilog-axi",
+          "top_module": "axi_interconnect"
+        },
+        {
+          "commit": "77320a9471d19c7dd383914bc049e02d9f4f1ffb",
+          "repo_url": "https://github.com/alexforencich/verilog-ethernet",
+          "top_module": "ip_demux"
+        },
+        {
+          "commit": "77320a9471d19c7dd383914bc049e02d9f4f1ffb",
+          "repo_url": "https://github.com/alexforencich/verilog-ethernet",
+          "top_module": "ip_mux"
+        }
+      ],
+      "distinct_repositories": 2,
+      "minimum_for_claim": 3,
+      "schema_1_1_evidence_files": [
+        "docs/experiments/signoff/evidence/2026_08_10/axi_pin_sky130hd_pin_perimeter.json",
+        "docs/experiments/signoff/evidence/2026_08_10/ip_demux_sky130hd_pin_perimeter.json",
+        "docs/experiments/signoff/evidence/2026_08_10/ip_mux_sky130hd_pin_perimeter.json"
+      ],
+      "threshold_met": true,
+      "verified_independent_designs": 3
+    },
+    "rule_specific_drc": {
+      "design_identities": [
+        {
+          "commit": "ecb9cb43192c6895620ea0926eb874052755a39c",
+          "repo_url": "https://github.com/siliconcompiler/siliconcompiler",
+          "top_module": "gcd"
+        },
+        {
+          "commit": "c4becd60f0ce9ada991d894e36036b9429446922",
+          "repo_url": "https://github.com/ultraembedded/core_sdram_axi4",
+          "top_module": "sdram_axi"
+        },
+        {
+          "commit": "62fc37ec58451c7d8813d7d3e3e1d7a1377c9082",
+          "repo_url": "https://github.com/zeroasiccorp/logikbench",
+          "top_module": "jesd204b"
+        }
+      ],
+      "distinct_repositories": 3,
+      "minimum_for_claim": 3,
+      "schema_1_1_evidence_files": [
+        "docs/experiments/signoff/evidence/2026_08_11/jesd204b_sky130hd_rule_specific_drc.json",
+        "docs/experiments/signoff/evidence/2026_08_11/sdram_axi_sky130hd_rule_specific_drc.json",
+        "docs/experiments/signoff/evidence/2026_08_11/siliconcompiler_gcd_sky130hd_rule_specific_drc.json"
+      ],
+      "threshold_met": true,
+      "verified_independent_designs": 3
+    },
+    "timing_closure": {
+      "design_identities": [
+        {
+          "commit": "516bd5dadc3365b7f9e225d2af8fe0b8d804fe53",
+          "repo_url": "https://github.com/alexforencich/verilog-axi",
+          "top_module": "axi_interconnect"
+        },
+        {
+          "commit": "62fc37ec58451c7d8813d7d3e3e1d7a1377c9082",
+          "repo_url": "https://github.com/zeroasiccorp/logikbench",
+          "top_module": "jesd204b"
+        }
+      ],
+      "distinct_repositories": 2,
+      "minimum_for_claim": 3,
+      "schema_1_1_evidence_files": [
+        "docs/experiments/signoff/evidence/2026_08_11/axi_interconnect_sky130hd_timing_460.json",
+        "docs/experiments/signoff/evidence/2026_08_11/jesd204b_sky130hd_timing_172.json"
+      ],
+      "threshold_met": false,
+      "verified_independent_designs": 2
+    }
+  }
+}

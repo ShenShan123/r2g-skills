@@ -1,0 +1,342 @@
+{
+  "admission": {
+    "failures": [],
+    "status": "pass"
+  },
+  "baseline_runs": [
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_1",
+            "sky130hd",
+            "repair_probe_axi_timing_460_baseline_1"
+          ],
+          "elapsed_seconds": 316.151,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_timing460_baseline_1/run_orfs.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_1",
+            "sky130hd",
+            "--check",
+            "both",
+            "--max-iters",
+            "0",
+            "--variant",
+            "repair_probe_axi_timing_460_baseline_1"
+          ],
+          "elapsed_seconds": 176.971,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_timing460_baseline_1/strict_signoff.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "python3",
+            "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_1",
+            "--run-dir",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_1/backend/RUN_2026-08-11_01-39-09_1822864_2734",
+            "--mode",
+            "strict",
+            "--def",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_1/backend/RUN_2026-08-11_01-39-09_1822864_2734/final/6_final.def"
+          ],
+          "elapsed_seconds": 0.083,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_timing460_baseline_1/signoff_gate.log",
+          "returncode": 3
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:55.738224+00:00",
+      "config_sha256": "5905438873604452a7ca9a7b9c89221cd0a2d1b95dfe90ad8d1427c1ddc213c1",
+      "constraint_attestation": {
+        "config_sha256": "5905438873604452a7ca9a7b9c89221cd0a2d1b95dfe90ad8d1427c1ddc213c1",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "a7a5c99d39da78a01e0b9b63749bc00c1d70c08c2b72c5da8e710dc2fdbabf20",
+        "status": "bound",
+        "target_frequency_mhz": 460.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_1/repair_family_probe_input.json",
+        "input_manifest_sha256": "d6f148800207bc1dc153c384cd59b5d36c1c6da3942b231ef62d5da4a17b74ab",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_1",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_1/repair_family_probe_result.json",
+        "result_sha256": "c23135e848baceaa1ad4e88622a7a4b1f906fefaa2fa4ecc87c52dd54fadf83b"
+      },
+      "family_id": "timing_closure",
+      "metrics": {
+        "antenna_violations": 0,
+        "drc_violations": 0,
+        "hold_wns_ns": 0.46997,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": -0.0180278
+      },
+      "normalized_failure_signature": [
+        "SETUP_TIMING"
+      ],
+      "protected_task_digest": "85d52be06d76ab8e542650e963f4be273904ca3bb39917bcbd5bd22a00eb94f4",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": "clean",
+        "lvs": "clean",
+        "ppa": null,
+        "rcx": "complete",
+        "route": "clean",
+        "signoff_gate": "pass_with_caveats",
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_1/backend/RUN_2026-08-11_01-39-09_1822864_2734",
+      "run_id": "RUN_2026-08-11_01-39-09_1822864_2734",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "axi_timing_460",
+      "variant": "baseline_1"
+    },
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_2",
+            "sky130hd",
+            "repair_probe_axi_timing_460_baseline_2"
+          ],
+          "elapsed_seconds": 309.558,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_timing460_baseline_2/run_orfs.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_2",
+            "sky130hd",
+            "--check",
+            "both",
+            "--max-iters",
+            "0",
+            "--variant",
+            "repair_probe_axi_timing_460_baseline_2"
+          ],
+          "elapsed_seconds": 174.124,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_timing460_baseline_2/strict_signoff.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "python3",
+            "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_2",
+            "--run-dir",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_2/backend/RUN_2026-08-11_01-39-13_1823230_6351",
+            "--mode",
+            "strict",
+            "--def",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_2/backend/RUN_2026-08-11_01-39-13_1823230_6351/final/6_final.def"
+          ],
+          "elapsed_seconds": 0.078,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_timing460_baseline_2/signoff_gate.log",
+          "returncode": 3
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:55.799160+00:00",
+      "config_sha256": "97f400be32f10a1a11872fcf2ba304428296a5bf9935942b3e9e471f75226fe5",
+      "constraint_attestation": {
+        "config_sha256": "97f400be32f10a1a11872fcf2ba304428296a5bf9935942b3e9e471f75226fe5",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "a7a5c99d39da78a01e0b9b63749bc00c1d70c08c2b72c5da8e710dc2fdbabf20",
+        "status": "bound",
+        "target_frequency_mhz": 460.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_2/repair_family_probe_input.json",
+        "input_manifest_sha256": "7aeec98d4aa66d9fd4938e5334a3dfd47112d7e6ad490c2abe61f49bce1a03cf",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_2",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_2/repair_family_probe_result.json",
+        "result_sha256": "85fccc3e943a881502c162c193d42f11c951a85c6a4604e9d5042bc76a427845"
+      },
+      "family_id": "timing_closure",
+      "metrics": {
+        "antenna_violations": 0,
+        "drc_violations": 0,
+        "hold_wns_ns": 0.46997,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": -0.0180278
+      },
+      "normalized_failure_signature": [
+        "SETUP_TIMING"
+      ],
+      "protected_task_digest": "85d52be06d76ab8e542650e963f4be273904ca3bb39917bcbd5bd22a00eb94f4",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": "clean",
+        "lvs": "clean",
+        "ppa": null,
+        "rcx": "complete",
+        "route": "clean",
+        "signoff_gate": "pass_with_caveats",
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_baseline_2/backend/RUN_2026-08-11_01-39-13_1823230_6351",
+      "run_id": "RUN_2026-08-11_01-39-13_1823230_6351",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "axi_timing_460",
+      "variant": "baseline_2"
+    }
+  ],
+  "effect": {
+    "after": {
+      "SETUP_SLACK_MARGIN": "0.2"
+    },
+    "before": {
+      "SETUP_SLACK_MARGIN": {
+        "absent": true
+      }
+    },
+    "changed_knobs": [
+      "SETUP_SLACK_MARGIN"
+    ]
+  },
+  "family_id": "timing_closure",
+  "schema_version": "repair-family-evidence-1.1",
+  "task": {
+    "check_set": [
+      "orfs",
+      "route",
+      "drc",
+      "lvs",
+      "setup",
+      "hold",
+      "antenna",
+      "rcx"
+    ],
+    "clock_port": "clk",
+    "license_evidence": {
+      "sha256": "ba81481b2d63a33e0dce336d9e736130709549feeaf6cd424b34beba712baa50",
+      "size": 1057,
+      "source_relative_path": "COPYING",
+      "spdx_id": "MIT",
+      "status": "allow"
+    },
+    "platform": "sky130hd",
+    "protected_task_digest": "85d52be06d76ab8e542650e963f4be273904ca3bb39917bcbd5bd22a00eb94f4",
+    "sdc_sha256": "a7a5c99d39da78a01e0b9b63749bc00c1d70c08c2b72c5da8e710dc2fdbabf20",
+    "signoff_mode": "strict",
+    "source_commit": "516bd5dadc3365b7f9e225d2af8fe0b8d804fe53",
+    "source_digest": "0aeca1febd4aa25c81e6338f676fcf6b6dba56bbb98e4ab9fb4695354cd0a713",
+    "source_provenance_status": "repo_commit_and_bytes_bound",
+    "source_repo_url": "https://github.com/alexforencich/verilog-axi",
+    "target_frequency_mhz": 460.0,
+    "top_module": "axi_interconnect"
+  },
+  "witness_run": {
+    "commands": [
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_witness_margin0p2",
+          "sky130hd",
+          "repair_probe_axi_timing_460_witness_margin0p2"
+        ],
+        "elapsed_seconds": 461.72,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_timing460_witness_margin0p2/run_orfs.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_witness_margin0p2",
+          "sky130hd",
+          "--check",
+          "both",
+          "--max-iters",
+          "0",
+          "--variant",
+          "repair_probe_axi_timing_460_witness_margin0p2"
+        ],
+        "elapsed_seconds": 162.493,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_timing460_witness_margin0p2/strict_signoff.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "python3",
+          "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_witness_margin0p2",
+          "--run-dir",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_witness_margin0p2/backend/RUN_2026-08-11_01-39-17_1823693_209c",
+          "--mode",
+          "strict",
+          "--def",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_witness_margin0p2/backend/RUN_2026-08-11_01-39-17_1823693_209c/final/6_final.def"
+        ],
+        "elapsed_seconds": 0.081,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_timing460_witness_margin0p2/signoff_gate.log",
+        "returncode": 0
+      }
+    ],
+    "completed_at": "2026-08-11T09:08:55.867309+00:00",
+    "config_sha256": "e989366eea01cbd4b02091ccc54b2b30f23722ec2313a68da7112dfd494ef956",
+    "constraint_attestation": {
+      "config_sha256": "e989366eea01cbd4b02091ccc54b2b30f23722ec2313a68da7112dfd494ef956",
+      "mode": "fixed_registered_target",
+      "sdc_sha256": "a7a5c99d39da78a01e0b9b63749bc00c1d70c08c2b72c5da8e710dc2fdbabf20",
+      "status": "bound",
+      "target_frequency_mhz": 460.0
+    },
+    "environment_failure": false,
+    "evidence_binding": {
+      "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_witness_margin0p2/repair_family_probe_input.json",
+      "input_manifest_sha256": "7f17b32c61696aee06fa6590d3f051af84215145cdf7a65e7874279b5066060f",
+      "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_witness_margin0p2",
+      "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_witness_margin0p2/repair_family_probe_result.json",
+      "result_sha256": "a38acda0267e1c4f5e4a3d1e9ac3a557fe276bdfd2b948ab08d9ed1ca150568d"
+    },
+    "family_id": "timing_closure",
+    "metrics": {
+      "antenna_violations": 0,
+      "drc_violations": 0,
+      "hold_wns_ns": 0.466436,
+      "lvs_mismatches": 0,
+      "route_violations": 0,
+      "setup_wns_ns": 0.00176459
+    },
+    "normalized_failure_signature": [],
+    "protected_task_digest": "85d52be06d76ab8e542650e963f4be273904ca3bb39917bcbd5bd22a00eb94f4",
+    "publication_strict_clean": false,
+    "report_status": {
+      "drc": "clean",
+      "lvs": "clean",
+      "ppa": null,
+      "rcx": "complete",
+      "route": "clean",
+      "signoff_gate": "pass",
+      "signoff_manifest": null,
+      "timing_check": null
+    },
+    "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_timing460_witness_margin0p2/backend/RUN_2026-08-11_01-39-17_1823693_209c",
+    "run_id": "RUN_2026-08-11_01-39-17_1823693_209c",
+    "schema_version": "repair-family-probe-result-1.1",
+    "strict_clean": true,
+    "strict_clean_scope": "fixed_target_physical_signoff",
+    "task_id": "axi_timing_460",
+    "variant": "witness_margin0p2"
+  }
+}

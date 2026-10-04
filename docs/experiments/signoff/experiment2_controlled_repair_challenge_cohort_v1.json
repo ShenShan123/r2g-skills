@@ -1,0 +1,497 @@
+{
+  "cohort_kind": "benchmark_challenge_screen",
+  "experiment_id": "r2g-exp2-controlled-repair-challenge-pilot-v1",
+  "fixtures": [
+    {
+      "candidate": {
+        "commit": "516bd5dadc3365b7f9e225d2af8fe0b8d804fe53",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "MIT COPYING file at repo root",
+          "repository_path": "COPYING",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/alexforencich/verilog-axi",
+        "rtl_files": [
+          "rtl/axi_register.v",
+          "rtl/axi_register_wr.v",
+          "rtl/axi_register_rd.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_risk_ranked_screen_2026_08_09_v23_run02/sources/axi_register",
+        "top_module": "axi_register",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "controlled_challenge": {
+        "challenge_core_utilization": 40,
+        "construction": "reverse_effect_from_independent_natural_repair_pairs",
+        "hidden_witness_core_utilization": 25,
+        "operator_family": "footprint_relief",
+        "parent_design_key": "e210f09e51fc8d5e52e99fedc8ea9445edcda4961c54914ec170cabae29f707c",
+        "parent_strict_clean": true,
+        "parent_task_key": "9b4699273c2a03d21e513f0d3395f04f3e128c996552440410b53585c23f1763",
+        "parent_validation_path": "/home/yangao/r2g_exp2_risk_ranked_screen_2026_08_09_v23_run02/methods/openai-vanilla/axi_register/validations/validation_01.json",
+        "parent_validation_sha256": "0928e7f7c0e5cb6b30468f056ab08da9a9416fcee6fdf16fed5a02c1865846f0",
+        "stratum": "controlled_replay"
+      },
+      "footprint_policy": {
+        "initial": 40,
+        "maximum": 40,
+        "minimum": 25,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "axi_register",
+      "mapped_cells": 457,
+      "qualification": {
+        "closure_sha256": "5094c761bfc88ab0a7c49af4480af65940ec268e57f941680b9cc3a3386c7791",
+        "result_path": "/home/yangao/r2g_exp1_rescore_2026_08_02_conditional_closure_v1_retry/evaluation/glm-vanilla.batch1/axi_register/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_rescore_2026_08_02_conditional_closure_v1_retry/submissions/glm-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 10784.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, the preregistered controlled challenge must reproduce the same non-environment physical failure twice; the hidden strict-clean parent configuration must then pass independent feasibility validation.",
+        "feasibility_core_utilization": 25,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "small"
+    },
+    {
+      "candidate": {
+        "commit": "5fd2db850a41b65aa34f3a31c663fc8704c7abd8",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LICENSE contains MIT License text.",
+          "repository_path": "LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/ben-marshall/uart",
+        "rtl_files": [
+          "rtl/uart_tx.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22a/sources/ben_marshall_uart_tx",
+        "top_module": "uart_tx",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "controlled_challenge": {
+        "challenge_core_utilization": 40,
+        "construction": "reverse_effect_from_independent_natural_repair_pairs",
+        "hidden_witness_core_utilization": 25,
+        "operator_family": "footprint_relief",
+        "parent_design_key": "c7b36c49dcc6f00cd7e5c65b2b59d047505158f459aebeaa7e3c3cdb64d70186",
+        "parent_strict_clean": true,
+        "parent_task_key": "4f9717ea61d38b5b4331782ae38d99ae443b93ab85325de681c09cf5f29ca09e",
+        "parent_validation_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22a/methods/openai-vanilla/ben_marshall_uart_tx/validations/validation_01.json",
+        "parent_validation_sha256": "00b4ff4a51659fbfbcb862525bc5c27a40fc4218951c20f2e7c6ea8e19e6833b",
+        "stratum": "controlled_replay"
+      },
+      "footprint_policy": {
+        "initial": 40,
+        "maximum": 40,
+        "minimum": 25,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "ben_marshall_uart_tx",
+      "mapped_cells": 167,
+      "qualification": {
+        "closure_sha256": "5451882931fb948bf0a47d238f24ef16e79ef1ee7a14e7eb80c26aa3973797a6",
+        "result_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/evaluation/openai-vanilla.batch1/ben_marshall_uart_tx/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/submissions/openai-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 1529.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, the preregistered controlled challenge must reproduce the same non-environment physical failure twice; the hidden strict-clean parent configuration must then pass independent feasibility validation.",
+        "feasibility_core_utilization": 25,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "small"
+    },
+    {
+      "candidate": {
+        "commit": "8af992930f71a69b0e06c38734c1094f41a05ca0",
+        "defines": [],
+        "header_files": [
+          "hdl/hazard3_config.vh",
+          "hdl/hazard3_config_inst.vh",
+          "hdl/rv_opcodes.vh"
+        ],
+        "include_dirs": [
+          "hdl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "normalized_from:LICENSE",
+          "repository_path": "LICENSE",
+          "spdx_id": "Apache-2.0"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/Wren6991/Hazard3",
+        "rtl_files": [
+          "hdl/hazard3_frontend.v",
+          "hdl/hazard3_instr_decompress.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/sources/Hazard3_hdl_hazard3_frontend",
+        "top_module": "hazard3_frontend",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "controlled_challenge": {
+        "challenge_core_utilization": 40,
+        "construction": "reverse_effect_from_independent_natural_repair_pairs",
+        "hidden_witness_core_utilization": 25,
+        "operator_family": "footprint_relief",
+        "parent_design_key": "89707ef2e4e0659820cf08aca8a7a992bb78d3dfcfaa0e56e28fa989def6a674",
+        "parent_strict_clean": true,
+        "parent_task_key": "664828275e01323c7eaf54a8c06f3f3825b3bdf221bec874383408ffc58e556e",
+        "parent_validation_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22b/methods/openai-vanilla/Hazard3_hdl_hazard3_frontend/validations/validation_01.json",
+        "parent_validation_sha256": "7d24c975173803a1e91b59c0f6128a53a4f8c2a12ef8d4803c726d8266cbc2e1",
+        "stratum": "controlled_replay"
+      },
+      "footprint_policy": {
+        "initial": 40,
+        "maximum": 40,
+        "minimum": 25,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "Hazard3_hdl_hazard3_frontend",
+      "mapped_cells": 1770,
+      "qualification": {
+        "closure_sha256": "63453f2a42b86b49a28a658d79e12370aa80cc0f86ae1070bd3f85e904ee196a",
+        "result_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/evaluation/r2g-pipeline.batch1/Hazard3_hdl_hazard3_frontend/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/submissions/r2g-pipeline.batch1.json"
+      },
+      "reference_synth_area_um2": 14981.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, the preregistered controlled challenge must reproduce the same non-environment physical failure twice; the hidden strict-clean parent configuration must then pass independent feasibility validation.",
+        "feasibility_core_utilization": 25,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "commit": "48ff7a7e2ef782cf778d47910cf85835c64b1bce",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "repository_path": "COPYING",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/alexforencich/verilog-axis",
+        "rtl_files": [
+          "rtl/axis_switch.v",
+          "rtl/axis_register.v",
+          "rtl/arbiter.v",
+          "rtl/priority_encoder.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_retrospective_repair_screen_2026_08_09_v18c/sources/axis_switch",
+        "top_module": "axis_switch",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "controlled_challenge": {
+        "challenge_core_utilization": 40,
+        "construction": "reverse_effect_from_independent_natural_repair_pairs",
+        "hidden_witness_core_utilization": 25,
+        "operator_family": "footprint_relief",
+        "parent_design_key": "153f89a1f519256a97f5e366dfb4e034db6cf07fc187b80dd0a8e23604cb63ca",
+        "parent_strict_clean": true,
+        "parent_task_key": "bdc94f2cc3e6bfb5d67e17f939412b3638d1e47db7da81320f8eade25d9cd307",
+        "parent_validation_path": "/home/yangao/r2g_exp2_retrospective_repair_screen_2026_08_09_v18c/methods/openai-vanilla/axis_switch/validations/validation_01.json",
+        "parent_validation_sha256": "4ad3b0185e16724dcaa1b82ddd977e3493dea6e686f7adb4d9ae392223ca6a5e",
+        "stratum": "controlled_replay"
+      },
+      "footprint_policy": {
+        "initial": 40,
+        "maximum": 40,
+        "minimum": 25,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "axis_switch",
+      "mapped_cells": 1688,
+      "qualification": {
+        "closure_sha256": "b8b9a3854ad0f1fe9d61775d421fa0b79cbe05cd6fa9a2b0f606a0c0972c0524"
+      },
+      "screening": {
+        "admission_rule": "At 100 MHz, the preregistered controlled challenge must reproduce the same non-environment physical failure twice; the hidden strict-clean parent configuration must then pass independent feasibility validation.",
+        "feasibility_core_utilization": 25,
+        "historical_symptom": "drc:m3.2:32",
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "commit": "cf4d771b5fbfa5ba9a34d58b127af54832c17545",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [
+          "asram16_axi4/src_v"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "normalized_from:asram16_axi4/src_v/asram16_axi4.v",
+          "repository_path": "asram16_axi4/src_v/asram16_axi4.v",
+          "spdx_id": "LGPL-2.1-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/ultraembedded/cores",
+        "rtl_files": [
+          "asram16_axi4/src_v/asram16_axi4.v",
+          "asram16_axi4/src_v/asram16_axi4_pmem.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22c/sources/cores_asram16_axi4_src_v_asram16_axi4",
+        "top_module": "asram16_axi4",
+        "top_parameters": {}
+      },
+      "clock_port": "clk_i",
+      "controlled_challenge": {
+        "challenge_core_utilization": 40,
+        "construction": "reverse_effect_from_independent_natural_repair_pairs",
+        "hidden_witness_core_utilization": 25,
+        "operator_family": "footprint_relief",
+        "parent_design_key": "a0192c438c931c2e454f540f43d8dafb95b96ea247e75879471a830136098daf",
+        "parent_strict_clean": true,
+        "parent_task_key": "46cd50218fd03f1480f3b2329708a46e36c552746950179a2257da48eeb7a802",
+        "parent_validation_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22c/methods/openai-vanilla/cores_asram16_axi4_src_v_asram16_axi4/validations/validation_01.json",
+        "parent_validation_sha256": "110169507a26b8b882bc613bf858479460aab223993eaaf061d4c96778aef693",
+        "stratum": "controlled_replay"
+      },
+      "footprint_policy": {
+        "initial": 40,
+        "maximum": 40,
+        "minimum": 25,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "cores_asram16_axi4_src_v_asram16_axi4",
+      "mapped_cells": 1745,
+      "qualification": {
+        "closure_sha256": "53cb0d876f5beab2aab63b69733b3351c5a82d422d3fee01bfde8cd52f21a473",
+        "result_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/evaluation/r2g-pipeline.batch1/cores_asram16_axi4_src_v_asram16_axi4/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/submissions/r2g-pipeline.batch1.json"
+      },
+      "reference_synth_area_um2": 16916.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, the preregistered controlled challenge must reproduce the same non-environment physical failure twice; the hidden strict-clean parent configuration must then pass independent feasibility validation.",
+        "feasibility_core_utilization": 25,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "commit": "10b99cadd2847399cf4a5bea531c42071a3ae30f",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Apache License 2.0",
+          "repository_path": "LICENSE",
+          "spdx_id": "Apache-2.0"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/lcapossio/emacZero",
+        "rtl_files": [
+          "rtl/eth_stats.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_risk_ranked_screen_2026_08_09_v23_run02/sources/emaczero_eth_stats",
+        "top_module": "eth_stats",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "controlled_challenge": {
+        "challenge_core_utilization": 40,
+        "construction": "reverse_effect_from_independent_natural_repair_pairs",
+        "hidden_witness_core_utilization": 25,
+        "operator_family": "footprint_relief",
+        "parent_design_key": "318e6e4074902423fac4f5c4b3c7bc2ca92974231cb9d2f19b0cff4283151c5e",
+        "parent_strict_clean": true,
+        "parent_task_key": "6654a3476012614def75df9cd9b0f6830e91baeb73ed23adbea4e9c53fac09c4",
+        "parent_validation_path": "/home/yangao/r2g_exp2_risk_ranked_screen_2026_08_09_v23_run02/methods/openai-vanilla/emaczero_eth_stats/validations/validation_01.json",
+        "parent_validation_sha256": "7d270e0457feaab3c7079000156e046f0be10629f09b83ede18958eaaa4f48ed",
+        "stratum": "controlled_replay"
+      },
+      "footprint_policy": {
+        "initial": 40,
+        "maximum": 40,
+        "minimum": 25,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "emaczero_eth_stats",
+      "mapped_cells": 3436,
+      "qualification": {
+        "closure_sha256": "7910414330550eb31e19eb90932bdd38abd5ca9f70998472bd394afb9da607fa",
+        "result_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/evaluation/qwen-vanilla.batch1/emaczero_eth_stats/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/submissions/qwen-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 30582.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, the preregistered controlled challenge must reproduce the same non-environment physical failure twice; the hidden strict-clean parent configuration must then pass independent feasibility validation.",
+        "feasibility_core_utilization": 25,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "commit": "80dc4718e1dcbbdb4b0dd1bdb393d8f7b98981dc",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "BSD-2-Clause style license header in each RTL file (secworks/aes)",
+          "repository_path": "src/rtl/aes.v",
+          "spdx_id": "BSD-2-Clause"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/secworks/aes",
+        "rtl_files": [
+          "src/rtl/aes.v",
+          "src/rtl/aes_core.v",
+          "src/rtl/aes_decipher_block.v",
+          "src/rtl/aes_encipher_block.v",
+          "src/rtl/aes_inv_sbox.v",
+          "src/rtl/aes_key_mem.v",
+          "src/rtl/aes_sbox.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22c/sources/aes_core_top",
+        "top_module": "aes",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "controlled_challenge": {
+        "challenge_core_utilization": 40,
+        "construction": "reverse_effect_from_independent_natural_repair_pairs",
+        "hidden_witness_core_utilization": 25,
+        "operator_family": "footprint_relief",
+        "parent_design_key": "6a578341af254dfb63961953a8fc1c6bbaa53e88e7491f549d3875bb2108068b",
+        "parent_strict_clean": true,
+        "parent_task_key": "d1bf6ac3f55d9549a3e9709b94e7430b487305b531e5469437bc65b199c37423",
+        "parent_validation_path": "/home/yangao/r2g_exp2_fixed100_expanded_screen_2026_08_09_v22c/methods/openai-vanilla/aes_core_top/validations/validation_01.json",
+        "parent_validation_sha256": "1d80676fe5f576fc7b1dbdc25d1ccf9c6a25b799ac91bfee94e23ad25edeb47e",
+        "stratum": "controlled_replay"
+      },
+      "footprint_policy": {
+        "initial": 40,
+        "maximum": 40,
+        "minimum": 25,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "aes_core_top",
+      "mapped_cells": 21708,
+      "qualification": {
+        "closure_sha256": "5a5afbff07a6741c8a25778116601ed3cb3949beafc09e3d233535b58fdc6a16",
+        "result_path": "/home/yangao/r2g_exp1_rescore_2026_08_02_conditional_closure_v1_retry/evaluation/glm-vanilla.batch1/aes_core_top/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_rescore_2026_08_02_conditional_closure_v1_retry/submissions/glm-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 185490.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, the preregistered controlled challenge must reproduce the same non-environment physical failure twice; the hidden strict-clean parent configuration must then pass independent feasibility validation.",
+        "feasibility_core_utilization": 25,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "large"
+    },
+    {
+      "candidate": {
+        "commit": "7eaba360df9fed9fc2db98d5f3df81cf01e5b604",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LICENSE contains 2-clause BSD redistribution conditions and disclaimer.",
+          "repository_path": "LICENSE",
+          "spdx_id": "BSD-2-Clause"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/secworks/chacha",
+        "rtl_files": [
+          "src/rtl/chacha_core.v",
+          "src/rtl/chacha_qr.v"
+        ],
+        "source_checkout_path": "/home/yangao/r2g_exp2_fixed100_history_screen_2026_08_09_v20/sources/secworks_chacha_core",
+        "top_module": "chacha_core",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "controlled_challenge": {
+        "challenge_core_utilization": 40,
+        "construction": "reverse_effect_from_independent_natural_repair_pairs",
+        "hidden_witness_core_utilization": 25,
+        "operator_family": "footprint_relief",
+        "parent_design_key": "d7d233c3c9272830a9f70f15e888505743542f8335029fc5475db792cfd01721",
+        "parent_strict_clean": true,
+        "parent_task_key": "27058fd203c7372c6b11f59d9927d821d402c313d0b81f7962d4c34c97b60959",
+        "parent_validation_path": "/home/yangao/r2g_exp2_fixed100_history_screen_2026_08_09_v20/methods/openai-vanilla/secworks_chacha_core/validations/validation_01.json",
+        "parent_validation_sha256": "69deb67547537a89628f68758e732cc12ffc883556fdc046fefa59f18aead113",
+        "stratum": "controlled_replay"
+      },
+      "footprint_policy": {
+        "initial": 40,
+        "maximum": 40,
+        "minimum": 25,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "secworks_chacha_core",
+      "mapped_cells": 13093,
+      "qualification": {
+        "closure_sha256": "055fbde9adf7fe630c6cc83048c7ca6da295a1f310dfe431e32492e16596f691",
+        "result_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/evaluation/openai-vanilla.batch1/secworks_chacha_core/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_gpt55_aibangbang_2026_08_01_engineering_pilot_run01/submissions/openai-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 104618.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, the preregistered controlled challenge must reproduce the same non-environment physical failure twice; the hidden strict-clean parent configuration must then pass independent feasibility validation.",
+        "feasibility_core_utilization": 25,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "large"
+    }
+  ],
+  "footprint_policy": {
+    "independent_feasibility": 25,
+    "initial": 40,
+    "maximum": 40,
+    "minimum": 25,
+    "mode": "bounded_core_utilization"
+  },
+  "platform": "sky130hd",
+  "repeatability_fixture_ids": [
+    "axi_register",
+    "ben_marshall_uart_tx",
+    "Hazard3_hdl_hazard3_frontend",
+    "axis_switch",
+    "cores_asram16_axi4_src_v_asram16_axi4",
+    "emaczero_eth_stats",
+    "aes_core_top",
+    "secworks_chacha_core"
+  ],
+  "schema_version": "1.0",
+  "selection_policy": {
+    "full_r2g_results_used_for_admission": false,
+    "inventory_generated_at": "2026-08-09T17:35:04+00:00",
+    "method": "held-out-strict-clean-parent-plus-real-repair-effect-reversal",
+    "natural_and_controlled_results_reported_separately": true,
+    "operator_selected_before_challenge_execution": true,
+    "operator_support_minimum_independent_designs": 3,
+    "source_repository_count": 8,
+    "witness_hidden_from_evaluated_methods": true
+  },
+  "status": "development_screen",
+  "target_clock_period_ns": 10,
+  "target_frequency_mhz": 100
+}

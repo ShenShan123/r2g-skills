@@ -1,0 +1,290 @@
+{
+  "admission": {
+    "failures": [],
+    "status": "pass"
+  },
+  "baseline_runs": [
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_baseline_1",
+            "sky130hd",
+            "repair_probe_ip_demux_pin_sky130hd_baseline_1"
+          ],
+          "elapsed_seconds": 435.446,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ip_demux_pin_sky130hd_baseline_1/run_orfs.log",
+          "returncode": 2
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:56.333216+00:00",
+      "config_sha256": "f2e0da68ed6d675075e9ee55308eff14ee7797fce5caf4f2e514d48b0d817fbe",
+      "constraint_attestation": {
+        "config_sha256": "f2e0da68ed6d675075e9ee55308eff14ee7797fce5caf4f2e514d48b0d817fbe",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "e25dbebc7ba281633bbf6a34d6f16ccd5098286c515c354e97147c877dfc47a2",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_baseline_1/repair_family_probe_input.json",
+        "input_manifest_sha256": "9e858457e6cbfb095e5231a2279a69f4516f39410569b8c7b3fc5dc41e38a06c",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_baseline_1",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_baseline_1/repair_family_probe_result.json",
+        "result_sha256": "b8d268938c9bc7ce38c15fcb27b241ca17bbd3efdd4878462f99dc4f17910716"
+      },
+      "family_id": "pin_perimeter",
+      "metrics": {
+        "antenna_violations": null,
+        "drc_violations": null,
+        "hold_wns_ns": null,
+        "lvs_mismatches": null,
+        "route_violations": null,
+        "setup_wns_ns": null
+      },
+      "normalized_failure_signature": [
+        "PPL-0024"
+      ],
+      "protected_task_digest": "76e773c1f765c77893946e721cf397b56761be4dccc5f7761d18d7244a3fe4dc",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": null,
+        "lvs": null,
+        "ppa": null,
+        "rcx": null,
+        "route": null,
+        "signoff_gate": null,
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_baseline_1/backend/RUN_2026-08-09_21-11-56_567489_4b50",
+      "run_id": "RUN_2026-08-09_21-11-56_567489_4b50",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "ip_demux_pin_sky130hd",
+      "variant": "baseline_1"
+    },
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_baseline_2",
+            "sky130hd",
+            "repair_probe_ip_demux_pin_sky130hd_baseline_2"
+          ],
+          "elapsed_seconds": 429.5,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ip_demux_pin_sky130hd_baseline_2/run_orfs.log",
+          "returncode": 2
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:56.401607+00:00",
+      "config_sha256": "0448942a04c824841d662adf79a4754b89b937557eb42ea6cce221414bbe705e",
+      "constraint_attestation": {
+        "config_sha256": "0448942a04c824841d662adf79a4754b89b937557eb42ea6cce221414bbe705e",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "e25dbebc7ba281633bbf6a34d6f16ccd5098286c515c354e97147c877dfc47a2",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_baseline_2/repair_family_probe_input.json",
+        "input_manifest_sha256": "34ba86a1bb81ccc38ef0306cfc713e4c825245d3cdda2d2e72153dfe8a6b92d7",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_baseline_2",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_baseline_2/repair_family_probe_result.json",
+        "result_sha256": "d9c30baaddfb1e93ecc4c728126c174f061240a79766fc739f81add3242c976d"
+      },
+      "family_id": "pin_perimeter",
+      "metrics": {
+        "antenna_violations": null,
+        "drc_violations": null,
+        "hold_wns_ns": null,
+        "lvs_mismatches": null,
+        "route_violations": null,
+        "setup_wns_ns": null
+      },
+      "normalized_failure_signature": [
+        "PPL-0024"
+      ],
+      "protected_task_digest": "76e773c1f765c77893946e721cf397b56761be4dccc5f7761d18d7244a3fe4dc",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": null,
+        "lvs": null,
+        "ppa": null,
+        "rcx": null,
+        "route": null,
+        "signoff_gate": null,
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_baseline_2/backend/RUN_2026-08-09_21-11-56_567566_5e63",
+      "run_id": "RUN_2026-08-09_21-11-56_567566_5e63",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "ip_demux_pin_sky130hd",
+      "variant": "baseline_2"
+    }
+  ],
+  "effect": {
+    "after": {
+      "CORE_AREA": "10 10 549 549",
+      "CORE_UTILIZATION": {
+        "unset": true
+      },
+      "DIE_AREA": "0 0 559 559"
+    },
+    "before": {
+      "CORE_AREA": {
+        "absent": true
+      },
+      "CORE_UTILIZATION": "25",
+      "DIE_AREA": {
+        "absent": true
+      }
+    },
+    "changed_knobs": [
+      "CORE_AREA",
+      "CORE_UTILIZATION",
+      "DIE_AREA"
+    ]
+  },
+  "family_id": "pin_perimeter",
+  "schema_version": "repair-family-evidence-1.1",
+  "task": {
+    "available_pin_positions": 938,
+    "check_set": [
+      "orfs",
+      "route",
+      "drc",
+      "lvs",
+      "setup",
+      "hold",
+      "antenna",
+      "rcx"
+    ],
+    "clock_port": "clk",
+    "io_pin_count": 1521,
+    "license_evidence": {
+      "sha256": "8ea57f95365e9b16a5b516f422b71269183a1ae53bab5878ae6d69039e58fe77",
+      "size": 1062,
+      "source_relative_path": "COPYING",
+      "spdx_id": "MIT",
+      "status": "allow"
+    },
+    "platform": "sky130hd",
+    "protected_task_digest": "76e773c1f765c77893946e721cf397b56761be4dccc5f7761d18d7244a3fe4dc",
+    "required_die_perimeter_um": 2068.56,
+    "sdc_sha256": "e25dbebc7ba281633bbf6a34d6f16ccd5098286c515c354e97147c877dfc47a2",
+    "signoff_mode": "strict",
+    "source_commit": "77320a9471d19c7dd383914bc049e02d9f4f1ffb",
+    "source_digest": "a25f74aa3bcbf309ac57dbb81aedb97ec2e52dd2ce4132c5d9e87b31f3174938",
+    "source_provenance_status": "repo_commit_and_bytes_bound",
+    "source_repo_url": "https://github.com/alexforencich/verilog-ethernet",
+    "target_frequency_mhz": 100.0,
+    "top_module": "ip_demux"
+  },
+  "witness_run": {
+    "commands": [
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_witness",
+          "sky130hd",
+          "repair_probe_ip_demux_pin_sky130hd_witness"
+        ],
+        "elapsed_seconds": 179.101,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ip_demux_pin_sky130hd_witness/run_orfs.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_witness",
+          "sky130hd",
+          "--check",
+          "both",
+          "--max-iters",
+          "0",
+          "--variant",
+          "repair_probe_ip_demux_pin_sky130hd_witness"
+        ],
+        "elapsed_seconds": 167.156,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ip_demux_pin_sky130hd_witness/strict_signoff.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "python3",
+          "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_witness",
+          "--run-dir",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_witness/backend/RUN_2026-08-09_21-52-04_640815_3f44",
+          "--mode",
+          "strict",
+          "--def",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_witness/backend/RUN_2026-08-09_21-52-04_640815_3f44/final/6_final.def"
+        ],
+        "elapsed_seconds": 0.114,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ip_demux_pin_sky130hd_witness/signoff_gate.log",
+        "returncode": 0
+      }
+    ],
+    "completed_at": "2026-08-11T09:08:56.464727+00:00",
+    "config_sha256": "a260b74fcdf19fb06718e230032d2de3ff6a667189406ea865de8b3dc696632d",
+    "constraint_attestation": {
+      "config_sha256": "a260b74fcdf19fb06718e230032d2de3ff6a667189406ea865de8b3dc696632d",
+      "mode": "fixed_registered_target",
+      "sdc_sha256": "e25dbebc7ba281633bbf6a34d6f16ccd5098286c515c354e97147c877dfc47a2",
+      "status": "bound",
+      "target_frequency_mhz": 100.0
+    },
+    "die_perimeter_um": 2236.0,
+    "environment_failure": false,
+    "evidence_binding": {
+      "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_witness/repair_family_probe_input.json",
+      "input_manifest_sha256": "af89ea0dac7cdadd43fd91cd24bfa30ea37b0ec4f15e1e933c600c00300899b3",
+      "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_witness",
+      "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_witness/repair_family_probe_result.json",
+      "result_sha256": "66bb4f2a09e9602f547878d4b886175cbe88060550355f63864c3a1607db1529"
+    },
+    "family_id": "pin_perimeter",
+    "metrics": {
+      "antenna_violations": 0,
+      "drc_violations": 0,
+      "hold_wns_ns": 0.507935,
+      "lvs_mismatches": 0,
+      "route_violations": 0,
+      "setup_wns_ns": 5.992
+    },
+    "normalized_failure_signature": [],
+    "protected_task_digest": "76e773c1f765c77893946e721cf397b56761be4dccc5f7761d18d7244a3fe4dc",
+    "publication_strict_clean": false,
+    "report_status": {
+      "drc": "clean",
+      "lvs": "clean",
+      "ppa": null,
+      "rcx": "complete",
+      "route": "clean",
+      "signoff_gate": "pass",
+      "signoff_manifest": null,
+      "timing_check": null
+    },
+    "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ip_demux_pin_sky130hd_witness/backend/RUN_2026-08-09_21-52-04_640815_3f44",
+    "run_id": "RUN_2026-08-09_21-52-04_640815_3f44",
+    "schema_version": "repair-family-probe-result-1.1",
+    "strict_clean": true,
+    "strict_clean_scope": "fixed_target_physical_signoff",
+    "task_id": "ip_demux_pin_sky130hd",
+    "variant": "witness"
+  }
+}

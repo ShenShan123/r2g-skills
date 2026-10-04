@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "record_type": "infrastructure_canary",
+  "status": "complete",
+  "campaign_root": "/home/yangao/r2g_exp2_signoff_canary_2026_08_08_v17",
+  "agent_commit": "1915dc9b7fde2783637bde3d51fadeca44679c83",
+  "orfs_commit": "a5ff7ef7dac4338e6e5fad7710b85fc6c8f3503c",
+  "bindings": {
+    "campaign_manifest_sha256": "9ed9bdaed1a6f6690cd1a1aed71716f7ce9619993a2416f61300dc1dd246d12e",
+    "cohort_sha256": "cd814b2e304096d023344c14e7ce887a0035804146ea0153aecde690381a3bf7",
+    "task_spec_sha256": "8d336622c8d732ace4722cfafce8db19e194246f364feeab423e7bcab8bf1c9d",
+    "batch_summary_sha256": "13c23823c4b02cc904a8819e52a96cac220461d6d0c8af6c8c2e6b4f3837bef2",
+    "final_results_sha256": "ba052162d1ab1c8d541535b0e099e10743236b9ccb9bb6ad44fb67fe50679ab1"
+  },
+  "scope": {
+    "fixtures": [
+      "forencich_axi_interconnect",
+      "ultraembedded_riscv_core"
+    ],
+    "method_fixture_campaigns": 8,
+    "purpose": "Validate runner, bounded resources, checkpoint locking and independent strict-signoff grading. This is not a paper capability result."
+  },
+  "strict_clean_results": {
+    "openai-vanilla": {
+      "count": 2,
+      "total": 2,
+      "frequency_mhz": [385, 120]
+    },
+    "qwen-vanilla": {
+      "count": 2,
+      "total": 2,
+      "frequency_mhz": [305, 110]
+    },
+    "deepseek-vanilla": {
+      "count": 0,
+      "total": 2,
+      "frequency_mhz": []
+    },
+    "full-r2g": {
+      "count": 2,
+      "total": 2,
+      "frequency_mhz": [160, 55]
+    }
+  },
+  "interpretation": "The canary completed cleanly and is frozen as evaluator evidence. Its two fixtures were not sufficiently discriminative to measure repair capability."
+}

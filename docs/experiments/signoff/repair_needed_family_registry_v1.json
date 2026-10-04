@@ -1,0 +1,251 @@
+{
+  "schema_version": "repair-needed-family-registry-1.0",
+  "status": "development",
+  "global_admission": {
+    "baseline_repeats": 2,
+    "minimum_natural_pairs_per_claimed_family": 3,
+    "require_distinct_baseline_run_ids": true,
+    "require_same_normalized_failure_signature": true,
+    "require_non_environment_failure": true,
+    "require_strict_clean_witness": true,
+    "strict_clean_evaluator_scope": "fixed_target_physical_signoff",
+    "require_fixed_target_constraint_attestation": true,
+    "publication_strict_clean_required": false,
+    "require_protected_task_digest_match": true,
+    "require_source_and_artifact_digests": true,
+    "require_license_evidence": true,
+    "report_natural_and_controlled_separately": true,
+    "protected_targets": [
+      "source_closure",
+      "top_module",
+      "platform",
+      "toolchain",
+      "clock_port",
+      "target_frequency",
+      "sdc",
+      "signoff_check_set",
+      "signoff_decks"
+    ],
+    "globally_forbidden_effects": [
+      "RTL_FILES",
+      "VERILOG_FILES",
+      "DESIGN_NAME",
+      "PLATFORM",
+      "SDC_FILE",
+      "CLOCK_PERIOD",
+      "TARGET_FREQUENCY_MHZ",
+      "FALSE_PATHS",
+      "DISABLE_TIMING_CHECKS",
+      "DRC_DECK",
+      "LVS_DECK",
+      "SKIP_DRC",
+      "SKIP_LVS",
+      "SKIP_TIMING",
+      "DRC_BEOL_ONLY"
+    ]
+  },
+  "families": {
+    "footprint_congestion": {
+      "claim": "Cell-footprint or placement-density relief clears a physical routability failure.",
+      "platform_scope": ["sky130hd", "sky130hs", "nangate45"],
+      "baseline_predicate": {
+        "accepted_signatures": ["placement_overflow", "route", "drc"],
+        "metric_any_positive": ["route_violations", "drc_violations"],
+        "non_target_requirements_when_available": {
+          "lvs_mismatches": 0,
+          "setup_wns_ns_min": 0,
+          "hold_wns_ns_min": 0
+        }
+      },
+      "allowed_effect_knobs": ["CORE_UTILIZATION", "PLACE_DENSITY", "PLACE_DENSITY_LB_ADDON"],
+      "forbidden_effect_knobs": ["DIE_AREA", "CORE_AREA", "SKIP_ANTENNA_REPAIR"],
+      "witness_predicate": {
+        "strict_clean": true,
+        "route_violations": 0,
+        "drc_violations": 0
+      },
+      "boundary_policy": {
+        "selection": "minimum_stable_failure_with_bounded_clean_witness",
+        "maximum_repair_area_ratio": 1.67,
+        "validated_probe": "CORE_UTILIZATION 25 -> 17",
+        "validated_probe_is_universal_standard": false
+      },
+      "minimum_natural_pairs": 3,
+      "current_verified_natural_pairs": 6
+    },
+    "pin_perimeter": {
+      "claim": "Perimeter-targeted die sizing clears deterministic IO pin-capacity failure.",
+      "platform_scope": ["sky130hd", "sky130hs", "nangate45"],
+      "baseline_predicate": {
+        "required_signature_tokens": ["PPL-0024"],
+        "required_numeric_evidence": ["io_pin_count", "available_pin_positions", "required_die_perimeter_um"]
+      },
+      "allowed_effect_knobs": ["DIE_AREA", "CORE_AREA", "CORE_ASPECT_RATIO", "CORE_MARGIN"],
+      "conditionally_allowed_effect_knobs": {
+        "CORE_UTILIZATION": {
+          "before_must_be_present": true,
+          "after_must_be_unset": true,
+          "requires_changed_knobs": ["DIE_AREA", "CORE_AREA"],
+          "rationale": "ORFS automatic utilization sizing and explicit DIE_AREA/CORE_AREA sizing are mutually exclusive; only mode deactivation is allowed, never a utilization retune."
+        }
+      },
+      "forbidden_effect_knobs": ["RTL_PORTS", "IO_PIN_CONSTRAINT_REMOVAL"],
+      "witness_predicate": {
+        "strict_clean": true,
+        "ppl_0024_present": false,
+        "source_port_digest_unchanged": true
+      },
+      "repair_bounds": {
+        "minimum_die_perimeter_ratio_to_tool_requirement": 1.0,
+        "maximum_die_perimeter_ratio_to_tool_requirement": 1.2
+      },
+      "minimum_natural_pairs": 3,
+      "current_verified_natural_pairs": 3
+    },
+    "rule_specific_drc": {
+      "claim": "A routing-, IO-placement-, or rule-specific physical action clears a stable non-antenna DRC class without enlarging the footprint.",
+      "platform_scope": ["sky130hd", "sky130hs", "nangate45"],
+      "baseline_predicate": {
+        "required_metric_positive": "drc_violations",
+        "exclude_signature_tokens": ["ANTENNA"],
+        "require_normalized_rule_classes": true,
+        "required_non_target_metrics": {
+          "route_violations": 0,
+          "antenna_violations": 0,
+          "lvs_mismatches": 0,
+          "setup_wns_ns_min": 0,
+          "hold_wns_ns_min": 0
+        }
+      },
+      "allowed_effect_knobs": [
+        "ROUTING_LAYER_ADJUSTMENT",
+        "FASTROUTE_TCL",
+        "CELL_PAD_IN_SITES_GLOBAL_PLACEMENT",
+        "CELL_PAD_IN_SITES_DETAIL_PLACEMENT",
+        "MIN_ROUTING_LAYER",
+        "MAX_ROUTING_LAYER",
+        "REPAIR_PDN_VIA_LAYER",
+        "DETAILED_ROUTE_END_ITERATION",
+        "DETAILED_ROUTE_ARGS",
+        "PLACE_PINS_ARGS"
+      ],
+      "forbidden_effect_knobs": [
+        "CORE_UTILIZATION",
+        "PLACE_DENSITY",
+        "DIE_AREA",
+        "CORE_AREA",
+        "DRC_BEOL_ONLY"
+      ],
+      "witness_predicate": {
+        "strict_clean": true,
+        "drc_violations": 0,
+        "route_violations": 0
+      },
+      "minimum_natural_pairs": 3,
+      "current_verified_natural_pairs": 3
+    },
+    "timing_closure": {
+      "claim": "A timing-specific physical optimization closes setup or hold at the identical registered frequency and SDC.",
+      "platform_scope": ["sky130hd", "sky130hs", "nangate45"],
+      "baseline_predicate": {
+        "metric_any_negative": ["setup_wns_ns", "hold_wns_ns"],
+        "require_completed_route": true,
+        "required_non_target_metrics": {
+          "route_violations": 0,
+          "drc_violations": 0,
+          "antenna_violations": 0,
+          "lvs_mismatches": 0
+        }
+      },
+      "allowed_effect_knobs": [
+        "SETUP_MOVE_SEQUENCE",
+        "SETUP_SLACK_MARGIN",
+        "HOLD_SLACK_MARGIN",
+        "TNS_END_PERCENT",
+        "SKIP_GATE_CLONING",
+        "SKIP_LAST_GASP",
+        "SKIP_CTS_REPAIR_TIMING"
+      ],
+      "forbidden_effect_knobs": [
+        "CLOCK_PERIOD",
+        "TARGET_FREQUENCY_MHZ",
+        "SDC_FILE",
+        "FALSE_PATHS",
+        "CLOCK_UNCERTAINTY",
+        "INPUT_DELAY",
+        "OUTPUT_DELAY"
+      ],
+      "witness_predicate": {
+        "strict_clean": true,
+        "setup_wns_ns_min": 0,
+        "hold_wns_ns_min": 0,
+        "sdc_digest_unchanged": true
+      },
+      "minimum_natural_pairs": 3,
+      "current_verified_natural_pairs": 2
+    },
+    "antenna_closure": {
+      "claim": "Antenna-specific diode or routing repair clears stable antenna violations under the same full signoff deck.",
+      "platform_scope": ["nangate45", "sky130hd", "sky130hs"],
+      "baseline_predicate": {
+        "required_metric_positive": "antenna_violations",
+        "required_signature_tokens": ["ANTENNA"],
+        "required_non_target_metrics": {
+          "route_violations": 0,
+          "lvs_mismatches": 0,
+          "setup_wns_ns_min": 0,
+          "hold_wns_ns_min": 0
+        },
+        "require_all_drc_violations_are_antenna": true
+      },
+      "allowed_effect_knobs": [
+        "SKIP_ANTENNA_REPAIR",
+        "SKIP_ANTENNA_REPAIR_PRE_GRT",
+        "SKIP_ANTENNA_REPAIR_POST_DRT",
+        "MAX_REPAIR_ANTENNAS_ITER_GRT",
+        "MAX_REPAIR_ANTENNAS_ITER_DRT"
+      ],
+      "forbidden_effect_knobs": ["SKIP_DRC", "DRC_BEOL_ONLY", "ANTENNA_DECK"],
+      "witness_predicate": {
+        "strict_clean": true,
+        "antenna_violations": 0,
+        "full_drc_deck": true
+      },
+      "minimum_natural_pairs": 3,
+      "current_verified_natural_pairs": 3
+    },
+    "pdn_floorplan": {
+      "claim": "A PDN-feasible geometry floor clears deterministic PDN strap-width failure.",
+      "platform_scope": ["sky130hd", "sky130hs", "nangate45"],
+      "baseline_predicate": {
+        "required_signature_tokens": ["PDN-0185"],
+        "required_numeric_evidence": [
+          "baseline_available_width_um",
+          "pdn_offset_um",
+          "total_strap_width_um",
+          "minimum_required_grid_width_um"
+        ]
+      },
+      "allowed_effect_knobs": ["DIE_AREA", "CORE_AREA", "CORE_MARGIN"],
+      "conditionally_allowed_effect_knobs": {
+        "CORE_UTILIZATION": {
+          "before_must_be_present": true,
+          "after_must_be_unset": true,
+          "requires_changed_knobs": ["DIE_AREA", "CORE_AREA"],
+          "rationale": "ORFS automatic utilization sizing and explicit DIE_AREA/CORE_AREA sizing are mutually exclusive; only mode deactivation is allowed, never a utilization retune."
+        }
+      },
+      "forbidden_effect_knobs": ["PDN_TCL", "SKIP_PDN"],
+      "witness_predicate": {
+        "strict_clean": true,
+        "pdn_0185_present": false,
+        "available_width_meets_minimum_required_grid_width": true
+      },
+      "repair_bounds": {
+        "maximum_available_width_ratio_to_minimum_required_grid_width": 1.2
+      },
+      "minimum_natural_pairs": 3,
+      "current_verified_natural_pairs": 1
+    }
+  }
+}

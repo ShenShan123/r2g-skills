@@ -1,0 +1,291 @@
+{
+  "admission": {
+    "failures": [],
+    "status": "pass"
+  },
+  "baseline_runs": [
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_baseline_1",
+            "sky130hd",
+            "repair_probe_simple_i2c_slave_pdn_100_baseline_1"
+          ],
+          "elapsed_seconds": 17.29,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/simple_i2c_pdn_baseline_1/run_orfs.log",
+          "returncode": 2
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:57.319488+00:00",
+      "config_sha256": "ce2e7441fe1b0dabb91ba140238b13447c90c6f752ff10c3bb150b9fb4190ff6",
+      "constraint_attestation": {
+        "config_sha256": "ce2e7441fe1b0dabb91ba140238b13447c90c6f752ff10c3bb150b9fb4190ff6",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "e377d37261fe88d97d24cbac656e920b7023b15e9db27102deeb29ab32bd8785",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_baseline_1/repair_family_probe_input.json",
+        "input_manifest_sha256": "1f971bdd9366713d3289a2d57b4e892d09a0f390d841d8d3a06fa4afd36027c4",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_baseline_1",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_baseline_1/repair_family_probe_result.json",
+        "result_sha256": "ec8ca86ed84d0aa876fb323983f88020f72fea1530708ab3202aa1b63c601f76"
+      },
+      "family_id": "pdn_floorplan",
+      "metrics": {
+        "antenna_violations": null,
+        "drc_violations": null,
+        "hold_wns_ns": null,
+        "lvs_mismatches": null,
+        "route_violations": null,
+        "setup_wns_ns": null
+      },
+      "normalized_failure_signature": [
+        "PDN-0185"
+      ],
+      "protected_task_digest": "75242bb8fa9dc85f2143869932a00e621d54a50a4196dfc6f0806cb9a78528e0",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": null,
+        "lvs": null,
+        "ppa": null,
+        "rcx": null,
+        "route": null,
+        "signoff_gate": null,
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_baseline_1/backend/RUN_2026-08-11_01-39-47_1825523_09be",
+      "run_id": "RUN_2026-08-11_01-39-47_1825523_09be",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "simple_i2c_slave_pdn_100",
+      "variant": "baseline_1"
+    },
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_baseline_2",
+            "sky130hd",
+            "repair_probe_simple_i2c_slave_pdn_100_baseline_2"
+          ],
+          "elapsed_seconds": 26.722,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/simple_i2c_pdn_baseline_2/run_orfs.log",
+          "returncode": 2
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:57.384298+00:00",
+      "config_sha256": "f32f49d7da1455c2550438b9bf99bd135ed14f10a9a5fb62a698812f45bf6839",
+      "constraint_attestation": {
+        "config_sha256": "f32f49d7da1455c2550438b9bf99bd135ed14f10a9a5fb62a698812f45bf6839",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "e377d37261fe88d97d24cbac656e920b7023b15e9db27102deeb29ab32bd8785",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_baseline_2/repair_family_probe_input.json",
+        "input_manifest_sha256": "409319e46bbfdc1c34c16d9d2683c28909009b0d8929142501c08c3aae45fd16",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_baseline_2",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_baseline_2/repair_family_probe_result.json",
+        "result_sha256": "fc53d992c873a4049ba1c56b9703e4c27c624d9d199d88b115dde9f1f34a3888"
+      },
+      "family_id": "pdn_floorplan",
+      "metrics": {
+        "antenna_violations": null,
+        "drc_violations": null,
+        "hold_wns_ns": null,
+        "lvs_mismatches": null,
+        "route_violations": null,
+        "setup_wns_ns": null
+      },
+      "normalized_failure_signature": [
+        "PDN-0185"
+      ],
+      "protected_task_digest": "75242bb8fa9dc85f2143869932a00e621d54a50a4196dfc6f0806cb9a78528e0",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": null,
+        "lvs": null,
+        "ppa": null,
+        "rcx": null,
+        "route": null,
+        "signoff_gate": null,
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_baseline_2/backend/RUN_2026-08-11_01-39-52_1826313_3e6c",
+      "run_id": "RUN_2026-08-11_01-39-52_1826313_3e6c",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "simple_i2c_slave_pdn_100",
+      "variant": "baseline_2"
+    }
+  ],
+  "effect": {
+    "after": {
+      "CORE_AREA": "5 5 55 55",
+      "CORE_UTILIZATION": {
+        "unset": true
+      },
+      "DIE_AREA": "0 0 60 60"
+    },
+    "before": {
+      "CORE_AREA": {
+        "absent": true
+      },
+      "CORE_UTILIZATION": "25",
+      "DIE_AREA": {
+        "absent": true
+      }
+    },
+    "changed_knobs": [
+      "CORE_AREA",
+      "CORE_UTILIZATION",
+      "DIE_AREA"
+    ]
+  },
+  "family_id": "pdn_floorplan",
+  "schema_version": "repair-family-evidence-1.1",
+  "task": {
+    "baseline_available_width_um": 5.98,
+    "check_set": [
+      "orfs",
+      "route",
+      "drc",
+      "lvs",
+      "setup",
+      "hold",
+      "antenna",
+      "rcx"
+    ],
+    "clock_port": "scl",
+    "license_evidence": {
+      "sha256": "589ed823e9a84c56feb95ac58e7cf384626b9cbf4fda2a907bc36e103de1bad2",
+      "size": 35141,
+      "source_relative_path": "LICENSE",
+      "spdx_id": "GPL-3.0-only",
+      "status": "allow"
+    },
+    "minimum_required_grid_width_um": 42.4,
+    "pdn_offset_um": 13.6,
+    "platform": "sky130hd",
+    "protected_task_digest": "75242bb8fa9dc85f2143869932a00e621d54a50a4196dfc6f0806cb9a78528e0",
+    "sdc_sha256": "e377d37261fe88d97d24cbac656e920b7023b15e9db27102deeb29ab32bd8785",
+    "signoff_mode": "strict",
+    "source_commit": "123c10d0de7e53e2a328a3ded73ad2394f8c6bb6",
+    "source_digest": "1150113397f362c6e1baa4ffbb7887d6d450fe1079887edcc74510547dfe160b",
+    "source_provenance_status": "repo_commit_and_bytes_bound",
+    "source_repo_url": "https://github.com/mitya1337/Simple_I2C",
+    "target_frequency_mhz": 100.0,
+    "top_module": "i2c_slave_controller",
+    "total_strap_width_um": 15.2
+  },
+  "witness_run": {
+    "available_width_um": 50.0,
+    "commands": [
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_witness_bound",
+          "sky130hd",
+          "repair_probe_simple_i2c_slave_pdn_100_witness_bound"
+        ],
+        "elapsed_seconds": 48.089,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/simple_i2c_pdn_witness_bound/run_orfs.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_witness_bound",
+          "sky130hd",
+          "--check",
+          "both",
+          "--max-iters",
+          "0",
+          "--variant",
+          "repair_probe_simple_i2c_slave_pdn_100_witness_bound"
+        ],
+        "elapsed_seconds": 11.64,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/simple_i2c_pdn_witness_bound/strict_signoff.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "python3",
+          "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_witness_bound",
+          "--run-dir",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_witness_bound/backend/RUN_2026-08-11_01-40-57_1829426_72b0",
+          "--mode",
+          "strict",
+          "--def",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_witness_bound/backend/RUN_2026-08-11_01-40-57_1829426_72b0/final/6_final.def"
+        ],
+        "elapsed_seconds": 0.052,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/simple_i2c_pdn_witness_bound/signoff_gate.log",
+        "returncode": 0
+      }
+    ],
+    "completed_at": "2026-08-11T09:08:57.447279+00:00",
+    "config_sha256": "fefbc046b91d69c59cf4f536cd7792654f1872df60bcc74cfef9e70966ccc832",
+    "constraint_attestation": {
+      "config_sha256": "fefbc046b91d69c59cf4f536cd7792654f1872df60bcc74cfef9e70966ccc832",
+      "mode": "fixed_registered_target",
+      "sdc_sha256": "e377d37261fe88d97d24cbac656e920b7023b15e9db27102deeb29ab32bd8785",
+      "status": "bound",
+      "target_frequency_mhz": 100.0
+    },
+    "environment_failure": false,
+    "evidence_binding": {
+      "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_witness_bound/repair_family_probe_input.json",
+      "input_manifest_sha256": "30f4308860567041b31b110e04a1b6a16146c3bf78f806d24436c57793c06032",
+      "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_witness_bound",
+      "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_witness_bound/repair_family_probe_result.json",
+      "result_sha256": "79c409141304ba7ffdc5a4300363f1bcf51da1e30addb866fd064d036dc9ea23"
+    },
+    "family_id": "pdn_floorplan",
+    "metrics": {
+      "antenna_violations": 0,
+      "drc_violations": 0,
+      "hold_wns_ns": 1e+39,
+      "lvs_mismatches": 0,
+      "route_violations": 0,
+      "setup_wns_ns": 1e+39
+    },
+    "normalized_failure_signature": [],
+    "protected_task_digest": "75242bb8fa9dc85f2143869932a00e621d54a50a4196dfc6f0806cb9a78528e0",
+    "publication_strict_clean": false,
+    "report_status": {
+      "drc": "clean",
+      "lvs": "clean",
+      "ppa": null,
+      "rcx": "complete",
+      "route": "clean",
+      "signoff_gate": "pass",
+      "signoff_manifest": null,
+      "timing_check": null
+    },
+    "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/simple_i2c_pdn_witness_bound/backend/RUN_2026-08-11_01-40-57_1829426_72b0",
+    "run_id": "RUN_2026-08-11_01-40-57_1829426_72b0",
+    "schema_version": "repair-family-probe-result-1.1",
+    "strict_clean": true,
+    "strict_clean_scope": "fixed_target_physical_signoff",
+    "task_id": "simple_i2c_slave_pdn_100",
+    "variant": "witness_bound"
+  }
+}

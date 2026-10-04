@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "experiment_id": "r2g-exp2-orfs-signoff-pilot",
+  "policy": {
+    "credentials": "environment_only",
+    "require_provider_usage": true,
+    "persist_response_content": false
+  },
+  "routes": [
+    {
+      "method_id": "openai-vanilla",
+      "display_model": "GPT-5.5 via AIbangbang",
+      "provider": "AIbangbang gateway",
+      "channel": "third_party_gateway",
+      "api_style": "openai_responses",
+      "endpoint": "https://api.aibangbang.me/v1/responses",
+      "endpoint_env": "AIBANGBANG_BASE_URL",
+      "api_key_env": "AIBANGBANG_API_KEY",
+      "model_id": "gpt-5.5",
+      "model_family": "gpt-5.5",
+      "tool_choice": "auto",
+      "max_output_tokens": 256,
+      "request_overhead_reserve_tokens": 5000,
+      "formal_reasoning_policy": "provider_default",
+      "documentation": "Third-party gateway engineering Pilot using the provider-authorized Responses endpoint; not an official OpenAI API baseline."
+    },
+    {
+      "method_id": "qwen-vanilla",
+      "display_model": "Qwen3.7 Max",
+      "provider": "Alibaba Cloud Model Studio",
+      "channel": "official_api",
+      "api_style": "openai_chat",
+      "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+      "endpoint_env": "DASHSCOPE_BASE_URL",
+      "api_key_env": "DASHSCOPE_API_KEY",
+      "model_id": "qwen3.7-max-2026-06-08",
+      "model_family": "qwen3.7-max",
+      "tool_choice": "auto",
+      "max_output_field": "max_completion_tokens",
+      "max_output_tokens": 256,
+      "formal_reasoning_policy": "provider_default"
+    },
+    {
+      "method_id": "deepseek-vanilla",
+      "display_model": "DeepSeek V4 Flash",
+      "provider": "DeepSeek",
+      "channel": "official_api",
+      "api_style": "openai_chat",
+      "endpoint": "https://api.deepseek.com/chat/completions",
+      "endpoint_env": "DEEPSEEK_BASE_URL",
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "model_id": "deepseek-v4-flash",
+      "model_family": "deepseek-v4-flash",
+      "tool_choice": "auto",
+      "max_output_field": "max_tokens",
+      "max_output_tokens": 256,
+      "formal_reasoning_policy": "provider_default_high"
+    }
+  ]
+}

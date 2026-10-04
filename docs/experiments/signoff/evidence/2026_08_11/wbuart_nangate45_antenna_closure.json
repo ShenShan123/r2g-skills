@@ -1,0 +1,347 @@
+{
+  "admission": {
+    "failures": [],
+    "status": "pass"
+  },
+  "baseline_runs": [
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_1",
+            "nangate45",
+            "repair_probe_wbuart_antenna_current_baseline_1"
+          ],
+          "elapsed_seconds": 131.564,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/wbuart_antcur_baseline_1/run_orfs.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_1",
+            "nangate45",
+            "--check",
+            "both",
+            "--max-iters",
+            "0",
+            "--variant",
+            "repair_probe_wbuart_antenna_current_baseline_1"
+          ],
+          "elapsed_seconds": 1337.917,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/wbuart_antcur_baseline_1/strict_signoff.log",
+          "returncode": 2
+        },
+        {
+          "command": [
+            "python3",
+            "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_1",
+            "--run-dir",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_1/backend/RUN_2026-08-11_01-54-43_1866296_760e",
+            "--mode",
+            "strict",
+            "--def",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_1/backend/RUN_2026-08-11_01-54-43_1866296_760e/final/6_final.def"
+          ],
+          "elapsed_seconds": 0.057,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/wbuart_antcur_baseline_1/signoff_gate.log",
+          "returncode": 0
+        }
+      ],
+      "completed_at": "2026-08-11T09:19:47.011110+00:00",
+      "config_sha256": "d36741d60da4ad4589e13ef54af7dbfdcaa407814ac0a53d9b72839812838c3c",
+      "constraint_attestation": {
+        "config_sha256": "d36741d60da4ad4589e13ef54af7dbfdcaa407814ac0a53d9b72839812838c3c",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "d0f2dadb5a43c914c5f65a157c5243823491e0b237f89f83168607ddbe97fd91",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_1/repair_family_probe_input.json",
+        "input_manifest_sha256": "d6e17f7d92bf646522a15c616bbd827ca915a1ab9b4c6ea58c8e3d6070836b13",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_1",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_1/repair_family_probe_result.json",
+        "result_sha256": "42db804b4fb1ff0bfd49137b54ca0cc76b003b93ce6cc006f048c724ed83d2aa"
+      },
+      "family_id": "antenna_closure",
+      "metrics": {
+        "antenna_violations": 10,
+        "drc_violations": 10,
+        "hold_wns_ns": 0.0761297,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": 9.15884
+      },
+      "normalized_failure_signature": [
+        "DRC:METAL5_ANTENNA"
+      ],
+      "protected_task_digest": "4d626206f576c2e3f2862a844122fc0210e220b1acde034a20d7839518fa1e37",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": "fail",
+        "lvs": "clean",
+        "ppa": null,
+        "rcx": "complete",
+        "route": "clean",
+        "signoff_gate": "dirty",
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_1/backend/RUN_2026-08-11_01-54-43_1866296_760e",
+      "run_id": "RUN_2026-08-11_01-54-43_1866296_760e",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "wbuart_antenna_current",
+      "variant": "baseline_1"
+    },
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_2",
+            "nangate45",
+            "repair_probe_wbuart_antenna_current_baseline_2"
+          ],
+          "elapsed_seconds": 130.665,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/wbuart_antcur_baseline_2/run_orfs.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_2",
+            "nangate45",
+            "--check",
+            "both",
+            "--max-iters",
+            "0",
+            "--variant",
+            "repair_probe_wbuart_antenna_current_baseline_2"
+          ],
+          "elapsed_seconds": 1314.552,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/wbuart_antcur_baseline_2/strict_signoff.log",
+          "returncode": 2
+        },
+        {
+          "command": [
+            "python3",
+            "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_2",
+            "--run-dir",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_2/backend/RUN_2026-08-11_01-54-53_1866910_19d8",
+            "--mode",
+            "strict",
+            "--def",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_2/backend/RUN_2026-08-11_01-54-53_1866910_19d8/final/6_final.def"
+          ],
+          "elapsed_seconds": 0.055,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/wbuart_antcur_baseline_2/signoff_gate.log",
+          "returncode": 0
+        }
+      ],
+      "completed_at": "2026-08-11T09:19:47.235058+00:00",
+      "config_sha256": "5a33ba8bedcb7747605c7f92a0549b7e20cab71aac86cb8c7769d39af98ef730",
+      "constraint_attestation": {
+        "config_sha256": "5a33ba8bedcb7747605c7f92a0549b7e20cab71aac86cb8c7769d39af98ef730",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "d0f2dadb5a43c914c5f65a157c5243823491e0b237f89f83168607ddbe97fd91",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_2/repair_family_probe_input.json",
+        "input_manifest_sha256": "cab6d6d299862db74671260f1b2f5eb40272802958af46533c6e53e0674bdb68",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_2",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_2/repair_family_probe_result.json",
+        "result_sha256": "cbaedb5319ef624354bed458c9bc7e6f08526202029870aea7064df398ae22f2"
+      },
+      "family_id": "antenna_closure",
+      "metrics": {
+        "antenna_violations": 10,
+        "drc_violations": 10,
+        "hold_wns_ns": 0.0761297,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": 9.15884
+      },
+      "normalized_failure_signature": [
+        "DRC:METAL5_ANTENNA"
+      ],
+      "protected_task_digest": "4d626206f576c2e3f2862a844122fc0210e220b1acde034a20d7839518fa1e37",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": "fail",
+        "lvs": "clean",
+        "ppa": null,
+        "rcx": "complete",
+        "route": "clean",
+        "signoff_gate": "dirty",
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_baseline_2/backend/RUN_2026-08-11_01-54-53_1866910_19d8",
+      "run_id": "RUN_2026-08-11_01-54-53_1866910_19d8",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "wbuart_antenna_current",
+      "variant": "baseline_2"
+    }
+  ],
+  "effect": {
+    "after": {
+      "MAX_REPAIR_ANTENNAS_ITER_DRT": "10",
+      "SKIP_ANTENNA_REPAIR": "1"
+    },
+    "before": {
+      "MAX_REPAIR_ANTENNAS_ITER_DRT": {
+        "absent": true
+      },
+      "SKIP_ANTENNA_REPAIR": {
+        "absent": true
+      }
+    },
+    "changed_knobs": [
+      "MAX_REPAIR_ANTENNAS_ITER_DRT",
+      "SKIP_ANTENNA_REPAIR"
+    ]
+  },
+  "family_id": "antenna_closure",
+  "schema_version": "repair-family-evidence-1.1",
+  "task": {
+    "check_set": [
+      "orfs",
+      "route",
+      "drc",
+      "lvs",
+      "setup",
+      "hold",
+      "antenna",
+      "rcx"
+    ],
+    "clock_port": "i_clk",
+    "license_evidence": {
+      "sha256": "589ed823e9a84c56feb95ac58e7cf384626b9cbf4fda2a907bc36e103de1bad2",
+      "size": 35141,
+      "source_relative_path": "LICENSE",
+      "spdx_id": "GPL-3.0-or-later",
+      "status": "allow"
+    },
+    "platform": "nangate45",
+    "protected_task_digest": "4d626206f576c2e3f2862a844122fc0210e220b1acde034a20d7839518fa1e37",
+    "sdc_sha256": "d0f2dadb5a43c914c5f65a157c5243823491e0b237f89f83168607ddbe97fd91",
+    "signoff_mode": "strict",
+    "source_commit": "f43a6b83c3a70fb2ac0696a45c5545b233fb860b",
+    "source_digest": "a7aef1ab1986eef1b051913256b7b976cd2e92d85799a78c72b6729b94d94f17",
+    "source_provenance_status": "repo_commit_and_bytes_bound",
+    "source_repo_url": "https://github.com/ZipCPU/wbuart32",
+    "target_frequency_mhz": 100.0,
+    "top_module": "wbuart"
+  },
+  "witness_run": {
+    "commands": [
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_witness",
+          "nangate45",
+          "repair_probe_wbuart_antenna_current_witness"
+        ],
+        "elapsed_seconds": 150.566,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/wbuart_antcur_witness/run_orfs.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_witness",
+          "nangate45",
+          "--check",
+          "both",
+          "--max-iters",
+          "0",
+          "--variant",
+          "repair_probe_wbuart_antenna_current_witness"
+        ],
+        "elapsed_seconds": 1315.615,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/wbuart_antcur_witness/strict_signoff.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "python3",
+          "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_witness",
+          "--run-dir",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_witness/backend/RUN_2026-08-11_01-54-58_1867356_5dcb",
+          "--mode",
+          "strict",
+          "--def",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_witness/backend/RUN_2026-08-11_01-54-58_1867356_5dcb/final/6_final.def"
+        ],
+        "elapsed_seconds": 0.052,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/wbuart_antcur_witness/signoff_gate.log",
+        "returncode": 0
+      }
+    ],
+    "completed_at": "2026-08-11T09:19:47.426585+00:00",
+    "config_sha256": "4690a641c437aa74f44dbe583bd5b57756466897e44e1dbefe224d27c76b6655",
+    "constraint_attestation": {
+      "config_sha256": "4690a641c437aa74f44dbe583bd5b57756466897e44e1dbefe224d27c76b6655",
+      "mode": "fixed_registered_target",
+      "sdc_sha256": "d0f2dadb5a43c914c5f65a157c5243823491e0b237f89f83168607ddbe97fd91",
+      "status": "bound",
+      "target_frequency_mhz": 100.0
+    },
+    "environment_failure": false,
+    "evidence_binding": {
+      "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_witness/repair_family_probe_input.json",
+      "input_manifest_sha256": "b7fdce2db72e07209e13500a97ce20165684b2a42851a037499fe07e54ce97a4",
+      "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_witness",
+      "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_witness/repair_family_probe_result.json",
+      "result_sha256": "f00926860c499227da90548f303afcf0c2565bb55369b8a8a32a36204f0c562c"
+    },
+    "family_id": "antenna_closure",
+    "metrics": {
+      "antenna_violations": 0,
+      "drc_violations": 0,
+      "hold_wns_ns": 0.0761297,
+      "lvs_mismatches": 0,
+      "route_violations": 0,
+      "setup_wns_ns": 9.15884
+    },
+    "normalized_failure_signature": [],
+    "protected_task_digest": "4d626206f576c2e3f2862a844122fc0210e220b1acde034a20d7839518fa1e37",
+    "publication_strict_clean": false,
+    "report_status": {
+      "drc": "clean",
+      "lvs": "clean",
+      "ppa": null,
+      "rcx": "complete",
+      "route": "clean",
+      "signoff_gate": "pass",
+      "signoff_manifest": null,
+      "timing_check": null
+    },
+    "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/wbuart_antcur_witness/backend/RUN_2026-08-11_01-54-58_1867356_5dcb",
+    "run_id": "RUN_2026-08-11_01-54-58_1867356_5dcb",
+    "schema_version": "repair-family-probe-result-1.1",
+    "strict_clean": true,
+    "strict_clean_scope": "fixed_target_physical_signoff",
+    "task_id": "wbuart_antenna_current",
+    "variant": "witness"
+  }
+}

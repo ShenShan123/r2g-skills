@@ -1,0 +1,342 @@
+{
+  "admission": {
+    "failures": [],
+    "status": "pass"
+  },
+  "baseline_runs": [
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_1",
+            "sky130hd",
+            "repair_probe_siliconcompiler_gcd_m3p2_100mhz_baseline_1"
+          ],
+          "elapsed_seconds": 260.61,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sc_gcd_drc_baseline_1/run_orfs.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_1",
+            "sky130hd",
+            "--check",
+            "both",
+            "--max-iters",
+            "0",
+            "--variant",
+            "repair_probe_siliconcompiler_gcd_m3p2_100mhz_baseline_1"
+          ],
+          "elapsed_seconds": 14.453,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sc_gcd_drc_baseline_1/strict_signoff.log",
+          "returncode": 2
+        },
+        {
+          "command": [
+            "python3",
+            "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_1",
+            "--run-dir",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_1/backend/RUN_2026-08-11_01-52-36_1858738_6cfb",
+            "--mode",
+            "strict",
+            "--def",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_1/backend/RUN_2026-08-11_01-52-36_1858738_6cfb/final/6_final.def"
+          ],
+          "elapsed_seconds": 0.055,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sc_gcd_drc_baseline_1/signoff_gate.log",
+          "returncode": 0
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:56.930021+00:00",
+      "config_sha256": "5aa5c78f166cca75669f1365a5618cff3f3688e7af2f85c3d7bc1d264939a253",
+      "constraint_attestation": {
+        "config_sha256": "5aa5c78f166cca75669f1365a5618cff3f3688e7af2f85c3d7bc1d264939a253",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "e25dbebc7ba281633bbf6a34d6f16ccd5098286c515c354e97147c877dfc47a2",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_1/repair_family_probe_input.json",
+        "input_manifest_sha256": "3c1f7e7711903c3974d66c7e5c761e0161efdd666675f8141cb63e2d6a794195",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_1",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_1/repair_family_probe_result.json",
+        "result_sha256": "7dbb3ada22a8a626ecc8641273b1c39269938678d89b4d73dd2d0d63153eb5b9"
+      },
+      "family_id": "rule_specific_drc",
+      "metrics": {
+        "antenna_violations": 0,
+        "drc_violations": 6,
+        "hold_wns_ns": 0.482829,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": 5.85902
+      },
+      "normalized_failure_signature": [
+        "DRC:m3.2"
+      ],
+      "protected_task_digest": "628261b3061c0320602b7c33c0fcf16e3db8b0e107387b22891072ea6b7f37fc",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": "fail",
+        "lvs": "clean",
+        "ppa": null,
+        "rcx": "complete",
+        "route": "clean",
+        "signoff_gate": "dirty",
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_1/backend/RUN_2026-08-11_01-52-36_1858738_6cfb",
+      "run_id": "RUN_2026-08-11_01-52-36_1858738_6cfb",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "siliconcompiler_gcd_m3p2_100mhz",
+      "variant": "baseline_1"
+    },
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_2",
+            "sky130hd",
+            "repair_probe_siliconcompiler_gcd_m3p2_100mhz_baseline_2"
+          ],
+          "elapsed_seconds": 259.145,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sc_gcd_drc_baseline_2/run_orfs.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_2",
+            "sky130hd",
+            "--check",
+            "both",
+            "--max-iters",
+            "0",
+            "--variant",
+            "repair_probe_siliconcompiler_gcd_m3p2_100mhz_baseline_2"
+          ],
+          "elapsed_seconds": 13.334,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sc_gcd_drc_baseline_2/strict_signoff.log",
+          "returncode": 2
+        },
+        {
+          "command": [
+            "python3",
+            "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_2",
+            "--run-dir",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_2/backend/RUN_2026-08-11_01-52-40_1859189_78e1",
+            "--mode",
+            "strict",
+            "--def",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_2/backend/RUN_2026-08-11_01-52-40_1859189_78e1/final/6_final.def"
+          ],
+          "elapsed_seconds": 0.057,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sc_gcd_drc_baseline_2/signoff_gate.log",
+          "returncode": 0
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:56.997734+00:00",
+      "config_sha256": "153a52fea81feb04b7aad75667a930df06263cea4ba91b22ebac9baacdc0e006",
+      "constraint_attestation": {
+        "config_sha256": "153a52fea81feb04b7aad75667a930df06263cea4ba91b22ebac9baacdc0e006",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "e25dbebc7ba281633bbf6a34d6f16ccd5098286c515c354e97147c877dfc47a2",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_2/repair_family_probe_input.json",
+        "input_manifest_sha256": "964cf1021fbcde9d4756fa291eb61551ab041fd1d79e6ca344b5c898844bcc76",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_2",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_2/repair_family_probe_result.json",
+        "result_sha256": "39b7622c948d19a6f70ec5a5c893eae89c7e7c30ee82f1d824f6a969fbf289d0"
+      },
+      "family_id": "rule_specific_drc",
+      "metrics": {
+        "antenna_violations": 0,
+        "drc_violations": 6,
+        "hold_wns_ns": 0.482829,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": 5.85902
+      },
+      "normalized_failure_signature": [
+        "DRC:m3.2"
+      ],
+      "protected_task_digest": "628261b3061c0320602b7c33c0fcf16e3db8b0e107387b22891072ea6b7f37fc",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": "fail",
+        "lvs": "clean",
+        "ppa": null,
+        "rcx": "complete",
+        "route": "clean",
+        "signoff_gate": "dirty",
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_baseline_2/backend/RUN_2026-08-11_01-52-40_1859189_78e1",
+      "run_id": "RUN_2026-08-11_01-52-40_1859189_78e1",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "siliconcompiler_gcd_m3p2_100mhz",
+      "variant": "baseline_2"
+    }
+  ],
+  "effect": {
+    "after": {
+      "PLACE_PINS_ARGS": "-exclude right:*"
+    },
+    "before": {
+      "PLACE_PINS_ARGS": {
+        "absent": true
+      }
+    },
+    "changed_knobs": [
+      "PLACE_PINS_ARGS"
+    ]
+  },
+  "family_id": "rule_specific_drc",
+  "schema_version": "repair-family-evidence-1.1",
+  "task": {
+    "check_set": [
+      "orfs",
+      "route",
+      "drc",
+      "lvs",
+      "setup",
+      "hold",
+      "antenna",
+      "rcx"
+    ],
+    "clock_port": "clk",
+    "license_evidence": {
+      "sha256": "95b2d1eac468fc260939fed25601e2f94e8265d0fc7ac1121191394d96b33901",
+      "size": 10766,
+      "source_relative_path": "LICENSE",
+      "spdx_id": "Apache-2.0",
+      "status": "allow"
+    },
+    "platform": "sky130hd",
+    "protected_task_digest": "628261b3061c0320602b7c33c0fcf16e3db8b0e107387b22891072ea6b7f37fc",
+    "sdc_sha256": "e25dbebc7ba281633bbf6a34d6f16ccd5098286c515c354e97147c877dfc47a2",
+    "signoff_mode": "strict",
+    "source_commit": "ecb9cb43192c6895620ea0926eb874052755a39c",
+    "source_digest": "a831a9e1fe9fa07b1c856b72191287c1f0b852fcbcfd36259ab4c6ea00b20c95",
+    "source_provenance_status": "repo_commit_and_bytes_bound",
+    "source_repo_url": "https://github.com/siliconcompiler/siliconcompiler",
+    "target_frequency_mhz": 100.0,
+    "top_module": "gcd"
+  },
+  "witness_run": {
+    "commands": [
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_witness_exclude_right",
+          "sky130hd",
+          "repair_probe_siliconcompiler_gcd_m3p2_100mhz_witness_exclude_right"
+        ],
+        "elapsed_seconds": 85.997,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sc_gcd_drc_witness_exclude_right/run_orfs.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_witness_exclude_right",
+          "sky130hd",
+          "--check",
+          "both",
+          "--max-iters",
+          "0",
+          "--variant",
+          "repair_probe_siliconcompiler_gcd_m3p2_100mhz_witness_exclude_right"
+        ],
+        "elapsed_seconds": 30.25,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sc_gcd_drc_witness_exclude_right/strict_signoff.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "python3",
+          "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_witness_exclude_right",
+          "--run-dir",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_witness_exclude_right/backend/RUN_2026-08-11_01-52-49_1860450_032e",
+          "--mode",
+          "strict",
+          "--def",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_witness_exclude_right/backend/RUN_2026-08-11_01-52-49_1860450_032e/final/6_final.def"
+        ],
+        "elapsed_seconds": 0.052,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sc_gcd_drc_witness_exclude_right/signoff_gate.log",
+        "returncode": 0
+      }
+    ],
+    "completed_at": "2026-08-11T09:08:57.060520+00:00",
+    "config_sha256": "f6804d5a967d2a23e4c576cc795f773fe19e9a06c1f2c8d658cbde387cb8f03b",
+    "constraint_attestation": {
+      "config_sha256": "f6804d5a967d2a23e4c576cc795f773fe19e9a06c1f2c8d658cbde387cb8f03b",
+      "mode": "fixed_registered_target",
+      "sdc_sha256": "e25dbebc7ba281633bbf6a34d6f16ccd5098286c515c354e97147c877dfc47a2",
+      "status": "bound",
+      "target_frequency_mhz": 100.0
+    },
+    "environment_failure": false,
+    "evidence_binding": {
+      "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_witness_exclude_right/repair_family_probe_input.json",
+      "input_manifest_sha256": "b5a5f075abbbf6117df18524286c8e40c82ce3472e3c37289cb36321f04c5931",
+      "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_witness_exclude_right",
+      "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_witness_exclude_right/repair_family_probe_result.json",
+      "result_sha256": "c53ea290a30f82a9c4f25548aaaa9fd9d4ff215b13f9ef9da5147755acac9cdc"
+    },
+    "family_id": "rule_specific_drc",
+    "metrics": {
+      "antenna_violations": 0,
+      "drc_violations": 0,
+      "hold_wns_ns": 0.492453,
+      "lvs_mismatches": 0,
+      "route_violations": 0,
+      "setup_wns_ns": 5.75549
+    },
+    "normalized_failure_signature": [],
+    "protected_task_digest": "628261b3061c0320602b7c33c0fcf16e3db8b0e107387b22891072ea6b7f37fc",
+    "publication_strict_clean": false,
+    "report_status": {
+      "drc": "clean",
+      "lvs": "clean",
+      "ppa": null,
+      "rcx": "complete",
+      "route": "clean",
+      "signoff_gate": "pass",
+      "signoff_manifest": null,
+      "timing_check": null
+    },
+    "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sc_gcd_drc_witness_exclude_right/backend/RUN_2026-08-11_01-52-49_1860450_032e",
+    "run_id": "RUN_2026-08-11_01-52-49_1860450_032e",
+    "schema_version": "repair-family-probe-result-1.1",
+    "strict_clean": true,
+    "strict_clean_scope": "fixed_target_physical_signoff",
+    "task_id": "siliconcompiler_gcd_m3p2_100mhz",
+    "variant": "witness_exclude_right"
+  }
+}

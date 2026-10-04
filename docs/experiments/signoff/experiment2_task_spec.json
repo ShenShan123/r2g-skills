@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.1",
+  "experiment_id": "r2g-exp2-orfs-signoff-pilot",
+  "platform": "sky130hd",
+  "task": "For each frozen RTL design, use the common deterministic flow executor and public checkpoint validator to reach the first strict-clean physical-design checkpoint at the frozen 100 MHz (10 ns) target within the budget.",
+  "methods": [
+    "openai-vanilla",
+    "qwen-vanilla",
+    "deepseek-vanilla",
+    "full-r2g"
+  ],
+  "budgets": {
+    "wall_time_seconds_per_method_design": 14400,
+    "provider_total_tokens_per_vanilla_method_design": 300000,
+    "provider_total_tokens_per_vanilla_method": 2400000,
+    "max_model_turns_per_vanilla_method_design": 50,
+    "max_orfs_flows_per_method_design": 4,
+    "cpu_cores": 4,
+    "max_concurrent_orfs_flows": 1,
+    "infrastructure_clean_reruns": 2
+  },
+  "execution_interface": {
+    "common_low_level_actions": [
+      "inspect_state",
+      "read_project_file",
+      "set_orfs_knob",
+      "run_complete_orfs_flow",
+      "validate_checkpoint",
+      "lock_checkpoint",
+      "submit_first_clean"
+    ],
+    "vanilla_forbidden": [
+      "r2g_recipe",
+      "r2g_memory",
+      "r2g_diagnosis",
+      "r2g_ranking",
+      "r2g_knowledge_database"
+    ],
+    "validator_returns_repair_advice": false
+  },
+  "cohort_contract": {
+    "roles": [
+      "repair_needed",
+      "clean_sentinel"
+    ],
+    "repair_needed_requires": [
+      "two_digest_bound_default_orfs_failures_with_the_same_non_environment_signature",
+      "one_digest_bound_independent_strict_clean_witness",
+      "registered_family_and_allowlisted_effect"
+    ],
+    "clean_sentinel_requires": [
+      "one_digest_bound_default_orfs_strict_clean_run"
+    ],
+    "primary_outcomes": [
+      "repair_recovery_rate",
+      "clean_sentinel_non_regression_rate"
+    ],
+    "development_smoke_is_not_a_paper_result": true
+  },
+  "knowledge_isolation": {
+    "full_r2g_starts_from_frozen_snapshot": true,
+    "vanilla_starts_from_empty_state": true,
+    "mutable_state_isolated_per_method_design": true,
+    "full_r2g_agent_runtime_isolated_per_design": true,
+    "frozen_seed_is_read_only_and_separate_from_working_state": true,
+    "cross_fixture_learning": false
+  },
+  "protected": {
+    "platform": "sky130hd",
+    "source_closure": true,
+    "top_module": true,
+    "clock_identity": true,
+    "target_frequency_mhz": 100,
+    "target_clock_period_ns": 10,
+    "footprint_policy": true,
+    "standard_cell_library": true,
+    "signoff_rule_decks": true,
+    "timing_exceptions_forbidden": ["set_false_path", "set_multicycle_path", "set_disable_timing"],
+    "check_disabling_forbidden": true
+  },
+  "strict_clean_gates": [
+    "complete_synthesis_floorplan_place_cts_route_finish_lineage",
+    "route_violations_zero",
+    "full_deck_drc_violations_zero",
+    "lvs_clean",
+    "setup_wns_nonnegative_and_tns_zero",
+    "hold_wns_nonnegative_and_tns_zero",
+    "antenna_violations_zero",
+    "rcx_spef_complete",
+    "same_run_digest_bound_provenance"
+  ],
+  "strict_clean_scope": "fixed_target_physical_signoff",
+  "graph_publication_clean_is_separate": true,
+  "target": {
+    "frequency_mhz": 100,
+    "period_ns": 10,
+    "per_rtl_frequency_selection_forbidden": true,
+    "frequency_search_forbidden": true,
+    "stop_after_first_strict_clean": true
+  },
+  "public_validator": {
+    "name": "validate_checkpoint",
+    "returns": ["per_gate_status", "raw_metrics", "evidence_paths"],
+    "does_not_return": ["root_cause_diagnosis", "repair_parameter_recommendations", "recipe_results"],
+    "runtime_counts_against_campaign_budget": true
+  },
+  "final_evaluation": {
+    "checkpoint_must_be_locked_first": true,
+    "independent_signoff_rerun": true,
+    "rebuild_protected_sdc": true,
+    "post_result_checkpoint_replacement_forbidden": true,
+    "fail_closed_on_missing_unknown_skipped_timeout_or_digest_mismatch": true
+  }
+}

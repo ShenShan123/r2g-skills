@@ -1,0 +1,156 @@
+{
+  "schema_version": "1.0",
+  "experiment_id": "r2g-exp2-retrospective-repair-screen",
+  "cohort_kind": "retrospective_repair_screen",
+  "status": "development_screen",
+  "platform": "sky130hd",
+  "selection_policy": {
+    "historical_outcomes_used_for_nomination": true,
+    "historical_outcomes_used_as_current_admission_evidence": false,
+    "current_default_orfs_repeats_required": 2,
+    "independent_feasibility_run_required": true,
+    "environment_failures_admissible": false
+  },
+  "repeatability_fixture_ids": [
+    "axil_reg_if",
+    "eth_mac_mii",
+    "can_fifo",
+    "axis_switch",
+    "picorv32_axi",
+    "wbsafety"
+  ],
+  "fixtures": [
+    {
+      "id": "axil_reg_if",
+      "size_bin": "small",
+      "mapped_cells": 792,
+      "clock_port": "clk",
+      "footprint_policy": {"mode": "bounded_core_utilization", "initial": 20, "minimum": 8, "maximum": 20},
+      "candidate": {
+        "repo_url": "https://github.com/alexforencich/verilog-axi",
+        "commit": "516bd5dadc3365b7f9e225d2af8fe0b8d804fe53",
+        "top_module": "axil_reg_if",
+        "language": "verilog",
+        "rtl_files": ["rtl/axil_reg_if.v", "rtl/axil_reg_if_rd.v", "rtl/axil_reg_if_wr.v"],
+        "header_files": [],
+        "include_dirs": [],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "COPYING", "spdx_id": "MIT"}
+      },
+      "qualification": {"closure_sha256": "93740ef852eb51a750623af48bbb9e48ed009e09dd4a5ee98dc2cb5b17a0d823"},
+      "screening": {"target_frequency_mhz": 100, "feasibility_core_utilization": 12, "historical_symptom": "drc:m3.2:34"}
+    },
+    {
+      "id": "eth_mac_mii",
+      "size_bin": "medium",
+      "mapped_cells": 2200,
+      "clock_port": "mii_tx_clk",
+      "footprint_policy": {"mode": "bounded_core_utilization", "initial": 25, "minimum": 8, "maximum": 25},
+      "candidate": {
+        "repo_url": "https://github.com/alexforencich/verilog-ethernet",
+        "commit": "77320a9471d19c7dd383914bc049e02d9f4f1ffb",
+        "top_module": "eth_mac_mii",
+        "language": "verilog",
+        "rtl_files": ["rtl/eth_mac_mii.v", "rtl/mii_phy_if.v", "rtl/eth_mac_1g.v", "rtl/axis_gmii_rx.v", "rtl/axis_gmii_tx.v", "rtl/lfsr.v", "rtl/ssio_sdr_in.v", "rtl/ssio_sdr_out.v"],
+        "header_files": [],
+        "include_dirs": ["rtl"],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "COPYING", "spdx_id": "MIT"}
+      },
+      "qualification": {"closure_sha256": "4afcb2b5023f5375ab15b185c9c739a75778436806abb813f20af85c152828f2"},
+      "screening": {"target_frequency_mhz": 100, "feasibility_core_utilization": 17, "historical_symptom": "drc:m3.2:6"}
+    },
+    {
+      "id": "can_fifo",
+      "size_bin": "medium",
+      "mapped_cells": 5906,
+      "clock_port": "clk",
+      "footprint_policy": {"mode": "bounded_core_utilization", "initial": 20, "minimum": 8, "maximum": 20},
+      "candidate": {
+        "repo_url": "https://github.com/dpiegdon/verilog-can",
+        "commit": "0744cb837db7a55c21d9d546fde1f30fc26de00f",
+        "top_module": "can_fifo",
+        "language": "verilog",
+        "rtl_files": ["can_fifo.v"],
+        "header_files": ["can_top_defines.v"],
+        "include_dirs": ["."],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "LICENSE", "spdx_id": "LGPL-2.1-or-later"}
+      },
+      "qualification": {"closure_sha256": "3d2cf60fc138db2b4e8d5e007c4e9d8418e310ff6f388de8e28685974e259a50"},
+      "screening": {"target_frequency_mhz": 100, "feasibility_core_utilization": 12, "historical_symptom": "drc:m3.2:20"}
+    },
+    {
+      "id": "axis_switch",
+      "size_bin": "medium",
+      "mapped_cells": 1688,
+      "clock_port": "clk",
+      "footprint_policy": {"mode": "bounded_core_utilization", "initial": 25, "minimum": 8, "maximum": 25},
+      "candidate": {
+        "repo_url": "https://github.com/alexforencich/verilog-axis",
+        "commit": "48ff7a7e2ef782cf778d47910cf85835c64b1bce",
+        "top_module": "axis_switch",
+        "language": "verilog",
+        "rtl_files": ["rtl/axis_switch.v", "rtl/axis_register.v", "rtl/arbiter.v", "rtl/priority_encoder.v"],
+        "header_files": [],
+        "include_dirs": [],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "COPYING", "spdx_id": "MIT"}
+      },
+      "qualification": {"closure_sha256": "b8b9a3854ad0f1fe9d61775d421fa0b79cbe05cd6fa9a2b0f606a0c0972c0524"},
+      "screening": {"target_frequency_mhz": 100, "feasibility_core_utilization": 17, "historical_symptom": "drc:m3.2:32"}
+    },
+    {
+      "id": "picorv32_axi",
+      "size_bin": "medium",
+      "mapped_cells": 7000,
+      "clock_port": "clk",
+      "footprint_policy": {"mode": "bounded_core_utilization", "initial": 25, "minimum": 8, "maximum": 25},
+      "candidate": {
+        "repo_url": "https://github.com/YosysHQ/picorv32",
+        "commit": "a473fc8fca393771d83b0ffcf0b14db3393339d8",
+        "top_module": "picorv32_axi",
+        "language": "verilog",
+        "rtl_files": ["picorv32.v"],
+        "header_files": [],
+        "include_dirs": [],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "COPYING", "spdx_id": "ISC"}
+      },
+      "qualification": {"closure_sha256": "d75e7bb569209055bc233a7cee9c26bb18c88e8f658b6dcf6bcc0cd29bc9b270"},
+      "screening": {"target_frequency_mhz": 100, "feasibility_core_utilization": 17, "historical_symptom": "route:residual:33"}
+    },
+    {
+      "id": "wbsafety",
+      "size_bin": "medium",
+      "mapped_cells": 1449,
+      "clock_port": "i_clk",
+      "footprint_policy": {"mode": "bounded_core_utilization", "initial": 25, "minimum": 8, "maximum": 25},
+      "candidate": {
+        "repo_url": "https://github.com/ZipCPU/wb2axip",
+        "commit": "2e8d3bc2d26ddc33d1881022a2a2b9d3f0c16b9b",
+        "top_module": "wbsafety",
+        "language": "verilog",
+        "rtl_files": ["rtl/wbsafety.v", "rtl/skidbuffer.v"],
+        "header_files": [],
+        "include_dirs": [],
+        "readmem_files": [],
+        "defines": [],
+        "top_parameters": {},
+        "license_evidence": {"repository_path": "rtl/wbsafety.v", "spdx_id": "Apache-2.0"}
+      },
+      "qualification": {"closure_sha256": "0ac99b052655b31df9d90c3ed2d86bc7fa26b68994aea60d44dd2dc4de13feb9"},
+      "screening": {"target_frequency_mhz": 100, "feasibility_core_utilization": 17, "historical_symptom": "route:timeout_or_residual:28"}
+    }
+  ]
+}

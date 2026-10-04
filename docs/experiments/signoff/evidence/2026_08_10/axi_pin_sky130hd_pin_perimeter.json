@@ -1,0 +1,290 @@
+{
+  "admission": {
+    "failures": [],
+    "status": "pass"
+  },
+  "baseline_runs": [
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_baseline_1",
+            "sky130hd",
+            "repair_probe_axi_pin_sky130hd_baseline_1"
+          ],
+          "elapsed_seconds": 87.116,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_pin_sky130hd_baseline_1/run_orfs.log",
+          "returncode": 2
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:55.538683+00:00",
+      "config_sha256": "9a9e2c0d830e5bcc96554b203334d3376d5f63222b2dcdb3f13f6eedbeda006a",
+      "constraint_attestation": {
+        "config_sha256": "9a9e2c0d830e5bcc96554b203334d3376d5f63222b2dcdb3f13f6eedbeda006a",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "e25dbebc7ba281633bbf6a34d6f16ccd5098286c515c354e97147c877dfc47a2",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_baseline_1/repair_family_probe_input.json",
+        "input_manifest_sha256": "8590645d425aadb8716cd60d208d3962aff57a5db7e038684f10bd97bdfd72e7",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_baseline_1",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_baseline_1/repair_family_probe_result.json",
+        "result_sha256": "638a2cfdb4a1be87017b96800e622d25cbdd151d0adcaf50ea4aad722df4558d"
+      },
+      "family_id": "pin_perimeter",
+      "metrics": {
+        "antenna_violations": null,
+        "drc_violations": null,
+        "hold_wns_ns": null,
+        "lvs_mismatches": null,
+        "route_violations": null,
+        "setup_wns_ns": null
+      },
+      "normalized_failure_signature": [
+        "PPL-0024"
+      ],
+      "protected_task_digest": "c1a2af606ac3265038dc6e73e06c50f9170ab3f55bd4de808e1ebe72737cb2a6",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": null,
+        "lvs": null,
+        "ppa": null,
+        "rcx": null,
+        "route": null,
+        "signoff_gate": null,
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_baseline_1/backend/RUN_2026-08-09_20-51-41_514342_5f23",
+      "run_id": "RUN_2026-08-09_20-51-41_514342_5f23",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "axi_pin_sky130hd",
+      "variant": "baseline_1"
+    },
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_baseline_2",
+            "sky130hd",
+            "repair_probe_axi_pin_sky130hd_baseline_2"
+          ],
+          "elapsed_seconds": 109.54,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_pin_sky130hd_baseline_2/run_orfs.log",
+          "returncode": 2
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:55.610233+00:00",
+      "config_sha256": "cb39cc9be26be3dc885d9f6c65e5542f11022042b3cedba81899dc981cf22a13",
+      "constraint_attestation": {
+        "config_sha256": "cb39cc9be26be3dc885d9f6c65e5542f11022042b3cedba81899dc981cf22a13",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "e25dbebc7ba281633bbf6a34d6f16ccd5098286c515c354e97147c877dfc47a2",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_baseline_2/repair_family_probe_input.json",
+        "input_manifest_sha256": "cb157c12a2ab6d3829560b1390d7fb56b3211d0d48c6143f8e2168649618734d",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_baseline_2",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_baseline_2/repair_family_probe_result.json",
+        "result_sha256": "e93c89e120e021474896977c62abfa2cee913f3799537ae612c53ee5106a3a92"
+      },
+      "family_id": "pin_perimeter",
+      "metrics": {
+        "antenna_violations": null,
+        "drc_violations": null,
+        "hold_wns_ns": null,
+        "lvs_mismatches": null,
+        "route_violations": null,
+        "setup_wns_ns": null
+      },
+      "normalized_failure_signature": [
+        "PPL-0024"
+      ],
+      "protected_task_digest": "c1a2af606ac3265038dc6e73e06c50f9170ab3f55bd4de808e1ebe72737cb2a6",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": null,
+        "lvs": null,
+        "ppa": null,
+        "rcx": null,
+        "route": null,
+        "signoff_gate": null,
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_baseline_2/backend/RUN_2026-08-09_20-56-04_523515_0ef2",
+      "run_id": "RUN_2026-08-09_20-56-04_523515_0ef2",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "axi_pin_sky130hd",
+      "variant": "baseline_2"
+    }
+  ],
+  "effect": {
+    "after": {
+      "CORE_AREA": "10 10 693 693",
+      "CORE_UTILIZATION": {
+        "unset": true
+      },
+      "DIE_AREA": "0 0 703 703"
+    },
+    "before": {
+      "CORE_AREA": {
+        "absent": true
+      },
+      "CORE_UTILIZATION": "25",
+      "DIE_AREA": {
+        "absent": true
+      }
+    },
+    "changed_knobs": [
+      "CORE_AREA",
+      "CORE_UTILIZATION",
+      "DIE_AREA"
+    ]
+  },
+  "family_id": "pin_perimeter",
+  "schema_version": "repair-family-evidence-1.1",
+  "task": {
+    "available_pin_positions": 1112,
+    "check_set": [
+      "orfs",
+      "route",
+      "drc",
+      "lvs",
+      "setup",
+      "hold",
+      "antenna",
+      "rcx"
+    ],
+    "clock_port": "clk",
+    "io_pin_count": 1914,
+    "license_evidence": {
+      "sha256": "ba81481b2d63a33e0dce336d9e736130709549feeaf6cd424b34beba712baa50",
+      "size": 1057,
+      "source_relative_path": "COPYING",
+      "spdx_id": "MIT",
+      "status": "allow"
+    },
+    "platform": "sky130hd",
+    "protected_task_digest": "c1a2af606ac3265038dc6e73e06c50f9170ab3f55bd4de808e1ebe72737cb2a6",
+    "required_die_perimeter_um": 2603.04,
+    "sdc_sha256": "e25dbebc7ba281633bbf6a34d6f16ccd5098286c515c354e97147c877dfc47a2",
+    "signoff_mode": "strict",
+    "source_commit": "516bd5dadc3365b7f9e225d2af8fe0b8d804fe53",
+    "source_digest": "0aeca1febd4aa25c81e6338f676fcf6b6dba56bbb98e4ab9fb4695354cd0a713",
+    "source_provenance_status": "repo_commit_and_bytes_bound",
+    "source_repo_url": "https://github.com/alexforencich/verilog-axi",
+    "target_frequency_mhz": 100.0,
+    "top_module": "axi_interconnect"
+  },
+  "witness_run": {
+    "commands": [
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_witness",
+          "sky130hd",
+          "repair_probe_axi_pin_sky130hd_witness"
+        ],
+        "elapsed_seconds": 464.816,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_pin_sky130hd_witness/run_orfs.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_witness",
+          "sky130hd",
+          "--check",
+          "both",
+          "--max-iters",
+          "0",
+          "--variant",
+          "repair_probe_axi_pin_sky130hd_witness"
+        ],
+        "elapsed_seconds": 140.247,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_pin_sky130hd_witness/strict_signoff.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "python3",
+          "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_witness",
+          "--run-dir",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_witness/backend/RUN_2026-08-09_20-56-04_523533_2694",
+          "--mode",
+          "strict",
+          "--def",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_witness/backend/RUN_2026-08-09_20-56-04_523533_2694/final/6_final.def"
+        ],
+        "elapsed_seconds": 0.074,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/axi_pin_sky130hd_witness/signoff_gate.log",
+        "returncode": 0
+      }
+    ],
+    "completed_at": "2026-08-11T09:08:55.670542+00:00",
+    "config_sha256": "4bad321c6cbf5dd8e610bd56dd3dcc28b518478dc68b172d66b2da3cc3bd89d4",
+    "constraint_attestation": {
+      "config_sha256": "4bad321c6cbf5dd8e610bd56dd3dcc28b518478dc68b172d66b2da3cc3bd89d4",
+      "mode": "fixed_registered_target",
+      "sdc_sha256": "e25dbebc7ba281633bbf6a34d6f16ccd5098286c515c354e97147c877dfc47a2",
+      "status": "bound",
+      "target_frequency_mhz": 100.0
+    },
+    "die_perimeter_um": 2812.0,
+    "environment_failure": false,
+    "evidence_binding": {
+      "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_witness/repair_family_probe_input.json",
+      "input_manifest_sha256": "a2c2b9fa0a6602b0fc307b2eec723caee3fc3666e614b72b1f1e61703a30af4d",
+      "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_witness",
+      "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_witness/repair_family_probe_result.json",
+      "result_sha256": "3e4b252615f056aa5c93425642740e948960ee5482ccd6a57af917f9b234e008"
+    },
+    "family_id": "pin_perimeter",
+    "metrics": {
+      "antenna_violations": 0,
+      "drc_violations": 0,
+      "hold_wns_ns": 0.469288,
+      "lvs_mismatches": 0,
+      "route_violations": 0,
+      "setup_wns_ns": 6.58448
+    },
+    "normalized_failure_signature": [],
+    "protected_task_digest": "c1a2af606ac3265038dc6e73e06c50f9170ab3f55bd4de808e1ebe72737cb2a6",
+    "publication_strict_clean": false,
+    "report_status": {
+      "drc": "clean",
+      "lvs": "clean",
+      "ppa": null,
+      "rcx": "complete",
+      "route": "clean",
+      "signoff_gate": "pass",
+      "signoff_manifest": null,
+      "timing_check": null
+    },
+    "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/axi_pin_sky130hd_witness/backend/RUN_2026-08-09_20-56-04_523533_2694",
+    "run_id": "RUN_2026-08-09_20-56-04_523533_2694",
+    "schema_version": "repair-family-probe-result-1.1",
+    "strict_clean": true,
+    "strict_clean_scope": "fixed_target_physical_signoff",
+    "task_id": "axi_pin_sky130hd",
+    "variant": "witness"
+  }
+}

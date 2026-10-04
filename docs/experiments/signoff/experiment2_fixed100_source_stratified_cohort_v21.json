@@ -1,0 +1,437 @@
+{
+  "experiment_id": "r2g-exp2-fixed100-source-stratified-screen",
+  "fixtures": [
+    {
+      "candidate": {
+        "commit": "cf4d771b5fbfa5ba9a34d58b127af54832c17545",
+        "defines": [],
+        "header_files": [
+          "usb_device/src_v/usbf_defs.v"
+        ],
+        "include_dirs": [
+          "usb_device/src_v"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "normalized_from:usb_device/src_v/usbf_sie_tx.v",
+          "repository_path": "usb_device/src_v/usbf_sie_tx.v",
+          "spdx_id": "GPL-2.0-or-later"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/ultraembedded/cores",
+        "rtl_files": [
+          "usb_device/src_v/usbf_sie_tx.v",
+          "usb_device/src_v/usbf_crc16.v"
+        ],
+        "top_module": "usbf_sie_tx",
+        "top_parameters": {}
+      },
+      "clock_port": "clk_i",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "cores_usb_device_src_v_usbf_sie_tx",
+      "mapped_cells": 227,
+      "qualification": {
+        "closure_sha256": "900ef7f8ce6aa5fae11fa93e45af77219371199c51a1e24d56b79ee01a484a6d",
+        "result_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/evaluation/r2g-pipeline.batch1/cores_usb_device_src_v_usbf_sie_tx/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/submissions/r2g-pipeline.batch1.json"
+      },
+      "reference_synth_area_um2": 2208.0,
+      "screening": {
+        "admission_rule": "At the frozen 100 MHz target, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization, then an independent preregistered 17% utilization run must be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "small",
+      "source_stratum": "experiment1_unused_natural_small"
+    },
+    {
+      "candidate": {
+        "commit": "10b99cadd2847399cf4a5bea531c42071a3ae30f",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Apache License 2.0 in repo root",
+          "repository_path": "LICENSE",
+          "spdx_id": "Apache-2.0"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/lcapossio/emacZero",
+        "rtl_files": [
+          "rtl/axil_arb2.v"
+        ],
+        "top_module": "axil_arb2",
+        "top_parameters": {}
+      },
+      "clock_port": "aclk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "emaczero_axil_arb2",
+      "mapped_cells": 168,
+      "qualification": {
+        "closure_sha256": "74b3f76a0655ed7769de68a723ae2c7cab8e65b04b04580d0479d14ac7ec20e4",
+        "result_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/evaluation/qwen-vanilla.batch1/emaczero_axil_arb2/result.json",
+        "submission_path": "/home/yangao/r2g_exp1_qwen_r2g_2026_08_01_protocol_v14_run03/submissions/qwen-vanilla.batch1.json"
+      },
+      "reference_synth_area_um2": 1719.0,
+      "screening": {
+        "admission_rule": "At the frozen 100 MHz target, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization, then an independent preregistered 17% utilization run must be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "small",
+      "source_stratum": "experiment1_unused_natural_small"
+    },
+    {
+      "candidate": {
+        "commit": "3b067f00ccced753b0502024766a51f58f3e04bc",
+        "defines": [],
+        "header_files": [
+          "rtl/verilog/i2c_master_defines.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "OpenCores source header at the pinned revision.",
+          "repository_path": "rtl/verilog/i2c_master_top.v",
+          "spdx_id": "NOASSERTION"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/i2c",
+        "rtl_files": [
+          "rtl/verilog/i2c_master_bit_ctrl.v",
+          "rtl/verilog/i2c_master_byte_ctrl.v",
+          "rtl/verilog/i2c_master_top.v"
+        ],
+        "top_module": "i2c_master_top",
+        "top_parameters": {}
+      },
+      "clock_port": "wb_clk_i",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "heldout_freecores_i2c",
+      "mapped_cells": 1009,
+      "qualification": {
+        "closure_sha256": "b599abdb322330e27731112a5d77000dcc5f31c07ce1ffda6431a6ce1debb7ee",
+        "result_path": "/home/yangao/r2g_e2e_heldout10_sky130hd_2026_07_29_5607e60_run01/acquire/corpus/pilot_freecores_i2c_e795f53c/design_meta.json",
+        "submission_path": "/home/yangao/r2g_e2e_heldout10_sky130hd_2026_07_29_5607e60_run01/acquire/corpus/index.csv"
+      },
+      "screening": {
+        "admission_rule": "At 100 MHz, reproduce the same non-environment physical failure twice at 25% utilization, then require an independent strict-clean 17% run.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium",
+      "source_stratum": "preregistered_heldout_2026_07_29"
+    },
+    {
+      "candidate": {
+        "commit": "7df2f5a0ab01969f49f260619fba0650ac97fe14",
+        "defines": [],
+        "header_files": [
+          "rtl/instruction.v"
+        ],
+        "include_dirs": [
+          "rtl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Repository LICENSE at the pinned revision.",
+          "repository_path": "LICENSE",
+          "spdx_id": "NOASSERTION"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/risclite/R8051",
+        "rtl_files": [
+          "rtl/r8051.v"
+        ],
+        "top_module": "r8051",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "heldout_risclite_r8051",
+      "mapped_cells": 2958,
+      "qualification": {
+        "closure_sha256": "3b8833e14a5c0064ee80c9d1da7987a7bfedad24d9cbf5b8fd137ecb240c5b9a",
+        "result_path": "/home/yangao/r2g_e2e_heldout10_sky130hd_2026_07_29_5607e60_run01/acquire/corpus/pilot_risclite_r8051_e795f53c/design_meta.json",
+        "submission_path": "/home/yangao/r2g_e2e_heldout10_sky130hd_2026_07_29_5607e60_run01/acquire/corpus/index.csv"
+      },
+      "screening": {
+        "admission_rule": "At 100 MHz, reproduce the same non-environment physical failure twice at 25% utilization, then require an independent strict-clean 17% run.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium",
+      "source_stratum": "preregistered_heldout_2026_07_29"
+    },
+    {
+      "candidate": {
+        "commit": "77320a9471d19c7dd383914bc049e02d9f4f1ffb",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [
+          "rtl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "MIT license at the pinned revision.",
+          "repository_path": "COPYING",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/alexforencich/verilog-ethernet",
+        "rtl_files": [
+          "rtl/eth_mac_1g.v",
+          "rtl/axis_gmii_rx.v",
+          "rtl/axis_gmii_tx.v",
+          "rtl/mac_ctrl_rx.v",
+          "rtl/mac_ctrl_tx.v",
+          "rtl/mac_pause_ctrl_rx.v",
+          "rtl/mac_pause_ctrl_tx.v",
+          "rtl/lfsr.v"
+        ],
+        "top_module": "eth_mac_1g",
+        "top_parameters": {}
+      },
+      "clock_port": "tx_clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "heldout_verilog_ethernet_eth_mac_1g",
+      "mapped_cells": 1097,
+      "qualification": {
+        "closure_sha256": "6ae453bfb651337a9e9781ab7c7a8562fbcaae4f9be51d79e7ba80c19efc8df4",
+        "result_path": "/home/yangao/r2g_e2e_heldout10_sky130hd_2026_07_29_5607e60_run01/acquire/corpus/pilot_verilog_ethernet_eth_mac_1g_e795f53c/design_meta.json",
+        "submission_path": "/home/yangao/r2g_e2e_heldout10_sky130hd_2026_07_29_5607e60_run01/acquire/corpus/index.csv"
+      },
+      "screening": {
+        "admission_rule": "At 100 MHz, reproduce the same non-environment physical failure twice at 25% utilization, then require an independent strict-clean 17% run.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium",
+      "source_stratum": "preregistered_heldout_2026_07_29"
+    },
+    {
+      "candidate": {
+        "commit": "dd26899086edf3b797d2775ef9502d204a9a8149",
+        "defines": [],
+        "header_files": [
+          "rtl/verilog/ethmac_defines.v",
+          "rtl/verilog/timescale.v"
+        ],
+        "include_dirs": [
+          "rtl/verilog"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "OpenCores source header at the pinned revision.",
+          "repository_path": "rtl/verilog/ethmac.v",
+          "spdx_id": "NOASSERTION"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/freecores/ethmac",
+        "rtl_files": [
+          "rtl/verilog/ethmac.v",
+          "rtl/verilog/eth_clockgen.v",
+          "rtl/verilog/eth_cop.v",
+          "rtl/verilog/eth_crc.v",
+          "rtl/verilog/eth_fifo.v",
+          "rtl/verilog/eth_maccontrol.v",
+          "rtl/verilog/eth_macstatus.v",
+          "rtl/verilog/eth_miim.v",
+          "rtl/verilog/eth_outputcontrol.v",
+          "rtl/verilog/eth_random.v",
+          "rtl/verilog/eth_receivecontrol.v",
+          "rtl/verilog/eth_registers.v",
+          "rtl/verilog/eth_rxaddrcheck.v",
+          "rtl/verilog/eth_rxcounters.v",
+          "rtl/verilog/eth_register.v",
+          "rtl/verilog/eth_rxethmac.v",
+          "rtl/verilog/eth_rxstatem.v",
+          "rtl/verilog/eth_spram_256x32.v",
+          "rtl/verilog/eth_shiftreg.v",
+          "rtl/verilog/eth_transmitcontrol.v",
+          "rtl/verilog/eth_txcounters.v",
+          "rtl/verilog/eth_txethmac.v",
+          "rtl/verilog/eth_txstatem.v",
+          "rtl/verilog/eth_wishbone.v"
+        ],
+        "top_module": "ethmac",
+        "top_parameters": {}
+      },
+      "clock_port": "wb_clk_i",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "heldout_freecores_ethmac",
+      "mapped_cells": 21547,
+      "qualification": {
+        "closure_sha256": "fcf0cfa98f2213a3997c3da9e85e96dfb6ad0b8dda01cda70d6b4affce3787c4",
+        "result_path": "/home/yangao/r2g_e2e_heldout10_sky130hd_2026_07_29_5607e60_run01/acquire/corpus/pilot_freecores_ethmac_e795f53c/design_meta.json",
+        "submission_path": "/home/yangao/r2g_e2e_heldout10_sky130hd_2026_07_29_5607e60_run01/acquire/corpus/index.csv"
+      },
+      "screening": {
+        "admission_rule": "At 100 MHz, reproduce the same non-environment physical failure twice at 25% utilization, then require an independent strict-clean 17% run.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "large",
+      "source_stratum": "preregistered_heldout_2026_07_29"
+    },
+    {
+      "candidate": {
+        "commit": "e4cdf33418a3aa95cee25e1f0b1d8a6ede51c1bd",
+        "defines": [],
+        "header_files": [],
+        "include_dirs": [
+          "src/rtl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "BSD-2-Clause license at the pinned revision.",
+          "repository_path": "LICENSE",
+          "spdx_id": "BSD-2-Clause"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/secworks/sha512",
+        "rtl_files": [
+          "src/rtl/sha512.v",
+          "src/rtl/sha512_core.v",
+          "src/rtl/sha512_h_constants.v",
+          "src/rtl/sha512_k_constants.v",
+          "src/rtl/sha512_w_mem.v"
+        ],
+        "top_module": "sha512",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "heldout_secworks_sha512",
+      "mapped_cells": 24365,
+      "qualification": {
+        "closure_sha256": "60fef55e43a74df0d1aae08d5fe92acf2f27d1352b7b48ac7754bb25c370fd29",
+        "result_path": "/home/yangao/r2g_e2e_heldout10_sky130hd_2026_07_29_5607e60_run01/acquire/corpus/pilot_secworks_sha512_e795f53c/design_meta.json",
+        "submission_path": "/home/yangao/r2g_e2e_heldout10_sky130hd_2026_07_29_5607e60_run01/acquire/corpus/index.csv"
+      },
+      "screening": {
+        "admission_rule": "At 100 MHz, reproduce the same non-environment physical failure twice at 25% utilization, then require an independent strict-clean 17% run.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "large",
+      "source_stratum": "preregistered_heldout_2026_07_29"
+    },
+    {
+      "candidate": {
+        "commit": "4aa437997cd35253c9111f10a449de13ccaeee78",
+        "defines": [],
+        "header_files": [
+          "rtl/config.vh"
+        ],
+        "include_dirs": [
+          "rtl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "Repository license at the pinned revision.",
+          "repository_path": "LICENSE",
+          "spdx_id": "BSD-3-Clause"
+        },
+        "readmem_files": [
+          "src/darksocv.mem"
+        ],
+        "repo_url": "https://github.com/darklife/darkriscv",
+        "rtl_files": [
+          "rtl/darkbridge.v",
+          "rtl/darkcache.v",
+          "rtl/darkio.v",
+          "rtl/darkmac.v",
+          "rtl/darkpll.v",
+          "rtl/darkram.v",
+          "rtl/darkriscv.v",
+          "rtl/darksocv.v",
+          "rtl/darkspi.v",
+          "rtl/darkuart.v"
+        ],
+        "top_module": "darksocv",
+        "top_parameters": {}
+      },
+      "clock_port": "XCLK",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "heldout_darkriscv_darksocv",
+      "mapped_cells": 153854,
+      "qualification": {
+        "closure_sha256": "53d1e9cc031adbf57a60bc942f74fd256ec22ae570a56e8ee0ade4ad34fb759c",
+        "result_path": "/home/yangao/r2g_e2e_heldout10_sky130hd_2026_07_29_5607e60_run01/acquire/corpus/pilot_darkriscv_darksocv_e795f53c/design_meta.json",
+        "submission_path": "/home/yangao/r2g_e2e_heldout10_sky130hd_2026_07_29_5607e60_run01/acquire/corpus/index.csv"
+      },
+      "screening": {
+        "admission_rule": "At 100 MHz, reproduce the same non-environment physical failure twice at 25% utilization, then require an independent strict-clean 17% run.",
+        "feasibility_core_utilization": 17,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "large",
+      "source_stratum": "preregistered_heldout_2026_07_29"
+    }
+  ],
+  "platform": "sky130hd",
+  "repeatability_fixture_ids": [
+    "heldout_risclite_r8051",
+    "heldout_secworks_sha512"
+  ],
+  "schema_version": "1.0",
+  "selection_policy": {
+    "independent_heldout_fixtures": 6,
+    "method": "source_stratified_pre_outcome_selection",
+    "natural_small_balance_fixtures": 2,
+    "physical_outcomes_used_for_selection": false,
+    "smoke_fixture_ids": [
+      "cores_usb_device_src_v_usbf_sie_tx",
+      "emaczero_axil_arb2",
+      "heldout_freecores_i2c"
+    ],
+    "source_reservation": "/home/yangao/r2g-skills-v1-pilot/docs/validation/pilot/HELDOUT10_SKY130HD_RESERVATION_2026-07-29.md"
+  },
+  "status": "development_screen",
+  "target_clock_period_ns": 10,
+  "target_frequency_mhz": 100
+}

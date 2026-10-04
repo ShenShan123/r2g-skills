@@ -1,0 +1,349 @@
+{
+  "admission": {
+    "failures": [],
+    "status": "pass"
+  },
+  "baseline_runs": [
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_1",
+            "nangate45",
+            "repair_probe_ftdi_bridge_antenna_current_baseline_1"
+          ],
+          "elapsed_seconds": 342.548,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ftdi_antcur_baseline_1/run_orfs.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_1",
+            "nangate45",
+            "--check",
+            "both",
+            "--max-iters",
+            "0",
+            "--variant",
+            "repair_probe_ftdi_bridge_antenna_current_baseline_1"
+          ],
+          "elapsed_seconds": 4499.926,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ftdi_antcur_baseline_1/strict_signoff.log",
+          "returncode": 2
+        },
+        {
+          "command": [
+            "python3",
+            "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_1",
+            "--run-dir",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_1/backend/RUN_2026-08-09_21-52-03_639588_674f",
+            "--mode",
+            "strict",
+            "--def",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_1/backend/RUN_2026-08-09_21-52-03_639588_674f/final/6_final.def"
+          ],
+          "elapsed_seconds": 0.063,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ftdi_antcur_baseline_1/signoff_gate.log",
+          "returncode": 0
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:55.936298+00:00",
+      "config_sha256": "c7ddee06dedb373a18472d0904957e86de18f8a943b18334124ab199a4073ad7",
+      "constraint_attestation": {
+        "config_sha256": "c7ddee06dedb373a18472d0904957e86de18f8a943b18334124ab199a4073ad7",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "e6105eb079dd6b0c1e5b3f5d8568dab1e0e947512542416e199b4e3686312623",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_1/repair_family_probe_input.json",
+        "input_manifest_sha256": "801f5efa1c98ba4d0e4d10b3894098bef5ee09c13bd49d085e9f1bf8ae795802",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_1",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_1/repair_family_probe_result.json",
+        "result_sha256": "77de7d316a43aaf8f693a74fc97b936a417ff08e845c33cdc8966107a3caf41b"
+      },
+      "family_id": "antenna_closure",
+      "metrics": {
+        "antenna_violations": 5,
+        "drc_violations": 5,
+        "hold_wns_ns": 0.101754,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": 8.93388
+      },
+      "normalized_failure_signature": [
+        "DRC:METAL4_ANTENNA",
+        "DRC:METAL5_ANTENNA"
+      ],
+      "protected_task_digest": "8d1454c22a1b3b0af02c5775abd05f6331d3872b5c4c210253030e21ee45b2ca",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": "fail",
+        "lvs": "clean",
+        "ppa": null,
+        "rcx": "complete",
+        "route": "clean",
+        "signoff_gate": "dirty",
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_1/backend/RUN_2026-08-09_21-52-03_639588_674f",
+      "run_id": "RUN_2026-08-09_21-52-03_639588_674f",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "ftdi_bridge_antenna_current",
+      "variant": "baseline_1"
+    },
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_2",
+            "nangate45",
+            "repair_probe_ftdi_bridge_antenna_current_baseline_2"
+          ],
+          "elapsed_seconds": 329.731,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ftdi_antcur_baseline_2/run_orfs.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_2",
+            "nangate45",
+            "--check",
+            "both",
+            "--max-iters",
+            "0",
+            "--variant",
+            "repair_probe_ftdi_bridge_antenna_current_baseline_2"
+          ],
+          "elapsed_seconds": 4499.075,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ftdi_antcur_baseline_2/strict_signoff.log",
+          "returncode": 2
+        },
+        {
+          "command": [
+            "python3",
+            "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_2",
+            "--run-dir",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_2/backend/RUN_2026-08-09_21-52-03_639663_4ba0",
+            "--mode",
+            "strict",
+            "--def",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_2/backend/RUN_2026-08-09_21-52-03_639663_4ba0/final/6_final.def"
+          ],
+          "elapsed_seconds": 0.067,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ftdi_antcur_baseline_2/signoff_gate.log",
+          "returncode": 0
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:56.001941+00:00",
+      "config_sha256": "c86de2af865332b72fa3375848993efb3b1f70e056e3e2e03fbebf8a511cda04",
+      "constraint_attestation": {
+        "config_sha256": "c86de2af865332b72fa3375848993efb3b1f70e056e3e2e03fbebf8a511cda04",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "e6105eb079dd6b0c1e5b3f5d8568dab1e0e947512542416e199b4e3686312623",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_2/repair_family_probe_input.json",
+        "input_manifest_sha256": "dedcf21bf6d24da48e049c5716f7c698248fdf49c71a1f94fb055ad1971a2774",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_2",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_2/repair_family_probe_result.json",
+        "result_sha256": "cf482dcb0bda4b070fbd94b55b8776c3bc4a90f13b3933f9629943db16c95f7f"
+      },
+      "family_id": "antenna_closure",
+      "metrics": {
+        "antenna_violations": 5,
+        "drc_violations": 5,
+        "hold_wns_ns": 0.101754,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": 8.93388
+      },
+      "normalized_failure_signature": [
+        "DRC:METAL4_ANTENNA",
+        "DRC:METAL5_ANTENNA"
+      ],
+      "protected_task_digest": "8d1454c22a1b3b0af02c5775abd05f6331d3872b5c4c210253030e21ee45b2ca",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": "fail",
+        "lvs": "clean",
+        "ppa": null,
+        "rcx": "complete",
+        "route": "clean",
+        "signoff_gate": "dirty",
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_baseline_2/backend/RUN_2026-08-09_21-52-03_639663_4ba0",
+      "run_id": "RUN_2026-08-09_21-52-03_639663_4ba0",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "ftdi_bridge_antenna_current",
+      "variant": "baseline_2"
+    }
+  ],
+  "effect": {
+    "after": {
+      "MAX_REPAIR_ANTENNAS_ITER_DRT": "10",
+      "SKIP_ANTENNA_REPAIR": "1"
+    },
+    "before": {
+      "MAX_REPAIR_ANTENNAS_ITER_DRT": {
+        "absent": true
+      },
+      "SKIP_ANTENNA_REPAIR": {
+        "absent": true
+      }
+    },
+    "changed_knobs": [
+      "MAX_REPAIR_ANTENNAS_ITER_DRT",
+      "SKIP_ANTENNA_REPAIR"
+    ]
+  },
+  "family_id": "antenna_closure",
+  "schema_version": "repair-family-evidence-1.1",
+  "task": {
+    "check_set": [
+      "orfs",
+      "route",
+      "drc",
+      "lvs",
+      "setup",
+      "hold",
+      "antenna",
+      "rcx"
+    ],
+    "clock_port": "clk_i",
+    "license_evidence": {
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+      "size": 18092,
+      "source_relative_path": "LICENSE",
+      "spdx_id": "GPL-2.0-only",
+      "status": "allow"
+    },
+    "platform": "nangate45",
+    "protected_task_digest": "8d1454c22a1b3b0af02c5775abd05f6331d3872b5c4c210253030e21ee45b2ca",
+    "sdc_sha256": "e6105eb079dd6b0c1e5b3f5d8568dab1e0e947512542416e199b4e3686312623",
+    "signoff_mode": "strict",
+    "source_commit": "d099493a9a2d63cb599980ea27ee4e638f86725f",
+    "source_digest": "37b06aabb16285048d81fdd82716e9ef37c7ecf76cbe394bac31e6e35f640285",
+    "source_provenance_status": "repo_commit_and_bytes_bound",
+    "source_repo_url": "https://github.com/ultraembedded/core_ftdi_bridge.git",
+    "target_frequency_mhz": 100.0,
+    "top_module": "ftdi_bridge"
+  },
+  "witness_run": {
+    "commands": [
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_witness",
+          "nangate45",
+          "repair_probe_ftdi_bridge_antenna_current_witness"
+        ],
+        "elapsed_seconds": 380.908,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ftdi_antcur_witness/run_orfs.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_witness",
+          "nangate45",
+          "--check",
+          "both",
+          "--max-iters",
+          "0",
+          "--variant",
+          "repair_probe_ftdi_bridge_antenna_current_witness"
+        ],
+        "elapsed_seconds": 4496.261,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ftdi_antcur_witness/strict_signoff.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "python3",
+          "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_witness",
+          "--run-dir",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_witness/backend/RUN_2026-08-09_21-52-03_639712_7c10",
+          "--mode",
+          "strict",
+          "--def",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_witness/backend/RUN_2026-08-09_21-52-03_639712_7c10/final/6_final.def"
+        ],
+        "elapsed_seconds": 0.071,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/ftdi_antcur_witness/signoff_gate.log",
+        "returncode": 0
+      }
+    ],
+    "completed_at": "2026-08-11T09:08:56.068842+00:00",
+    "config_sha256": "f83d545d2e79eef075f032dd2738ffb2a31a84741ea86c208062522b4423ef32",
+    "constraint_attestation": {
+      "config_sha256": "f83d545d2e79eef075f032dd2738ffb2a31a84741ea86c208062522b4423ef32",
+      "mode": "fixed_registered_target",
+      "sdc_sha256": "e6105eb079dd6b0c1e5b3f5d8568dab1e0e947512542416e199b4e3686312623",
+      "status": "bound",
+      "target_frequency_mhz": 100.0
+    },
+    "environment_failure": false,
+    "evidence_binding": {
+      "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_witness/repair_family_probe_input.json",
+      "input_manifest_sha256": "b4c5177a872a3bc0b2421436e0b67bb6aeec107b2df49625339e6b199cbf00b1",
+      "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_witness",
+      "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_witness/repair_family_probe_result.json",
+      "result_sha256": "00c88621402da98a9c7e592ea9281e75aafca27d2cf331c3477fe7c88949d7b0"
+    },
+    "family_id": "antenna_closure",
+    "metrics": {
+      "antenna_violations": 0,
+      "drc_violations": 0,
+      "hold_wns_ns": 0.101754,
+      "lvs_mismatches": 0,
+      "route_violations": 0,
+      "setup_wns_ns": 8.9345
+    },
+    "normalized_failure_signature": [],
+    "protected_task_digest": "8d1454c22a1b3b0af02c5775abd05f6331d3872b5c4c210253030e21ee45b2ca",
+    "publication_strict_clean": false,
+    "report_status": {
+      "drc": "clean",
+      "lvs": "clean",
+      "ppa": null,
+      "rcx": "complete",
+      "route": "clean",
+      "signoff_gate": "pass",
+      "signoff_manifest": null,
+      "timing_check": null
+    },
+    "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/ftdi_antcur_witness/backend/RUN_2026-08-09_21-52-03_639712_7c10",
+    "run_id": "RUN_2026-08-09_21-52-03_639712_7c10",
+    "schema_version": "repair-family-probe-result-1.1",
+    "strict_clean": true,
+    "strict_clean_scope": "fixed_target_physical_signoff",
+    "task_id": "ftdi_bridge_antenna_current",
+    "variant": "witness"
+  }
+}

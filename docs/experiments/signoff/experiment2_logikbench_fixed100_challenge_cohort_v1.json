@@ -1,0 +1,538 @@
+{
+  "cohort_kind": "benchmark_challenge_screen",
+  "experiment_id": "r2g-exp2-logikbench-fixed100-challenge-screen",
+  "fixtures": [
+    {
+      "candidate": {
+        "candidate_id": "logikbench_blocks_ethmac",
+        "category": "benchmark_challenge",
+        "commit": "62fc37ec58451c7d8813d7d3e3e1d7a1377c9082",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "logikbench-pinned-risk-scout",
+        "header_files": [],
+        "include_dirs": [
+          "logikbench/benchmarks/blocks/ethmac/rtl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LogikBench benchmark=blocks/ethmac; source_class=human",
+          "repository_path": "logikbench/benchmarks/blocks/ethmac/LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/zeroasiccorp/logikbench",
+        "rtl_files": [
+          "logikbench/benchmarks/blocks/ethmac/rtl/axis_gmii_rx.v",
+          "logikbench/benchmarks/blocks/ethmac/rtl/axis_gmii_tx.v",
+          "logikbench/benchmarks/blocks/ethmac/rtl/eth_lfsr.v",
+          "logikbench/benchmarks/blocks/ethmac/rtl/eth_mac_1g.v",
+          "logikbench/benchmarks/blocks/ethmac/rtl/ethmac.v"
+        ],
+        "selection_reason": "Sky130 published metrics; risk_score=0.703612",
+        "source_checkout_path": "/home/yangao/r2g_repair_candidate_sources/logikbench",
+        "top_module": "ethmac",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "logikbench_blocks_ethmac",
+      "mapped_cells": 1098,
+      "qualification": {
+        "closure_sha256": "86a8c75f82cc423324aa0e35e0d338f4d6a52510eeaa723ea0f2590e0a0089c8",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/logikbench_repair_risk_inventory_v1.json",
+        "result_path": "/home/yangao/r2g_logikbench_repair_scout_2026_08_09_v1/synth/logikbench_blocks_ethmac/result.json"
+      },
+      "reference_synth_area_um2": 10730.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "published_sky130": {
+          "area_um2": 10085.92,
+          "cells": 989,
+          "fmax_mhz": 96.9,
+          "task_time_seconds": 4.16
+        },
+        "risk_score": 0.703612,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "candidate_id": "logikbench_blocks_axiram",
+        "category": "benchmark_challenge",
+        "commit": "62fc37ec58451c7d8813d7d3e3e1d7a1377c9082",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "logikbench-pinned-risk-scout",
+        "header_files": [],
+        "include_dirs": [
+          "logikbench/benchmarks/blocks/axiram/rtl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LogikBench benchmark=blocks/axiram; source_class=human",
+          "repository_path": "logikbench/benchmarks/blocks/axiram/LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/zeroasiccorp/logikbench",
+        "rtl_files": [
+          "logikbench/benchmarks/blocks/axiram/rtl/axiram.v"
+        ],
+        "selection_reason": "Sky130 published metrics; risk_score=0.69616",
+        "source_checkout_path": "/home/yangao/r2g_repair_candidate_sources/logikbench",
+        "top_module": "axiram",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "logikbench_blocks_axiram",
+      "mapped_cells": 3628,
+      "qualification": {
+        "closure_sha256": "213996d2bf85e4c940dfb8ac59e89a8f0958ce3a448f36f81e845c38f62b96af",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/logikbench_repair_risk_inventory_v1.json",
+        "result_path": "/home/yangao/r2g_logikbench_repair_scout_2026_08_09_v1/synth/logikbench_blocks_axiram/result.json"
+      },
+      "reference_synth_area_um2": 79596.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "published_sky130": {
+          "area_um2": 81599.51,
+          "cells": 4254,
+          "fmax_mhz": 85.28,
+          "task_time_seconds": 4.43
+        },
+        "risk_score": 0.69616,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "candidate_id": "logikbench_blocks_gearbox66",
+        "category": "benchmark_challenge",
+        "commit": "62fc37ec58451c7d8813d7d3e3e1d7a1377c9082",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "logikbench-pinned-risk-scout",
+        "header_files": [],
+        "include_dirs": [
+          "logikbench/benchmarks/blocks/gearbox66/rtl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LogikBench benchmark=blocks/gearbox66; source_class=ai",
+          "repository_path": "LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/zeroasiccorp/logikbench",
+        "rtl_files": [
+          "logikbench/benchmarks/blocks/gearbox66/rtl/gearbox66.v"
+        ],
+        "selection_reason": "Sky130 published metrics; risk_score=0.642825",
+        "source_checkout_path": "/home/yangao/r2g_repair_candidate_sources/logikbench",
+        "top_module": "gearbox66",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "logikbench_blocks_gearbox66",
+      "mapped_cells": 3105,
+      "qualification": {
+        "closure_sha256": "22ca0909c0abf600375d204f53e284feed043ff838cefdcc05b16b3889a77389",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/logikbench_repair_risk_inventory_v1.json",
+        "result_path": "/home/yangao/r2g_logikbench_repair_scout_2026_08_09_v1/synth/logikbench_blocks_gearbox66/result.json"
+      },
+      "reference_synth_area_um2": 33339.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "published_sky130": {
+          "area_um2": 32228.41,
+          "cells": 2960,
+          "fmax_mhz": 81.25,
+          "task_time_seconds": 3.58
+        },
+        "risk_score": 0.642825,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "candidate_id": "logikbench_blocks_apbregs",
+        "category": "benchmark_challenge",
+        "commit": "62fc37ec58451c7d8813d7d3e3e1d7a1377c9082",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "logikbench-pinned-risk-scout",
+        "header_files": [],
+        "include_dirs": [
+          "logikbench/benchmarks/blocks/apbregs/rtl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LogikBench benchmark=blocks/apbregs; source_class=human",
+          "repository_path": "LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/zeroasiccorp/logikbench",
+        "rtl_files": [
+          "logikbench/benchmarks/blocks/apbregs/rtl/apbregs.v"
+        ],
+        "selection_reason": "Sky130 published metrics; risk_score=0.587662",
+        "source_checkout_path": "/home/yangao/r2g_repair_candidate_sources/logikbench",
+        "top_module": "apbdev",
+        "top_parameters": {}
+      },
+      "clock_port": "apb_pclk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "logikbench_blocks_apbregs",
+      "mapped_cells": 2113,
+      "qualification": {
+        "closure_sha256": "6015c6aa9f24380c9df56c22fad4ae0a568dddc0764ad10bb39a9dfcca288be0",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/logikbench_repair_risk_inventory_v1.json",
+        "result_path": "/home/yangao/r2g_logikbench_repair_scout_2026_08_09_v1/synth/logikbench_blocks_apbregs/result.json"
+      },
+      "reference_synth_area_um2": 39766.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "published_sky130": {
+          "area_um2": 38908.57,
+          "cells": 1594,
+          "fmax_mhz": 78.7,
+          "task_time_seconds": 2.34
+        },
+        "risk_score": 0.587662,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "candidate_id": "logikbench_blocks_chiplink",
+        "category": "benchmark_challenge",
+        "commit": "62fc37ec58451c7d8813d7d3e3e1d7a1377c9082",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "logikbench-pinned-risk-scout",
+        "header_files": [],
+        "include_dirs": [
+          "logikbench/benchmarks/blocks/chiplink/rtl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LogikBench benchmark=blocks/chiplink; source_class=ai",
+          "repository_path": "LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/zeroasiccorp/logikbench",
+        "rtl_files": [
+          "logikbench/benchmarks/blocks/chiplink/rtl/chiplink.v",
+          "logikbench/benchmarks/blocks/chiplink/rtl/chiplink_cdc_fifo.v",
+          "logikbench/benchmarks/blocks/chiplink/rtl/chiplink_rx.v",
+          "logikbench/benchmarks/blocks/chiplink/rtl/chiplink_train.v",
+          "logikbench/benchmarks/blocks/chiplink/rtl/chiplink_tx.v"
+        ],
+        "selection_reason": "Sky130 published metrics; risk_score=0.569168",
+        "source_checkout_path": "/home/yangao/r2g_repair_candidate_sources/logikbench",
+        "top_module": "chiplink",
+        "top_parameters": {
+          "DW": "32",
+          "NLANES": "8"
+        }
+      },
+      "clock_port": "wr_clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "logikbench_blocks_chiplink",
+      "mapped_cells": 1002,
+      "qualification": {
+        "closure_sha256": "ebaa0e04cb8496abebb75aaec81cc20753f09f1ca0bba3dd2dce94da3cc0fa5d",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/logikbench_repair_risk_inventory_v1.json",
+        "result_path": "/home/yangao/r2g_logikbench_repair_scout_2026_08_09_v1/synth/logikbench_blocks_chiplink/result.json"
+      },
+      "reference_synth_area_um2": 17792.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "published_sky130": {
+          "area_um2": 17302.84,
+          "cells": 994,
+          "fmax_mhz": 153.24,
+          "task_time_seconds": 1.62
+        },
+        "risk_score": 0.569168,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "candidate_id": "logikbench_blocks_jesd204b",
+        "category": "benchmark_challenge",
+        "commit": "62fc37ec58451c7d8813d7d3e3e1d7a1377c9082",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "logikbench-pinned-risk-scout",
+        "header_files": [],
+        "include_dirs": [
+          "logikbench/benchmarks/blocks/codec8b10b/rtl",
+          "logikbench/benchmarks/blocks/jesd204b/rtl",
+          "logikbench/benchmarks/blocks/linkmap/rtl",
+          "logikbench/benchmarks/blocks/wordalign/rtl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LogikBench benchmark=blocks/jesd204b; source_class=ai",
+          "repository_path": "LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/zeroasiccorp/logikbench",
+        "rtl_files": [
+          "logikbench/benchmarks/blocks/jesd204b/rtl/jesd204b.v",
+          "logikbench/benchmarks/blocks/jesd204b/rtl/jesd204b_rx.v",
+          "logikbench/benchmarks/blocks/jesd204b/rtl/jesd204b_scramble.v",
+          "logikbench/benchmarks/blocks/jesd204b/rtl/jesd204b_tx.v",
+          "logikbench/benchmarks/blocks/codec8b10b/rtl/codec8b10b.v",
+          "logikbench/benchmarks/blocks/wordalign/rtl/wordalign.v",
+          "logikbench/benchmarks/blocks/linkmap/rtl/linkmap.v"
+        ],
+        "selection_reason": "Sky130 published metrics; risk_score=0.517836",
+        "source_checkout_path": "/home/yangao/r2g_repair_candidate_sources/logikbench",
+        "top_module": "jesd204b",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "logikbench_blocks_jesd204b",
+      "mapped_cells": 4153,
+      "qualification": {
+        "closure_sha256": "34f507df3cb4a1af5aca26bc6a759344127c0b33357b6f2dbfedfdac0f9a0590",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/logikbench_repair_risk_inventory_v1.json",
+        "result_path": "/home/yangao/r2g_logikbench_repair_scout_2026_08_09_v1/synth/logikbench_blocks_jesd204b/result.json"
+      },
+      "reference_synth_area_um2": 48863.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "published_sky130": {
+          "area_um2": 44019.72,
+          "cells": 3528,
+          "fmax_mhz": 61.74,
+          "task_time_seconds": 5.52
+        },
+        "risk_score": 0.517836,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "candidate_id": "logikbench_blocks_huffman",
+        "category": "benchmark_challenge",
+        "commit": "62fc37ec58451c7d8813d7d3e3e1d7a1377c9082",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "logikbench-pinned-risk-scout",
+        "header_files": [],
+        "include_dirs": [
+          "logikbench/benchmarks/blocks/huffman/rtl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LogikBench benchmark=blocks/huffman; source_class=ai",
+          "repository_path": "LICENSE",
+          "spdx_id": "MIT"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/zeroasiccorp/logikbench",
+        "rtl_files": [
+          "logikbench/benchmarks/blocks/huffman/rtl/huffman.v",
+          "logikbench/benchmarks/blocks/huffman/rtl/huffman_dec.v",
+          "logikbench/benchmarks/blocks/huffman/rtl/huffman_enc.v"
+        ],
+        "selection_reason": "Sky130 published metrics; risk_score=0.500255",
+        "source_checkout_path": "/home/yangao/r2g_repair_candidate_sources/logikbench",
+        "top_module": "huffman",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "logikbench_blocks_huffman",
+      "mapped_cells": 1284,
+      "qualification": {
+        "closure_sha256": "8eca28e7a09c460be4e6f1ee9117a1ccec87c5e61c8dbcf7990580f43ea2004a",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/logikbench_repair_risk_inventory_v1.json",
+        "result_path": "/home/yangao/r2g_logikbench_repair_scout_2026_08_09_v1/synth/logikbench_blocks_huffman/result.json"
+      },
+      "reference_synth_area_um2": 9623.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "published_sky130": {
+          "area_um2": 7870.05,
+          "cells": 1082,
+          "fmax_mhz": 69.24,
+          "task_time_seconds": 2.57
+        },
+        "risk_score": 0.500255,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "medium"
+    },
+    {
+      "candidate": {
+        "candidate_id": "logikbench_blocks_serv",
+        "category": "benchmark_challenge",
+        "commit": "62fc37ec58451c7d8813d7d3e3e1d7a1377c9082",
+        "confidence": 1.0,
+        "defines": [],
+        "discovery_method": "logikbench-pinned-risk-scout",
+        "header_files": [],
+        "include_dirs": [
+          "logikbench/benchmarks/blocks/serv/rtl"
+        ],
+        "language": "verilog",
+        "license_evidence": {
+          "note": "LogikBench benchmark=blocks/serv; source_class=human",
+          "repository_path": "logikbench/benchmarks/blocks/serv/LICENSE",
+          "spdx_id": "ISC"
+        },
+        "readmem_files": [],
+        "repo_url": "https://github.com/zeroasiccorp/logikbench",
+        "rtl_files": [
+          "logikbench/benchmarks/blocks/serv/rtl/serv_aligner.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_alu.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_bufreg.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_bufreg2.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_compdec.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_csr.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_ctrl.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_debug.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_decode.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_immdec.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_mem_if.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_rf_if.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_rf_ram.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_rf_ram_if.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_rf_top.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_state.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_synth_wrapper.v",
+          "logikbench/benchmarks/blocks/serv/rtl/serv_top.v"
+        ],
+        "selection_reason": "Sky130 published metrics; risk_score=0.393523",
+        "source_checkout_path": "/home/yangao/r2g_repair_candidate_sources/logikbench",
+        "top_module": "serv_top",
+        "top_parameters": {}
+      },
+      "clock_port": "clk",
+      "footprint_policy": {
+        "initial": 25,
+        "maximum": 25,
+        "minimum": 8,
+        "mode": "bounded_core_utilization"
+      },
+      "id": "logikbench_blocks_serv",
+      "mapped_cells": 691,
+      "qualification": {
+        "closure_sha256": "1c12ca7a76616070832445a60fb1906aa87cd6290656bb07165cfa16d6a79b68",
+        "inventory_path": "/home/yangao/r2g-skills/docs/experiments/signoff/logikbench_repair_risk_inventory_v1.json",
+        "result_path": "/home/yangao/r2g_logikbench_repair_scout_2026_08_09_v1/synth_retry/logikbench_blocks_serv/result.json"
+      },
+      "reference_synth_area_um2": 8230.0,
+      "screening": {
+        "admission_rule": "At 100 MHz, Default ORFS must reproduce the same non-environment physical failure twice at 25% utilization; an independently materialized 17% run must then be strict-clean.",
+        "feasibility_core_utilization": 17,
+        "published_sky130": {
+          "area_um2": 7414.61,
+          "cells": 576,
+          "fmax_mhz": 72.29,
+          "task_time_seconds": 1.57
+        },
+        "risk_score": 0.393523,
+        "target_frequency_mhz": 100
+      },
+      "size_bin": "small"
+    }
+  ],
+  "footprint_policy": {
+    "independent_feasibility": 17,
+    "initial": 25,
+    "maximum": 25,
+    "minimum": 8,
+    "mode": "bounded_core_utilization"
+  },
+  "platform": "sky130hd",
+  "repeatability_fixture_ids": [
+    "logikbench_blocks_ethmac",
+    "logikbench_blocks_axiram",
+    "logikbench_blocks_gearbox66",
+    "logikbench_blocks_apbregs",
+    "logikbench_blocks_chiplink",
+    "logikbench_blocks_jesd204b",
+    "logikbench_blocks_huffman",
+    "logikbench_blocks_serv"
+  ],
+  "schema_version": "1.0",
+  "selection_policy": {
+    "environment_failures_admissible": false,
+    "full_r2g_results_used_for_admission": false,
+    "independent_repository_generalization_claim": false,
+    "low_risk_candidates_executed": false,
+    "method": "published-metric-risk-ranking-then-independent-default-orfs",
+    "smoke_fixture_ids": [
+      "logikbench_blocks_ethmac",
+      "logikbench_blocks_axiram",
+      "logikbench_blocks_gearbox66"
+    ],
+    "source_inventory_sha256_bound_in_campaign": true,
+    "source_repository_count": 1,
+    "vanilla_llm_results_used_for_admission": false
+  },
+  "status": "development_screen",
+  "target_clock_period_ns": 10,
+  "target_frequency_mhz": 100
+}

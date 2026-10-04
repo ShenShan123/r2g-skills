@@ -1,0 +1,342 @@
+{
+  "admission": {
+    "failures": [],
+    "status": "pass"
+  },
+  "baseline_runs": [
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_1",
+            "sky130hd",
+            "repair_probe_sdram_axi_m3p2_baseline_1"
+          ],
+          "elapsed_seconds": 1581.622,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sdram_drc_baseline_1/run_orfs.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_1",
+            "sky130hd",
+            "--check",
+            "both",
+            "--max-iters",
+            "0",
+            "--variant",
+            "repair_probe_sdram_axi_m3p2_baseline_1"
+          ],
+          "elapsed_seconds": 45.824,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sdram_drc_baseline_1/strict_signoff.log",
+          "returncode": 2
+        },
+        {
+          "command": [
+            "python3",
+            "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_1",
+            "--run-dir",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_1/backend/RUN_2026-08-09_21-52-04_641188_557f",
+            "--mode",
+            "strict",
+            "--def",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_1/backend/RUN_2026-08-09_21-52-04_641188_557f/final/6_final.def"
+          ],
+          "elapsed_seconds": 0.061,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sdram_drc_baseline_1/signoff_gate.log",
+          "returncode": 0
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:57.126791+00:00",
+      "config_sha256": "79b0dacd665df7cc2bbf8007caea9f9389d283ed9f99e3f818eb610c3543d5a0",
+      "constraint_attestation": {
+        "config_sha256": "79b0dacd665df7cc2bbf8007caea9f9389d283ed9f99e3f818eb610c3543d5a0",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "e6105eb079dd6b0c1e5b3f5d8568dab1e0e947512542416e199b4e3686312623",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_1/repair_family_probe_input.json",
+        "input_manifest_sha256": "f691d705371be141603a5c5735be5a35864c161c25f02987b02c2dd47969d868",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_1",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_1/repair_family_probe_result.json",
+        "result_sha256": "682154a29ae34373d5d3d2b6cb4a3583f763674b957813ae17a57c3b8861b59c"
+      },
+      "family_id": "rule_specific_drc",
+      "metrics": {
+        "antenna_violations": 0,
+        "drc_violations": 60,
+        "hold_wns_ns": 0.344658,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": 4.52535
+      },
+      "normalized_failure_signature": [
+        "DRC:m3.2"
+      ],
+      "protected_task_digest": "dc6f7fd7b290ee02db75ea49ca6a3d244d493966f3e50ff83db4d2d52cbe2839",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": "fail",
+        "lvs": "clean",
+        "ppa": null,
+        "rcx": "complete",
+        "route": "clean",
+        "signoff_gate": "dirty",
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_1/backend/RUN_2026-08-09_21-52-04_641188_557f",
+      "run_id": "RUN_2026-08-09_21-52-04_641188_557f",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "sdram_axi_m3p2",
+      "variant": "baseline_1"
+    },
+    {
+      "commands": [
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_2",
+            "sky130hd",
+            "repair_probe_sdram_axi_m3p2_baseline_2"
+          ],
+          "elapsed_seconds": 1544.721,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sdram_drc_baseline_2/run_orfs.log",
+          "returncode": 0
+        },
+        {
+          "command": [
+            "bash",
+            "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_2",
+            "sky130hd",
+            "--check",
+            "both",
+            "--max-iters",
+            "0",
+            "--variant",
+            "repair_probe_sdram_axi_m3p2_baseline_2"
+          ],
+          "elapsed_seconds": 45.959,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sdram_drc_baseline_2/strict_signoff.log",
+          "returncode": 2
+        },
+        {
+          "command": [
+            "python3",
+            "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_2",
+            "--run-dir",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_2/backend/RUN_2026-08-09_21-52-04_641424_6bf3",
+            "--mode",
+            "strict",
+            "--def",
+            "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_2/backend/RUN_2026-08-09_21-52-04_641424_6bf3/final/6_final.def"
+          ],
+          "elapsed_seconds": 0.069,
+          "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sdram_drc_baseline_2/signoff_gate.log",
+          "returncode": 0
+        }
+      ],
+      "completed_at": "2026-08-11T09:08:57.190601+00:00",
+      "config_sha256": "675f96ed0c813f9dc513d412d2e1641b99eb16eb53f351a338fb3447d6c57c4f",
+      "constraint_attestation": {
+        "config_sha256": "675f96ed0c813f9dc513d412d2e1641b99eb16eb53f351a338fb3447d6c57c4f",
+        "mode": "fixed_registered_target",
+        "sdc_sha256": "e6105eb079dd6b0c1e5b3f5d8568dab1e0e947512542416e199b4e3686312623",
+        "status": "bound",
+        "target_frequency_mhz": 100.0
+      },
+      "environment_failure": false,
+      "evidence_binding": {
+        "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_2/repair_family_probe_input.json",
+        "input_manifest_sha256": "745d7756b0c6fec6e352a300d3ab0876563f87eab2f2f8dfff741f50b3bbb3df",
+        "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_2",
+        "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_2/repair_family_probe_result.json",
+        "result_sha256": "da5c878f179868601cc5104e0260826a6dfb493b8d434b54c71e7d5dcb531ec7"
+      },
+      "family_id": "rule_specific_drc",
+      "metrics": {
+        "antenna_violations": 0,
+        "drc_violations": 60,
+        "hold_wns_ns": 0.344658,
+        "lvs_mismatches": 0,
+        "route_violations": 0,
+        "setup_wns_ns": 4.52535
+      },
+      "normalized_failure_signature": [
+        "DRC:m3.2"
+      ],
+      "protected_task_digest": "dc6f7fd7b290ee02db75ea49ca6a3d244d493966f3e50ff83db4d2d52cbe2839",
+      "publication_strict_clean": false,
+      "report_status": {
+        "drc": "fail",
+        "lvs": "clean",
+        "ppa": null,
+        "rcx": "complete",
+        "route": "clean",
+        "signoff_gate": "dirty",
+        "signoff_manifest": null,
+        "timing_check": null
+      },
+      "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_baseline_2/backend/RUN_2026-08-09_21-52-04_641424_6bf3",
+      "run_id": "RUN_2026-08-09_21-52-04_641424_6bf3",
+      "schema_version": "repair-family-probe-result-1.1",
+      "strict_clean": false,
+      "strict_clean_scope": "fixed_target_physical_signoff",
+      "task_id": "sdram_axi_m3p2",
+      "variant": "baseline_2"
+    }
+  ],
+  "effect": {
+    "after": {
+      "PLACE_PINS_ARGS": "-exclude right:*"
+    },
+    "before": {
+      "PLACE_PINS_ARGS": {
+        "absent": true
+      }
+    },
+    "changed_knobs": [
+      "PLACE_PINS_ARGS"
+    ]
+  },
+  "family_id": "rule_specific_drc",
+  "schema_version": "repair-family-evidence-1.1",
+  "task": {
+    "check_set": [
+      "orfs",
+      "route",
+      "drc",
+      "lvs",
+      "setup",
+      "hold",
+      "antenna",
+      "rcx"
+    ],
+    "clock_port": "clk_i",
+    "license_evidence": {
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "size": 35149,
+      "source_relative_path": "LICENSE",
+      "spdx_id": "GPL-3.0-only",
+      "status": "allow"
+    },
+    "platform": "sky130hd",
+    "protected_task_digest": "dc6f7fd7b290ee02db75ea49ca6a3d244d493966f3e50ff83db4d2d52cbe2839",
+    "sdc_sha256": "e6105eb079dd6b0c1e5b3f5d8568dab1e0e947512542416e199b4e3686312623",
+    "signoff_mode": "strict",
+    "source_commit": "c4becd60f0ce9ada991d894e36036b9429446922",
+    "source_digest": "25b07cd37964cbca3655a0a56ffec0704470e1df1366080d8b594e439b68484a",
+    "source_provenance_status": "repo_commit_and_bytes_bound",
+    "source_repo_url": "https://github.com/ultraembedded/core_sdram_axi4",
+    "target_frequency_mhz": 100.0,
+    "top_module": "sdram_axi"
+  },
+  "witness_run": {
+    "commands": [
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/run_orfs.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_witness_exclude_right",
+          "sky130hd",
+          "repair_probe_sdram_axi_m3p2_witness_exclude_right"
+        ],
+        "elapsed_seconds": 170.413,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sdram_drc_witness_exclude_right/run_orfs.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "bash",
+          "/home/yangao/r2g-skills/r2g-skills/signoff-loop/scripts/flow/fix_signoff.sh",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_witness_exclude_right",
+          "sky130hd",
+          "--check",
+          "both",
+          "--max-iters",
+          "0",
+          "--variant",
+          "repair_probe_sdram_axi_m3p2_witness_exclude_right"
+        ],
+        "elapsed_seconds": 43.773,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sdram_drc_witness_exclude_right/strict_signoff.log",
+        "returncode": 0
+      },
+      {
+        "command": [
+          "python3",
+          "/home/yangao/r2g-skills/r2g-skills/def-graph/scripts/flow/signoff_gate.py",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_witness_exclude_right",
+          "--run-dir",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_witness_exclude_right/backend/RUN_2026-08-11_02-00-28_1882455_2481",
+          "--mode",
+          "strict",
+          "--def",
+          "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_witness_exclude_right/backend/RUN_2026-08-11_02-00-28_1882455_2481/final/6_final.def"
+        ],
+        "elapsed_seconds": 0.06,
+        "log": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/logs/sdram_drc_witness_exclude_right/signoff_gate.log",
+        "returncode": 0
+      }
+    ],
+    "completed_at": "2026-08-11T09:08:57.256450+00:00",
+    "config_sha256": "da4873637608e163b7b13bcfbef16aafb0a58e6c55aaa45464e6751094b13a12",
+    "constraint_attestation": {
+      "config_sha256": "da4873637608e163b7b13bcfbef16aafb0a58e6c55aaa45464e6751094b13a12",
+      "mode": "fixed_registered_target",
+      "sdc_sha256": "e6105eb079dd6b0c1e5b3f5d8568dab1e0e947512542416e199b4e3686312623",
+      "status": "bound",
+      "target_frequency_mhz": 100.0
+    },
+    "environment_failure": false,
+    "evidence_binding": {
+      "input_manifest": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_witness_exclude_right/repair_family_probe_input.json",
+      "input_manifest_sha256": "d58413fdec2bfe34e270588a2bd6bd69dc17b60ccca8df356224ce64921cbf0c",
+      "project": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_witness_exclude_right",
+      "result": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_witness_exclude_right/repair_family_probe_result.json",
+      "result_sha256": "41f1bd8d9cde9211487dff47ba5e37150a5de7e81123400ef7abf2df94795710"
+    },
+    "family_id": "rule_specific_drc",
+    "metrics": {
+      "antenna_violations": 0,
+      "drc_violations": 0,
+      "hold_wns_ns": 0.34499,
+      "lvs_mismatches": 0,
+      "route_violations": 0,
+      "setup_wns_ns": 4.89851
+    },
+    "normalized_failure_signature": [],
+    "protected_task_digest": "dc6f7fd7b290ee02db75ea49ca6a3d244d493966f3e50ff83db4d2d52cbe2839",
+    "publication_strict_clean": false,
+    "report_status": {
+      "drc": "clean",
+      "lvs": "clean",
+      "ppa": null,
+      "rcx": "complete",
+      "route": "clean",
+      "signoff_gate": "pass",
+      "signoff_manifest": null,
+      "timing_check": null
+    },
+    "run_dir": "/home/yangao/r2g_repair_family_probe_2026_08_10_v1/projects/sdram_drc_witness_exclude_right/backend/RUN_2026-08-11_02-00-28_1882455_2481",
+    "run_id": "RUN_2026-08-11_02-00-28_1882455_2481",
+    "schema_version": "repair-family-probe-result-1.1",
+    "strict_clean": true,
+    "strict_clean_scope": "fixed_target_physical_signoff",
+    "task_id": "sdram_axi_m3p2",
+    "variant": "witness_exclude_right"
+  }
+}
