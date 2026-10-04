@@ -123,7 +123,24 @@ E5L_RTL = Path("/data2/home/shenshan/r2g-work/corpora/e5l/d/fe9bc8b0fd8a/_downlo
                "e5l_fe9bc8b0fd8a/rtl")
 
 
-@pytest.mark.skipif(not E5L_RTL.is_dir(), reason="E5L corpus not on this host")
+def _readable_dir(path: Path) -> bool:
+    """Is this an existing directory this process may look at?
+
+    The caller's intent is "skip unless the corpus is on this host", and the
+    path above is under another operator's home. Path.is_dir() only swallows
+    ENOENT/ENOTDIR/EBADF/ELOOP, so on a host where an ancestor directory is
+    unreadable it raises PermissionError instead of returning False -- and
+    because the call sits in a decorator argument it raises at import time and
+    interrupts collection of the WHOLE rtl-acquire suite, not just this test.
+    Unreadable is a way of not being on this host, so it must answer False.
+    """
+    try:
+        return path.is_dir()
+    except OSError:
+        return False
+
+
+@pytest.mark.skipif(not _readable_dir(E5L_RTL), reason="E5L corpus not on this host")
 def test_real_e5l_datapath_resolves_in_clk() -> None:
     files = [E5L_RTL / n for n in ("Datapath.v", "InstantMinComp.v",
                                    "MinTrackerComp.v", "ProcessingElements.v")]
