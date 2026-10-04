@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-08-21T22:56:48-07:00",
-  "source_run_count": 3324,
+  "generated_at": "2026-10-04T05:54:50-07:00",
+  "source_run_count": 3330,
   "min_successful_runs_required": 3,
   "schema_version": 3,
-  "generation": 7354,
+  "generation": 7355,
   "families": {
     "rv32i": {
       "platforms": {
@@ -13533,6 +13533,60 @@
             }
           }
         }
+      }
+    }
+  },
+  "platforms": {
+    "nangate45": {
+      "slack_deterioration": {
+        "d_fp_pl": {
+          "ns_p90": 0.3192599999999999,
+          "pct_p90": 0.03192599999999999
+        },
+        "d_pl_fin": {
+          "ns_p90": 0.01205999999999996,
+          "pct_p90": 0.001205999999999996
+        },
+        "n": 10
+      }
+    },
+    "sky130hd": {
+      "slack_deterioration": {
+        "d_fp_pl": {
+          "ns_p90": 4.25367,
+          "pct_p90": 0.42536699999999994
+        },
+        "d_pl_fin": {
+          "ns_p90": -0.2953999999999999,
+          "pct_p90": -0.02953999999999999
+        },
+        "n": 1
+      }
+    },
+    "sky130hs": {
+      "slack_deterioration": {
+        "d_fp_pl": {
+          "ns_p90": 1.260056,
+          "pct_p90": 0.3002839498764368
+        },
+        "d_pl_fin": {
+          "ns_p90": 0.17889600000000005,
+          "pct_p90": 0.05560774393987897
+        },
+        "n": 836
+      }
+    },
+    "gf180": {
+      "slack_deterioration": {
+        "d_fp_pl": {
+          "ns_p90": 1.743837,
+          "pct_p90": 0.555018544784995
+        },
+        "d_pl_fin": {
+          "ns_p90": 0.2269323,
+          "pct_p90": 0.05116230391541226
+        },
+        "n": 34
       }
     }
   },
