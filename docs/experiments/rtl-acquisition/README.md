@@ -29,7 +29,7 @@ are referenced only by environment variable name and must never be committed. Be
 formal Pilot batch, run:
 
 ```bash
-python3 tools/preflight_experiment1_model_routes.py \
+python3 experiments/preflight_experiment1_model_routes.py \
   --routes docs/experiments/rtl-acquisition/experiment1_model_routes.json \
   --env-file ~/.config/r2g/experiment1_api.env \
   --output CAMPAIGN_ROOT/api/model_route_preflight.json
@@ -50,7 +50,7 @@ source-yield statistics, or any other acquisition memory.
 2. Initialize one campaign:
 
    ```bash
-   python3 tools/run_experiment1_rtl_acquisition.py init-campaign \
+   python3 experiments/run_experiment1_rtl_acquisition.py init-campaign \
      --campaign-root /path/to/campaign \
      --campaign-id exp1-pilot-v1 \
      --model-preflight /path/to/model_route_preflight.json
@@ -61,7 +61,7 @@ source-yield statistics, or any other acquisition memory.
 
    ```bash
    export GITHUB_TOKEN="$(gh auth token)"
-   python3 tools/run_experiment1_method_campaign.py acquire \
+   python3 experiments/run_experiment1_method_campaign.py acquire \
      --campaign-root /path/to/campaign \
      --method-id openai-vanilla \
      --env-file ~/.config/r2g/experiment1_api.env \
@@ -90,7 +90,7 @@ source-yield statistics, or any other acquisition memory.
    fixed-denominator method report:
 
    ```bash
-   python3 tools/run_experiment1_method_campaign.py evaluate \
+   python3 experiments/run_experiment1_method_campaign.py evaluate \
      --campaign-root /path/to/campaign \
      --method-id openai-vanilla \
      --cores 4

@@ -36,13 +36,13 @@
 完成上述冻结后，先初始化一次 Campaign，再分别执行每个方法：
 
 ```bash
-python3 tools/run_experiment1_method_campaign.py acquire \
+python3 experiments/run_experiment1_method_campaign.py acquire \
   --campaign-root CAMPAIGN_ROOT \
   --method-id METHOD_ID \
   --env-file ~/.config/r2g/experiment1_api.env \
   --cores 4
 
-python3 tools/run_experiment1_method_campaign.py evaluate \
+python3 experiments/run_experiment1_method_campaign.py evaluate \
   --campaign-root CAMPAIGN_ROOT \
   --method-id METHOD_ID \
   --cores 4

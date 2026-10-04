@@ -301,3 +301,6 @@ backups/
 # Stray 0-byte knowledge DB created when a tool opened the wrong filename:
 # the real store is knowledge.sqlite
 r2g-skills/signoff-loop/knowledge/knowledge.db
+
+# The ICLR draft is archived outside the repo (not submitted; see r2g-paper-archive-*)
+docs/paper/

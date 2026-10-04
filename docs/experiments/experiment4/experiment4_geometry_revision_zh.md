@@ -51,11 +51,11 @@
 在 `/home/yangao/r2g-skills` 下执行：
 
 ```bash
-/home/yangao/.conda/envs/gnn_env/bin/python tools/validate_experiment4_geometry_fix.py \
+/home/yangao/.conda/envs/gnn_env/bin/python experiments/validate_experiment4_geometry_fix.py \
   --campaign /home/yangao/r2g_exp4_graph_conversion_v2_20260908 \
   --output /home/yangao/r2g_exp4_physical_semantics_fix_validation_20260908 \
   --feature-script /home/yangao/r2g-skills/r2g-skills/def-graph/scripts/r2g2/02_extract_features.py
-/home/yangao/.conda/envs/gnn_env/bin/python tools/experiment4_semantic_audit.py \
+/home/yangao/.conda/envs/gnn_env/bin/python experiments/experiment4_semantic_audit.py \
   --campaign /home/yangao/r2g_exp4_physical_semantics_fix_validation_20260908 \
   --output /home/yangao/r2g_exp4_physical_semantics_fix_validation_20260908/audit_v0_3_final \
   --methods r2g-geometry-fix \

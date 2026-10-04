@@ -69,14 +69,14 @@ R2G 开发历史成本与本次运行成本分开叙述；LLM 转换器开发 To
 
 ```bash
 /home/yangao/.conda/envs/gnn_env/bin/python -m pytest -q tools/tests/test_experiment4_semantic_audit.py
-/home/yangao/.conda/envs/gnn_env/bin/python tools/experiment4_semantic_audit.py \
+/home/yangao/.conda/envs/gnn_env/bin/python experiments/experiment4_semantic_audit.py \
   --campaign /home/yangao/r2g_exp4_graph_conversion_v2_20260908 \
   --output /home/yangao/r2g_exp4_semantic_audit_20260908 \
   --yosys /home/yangao/r2g_toolchain/OpenROAD-flow-scripts/tools/install/yosys/bin/yosys \
   --openroad /home/yangao/r2g_toolchain/OpenROAD-flow-scripts/tools/install/OpenROAD/bin/openroad
-/home/yangao/.conda/envs/gnn_env/bin/python tools/report_experiment4_semantic_audit.py \
+/home/yangao/.conda/envs/gnn_env/bin/python experiments/report_experiment4_semantic_audit.py \
   /home/yangao/r2g_exp4_semantic_audit_20260908
-/home/yangao/.conda/envs/gnn_env/bin/python tools/experiment4_batch_smoke.py \
+/home/yangao/.conda/envs/gnn_env/bin/python experiments/experiment4_batch_smoke.py \
   --campaign /home/yangao/r2g_exp4_graph_conversion_v2_20260908 \
   --output /home/yangao/r2g_exp4_semantic_audit_20260908/batch_smoke.json
 ```

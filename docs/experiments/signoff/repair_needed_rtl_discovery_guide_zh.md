@@ -192,7 +192,7 @@ baseline 和 feasibility。该倍率应在下一轮独立 Pilot 后冻结，而�
 - LogikBench 风险排序：`logikbench_repair_risk_ranking_v1.md`
 - 风险排序工具：`tools/rank_experiment2_repair_candidates.py`
 - LogikBench scout：`tools/logikbench_repair_scout.py`
-- 正式重复/feasibility runner：`tools/run_experiment2_retrospective_repair_screen.py`
+- 正式重复/feasibility runner：`experiments/run_experiment2_retrospective_repair_screen.py`
 
 最重要的原则是：**用便宜代理提高命中率，用独立重复证明失败真实存在，用预注册合法修复
 证明它不是无解题；风险排序负责省时间，family registry 约束因果，strict signoff 才负责给

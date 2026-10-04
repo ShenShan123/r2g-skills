@@ -80,7 +80,13 @@ r2g-skills/                     # The skill collection — installs THREE Claude
     scripts/knowledge/project_frontend_diagnosis.py  # journal→knowledge projection + honesty --check
     scripts/skill_env.py  scripts/flow/_env.sh  # thin env delegate over the shared _env.sh
     references/  tests/           # policy JSONs, operation matrix, failure KB; pytest suite
-tools/                          # Repo-level operator tooling + installers (incl. verify_graph_dataset.py)
+tools/                          # Operator tooling the SKILLS call + installers (incl. verify_graph_dataset.py)
+experiments/                    # Paper-evidence machinery (E1-E5 runners + tests). Split out of tools/
+                                #   2026-10-04: nothing under r2g-skills/ references it, and the
+                                #   dependency runs one way (experiments -> skills), so it is a leaf.
+                                #   A script belongs in tools/ if a skill calls it, in experiments/ if
+                                #   it only produces evidence for a claim in EXPERIMENT_PLAN.md.
+gnn-node/  gnn-edge/            # Downstream consumers of def-graph's datasets (node / parasitic-edge GNNs)
 design_cases/                   # All design runs + built datasets (gitignored); _batch/, _dashboard/
 ```
 
@@ -112,15 +118,20 @@ the toolchain. `--dry-run` prints a per-tier plan and installs nothing; without 
 def-graph) are the honesty layer — a bootstrapped env is auto-found next session. Design + rationale:
 `docs/superpowers/plans/r2g-skills-bootstrap-2026-07-08.md`.
 
-**This machine:** signoff tools (iverilog/vvp, magic, netgen) live in
-`/proj/workarea/user5/miniconda3/envs/eda` (relocated 2026-07-09 from a now-deleted `~/miniconda3` to
-free a full `$HOME`; the conda root is on `/proj` too); the sky130A PDK is staged at
-`/proj/workarea/user5/sky130_pdk/share/pdk/sky130A`; all pinned in `references/env.local.sh` and green
-in `check_env.sh` (enables real sky130 Magic DRC + Netgen LVS).
-The graph-stage torch venv is at `/proj/workarea/user5/pyenvs/rtl2graph` (torch 2.12.1+cpu, PyG 2.8.0,
-pandas, pytest) — point `R2G_GRAPH_PYTHON` at its `bin/python`. Install recipe in `README.md`.
-**Never install large packages into `$HOME` (full) — use `/proj`.** Platforms in this checkout:
-`nangate45`, `sky130hd` (default), `sky130hs`, `gf180`, `ihp-sg13g2`. **`asap7` is NOT SUPPORTED in
+**This machine (verified 2026-10-04):** everything is under `/home/yangao` — there is **no `/proj`
+mount here**, so ignore any `/proj/workarea/...` path in older notes (those describe hosts 203/208).
+ORFS + the pinned openroad/yosys live in `/home/yangao/r2g_toolchain/OpenROAD-flow-scripts`; signoff
+tools (magic, netgen) and the sky130A PDK in `/home/yangao/.conda/envs/eda` (`share/pdk/sky130A`);
+iverilog in `/opt/OpenROAD/oss-cad-suite/bin`. All pinned in `references/env.local.sh`.
+The graph-stage torch venv is `/home/yangao/r2g_toolchain/pyenvs/r2g-graph` (torch 2.13.0+cpu, PyG
+2.8.0, pandas 3.0.3) — `R2G_GRAPH_PYTHON` points at the `bin/r2g_graph_python` wrapper. It needs
+`pytest`+`jsonschema` to run the `tools/`, `experiments/` and def-graph suites (installed 2026-10-04;
+without them 11 test files fail to collect on numpy/torch and 3 more on jsonschema), and `pyg-lib` or
+`torch-sparse` for `gnn-node`'s NeighborSampler (still absent — 4 gnn-node tests are gated on it).
+`$HOME` has ~1.4 TB free here, so install into it; the "never install into `$HOME`" rule was about
+203/208, where it was full. `check_env.sh` reads STRICT-READY on `nangate45`, `sky130hd` and
+`sky130hs`. Platforms in this checkout: `nangate45`, `sky130hd` (default), `sky130hs`, `gf180`,
+`gt2n`, `ihp-sg13g2` (plus the `sky130io`/`sky130ram`/`common` support decks). **`asap7` is NOT SUPPORTED in
 this version** — `run_orfs.sh` refuses it (exit 65) and `platform_capability.py` reports tier
 `unsupported`; it can never read DRC-clean (irreducible false-violation floor, no LVS deck, Calibre
 not installed), so it can never promote a recipe. Override for experiments only:

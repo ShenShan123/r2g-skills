@@ -12,9 +12,9 @@ hidden case 仍未物化。旧 v1/v1.1/v2 只作为测量研发证据，不与 v
 PY=/home/yangao/.conda/envs/gnn_env/bin/python
 ROOT=/home/yangao/r2g_exp4_confirmatory_v3_20260909
 REPO=/home/yangao/r2g-skills
-RUN=$ROOT/runtime/tools/run_experiment4_graph_conversion.py
-DEV=$ROOT/runtime/tools/run_experiment4_llm_converter.py
-PIPE=$ROOT/runtime/tools/run_experiment4_formal_pipeline.py
+RUN=$ROOT/runtime/experiments/run_experiment4_graph_conversion.py
+DEV=$ROOT/runtime/experiments/run_experiment4_llm_converter.py
+PIPE=$ROOT/runtime/experiments/run_experiment4_formal_pipeline.py
 ```
 
 ## 1. 公开输入和 canary
