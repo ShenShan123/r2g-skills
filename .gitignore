@@ -283,7 +283,7 @@ Dataset_R2G2.0(B)/
 # V1 validation registry outputs (machine-local run evidence — never commit)
 docs/superpowers/plans/validation-reports/
 
-# JetBrains project config (gnn-node/ and gnn-edge/ each carry one)
+# JetBrains project config
 .idea/
 *.iml
 

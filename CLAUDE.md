@@ -86,7 +86,6 @@ experiments/                    # Paper-evidence machinery (E1-E5 runners + test
                                 #   dependency runs one way (experiments -> skills), so it is a leaf.
                                 #   A script belongs in tools/ if a skill calls it, in experiments/ if
                                 #   it only produces evidence for a claim in EXPERIMENT_PLAN.md.
-gnn-node/  gnn-edge/            # Downstream consumers of def-graph's datasets (node / parasitic-edge GNNs)
 design_cases/                   # All design runs + built datasets (gitignored); _batch/, _dashboard/
 ```
 
