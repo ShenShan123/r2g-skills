@@ -9,6 +9,7 @@ from tehm.evaluation.candidate_executor import (
     P12_ARMS, CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
 )
 from tehm.evaluation.counterfactual_oracle import counterfactual_oracle_complete
+from contracts import MemoryRoutingDecision
 from tehm.ids import stable_dumps
 from tehm.state.shift_receipts import StateShiftReceipt
 from tehm.assets.receipts import CapabilityGapReceipt

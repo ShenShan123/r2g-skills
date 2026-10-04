@@ -335,3 +335,30 @@ def test_shipped_lessons_cover_key_symptoms():
     got = {l["id"] for l in search_failures.lessons_for_symptom(
         check="drc", vclass="V1.S.4", platform="asap7")}
     assert "lesson-asap7-drc-deck-floor" in got
+
+
+def test_route_dead_gate_reads_orfs_stage_rows(tmp_path):
+    """Route fix iterations are stored as check_type='orfs_stage' / the route symptom
+    (fix_signoff.sh remaps them). The gate used to query check_type='route' and so
+    could never fire for route; a place-stage failure must not count either."""
+    db = tmp_path / "knowledge.sqlite"
+    conn = knowledge_db.connect(db)
+    knowledge_db.ensure_schema(conn)
+    proj = tmp_path / "design"
+    proj.mkdir()
+    route_sid = symptom.symptom_id(symptom.canonical_signature("orfs_stage", "route", {}))
+    place_sid = symptom.symptom_id(symptom.canonical_signature("orfs_stage", "place", {}))
+    for i, (strat, verdict, sid) in enumerate([
+            ("route_relief", "no_change", route_sid), ("route_relief", "regression", route_sid),
+            ("core_util_relief", "no_change", place_sid), ("core_util_relief", "no_change", place_sid)]):
+        conn.execute(
+            "INSERT INTO fix_events (fix_session_id, project_path, check_type, iter, strategy, "
+            "verdict, symptom_id) VALUES (?,?,?,?,?,?,?)",
+            (f"s{i}", str(proj), "orfs_stage", 1, strat, verdict, sid))
+    conn.commit()
+    conn.close()
+    plan = _plan("route_relief", "core_util_relief")
+    dsf._annotate_live_gates(plan, proj, check="route", db_path=db)
+    by_id = {s["id"]: s for s in plan["strategies"]}
+    assert by_id["route_relief"]["dead_here"] == 2
+    assert "dead_here" not in by_id["core_util_relief"]   # place-stage evidence is not route evidence

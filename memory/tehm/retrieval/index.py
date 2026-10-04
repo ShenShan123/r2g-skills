@@ -10,7 +10,6 @@ import json
 import sqlite3
 from dataclasses import dataclass, field
 
-from tehm import db as tehm_db
 from tehm.crystallization.validity import ADMISSIBLE_FOR_LIFECYCLE
 from tehm.ids import is_hole, rule_id as mint_rule_id
 

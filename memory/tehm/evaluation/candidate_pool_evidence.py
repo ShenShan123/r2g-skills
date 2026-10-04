@@ -155,7 +155,7 @@ def _replay_pool(raw: object, *, case_id: str, cohort_bundle,
             receipt.routing_decision != cohort_bundle.routing_decision:
         raise CandidatePoolEvidenceError(
             f"candidate-pool route binding mismatch: {case_id}")
-    query = _query(raw.get("query"), case_id=case_id)
+    _query(raw.get("query"), case_id=case_id)          # validates; raises on a malformed query
     candidates_raw = raw.get("candidates")
     if isinstance(candidates_raw, (str, bytes)) or \
             not isinstance(candidates_raw, Sequence) or not candidates_raw:

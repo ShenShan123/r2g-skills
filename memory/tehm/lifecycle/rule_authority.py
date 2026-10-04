@@ -29,7 +29,7 @@ from tehm.dataset import normalize_stored_learner_bool
 from tehm.ids import stable_dumps
 from tehm.physical.orfs_preflight import validate_persisted_execution_preflight
 
-from .promotion_gates import PROMOTION_GATE_VERSION, REQUIRED_GATES, evaluate_promotion_gates
+from .promotion_gates import REQUIRED_GATES, evaluate_promotion_gates
 from .rule_status import get_status, set_status
 
 
@@ -709,7 +709,7 @@ def _external_transition_binding(
         action_domain = _strict_text(action.get("domain"), label="action_domain")
         _strict_text(action.get("transformation_family"),
                      label="transformation_family")
-    except ValueError as exc:
+    except ValueError:
         raise ValueError("external_authority:record_identity_incomplete")
     if not isinstance(delta, Mapping) or not isinstance(verification, Mapping):
         raise ValueError("external_authority:record_payload_incomplete")

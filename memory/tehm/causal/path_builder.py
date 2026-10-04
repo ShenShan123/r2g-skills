@@ -11,10 +11,7 @@ from tehm.dataset import normalize_stored_learner_bool, validate_membership_row
 from tehm.ids import stable_dumps
 
 from .edges import CausalEdge, persist_edge
-from .evidence_level import (
-    CausalEvidenceLevel, evidence_rank, transition_evidence_level,
-    validate_evidence_level,
-)
+from .evidence_level import evidence_rank, transition_evidence_level, validate_evidence_level
 from .mechanism import load_transition_facts, mechanism_signature
 from .nodes import CausalNode, persist_node
 from .receipts import CausalFragment, CausalPathCandidate

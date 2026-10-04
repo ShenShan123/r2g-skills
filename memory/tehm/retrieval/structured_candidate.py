@@ -9,7 +9,7 @@ from __future__ import annotations
 import copy
 import hashlib
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from contracts import MemoryQuery, MemoryRoutingDecision, RepairContext
@@ -352,20 +352,15 @@ def build_structured_candidate(
         source_contract, verify_source_copy, source_runtime_binding,
     )
     source_replay = None
-    from tehm.assets.source_selection import SOURCE_CONTRACTS
-    from tehm.assets.guard_binding import DOMAIN as GUARD_DOMAIN
-    from tehm.rtl.skid_payload_action import DOMAIN as SKID_DOMAIN
-    from tehm.rtl.skid_payload_action_v2 import DOMAIN as SKID_V2_DOMAIN
-    from tehm.rtl.skid_payload_action_v3 import DOMAIN as SKID_V3_DOMAIN
-    from tehm.rtl.skid_payload_action_v4 import DOMAIN as SKID_V4_DOMAIN
-    from tehm.rtl.skid_payload_action_v5 import DOMAIN as SKID_V5_DOMAIN
-    from tehm.rtl.skid_payload_action_v6 import DOMAIN as SKID_V6_DOMAIN
-    from tehm.rtl.skid_payload_action_v9 import DOMAIN as SKID_V9_DOMAIN
+    from tehm.assets.source_selection import SOURCE_BOUND_DOMAINS, SOURCE_CONTRACTS
+    from tehm.assets.retired import retired_generation, retired_reason
+    generation = retired_generation(asset)
+    if generation:
+        raise StructuredCandidateError(retired_reason(generation))
     claimed_contract = (asset.get("provenance") or {}).get("binding_contract")
     if source_contract(asset) is None and (
             (isinstance(claimed_contract, str) and claimed_contract in SOURCE_CONTRACTS) or
-            ((asset.get("definition") or {}).get("action") or {}).get("domain") in
-            {GUARD_DOMAIN, SKID_DOMAIN, SKID_V2_DOMAIN, SKID_V3_DOMAIN, SKID_V4_DOMAIN, SKID_V5_DOMAIN, SKID_V6_DOMAIN, SKID_V9_DOMAIN}):
+            ((asset.get("definition") or {}).get("action") or {}).get("domain") in SOURCE_BOUND_DOMAINS):
         raise StructuredCandidateError("source binding registered template missing")
     if source_contract(asset) is not None:
         selected_proof = (asset_selection.receipt.binding.get("assets") or {}).get(asset_id)

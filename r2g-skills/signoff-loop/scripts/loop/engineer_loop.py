@@ -43,6 +43,7 @@ sys.path.insert(0, str(REPORTS))
 sys.path.insert(0, str(MEMORY_ROOT))
 from knowledge_db import now_local as _now  # invariant 32: the ONE stamp
 import action_domain                        # RMD-HO-P1-02: stage-scoped eligibility
+import situation                            # sit-v1 failure context (redesign A2)
 
 STATES = ("pending", "flow", "signoff", "fixing", "clean", "escalated",
           "abandoned")
@@ -904,6 +905,16 @@ def _config_effect(before: dict[str, str], after: dict[str, str]) -> dict:
     }
 
 
+def _severity_fields(entry: dict, stage: str | None) -> dict:
+    """Graded severity before (captured at the abort) and after (the retry's newest run)."""
+    try:
+        import severity
+        after = severity.from_project(entry["project_path"], "orfs_stage", stage)
+    except Exception:
+        after = None
+    return {"severity_before": entry.get("_r2g_severity_before"), "severity_after": after}
+
+
 def _effect_fields(entry: dict, *, cleared: bool) -> dict:
     effect = entry.pop("_r2g_config_effect", None) or {}
     delta = effect.get("delta") or {}
@@ -917,7 +928,8 @@ def _effect_fields(entry: dict, *, cleared: bool) -> dict:
     }
 
 
-def _record_pdn_fix(entry: dict, *, cleared: bool) -> None:
+def _record_pdn_fix(entry: dict, *, cleared: bool,
+                    situation_: dict | None = None) -> None:
     """Record the PDN-0185 die-floor (CORE_UTILIZATION -> explicit PDN-feasible DIE_AREA) as a
     fix_log row so the NEXT _ingest projects it into fix_events -> fix_trajectories -> a Tier-3
     recipe, making the recovery VISIBLE to learning (mirrors _record_resize_fix). Keyed
@@ -938,12 +950,16 @@ def _record_pdn_fix(entry: dict, *, cleared: bool) -> None:
         "before_status": "fail", "after_status": "clean" if cleared else "fail",
         "ts": _now(),
         **_effect_fields(entry, cleared=cleared),
+        **_severity_fields(entry, "floorplan"),
     }
+    if situation_:
+        row["situation"] = situation_
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
-def _record_resize_fix(entry: dict, *, cleared: bool) -> None:
+def _record_resize_fix(entry: dict, *, cleared: bool,
+                       situation_: dict | None = None) -> None:
     """Record the FLW-0024 die-resize (DIE_AREA -> CORE_UTILIZATION) as a fix_log row
     so the NEXT _ingest projects it into fix_events -> fix_trajectories -> a Tier-3
     recipe — making the recovery VISIBLE to learning (honest accounting, a
@@ -978,7 +994,10 @@ def _record_resize_fix(entry: dict, *, cleared: bool) -> None:
         "before_status": "fail", "after_status": "clean" if cleared else "fail",
         "ts": _now(),
         **_effect_fields(entry, cleared=cleared),
+        **_severity_fields(entry, "place"),
     }
+    if situation_:
+        row["situation"] = situation_
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
 
@@ -1097,7 +1116,8 @@ def _raise_synth_memory_cap(entry: dict, bits: int = _SYNTH_MEM_BITS_RETRY) -> b
     return raised
 
 
-def _record_synth_mem_fix(entry: dict, *, cleared: bool) -> None:
+def _record_synth_mem_fix(entry: dict, *, cleared: bool,
+                          situation_: dict | None = None) -> None:
     """Record the SYNTH_MEMORY_MAX_BITS raise as a fix_log row so the next _ingest
     projects it into fix_events -> a Tier-3 'synth_memory_relax' recipe -- the synth
     memory-cap recovery becomes VISIBLE to learning (a cross-design prior keyed to the
@@ -1118,9 +1138,136 @@ def _record_synth_mem_fix(entry: dict, *, cleared: bool) -> None:
         "before_status": "fail", "after_status": "clean" if cleared else "fail",
         "ts": _now(),
         **_effect_fields(entry, cleared=cleared),
+        **_severity_fields(entry, "synth"),
     }
+    if situation_:
+        row["situation"] = situation_
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+# ── Memory before escalation (R2G memory redesign B6, 2026-10-01) ───────────────
+# A backend residual (FLW-0024 / PPL-0024 that survived the hard-coded die recovery)
+# used to escalate straight to the operator queue: memory was never asked, so a fix
+# verified on another design in the SAME situation could not help. Under the TEHM
+# backend, ask it once — at most one promoted, situation-applicable, policy-safe,
+# non-vetoed rule — re-flow, verify by stage completion, and record the attempt as
+# a fix_log row (negative evidence on failure); otherwise escalate as before. Route
+# residuals need no hook here: _run_fix(check=route) already consults TEHM through
+# fix_signoff.sh -> diagnose_signoff_fix. The legacy `conn` is None under TEHM, so
+# this goes through the backend router, never the legacy store.
+def _memory_family(strategy_id) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "_", str(strategy_id or "")).strip("_").upper()
+
+
+def _pick_memory_strategy(entry: dict, stage: str) -> tuple[dict | None, dict | None]:
+    """(strategy, situation) of the first usable TEHM rule for this backend abort."""
+    if (os.environ.get("R2G_MEMORY_BACKEND", "legacy").strip().lower() != "tehm"
+            or entry.get("kind") == "ab_arm" or entry.get("_r2g_memory_tried")):
+        return None, None
+    entry["_r2g_memory_tried"] = True          # once per design visit (survives the retry)
+    proj = Path(entry["project_path"])
+    cfg = _config_snapshot(entry)
+    try:
+        import knob_policy
+        from runtime_router import signoff_strategies, signoff_vetoes
+        sit = situation.from_project(proj, "orfs_stage", stage)
+        try:
+            import severity
+            cur_sev = severity.from_project(proj, "orfs_stage", stage)
+        except Exception:
+            cur_sev = None
+        strategies = signoff_strategies(
+            project_dir=proj, check="orfs_stage", design_id=cfg.get("DESIGN_NAME"),
+            platform=cfg.get("PLATFORM"), cfg=cfg, reports={}, situation=sit, severity=cur_sev)
+        vetoed = {_memory_family(k) for k in signoff_vetoes(situation=sit)}
+    except Exception as exc:                   # fail-closed: escalate as before
+        print(f"[loop] memory consultation skipped: {type(exc).__name__}: {exc}",
+              file=sys.stderr)
+        return None, None
+    for st in strategies:
+        edits = st.get("config_edits") or {}
+        why = None
+        if _memory_family(st.get("transformation_family") or st.get("id")) in vetoed:
+            why = "vetoed in this situation"
+        elif knob_policy.edits_violations(edits):
+            why = "knob policy: " + "; ".join(knob_policy.edits_violations(edits))
+        elif all((k not in cfg) if str(v) == knob_policy.UNSET else cfg.get(k) == str(v)
+                 for k, v in edits.items()):
+            why = "edits already in effect"
+        if why:
+            print(f"[loop] memory strategy {st.get('id')} dropped: {why}", file=sys.stderr)
+            continue
+        return st, sit
+    return None, sit
+
+
+def _apply_memory_edits(entry: dict, edits: dict) -> None:
+    """Merge ``edits`` into the signoff-fix auto block (earlier auto edits kept)."""
+    import diagnose_signoff_fix as dsf
+    cfg_path = Path(entry["project_path"]) / "constraints" / "config.mk"
+    text = cfg_path.read_text(encoding="utf-8")
+    block, inside = {}, False
+    for ln in text.splitlines():
+        if ln.strip() == dsf.BLOCK_START:
+            inside = True
+        elif ln.strip() == dsf.BLOCK_END:
+            inside = False
+        elif inside and _config_knob(ln):
+            block[_config_knob(ln)] = ln.split("=", 1)[1].strip()
+    cfg_path.write_text(dsf.apply_edits(text, {**block, **{k: str(v) for k, v in edits.items()}}),
+                        encoding="utf-8")
+
+
+def _record_memory_fix(entry: dict, strategy: dict, stage: str, *, cleared: bool,
+                       situation_: dict | None) -> None:
+    """fix_log row for a memory-rule recovery (same contract as _record_resize_fix:
+    honest stage-completion outcome, before=1 after=0|1, effect fields)."""
+    proj = Path(entry["project_path"])
+    reports = proj / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
+    runs = sorted(proj.glob("backend/RUN_*"))
+    run_tag = runs[-1].name if runs else "norun"
+    sid = "memfix_" + hashlib.sha1(f"{proj}:{run_tag}".encode("utf-8")).hexdigest()[:12]
+    row = {
+        "fix_session_id": sid, "iter": 1,
+        "strategy": _memory_family(strategy.get("transformation_family")
+                                   or strategy.get("id")).lower(),
+        "memory_rule": strategy.get("rule_id"),
+        "memory_trial": bool(strategy.get("memory_trial")),
+        "witness_selected": strategy.get("witness_selected") or [],
+        "memory_mechanisms": strategy.get("mechanisms") or [],   # Phase H attribution
+        "check": "orfs_stage", "violation_class": stage, "from_stage": stage,
+        "before": 1, "after": 0 if cleared else 1,
+        "before_status": "fail", "after_status": "clean" if cleared else "fail",
+        "ts": _now(),
+        **_effect_fields(entry, cleared=cleared),
+        **_severity_fields(entry, stage),
+    }
+    if situation_:
+        row["situation"] = situation_
+    with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+def _memory_recovery(led, entry: dict, conn, stage: str) -> str | None:
+    """B6: try ONE memory rule before escalating a backend residual at ``stage``.
+    Returns the retry's process_one result, or None to escalate as before."""
+    strategy, sit = _pick_memory_strategy(entry, stage)
+    if strategy is None:
+        return None
+    print(f"[loop] memory {'composition' if strategy.get('source') == 'tehm_compose' else 'rule'} "
+          f"{strategy.get('rule_id')} before escalation: "
+          f"{strategy.get('config_edits')}", file=sys.stderr)
+    before = _config_snapshot(entry)
+    _apply_memory_edits(entry, strategy["config_edits"])
+    entry["_r2g_config_effect"] = _config_effect(before, _config_snapshot(entry))
+    led.set_state(entry["design"], "fixing")
+    result = process_one(led, entry, conn, _resized=True)
+    _record_memory_fix(entry, strategy, stage, cleared=(_fail_stage(entry) != stage),
+                       situation_=sit)
+    _ingest(entry)
+    return result
 
 
 def _signoff_status(entry: dict) -> dict:
@@ -1229,6 +1376,20 @@ def process_one(led: Ledger, entry: dict, conn, *,
         # (synth/place/cts crashes, or a route fix that still fails) escalate.
         _ingest(entry)                      # partial runs still teach
         repair_config_before = _config_snapshot(entry)
+        # The abort's situation (error code, die mode, util band) BEFORE any recovery
+        # edits config.mk; the recoveries below record it on their fix_log row. A local,
+        # not an entry key: the recursive retry may abort again and must not overwrite it.
+        try:
+            pre_sit = situation.from_project(entry["project_path"], "orfs_stage",
+                                             _fail_stage(entry))
+        except Exception:
+            pre_sit = None
+        try:                                # graded severity before any recovery (Phase G0)
+            import severity
+            entry["_r2g_severity_before"] = severity.from_project(
+                entry["project_path"], "orfs_stage", _fail_stage(entry))
+        except Exception:
+            entry["_r2g_severity_before"] = None
         # FLW-0024 (place density > 1.0): the die is too small for the synthesized
         # cells -- a RECOVERABLE over-pack (the fixed DIE_AREA was sized from an RTL
         # line-count proxy, not gate count), NOT the irrecoverable NesterovSolve
@@ -1247,7 +1408,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
             # cleared the abort); re-ingest projects the appended fix_log row into a
             # fix_event (idempotent UPSERT on the retry's run row — same ppa.json
             # mtime -> same run_id).
-            _record_resize_fix(entry, cleared=(result == "clean"))
+            _record_resize_fix(entry, cleared=(result == "clean"), situation_=pre_sit)
             _ingest(entry)
             return result
         # PPL-0024 (IO pins exceed die perimeter): the die is too small in PERIMETER for
@@ -1262,7 +1423,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
                 repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
             result = process_one(led, entry, conn, _resized=True)
-            _record_resize_fix(entry, cleared=(result == "clean"))
+            _record_resize_fix(entry, cleared=(result == "clean"), situation_=pre_sit)
             _ingest(entry)
             return result
         # Synth memory-cap (Yosys refuses to infer a memory larger than the default
@@ -1294,7 +1455,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
             # failure as the synth fix FAILING (false negative learning that teaches the loop
             # synth_memory_relax does not work when it does). _fail_stage reflects the retry.
             synth_cleared = _fail_stage(entry) != "synth"
-            _record_synth_mem_fix(entry, cleared=synth_cleared)
+            _record_synth_mem_fix(entry, cleared=synth_cleared, situation_=pre_sit)
             _ingest(entry)
             return result
         # PDN-0185 (floorplan pdngen: die too NARROW for met4/met5 power straps): a tiny
@@ -1311,7 +1472,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
                 repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
             result = process_one(led, entry, conn, _resized=True)
-            _record_pdn_fix(entry, cleared=(result == "clean"))
+            _record_pdn_fix(entry, cleared=(result == "clean"), situation_=pre_sit)
             _ingest(entry)
             return result
         reason, notes = "unseen_crash", f"run_orfs rc={rc}"
@@ -1343,6 +1504,10 @@ def process_one(led: Ledger, entry: dict, conn, *,
               and _is_flw0024(entry)):
             # FLW-0024 that survived the auto-resize retry (cells exceed even the
             # auto-sized routable die): an honest residual, NOT an unseen crash.
+            # Memory first (B6); escalate only if it has nothing usable.
+            mem_result = _memory_recovery(led, entry, conn, "place")
+            if mem_result is not None:
+                return mem_result
             reason = "place_density_residual"
             notes = (f"FLW-0024 place-density overflow (rc={rc}); auto-resize to "
                      f"CORE_UTILIZATION did not clear")
@@ -1352,6 +1517,9 @@ def process_one(led: Ledger, entry: dict, conn, *,
             # perimeter -- a genuinely pin-dense design): an honest residual, NOT an unseen
             # crash. A proper pin-aware floorplan (CORE_ASPECT_RATIO / explicit pad ring) is
             # the next lever; labeled honestly so the operator runbook can route it.
+            mem_result = _memory_recovery(led, entry, conn, "place")
+            if mem_result is not None:
+                return mem_result
             reason = "pin_overflow_residual"
             notes = (f"PPL-0024 IO pins exceed die perimeter (rc={rc}); die enlargement "
                      f"(lower CORE_UTILIZATION) did not create enough pin positions")

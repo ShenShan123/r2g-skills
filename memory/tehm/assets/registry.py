@@ -211,22 +211,14 @@ def set_asset_status(
     if status != old_status and status not in ASSET_STATUS_TRANSITIONS[old_status]:
         raise ValueError(f"invalid asset status transition {old_status}->{status}")
     if status == "promoted":
-        from .lifecycle import _v9_shadow_pending
-        pending = _v9_shadow_pending(asset, target_scope)
-        if pending is not None:
-            raise ValueError(pending.evidence['reason'])
-
-        from .r5_train_evidence import is_r5_skid_asset
-        from .skid_binding_v4 import is_skid_v4_asset
-        from .skid_binding_v5 import is_skid_v5_asset
-        from .skid_binding_v6 import is_skid_v6_asset
-        from .skid_binding_v7 import is_skid_v7_asset
-        from .skid_binding_v8 import is_skid_v8_asset
-        if (is_r5_skid_asset(asset) or is_skid_v4_asset(asset) or
-                is_skid_v5_asset(asset) or is_skid_v6_asset(asset) or
-                is_skid_v7_asset(asset) or is_skid_v8_asset(asset)) and not strict_asset_authority:
+        from .retired import retired_generation, retired_reason
+        generation = retired_generation(asset)
+        if generation:
+            raise ValueError(retired_reason(generation))
+        from .i2c_binding_v3 import is_i2c_v3_asset
+        if is_i2c_v3_asset(asset) and not strict_asset_authority:
             raise ValueError(
-                "R5 skid Asset promotion requires strict raw-replayed authority")
+                "R5 Asset promotion requires strict raw-replayed authority")
         if strict_asset_authority:
             if authority_receipt is None:
                 raise ValueError(

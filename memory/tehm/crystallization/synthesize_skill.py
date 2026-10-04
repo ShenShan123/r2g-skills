@@ -24,7 +24,7 @@ non-triviality audit (Phase 6).
 from __future__ import annotations
 
 from tehm import ROLE_SCHEMA_VERSION, PREDICATE_SCHEMA_VERSION
-from tehm.ids import rule_id, stable_dumps
+from tehm.ids import is_hole, rule_id, stable_dumps
 from tehm.crystallization.anti_unify import ALGORITHM_VERSION, result_digest
 
 SYNTHESIZER_VERSION = "skill-synthesizer-v0.1"
@@ -55,12 +55,13 @@ def synthesize_skill(result, *, domain: str, transformation_family: str,
         "action_domain": action_domain,
         **result.after_pattern,
     }
+    hard_preconditions = situation_preconditions(before_pattern)
     rule = {
         "rule_id": rule_id(
             domain=domain,
             before_pattern=before_pattern,
             after_pattern=after_pattern,
-            hard_preconditions=[],
+            hard_preconditions=hard_preconditions,
             obligations=list(obligations),
         ),
         "domain": domain,
@@ -68,7 +69,7 @@ def synthesize_skill(result, *, domain: str, transformation_family: str,
         "transformation_family": transformation_family,
         "before_pattern": before_pattern,
         "after_pattern": after_pattern,
-        "hard_preconditions": [],
+        "hard_preconditions": hard_preconditions,
         "context_predicates": ({"compatibility_profile": compatibility_profile}
                                 if compatibility_profile else {}),
         "obligations": sorted(set(obligations)),
@@ -98,6 +99,20 @@ def synthesize_skill(result, *, domain: str, transformation_family: str,
         "updated_at": created_at,
     }
     return rule
+
+
+def situation_preconditions(before_pattern: dict) -> list[dict]:
+    """B3 (R2G memory redesign 2026-10-01): every situation field the source
+    episodes SHARED (a concrete ``situation.*`` match slot) becomes an equality
+    hard precondition; a field they differed on is a hole and is dropped. Rules
+    without situation slots (all RTL rules, pre-B3 flow rules) keep ``[]``, so
+    their rule ids are unchanged."""
+    # Encoded as predicate STRINGS ``situation.<field>==<value>``: the rule index
+    # requires hard_preconditions to be a list of strings (retrieval integrity
+    # check). A dict encoding made every situated rule an integrity error at
+    # retrieval (found preparing Phase D amendment D-A1).
+    return [f"{path}=={value}" for path, value in sorted(before_pattern.items())
+            if path.startswith("situation.") and not is_hole(value)]
 
 
 def rule_sources(rule: dict) -> list[dict]:

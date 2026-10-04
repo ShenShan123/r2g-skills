@@ -239,7 +239,22 @@ case "$PLATFORM" in
   sky130hd) SC_LIB_NAME="sky130_fd_sc_hd" ;;
   sky130hs) SC_LIB_NAME="sky130_fd_sc_hs" ;;
 esac
+# Library precedence (failure-patterns.md "sky130hd Netgen LVS netgen_property on every design"):
+# the CDL is the representation normalize_sky130_lvs_spice.py is written for (M devices, short
+# model names, `short` tie proxies), and the ORFS platform CDL matches the platform GDS the layout
+# was built from. The open_pdks transistor SPICE (X devices, unit-less diode area) is used only
+# when no CDL exists -- preferring it whenever it happened to be installed made every sky130hd
+# design fail LVS with netgen_property on hosts whose PDK ships it.
+_ORFS_PLAT_CDL="$FLOW_DIR/platforms/$PLATFORM/cdl/$PLATFORM.cdl"
+_PDK_SC_CDL="$PDK_ROOT/sky130A/libs.ref/$SC_LIB_NAME/cdl/$SC_LIB_NAME.cdl"
 SC_SPICE="$PDK_ROOT/sky130A/libs.ref/$SC_LIB_NAME/spice/$SC_LIB_NAME.spice"
+if [[ -f "$_ORFS_PLAT_CDL" ]]; then
+  SC_SPICE="$_ORFS_PLAT_CDL"
+  echo "Using ORFS platform standard-cell CDL (matches the platform GDS): $SC_SPICE"
+elif [[ -f "$_PDK_SC_CDL" ]]; then
+  SC_SPICE="$_PDK_SC_CDL"
+  echo "Using PDK standard-cell CDL: $SC_SPICE"
+fi
 if [[ ! -f "$SC_SPICE" ]]; then
   _R2G_SC_SPICE="$HOME/.local/share/r2g-pdk/$SC_LIB_NAME/$SC_LIB_NAME.spice"
   if [[ -f "$_R2G_SC_SPICE" ]]; then

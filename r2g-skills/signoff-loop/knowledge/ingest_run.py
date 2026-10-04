@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 import knowledge_db
+import situation
 import symptom
 import tool_versions
 
@@ -194,6 +195,12 @@ def _normalize_verdict(raw: str | None, before: Any, after: Any,
             return "regression"
         if v == "win" and before is not None and after is not None and after == before:
             return "no_change"
+        # A non-improving verdict whose measured count went UP is harm, not a no-op
+        # (56 committed fix_events were 'no_change' with after > before, e.g. sky130hs
+        # li.3 density_relief 7.5 -> 10.9 avg). Guards fix_log writers other than
+        # fix_signoff.sh, which now emits 'regression' itself.
+        if v == "no_change" and before is not None and after is not None and after > before:
+            return "regression"
         # RMD3-P0-01 (failure-patterns.md #58): a row carrying MEASURED global
         # regressions (result_vector.compare fired on a fresh good->bad flip)
         # can never be positive evidence, whatever its raw verdict claims —
@@ -316,6 +323,42 @@ def _load_bench_designs(path: Path | None = None) -> set[str]:
 
 
 # Size bands match suggest_config.recommend (tiny<100, small<5000, medium<50000).
+def ppa_cell_count(project: Path) -> int | None:
+    """Cell count of the project's newest flow: geometry.instance_count from
+    reports/ppa.json (authoritative, from 6_report.json), else stdcell_count."""
+    ppa = _read_json(project / "reports" / "ppa.json") or {}
+    geometry = ppa.get("geometry", {}) if isinstance(ppa, dict) else {}
+    if not isinstance(geometry, dict):
+        return None
+    count = _to_int(geometry.get("instance_count"))
+    return count if count is not None else _to_int(geometry.get("stdcell_count"))
+
+
+def prior_cell_count(conn: sqlite3.Connection, project: Path) -> int | None:
+    """This project's most-recent PRIOR non-null runs.cell_count (pins the size band
+    across an abort re-ingest — see the design_class note in ingest())."""
+    row = conn.execute(
+        "SELECT cell_count FROM runs WHERE project_path=? AND cell_count IS NOT NULL "
+        "ORDER BY julianday(ingested_at) DESC, run_id DESC LIMIT 1",
+        (str(project.resolve()),)).fetchone()
+    return row[0] if row and row[0] else None
+
+
+def project_design_class(project: Path, cfg: dict[str, str], *,
+                         cell_count: int | None = None,
+                         conn: sqlite3.Connection | None = None) -> str:
+    """THE design_class derivation, shared by ingest and diagnose_signoff_fix
+    (R2G memory redesign A3). diagnose used to size the class from proj/synth/
+    synth.log, which run_orfs.sh projects never write -> every lookup keyed
+    '<type>/unknown' while ingest keyed '<type>/<band>' from ppa.json, so the
+    lifecycle gate read rows that never matched the stored ones."""
+    if cell_count is None:
+        cell_count = ppa_cell_count(project)
+    if cell_count is None and conn is not None:
+        cell_count = prior_cell_count(conn, project)
+    return f"{_design_type(project, cfg)}/{_size_class(cell_count)}"
+
+
 def _size_class(cell_count: int | None) -> str:
     if not cell_count:
         return "unknown"
@@ -468,6 +511,14 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
                 verdict = "inconclusive"
         sig, symptom_id_ = symptom.from_fix_log_row(r)
         _upsert_symptom(conn, sig, symptom_id_)
+        sit, sit_source = situation.from_fix_log_row(r, project, platform)
+        sit_id = situation.situation_id(sit) if sit else None
+        if sit:
+            conn.execute(
+                "INSERT OR IGNORE INTO situations "
+                "(situation_id, situation_json, version, first_seen) VALUES (?,?,?,?)",
+                (sit_id, json.dumps(sit, sort_keys=True), sit.get("v"),
+                 knowledge_db.now_local()))
         row_versions = r.get("tool_versions")
         tv_json = (json.dumps(row_versions, sort_keys=True)
                    if isinstance(row_versions, dict) else ambient_versions)
@@ -478,15 +529,24 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
             " before_count, after_count, before_categories_json, after_categories_json, "
             " before_status, after_status, verdict, cumulative_config_json, "
             " config_delta_json, env_flags_json, tool_versions_json, "
-            " symptom_id, signature_json, ts, provenance) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            " symptom_id, signature_json, ts, provenance, "
+            " situation_id, situation_json, situation_source) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(fix_session_id, iter, strategy) DO UPDATE SET "
             "  config_delta_json=excluded.config_delta_json, "
             "  env_flags_json=excluded.env_flags_json, "
             "  tool_versions_json=COALESCE(fix_events.tool_versions_json, "
             "                              excluded.tool_versions_json), "
             "  symptom_id=excluded.symptom_id, "
-            "  signature_json=excluded.signature_json",
+            "  signature_json=excluded.signature_json, "
+            # A pre-fix snapshot is authoritative: re-ingest never downgrades it to
+            # an ingest-time derivation (the project config may since be post-fix).
+            "  situation_id=CASE WHEN fix_events.situation_source='snapshot' "
+            "    THEN fix_events.situation_id ELSE excluded.situation_id END, "
+            "  situation_json=CASE WHEN fix_events.situation_source='snapshot' "
+            "    THEN fix_events.situation_json ELSE excluded.situation_json END, "
+            "  situation_source=CASE WHEN fix_events.situation_source='snapshot' "
+            "    THEN 'snapshot' ELSE excluded.situation_source END",
             (sid, str(project.resolve()), design_name, design_family, platform,
              r.get("check"), r.get("violation_class"), _to_int(r.get("iter")),
              r.get("strategy"), r.get("from_stage"), before, after,
@@ -495,7 +555,8 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
              verdict,
              r.get("cumulative_config"), r.get("config_delta"), r.get("env_flags"),
              tv_json, symptom_id_, json.dumps(sig, sort_keys=True),
-             r.get("ts"), "live"))
+             r.get("ts"), "live",
+             sit_id, json.dumps(sit, sort_keys=True) if sit else None, sit_source))
         n += 1
     return n
 
@@ -602,7 +663,7 @@ def _effective_stage_upgrade(run_dir: Path, flow_scope: str):
         return None
 
 
-_ORFS_ERRCODE_RE = re.compile(r"\[ERROR\s+([A-Z]{2,5}-\d{3,4})\]")
+_ORFS_ERRCODE_RE = situation.ORFS_ERRCODE_RE   # one tool-error regex for both keys
 
 
 def _orfs_fail_detail(run_dir: Path | None) -> tuple[str | None, str | None]:
@@ -1005,15 +1066,8 @@ def ingest(project: Path,
     # recipe for that symptom ever promotes (2026-06-23 audit, bug #9 — proximate
     # trigger). Pin the band from this project's most-recent PRIOR non-null cell_count;
     # the stored runs.cell_count for THIS run stays honest (NULL on an abort).
-    class_cell_count = cell_count
-    if class_cell_count is None:
-        prior = conn.execute(
-            "SELECT cell_count FROM runs WHERE project_path=? AND cell_count IS NOT NULL "
-            "ORDER BY julianday(ingested_at) DESC, run_id DESC LIMIT 1",
-            (str(project.resolve()),)).fetchone()
-        if prior and prior[0]:
-            class_cell_count = prior[0]
-    design_class = f"{_design_type(project, cfg)}/{_size_class(class_cell_count)}"
+    class_cell_count = cell_count if cell_count is not None else prior_cell_count(conn, project)
+    design_class = project_design_class(project, cfg, cell_count=class_cell_count)
     # Win 3 r2g-bench: flag held-out designs (by DESIGN_NAME or project basename).
     # Filtered ONLY at the learning read — failure_events/run_violations below are
     # still written for bench runs (honesty invariant H3).

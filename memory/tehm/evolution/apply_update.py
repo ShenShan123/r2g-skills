@@ -16,7 +16,6 @@ from dataclasses import replace
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
-from tehm import db as tehm_db
 from tehm.assets.registry import register_asset, set_asset_status
 from tehm.capability.registry import register_capability
 from tehm.ids import stable_dumps

@@ -19,6 +19,7 @@ for a favorable binding. V2 runs strictly before V1 is consulted (honesty H5).
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from tehm.crystallization.anti_unify import AntiUnifyConfig, anti_unify_rewrites, is_hole
@@ -41,6 +42,11 @@ class ValidityConfig:
     min_sources_for_concrete_repeat: int = 3    # hole_ratio==0 with <n -> memorization
     min_lineages_for_cross: int = 2
     v4_min_support: int = 3                     # n < 3 -> V4 = N/A (not FAIL)
+    # R2G Phase F unblocker 1 (the default since Phase H): a V4 mismatch that is ONLY on
+    # a numeric knob-value slot (rewrite.knob.<K>.abs|.delta, both numeric) is a hole
+    # candidate, not instability -- verified fixes that agree on everything but the
+    # amount (util 45 vs 55) used to make the whole rule UNSTABLE.
+    value_tolerant: bool = True
 
 
 @dataclass
@@ -195,6 +201,7 @@ def _v4_stability(rule: dict, source_transitions: list[dict],
                                        "reason": f"n={n} < {config.v4_min_support}"})
     failures: list[str] = []
     failure_details: list[dict] = []
+    tolerated: list[str] = []      # held-out episodes explained only thanks to value tolerance
     au_config = AntiUnifyConfig(min_group_size=min(2, n - 1))
     for i, held in enumerate(source_transitions):
         rest = [t for j, t in enumerate(source_transitions) if j != i]
@@ -202,6 +209,11 @@ def _v4_stability(rule: dict, source_transitions: list[dict],
         result = anti_unify_rewrites(rewrites, au_config)
         held_slots = normalize_rewrite(held).slot_dict()
         mismatches = _explanation_mismatches(result, held_slots)
+        if config.value_tolerant:
+            strict = mismatches
+            mismatches = [m for m in mismatches if not _numeric_knob_value_mismatch(m)]
+            if strict and not mismatches:
+                tolerated.append(held.get("transition_id"))
         if mismatches:
             transition_id = held.get("transition_id")
             failures.append(transition_id)
@@ -213,8 +225,23 @@ def _v4_stability(rule: dict, source_transitions: list[dict],
         "leave_one_out": n,
         "failures": failures,
         "failure_details": failure_details,
+        "value_tolerated": tolerated,     # Phase H attribution (mechanism "v4_tolerance")
         "method": "r_{-i} = phi_P(G \\ e_i); does it explain e_i?",
     })
+
+
+_KNOB_VALUE_SLOT = re.compile(r"^rewrite\.knob\.[^.]+\.(abs|delta)$")
+
+
+def _numeric_knob_value_mismatch(m: dict) -> bool:
+    if not _KNOB_VALUE_SLOT.match(str(m.get("path"))):
+        return False
+    try:
+        float(m.get("expected"))
+        float(m.get("observed"))
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def _explains(result, held_slots: dict) -> bool:

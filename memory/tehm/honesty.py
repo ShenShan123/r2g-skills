@@ -200,6 +200,9 @@ def h5_validity_order(conn: sqlite3.Connection) -> tuple[bool, str]:
         profile = tehm_db.read_json(row["validity_profile_json"])
         gates = profile.get("gates") if isinstance(profile, dict) else None
         names = [g.get("name") for g in gates or [] if isinstance(g, dict)]
+        if (names == ["V2"] and row["validity_status"] == "REJECT_DEGENERATE"
+                and gates[0].get("ok") is False):
+            continue    # rejected AT V2: V1 is correctly never consulted (audit_rule)
         if names[:2] != ["V2", "V1"]:
             bad.append(f"{row['rule_id']}:order={names}")
             continue

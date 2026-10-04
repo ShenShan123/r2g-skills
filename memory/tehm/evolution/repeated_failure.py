@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sqlite3
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from tehm.causal.mechanism import TransitionFacts, load_transition_facts

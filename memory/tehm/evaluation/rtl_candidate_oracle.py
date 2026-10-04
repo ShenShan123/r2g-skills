@@ -190,7 +190,6 @@ def execute_rtl_candidate(candidate: StructuredRepairCandidate | None,
     edit: Mapping | None = None
 
     if candidate is None:
-        verified_path = source
         verified_digest = before_digest
         verification = runner.verify(
             rtl_files, target_tb=target, regression_tb=regression)

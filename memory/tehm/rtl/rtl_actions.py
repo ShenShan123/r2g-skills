@@ -15,48 +15,16 @@ RTL_ACTION_VERSION = "rtl-actions-v1.0"
 RTL_ACTION_DOMAINS = (
     "rtl.AST_REWRITE", "rtl.GUARD_STRENGTHEN", "rtl.RESET_RESTORE",
     "rtl.WIDTH_CORRECT", "rtl.PRIORITY_REORDER", "rtl.FSM_GUARD_CONJOIN",
-    "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW",
-    "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V2",
-    "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V3",
-    "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V4",
-    "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V5",
-    "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V6",
-    "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V7",
-    "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V8",
-    "rtl.SKID_ONE_PROCESS_DRAIN_SHADOW_V9",
+    "rtl.I2C_NACK_STATUS_LATCH_V3",
 )
 
 
 def apply_rtl_action(source: str, payload: dict) -> tuple[str, dict]:
     """Apply one rtl.* action to Verilog source; returns (new_source, edit)."""
     domain = payload.get("domain")
-    if domain == "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW":
-        from .skid_payload_action import apply_skid_payload_action
-        return apply_skid_payload_action(source, payload)
-    if domain == "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V2":
-        from .skid_payload_action_v2 import apply_skid_payload_action_v2
-        return apply_skid_payload_action_v2(source, payload)
-    if domain == "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V3":
-        from .skid_payload_action_v3 import apply_skid_payload_action_v3
-        return apply_skid_payload_action_v3(source, payload)
-    if domain == "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V4":
-        from .skid_payload_action_v4 import apply_skid_payload_action_v4
-        return apply_skid_payload_action_v4(source, payload)
-    if domain == "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V5":
-        from .skid_payload_action_v5 import apply_skid_payload_action_v5
-        return apply_skid_payload_action_v5(source, payload)
-    if domain == "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V6":
-        from .skid_payload_action_v6 import apply_skid_payload_action_v6
-        return apply_skid_payload_action_v6(source, payload)
-    if domain == "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V7":
-        from .skid_payload_action_v7 import apply_skid_payload_action_v7
-        return apply_skid_payload_action_v7(source, payload)
-    if domain == "rtl.SKID_TEMP_PAYLOAD_RESTORE_SHADOW_V8":
-        from .skid_payload_action_v8 import apply_skid_payload_action_v8
-        return apply_skid_payload_action_v8(source, payload)
-    if domain == "rtl.SKID_ONE_PROCESS_DRAIN_SHADOW_V9":
-        from .skid_payload_action_v9 import apply_skid_payload_action_v9
-        return apply_skid_payload_action_v9(source, payload)
+    if domain == "rtl.I2C_NACK_STATUS_LATCH_V3":
+        from .i2c_nack_action_v3 import apply_i2c_nack_action_v3
+        return apply_i2c_nack_action_v3(source, payload)
     if domain == "rtl.FSM_GUARD_CONJOIN":
         from .guard_conjunction import apply_guard_conjunction
         return apply_guard_conjunction(

@@ -9,7 +9,6 @@ import json
 import sqlite3
 import tempfile
 from copy import deepcopy
-from dataclasses import asdict
 from pathlib import Path
 
 from tehm.adapters.orfs_terminal_failure import (
@@ -114,34 +113,6 @@ def _record_from_replayed_flow_states(before, after, *, lineage_id: str,
     )
     record.validate()
     return record
-
-
-def replay_flow_feasibility_record(record: ExecutionRecord) -> dict:
-    """Rebuild action, both states, delta and verifier; reject any substitution.
-
-    This is a pre-capture integrity check, not a learner admission gate.
-    """
-    record.validate()
-    scoped = record.verification.get("scoped_execution")
-    if isinstance(scoped, dict) and scoped.get("version") == "orfs-rc1-seed-record-v1":
-        from tehm.adapters.research_seed_scoped import replay_research_seed_record
-        return replay_research_seed_record(record)
-    if not isinstance(scoped, dict) or scoped.get("version") != "orfs-scoped-record-v1":
-        raise ValueError("unsupported scoped execution record")
-    if scoped.get("role") not in {"before", "after"}:
-        raise ValueError("unsupported scoped execution role")
-    try:
-        expected = build_flow_feasibility_record(
-            Path(scoped["before_project"]), Path(scoped["after_project"]),
-            lineage_id=record.lineage_id,
-            role="control" if scoped["role"] == "before" else "treatment",
-            **{key: scoped[key] for key in ("before_pin", "after_pin", "config_edits",
-                                           "toolchain_manifest", "expected_manifest_digest")})
-    except (KeyError, TypeError) as exc:
-        raise ValueError("malformed scoped execution record") from exc
-    if asdict(record) != asdict(expected):
-        raise ValueError("flow feasibility record differs from replayed execution")
-    return expected.verification["scoped_execution"]["pair_receipt"]
 
 
 def replay_persisted_flow_feasibility(conn: sqlite3.Connection, transition_id: str,

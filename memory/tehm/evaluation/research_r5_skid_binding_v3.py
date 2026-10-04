@@ -142,22 +142,3 @@ def bind_skid_payload_v3(asset: Mapping, source: str, public_context: Mapping) -
                    witness_digest=v1._digest(witness))
 
 
-def apply_bound_skid_payload_v3(asset: Mapping, source: str,
-                                public_context: Mapping,
-                                binding: Mapping) -> tuple[str, dict]:
-    fresh = bind_skid_payload_v3(asset, source, public_context)
-    if fresh.get("status") != "BOUND" or not isinstance(binding, Mapping) or dict(binding) != fresh:
-        raise ValueError("binding is stale, tampered, or not uniquely supported")
-    witness = fresh["witness"]
-    start, end = witness["rhs_span"]
-    edited = source[:start] + witness["replacement_rhs"] + source[end:]
-    healthy_reason = ("payload_source_already_r_data" if witness["shape"] ==
-                      "zipcpu_registered" else "payload_source_already_temp_register")
-    if (edited == source or bind_skid_payload_v3(asset, edited, public_context).get("reason")
-            != healthy_reason):
-        raise ValueError("candidate did not become the supported healthy structure")
-    return edited, {"contract": CONTRACT, "operator": OPERATOR,
-                    "before_sha256": v1._source_sha(source),
-                    "after_sha256": v1._source_sha(edited),
-                    "binding_digest": fresh["witness_digest"], "rewritten": 1,
-                    "functional_correctness": "not_asserted_requires_authoritative_oracle"}

@@ -11,7 +11,7 @@ import hashlib
 
 from tehm.graph.local_design_graph import LocalDesignGraph
 from tehm.ids import stable_dumps
-from tehm.rtl.compatibility import annotate_graph, profile_for_action
+from tehm.rtl.compatibility import annotate_graph
 
 RTL_GRAPH_VERSION = "rtl-graph-v0.1"
 

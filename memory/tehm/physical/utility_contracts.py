@@ -19,7 +19,7 @@ import math
 from collections.abc import Callable, Mapping
 
 from tehm.ids import stable_dumps
-from tehm.physical.effects import PHYSICAL_METRICS, extract_deltas
+from tehm.physical.effects import extract_deltas
 from tehm.physical.memory import _action_signature
 
 

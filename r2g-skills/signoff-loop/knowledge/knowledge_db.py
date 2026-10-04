@@ -73,6 +73,7 @@ _POST_MIGRATION_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_fix_events_symptom     ON fix_events(symptom_id)",
     "CREATE INDEX IF NOT EXISTS idx_run_violations_symptom ON run_violations(symptom_id)",
     "CREATE INDEX IF NOT EXISTS idx_fix_traj_symptom       ON fix_trajectories(symptom_id)",
+    "CREATE INDEX IF NOT EXISTS idx_fix_events_situation   ON fix_events(situation_id)",
     # Idempotency guard for A/B trial retries (P0-16): unique per deterministic
     # trial_uuid; NULLs (legacy/ad-hoc rows) are exempt via the partial predicate.
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_ab_trials_uuid  ON ab_trials(trial_uuid) WHERE trial_uuid IS NOT NULL",
@@ -210,6 +211,11 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "fix_events": {
         "symptom_id": "TEXT",
         "signature_json": "TEXT",
+        # Situation signature (situation.py sit-v1, R2G memory redesign A2): additive,
+        # nullable; symptom_id stays the learner's key.
+        "situation_id": "TEXT",
+        "situation_json": "TEXT",
+        "situation_source": "TEXT",
     },
     "fix_trajectories": {
         "symptom_id": "TEXT",
@@ -243,6 +249,9 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "fix_events_archive": {
         "symptom_id": "TEXT",
         "signature_json": "TEXT",
+        "situation_id": "TEXT",
+        "situation_json": "TEXT",
+        "situation_source": "TEXT",
     },
 }
 

@@ -54,6 +54,19 @@ CLOCK_PORT_PATTERNS = [
 ]
 
 
+def _top_input_ports(all_content: str, top_module: str) -> set:
+    """Input port names of ``top_module`` (ANSI and non-ANSI declarations); empty if not found."""
+    m = re.search(r'\bmodule\s+' + re.escape(top_module) + r'\b(.*?)\bendmodule\b', all_content, re.DOTALL)
+    if not m:
+        return set()
+    body = re.sub(r'//[^\n]*|/\*.*?\*/', '', m.group(1), flags=re.DOTALL)
+    ports = set()
+    for decl in re.finditer(r'\binput\b\s*(?:wire\b|reg\b|logic\b)?\s*(?:signed\b)?\s*(?:\[[^\]]*\]\s*)?'
+                            r'([A-Za-z_]\w*(?:\s*,\s*(?!input\b|output\b|inout\b)[A-Za-z_]\w*)*)', body):
+        ports.update(n.strip() for n in decl.group(1).split(','))
+    return ports
+
+
 def detect_clock_port(rtl_files, top_module):
     """Detect the clock port name from RTL files.
 
@@ -83,6 +96,15 @@ def detect_clock_port(rtl_files, top_module):
                                 'nreset', 'nrst', 'aresetn', 'async_rst',
                                 's_axi_aresetn', 'aresetn_i'):
             edge_signals.add(sig)
+
+    # A clock candidate must be an INPUT of the top module: posedge signals of submodules
+    # (i2c_master_top's byte controller clocks on `clk`; the top's port is `wb_clk_i`) would
+    # otherwise yield an SDC create_clock on a non-existent port, which OpenROAD silently skips
+    # -> the whole flow runs unconstrained (failure-patterns.md "Unconstrained Timing (Silent
+    # Clock Mismatch)").
+    top_inputs = _top_input_ports(all_content, top_module)
+    if top_inputs:
+        edge_signals &= top_inputs
 
     # Strategy 2: Check edge signals against clock naming patterns
     if edge_signals:

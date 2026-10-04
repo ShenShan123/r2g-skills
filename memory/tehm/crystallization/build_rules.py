@@ -97,13 +97,19 @@ def crystallize_all(conn: sqlite3.Connection, *, min_group_size: int = 2,
         # A primary effect can contain structurally different executors.  Do
         # not anti-unify those into a wildcard profile: split first on the
         # explicit compatibility contract carried by each RTL action.
-        compatibility_groups: dict[str | None, list[str]] = {}
+        # Flow/signoff rewrites also split on the edited KNOB SET (B2): a rule must
+        # carry a concrete knob list to be executable, so episodes editing
+        # different knobs never anti-unify into a wildcard knob.
+        compatibility_groups: dict[tuple, list[str]] = {}
         for tid in group_transition_ids:
             action = by_id[tid].get("action") or {}
             payload = action.get("payload") or {}
             profile = payload.get("compatibility_profile")
-            compatibility_groups.setdefault(profile, []).append(tid)
-        for compatibility_profile, transition_ids in sorted(
+            knob_edits = payload.get("knob_edits")
+            knob_set = (",".join(sorted(knob_edits))
+                        if isinstance(knob_edits, dict) and knob_edits else None)
+            compatibility_groups.setdefault((profile, knob_set), []).append(tid)
+        for (compatibility_profile, knob_set), transition_ids in sorted(
                 compatibility_groups.items(), key=lambda item: str(item[0])):
             if (group_keys is not None and
                     (key, compatibility_profile) not in group_keys):
@@ -111,49 +117,32 @@ def crystallize_all(conn: sqlite3.Connection, *, min_group_size: int = 2,
             if len(transition_ids) < min_group_size:
                 continue
             members = [by_id[tid] for tid in transition_ids]
-            for t in members:
-                t["lineage_id"] = lineage_of.get(t["source_state_id"])
             internal_key = (key if compatibility_profile is None else
                             f"{key}|compatibility:{compatibility_profile}")
-            rewrites: list[RoleNormalizedRewrite] = [
-                normalize_rewrite(
-                    t, effect_key=internal_key,
-                    episode_id=episode_of.get(t["transition_id"]),
-                    lineage_id=lineage_of.get(t["source_state_id"]))
-                for t in members
-            ]
-            result = anti_unify_rewrites(
-                rewrites, AntiUnifyConfig(min_group_size=min_group_size))
-            obligations = tuple(sorted({o for r in rewrites for o in r.obligations}))
-            source_episodes = sorted({r.episode_id for r in rewrites})
-            source_episode_transitions = {
-                episode_id: sorted({r.transition_id for r in rewrites
-                                    if r.episode_id == episode_id})
-                for episode_id in source_episodes}
-            source_episode_lineages = {
-                episode_id: next((r.lineage_id for r in rewrites
-                                  if r.episode_id == episode_id and r.lineage_id), None)
-                for episode_id in source_episodes}
-            family = rewrites[0].transformation_family
-            rule = synthesize_skill(
-                result, domain=rewrites[0].domain,
-                transformation_family=family,
-                action_domain=rewrites[0].action_domain,
-                obligations=obligations, source_episodes=source_episodes,
-                compatibility_profile=compatibility_profile,
-                created_at=(created_at if created_at is not None
-                            else tehm_db.now_local()),
-                source_episode_transitions=source_episode_transitions,
-                source_episode_lineages=source_episode_lineages)
-            # Phase 6: ordered validity audit + risk stratification.
-            audit = audit_rule(rule, source_transitions=members,
-                               config=validity_config)
-            rule["validity_status"] = audit.status
-            rule["validity_profile"] = audit.to_dict()
-            rule["risk_profile"] = stratify_rule_risk(rule, members)
+            if knob_set is not None:
+                internal_key = f"{internal_key}|knobs:{knob_set}"
+            rules.append(_crystallize_group(
+                conn, members, internal_key=internal_key,
+                compatibility_profile=compatibility_profile, episode_of=episode_of,
+                lineage_of=lineage_of, min_group_size=min_group_size,
+                validity_config=validity_config, created_at=created_at,
+                dry_run=dry_run))
+    # Phase D amendment D-A2: rules over the knob SUBSET that differently-shaped
+    # verified flow/signoff fixes share (a full rebuild only; never targeted).
+    if effect_keys is None and group_keys is None:
+        seen = {r["rule_id"] for r in rules}
+        for projected, internal_key in _knob_subset_groups(
+                transitions, lineage_of, min_group_size=min_group_size):
+            rule = _crystallize_group(
+                conn, projected, internal_key=internal_key, compatibility_profile=None,
+                episode_of=episode_of, lineage_of=lineage_of,
+                min_group_size=min_group_size, validity_config=validity_config,
+                created_at=created_at, dry_run=True,
+                knob_projection=internal_key.rsplit("|subset:", 1)[1])
+            if rule["rule_id"] in seen:
+                continue
+            seen.add(rule["rule_id"])
             if not dry_run:
-                # The enclosing savepoint owns the commit boundary.  Keeping
-                # this write uncommitted is required for all-rules atomicity.
                 _persist_rule(conn, rule, commit=False)
             rules.append(rule)
     # Do not let an incomplete/corrupt learner row make a formerly valid rule
@@ -164,6 +153,115 @@ def crystallize_all(conn: sqlite3.Connection, *, min_group_size: int = 2,
         _retire_stale_rules(conn, {r["rule_id"] for r in rules}, campaign_id,
                             commit=False)
     return rules
+
+
+def _crystallize_group(conn, members: list[dict], *, internal_key: str,
+                       compatibility_profile, episode_of: dict, lineage_of: dict,
+                       min_group_size: int, validity_config: ValidityConfig,
+                       created_at: str | None, dry_run: bool,
+                       knob_projection: str | None = None) -> dict:
+    """One group -> one audited rule: role-normalize, anti-unify, synthesize,
+    validity audit (V2->V1->V3->V4), risk; persisted unless ``dry_run``."""
+    for t in members:
+        t["lineage_id"] = lineage_of.get(t["source_state_id"])
+    rewrites: list[RoleNormalizedRewrite] = [
+        normalize_rewrite(
+            t, effect_key=internal_key,
+            episode_id=episode_of.get(t["transition_id"]),
+            lineage_id=lineage_of.get(t["source_state_id"]))
+        for t in members
+    ]
+    result = anti_unify_rewrites(
+        rewrites, AntiUnifyConfig(min_group_size=min_group_size))
+    obligations = tuple(sorted({o for r in rewrites for o in r.obligations}))
+    source_episodes = sorted({r.episode_id for r in rewrites})
+    source_episode_transitions = {
+        episode_id: sorted({r.transition_id for r in rewrites
+                            if r.episode_id == episode_id})
+        for episode_id in source_episodes}
+    source_episode_lineages = {
+        episode_id: next((r.lineage_id for r in rewrites
+                          if r.episode_id == episode_id and r.lineage_id), None)
+        for episode_id in source_episodes}
+    rule = synthesize_skill(
+        result, domain=rewrites[0].domain,
+        transformation_family=rewrites[0].transformation_family,
+        action_domain=rewrites[0].action_domain,
+        obligations=obligations, source_episodes=source_episodes,
+        compatibility_profile=compatibility_profile,
+        created_at=(created_at if created_at is not None
+                    else tehm_db.now_local()),
+        source_episode_transitions=source_episode_transitions,
+        source_episode_lineages=source_episode_lineages)
+    if knob_projection:
+        # Extrapolated: the sources also edited knobs outside this subset.
+        rule["context_predicates"]["knob_projection"] = knob_projection
+    # Phase 6: ordered validity audit + risk stratification.
+    audit = audit_rule(rule, source_transitions=members, config=validity_config)
+    rule["validity_status"] = audit.status
+    rule["validity_profile"] = audit.to_dict()
+    rule["risk_profile"] = stratify_rule_risk(rule, members)
+    if not dry_run:
+        # The enclosing savepoint owns the commit boundary.  Keeping this
+        # write uncommitted is required for all-rules atomicity.
+        _persist_rule(conn, rule, commit=False)
+    return rule
+
+
+_STAGE_ORDER = ("synth", "floorplan", "place", "cts", "route", "finish")
+
+
+def _knob_subset_groups(transitions: list[dict], lineage_of: dict, *,
+                        min_group_size: int):
+    """Yield (projected members, internal key) for each knob SUBSET shared by
+    verified PASS flow/signoff fixes of one (check, class, platform) bucket that
+    edited different knob sets (Phase D amendment D-A2).
+
+    A projection onto K is an EXTRAPOLATION (the sources also changed knobs
+    outside K): it needs >= min_group_size members from >= 2 designs and at
+    least one member whose own knob set is larger than K (else it is an
+    ordinary knob-set group, already crystallised). Members are re-stamped with
+    family KNOB_SUBSET_<K> and the EARLIEST re-run stage among them.
+    """
+    buckets: dict[tuple, list[dict]] = {}
+    for t in transitions:
+        payload = (t.get("action") or {}).get("payload") or {}
+        knobs = payload.get("knob_edits")
+        sit = payload.get("situation")
+        if ((t.get("verifier") or {}).get("verdict") != "PASS" or
+                not isinstance(knobs, dict) or not knobs or not isinstance(sit, dict)):
+            continue
+        key = (sit.get("check"), sit.get("violation_class"), sit.get("platform"))
+        buckets.setdefault(key, []).append(t)
+    for key, members in sorted(buckets.items(), key=lambda kv: str(kv[0])):
+        sets = [frozenset(m["action"]["payload"]["knob_edits"]) for m in members]
+        subsets = {a & b for i, a in enumerate(sets) for b in sets[i + 1:] if a & b}
+        for subset in sorted(subsets, key=lambda k: (-len(k), sorted(k))):
+            group = [(m, s) for m, s in zip(members, sets) if subset <= s]
+            designs = {lineage_of.get(m["source_state_id"]) for m, _ in group}
+            if (len(group) < min_group_size or len(designs) < 2
+                    or all(s == subset for _, s in group)):
+                continue
+            stages = [((m["action"].get("payload") or {}).get("rerun_from")) for m, _ in group]
+            rerun = min((x for x in stages if x in _STAGE_ORDER),
+                        key=_STAGE_ORDER.index, default=None)
+            name = ",".join(sorted(subset))
+            family = "KNOB_SUBSET_" + "_".join(sorted(subset))
+            yield ([_project(m, subset, family, rerun) for m, _ in group],
+                   f"subset:{key}|subset:{name}")
+
+
+def _project(t: dict, subset: frozenset, family: str, rerun) -> dict:
+    """A copy of transition ``t`` whose action edits only ``subset``."""
+    action = dict(t.get("action") or {})
+    payload = dict(action.get("payload") or {})
+    payload["knob_edits"] = {k: v for k, v in payload["knob_edits"].items() if k in subset}
+    payload["config_edits"] = {k: v for k, v in (payload.get("config_edits") or {}).items()
+                               if k in subset}
+    payload["strategy"] = family.lower()
+    payload["rerun_from"] = rerun
+    action.update(payload=payload, transformation_family=family)
+    return {**t, "action": action}
 
 
 def _load_transitions(conn: sqlite3.Connection, *, campaign_id: str = "live"):
@@ -196,8 +294,14 @@ def _load_transitions(conn: sqlite3.Connection, *, campaign_id: str = "live"):
     for transition in transitions:
         try:
             require_verified_transition(conn, transition["transition_id"])
-        except ValueError:
-            invalid_transition_ids.append(transition["transition_id"])
+        except ValueError as exc:
+            # Only a CORRUPT row (unloadable witness, failed scoped replay) may block
+            # stale-rule retirement. A merely UNMEASURED row (stop / apply-failed /
+            # rerun-failed: no definitive verdict, incomplete oracle) never feeds a rule
+            # either, but treating it as corrupt disabled retirement in every R2G store,
+            # so rules outlived their evidence (R2G memory Phase F finding 1).
+            if not _only_unmeasured(str(exc)):
+                invalid_transition_ids.append(transition["transition_id"])
             continue
         verified.append(transition)
     transitions = verified
@@ -209,6 +313,19 @@ def _load_transitions(conn: sqlite3.Connection, *, campaign_id: str = "live"):
             "SELECT transition_id, episode_id FROM tehm_episode_steps"):
         episode_of[r["transition_id"]] = r["episode_id"]
     return transitions, lineage_of, episode_of, tuple(invalid_transition_ids)
+
+
+_UNMEASURED_REASONS = frozenset({"verifier_verdict_not_definitive", "oracle_incomplete",
+                                 "oracle_type_not_executable"})
+
+
+def _only_unmeasured(message: str) -> bool:
+    """True when require_verified_execution's reasons are ALL 'not measured' ones."""
+    marker = "requires complete verified execution: "
+    if marker not in message:
+        return False
+    reasons = {r.strip() for r in message.split(marker, 1)[1].split(",") if r.strip()}
+    return bool(reasons) and reasons <= _UNMEASURED_REASONS
 
 
 def _persist_rule(conn: sqlite3.Connection, rule: dict, *, commit: bool = True) -> None:

@@ -57,31 +57,6 @@ def _registered_inputs(project: Path) -> list[dict]:
              "sha256": hashlib.sha256(path.read_bytes()).hexdigest()} for path in paths]
 
 
-def register_terminal_contract(project: Path, *, contract_version: str,
-                               toolchain: dict, command: list[str]) -> dict:
-    """Runner-only registration for a fresh, non-resumed execution workspace.
-
-    The exclusive file precedes invocation. It is an auditable producer record,
-    not a cryptographic timestamp or permission to admit historical failures.
-    """
-    project = Path(project).resolve()
-    contract = resolve_terminal_contract(contract_version)
-    if any((project / "backend").glob("RUN_*")) or (project / "campaign-run-receipt.json").exists():
-        raise ValueError("terminal registration requires a fresh project; no historical backfill")
-    if toolchain.get("status") != "bound_internal" or toolchain.get("manifest_validation", {}).get("valid") is not True:
-        raise ValueError("terminal registration requires a valid internal toolchain lock")
-    registration = {"version": "orfs-terminal-preregistration-v1",
-                    "project": str(project), "contract": contract,
-                    "contract_digest": _digest(contract),
-                    "toolchain_digest": _digest(toolchain), "command": list(command),
-                    "inputs": _registered_inputs(project)}
-    registration["registration_digest"] = _digest(registration)
-    path = project / "terminal-preregistration.json"
-    with path.open("x") as stream:
-        stream.write(json.dumps(registration, indent=2, sort_keys=True) + "\n")
-    return registration
-
-
 def recheck_terminal_registration(project: Path, registration: dict) -> bool:
     """Recheck registration and source identities, without granting authority."""
     project = Path(project).resolve()

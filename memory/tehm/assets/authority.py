@@ -416,53 +416,18 @@ def record_asset_authority(
     missing = list(derived.missing)
     eligible = bool(derived.eligible and computed_digest and
                     stored_digest == computed_digest)
-    from .r5_train_evidence import is_r5_skid_asset, verify_train_row_metadata
-    if is_r5_skid_asset(asset):
-        metadata_ok = verify_train_row_metadata(validation_entries, binding_entries)
-        evidence["r5_train_row_metadata_verified"] = metadata_ok
+    from .retired import retired_generation, retired_reason
+    generation = retired_generation(asset)
+    if generation:                                  # fail closed: replay in the frozen worktree
+        missing.append(retired_reason(generation))
+        eligible = False
+    from .i2c_binding_v3 import is_i2c_v3_asset
+    if is_i2c_v3_asset(asset):
+        from .r5_train_evidence_i2c_v3 import verify_train_row_metadata as verify_i2c_v3_metadata
+        metadata_ok = verify_i2c_v3_metadata(validation_entries, binding_entries)
+        evidence["r5_i2c_v3_train_row_metadata_verified"] = metadata_ok
         if not metadata_ok:
-            missing.append("r5_train_evidence_row_metadata")
-            eligible = False
-
-    from .skid_binding_v4 import is_skid_v4_asset
-    if is_skid_v4_asset(asset):
-        from .r5_train_evidence_v4 import verify_train_row_metadata as verify_v4_metadata
-        metadata_ok = verify_v4_metadata(validation_entries, binding_entries)
-        evidence["r5_v4_train_row_metadata_verified"] = metadata_ok
-        if not metadata_ok:
-            missing.append("r5_v4_train_evidence_row_metadata")
-            eligible = False
-    from .skid_binding_v5 import is_skid_v5_asset
-    if is_skid_v5_asset(asset):
-        from .r5_train_evidence_v5 import verify_train_row_metadata as verify_v5_metadata
-        metadata_ok = verify_v5_metadata(validation_entries, binding_entries)
-        evidence["r5_v5_train_row_metadata_verified"] = metadata_ok
-        if not metadata_ok:
-            missing.append("r5_v5_train_evidence_row_metadata")
-            eligible = False
-    from .skid_binding_v6 import is_skid_v6_asset
-    if is_skid_v6_asset(asset):
-        from .r5_train_evidence_v6 import verify_train_row_metadata as verify_v6_metadata
-        metadata_ok = verify_v6_metadata(validation_entries, binding_entries)
-        evidence["r5_v6_train_row_metadata_verified"] = metadata_ok
-        if not metadata_ok:
-            missing.append("r5_v6_train_evidence_row_metadata")
-            eligible = False
-    from .skid_binding_v7 import is_skid_v7_asset
-    if is_skid_v7_asset(asset):
-        from .r5_train_evidence_v7 import verify_train_row_metadata as verify_v7_metadata
-        metadata_ok = verify_v7_metadata(validation_entries, binding_entries)
-        evidence["r5_v7_train_row_metadata_verified"] = metadata_ok
-        if not metadata_ok:
-            missing.append("r5_v7_train_evidence_row_metadata")
-            eligible = False
-    from .skid_binding_v8 import is_skid_v8_asset
-    if is_skid_v8_asset(asset):
-        from .r5_train_evidence_v8 import verify_train_row_metadata as verify_v8_metadata
-        metadata_ok = verify_v8_metadata(validation_entries, binding_entries)
-        evidence["r5_v8_train_row_metadata_verified"] = metadata_ok
-        if not metadata_ok:
-            missing.append("r5_v8_train_evidence_row_metadata")
+            missing.append("r5_i2c_v3_train_evidence_row_metadata")
             eligible = False
     if (validation_malformed or binding_malformed or rollback_malformed or
             len(rollback_entries) != 1):
@@ -617,48 +582,16 @@ def verify_asset_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
             if stable_dumps(evidence.get("rollback_receipt") or {}) != stable_dumps(
                     loaded["rollback"][0] if loaded["rollback"] else {}):
                 reasons.append("authority_rollback_payload_mismatch")
-            from .r5_train_evidence import is_r5_skid_asset, verify_train_row_metadata
-            if is_r5_skid_asset(asset):
-                if (evidence.get("r5_train_row_metadata_verified") is not True or
-                        not verify_train_row_metadata(
-                            loaded_metadata["validation"], loaded_metadata["binding"])):
-                    reasons.append("r5_train_evidence_row_metadata_mismatch")
-            from .skid_binding_v4 import is_skid_v4_asset
-            if is_skid_v4_asset(asset):
-                from .r5_train_evidence_v4 import verify_train_row_metadata as verify_v4_metadata
-                if (evidence.get("r5_v4_train_row_metadata_verified") is not True or
-                        not verify_v4_metadata(
-                            loaded_metadata["validation"], loaded_metadata["binding"])):
-                    reasons.append("r5_v4_train_evidence_row_metadata_mismatch")
-            from .skid_binding_v5 import is_skid_v5_asset
-            if is_skid_v5_asset(asset):
-                from .r5_train_evidence_v5 import verify_train_row_metadata as verify_v5_metadata
-                if (evidence.get("r5_v5_train_row_metadata_verified") is not True or
-                        not verify_v5_metadata(
-                            loaded_metadata["validation"], loaded_metadata["binding"])):
-                    reasons.append("r5_v5_train_evidence_row_metadata_mismatch")
-            from .skid_binding_v6 import is_skid_v6_asset
-            if is_skid_v6_asset(asset):
-                from .r5_train_evidence_v6 import verify_train_row_metadata as verify_v6_metadata
-                if (evidence.get("r5_v6_train_row_metadata_verified") is not True or
-                        not verify_v6_metadata(
-                            loaded_metadata["validation"], loaded_metadata["binding"])):
-                    reasons.append("r5_v6_train_evidence_row_metadata_mismatch")
-
-            from .skid_binding_v7 import is_skid_v7_asset
-            if is_skid_v7_asset(asset):
-                from .r5_train_evidence_v7 import verify_train_row_metadata as verify_v7_metadata
-                if (evidence.get("r5_v7_train_row_metadata_verified") is not True or
-                        not verify_v7_metadata(
-                            loaded_metadata["validation"], loaded_metadata["binding"])):
-                    reasons.append("r5_v7_train_evidence_row_metadata_mismatch")
-
-            from .skid_binding_v8 import is_skid_v8_asset
-            if is_skid_v8_asset(asset):
-                from .r5_train_evidence_v8 import verify_train_row_metadata as verify_v8_metadata
-                if (evidence.get("r5_v8_train_row_metadata_verified") is not True or
-                        not verify_v8_metadata(loaded_metadata["validation"], loaded_metadata["binding"])):
-                    reasons.append("r5_v8_train_evidence_row_metadata_mismatch")
+            from .retired import retired_generation, retired_reason
+            generation = retired_generation(asset)
+            if generation:
+                reasons.append(retired_reason(generation))
+            from .i2c_binding_v3 import is_i2c_v3_asset
+            if is_i2c_v3_asset(asset):
+                from .r5_train_evidence_i2c_v3 import verify_train_row_metadata as verify_i2c_v3_metadata
+                if (evidence.get("r5_i2c_v3_train_row_metadata_verified") is not True or
+                        not verify_i2c_v3_metadata(loaded_metadata["validation"], loaded_metadata["binding"])):
+                    reasons.append("r5_i2c_v3_train_evidence_row_metadata_mismatch")
 
             try:
                 min_lineages = int(evidence.get("min_lineages") or 1)
@@ -673,9 +606,9 @@ def verify_asset_authority(conn: sqlite3.Connection, authority_receipt) -> dict:
             except (TypeError, ValueError):
                 derived = None
                 reasons.append("authority_evidence_malformed")
-            if (derived is not None and is_skid_v8_asset(asset) and
+            if (derived is not None and is_i2c_v3_asset(asset) and
                     stable_dumps(evidence.get("derived_evidence")) != stable_dumps(dict(derived.evidence))):
-                reasons.append("r5_v8_derived_evidence_mismatch")
+                reasons.append("r5_i2c_v3_derived_evidence_mismatch")
             if derived is not None and dict(checks) != dict(derived.checks):
                 reasons.append("authority_checks_mismatch")
             if derived is not None and tuple(sorted(missing)) != tuple(sorted(derived.missing)):

@@ -213,7 +213,7 @@ def test_process_one_recovers_ppl0024_then_honest_residual(tmp_path, monkeypatch
     monkeypatch.setattr(engineer_loop, "_fail_stage", lambda e: "place")
     monkeypatch.setattr(engineer_loop, "_is_flw0024", lambda e: False)
     monkeypatch.setattr(engineer_loop, "_is_ppl0024", lambda e: True)
-    monkeypatch.setattr(engineer_loop, "_record_resize_fix", lambda e, *, cleared: None)
+    monkeypatch.setattr(engineer_loop, "_record_resize_fix", lambda e, *, cleared, **_kw: None)
     out = engineer_loop.process_one(led, led.pending()[0], conn=conn)
     assert out == "escalated"
     import re

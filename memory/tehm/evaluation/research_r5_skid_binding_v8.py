@@ -153,20 +153,3 @@ def bind_skid_payload_v8(asset: Mapping, source: str, public_context: Mapping):
                   witness_digest=base._digest(witness))
 
 
-def apply_bound_skid_payload_v8(asset, source, public_context, binding):
-    fresh = bind_skid_payload_v8(asset, source, public_context)
-    if fresh['status'] != 'BOUND' or not isinstance(binding, Mapping) or dict(binding) != fresh:
-        raise ValueError('v8 binding stale, tampered or unsupported')
-    w = fresh['witness']; start, stop = w['rhs_span']
-    if source[start:stop] != w['old_rhs']:
-        raise ValueError('source span identity mismatch')
-    edited = source[:start] + w['replacement_rhs'] + source[stop:]
-    healthy = bind_skid_payload_v8(asset, edited, public_context)
-    if healthy['status'] != 'NO_MATCH' or healthy['reason'] != 'payload_already_uses_captured_slot':
-        raise ValueError('candidate failed structural postcondition')
-    return edited, {'binding_contract': CONTRACT, 'operator': OPERATOR, 'profile': PROFILE,
-        'rewritten': 1, 'source_binding_rederived': True,
-        'before_source_sha256': base._source_sha(source),
-        'after_source_sha256': base._source_sha(edited), 'witness_digest': fresh['witness_digest'],
-        'non_target_source_bytes_preserved': True, 'functional_verdict': 'NOT_EVALUATED',
-        'memory_authority_granted': False, 'proof_scope': TEMPLATE['proof_scope']}

@@ -68,29 +68,12 @@ def _require_scoped_replay(facts) -> None:
         raise ValueError("scoped_replay_facts_mismatch")
     scoped = facts.verifier.get("scoped_execution")
     version = scoped.get("version") if isinstance(scoped, dict) else None
-    if version == "tehm-r5-rtl-train-scoped-v1":
-        from tehm.adapters.research_r5_rtl_scoped import replay_persisted_rtl_train
-        replay_persisted_rtl_train(
-            conn, facts.transition_id, acquisition_data=acquisition)
-    elif version == "tehm-r5-rtl-train-scoped-v2":
-        from tehm.adapters.research_r5_rtl_scoped_v2 import replay_persisted_rtl_train_v2
-        replay_persisted_rtl_train_v2(
-            conn, facts.transition_id, acquisition_data=acquisition)
-    elif version == "tehm-r5-rtl-train-scoped-v3":
-        from tehm.adapters.research_r5_rtl_scoped_v3 import replay_persisted_rtl_train_v3
-        replay_persisted_rtl_train_v3(
-            conn, facts.transition_id, acquisition_data=acquisition)
-    elif version == "tehm-r5-rtl-train-scoped-v4":
-        from tehm.adapters.research_r5_rtl_scoped_v4 import replay_persisted_rtl_train_v4
-        replay_persisted_rtl_train_v4(
-            conn, facts.transition_id, acquisition_data=acquisition)
-    elif version == "tehm-r5-rtl-train-scoped-v5":
-        from tehm.adapters.research_r5_rtl_scoped_v5 import replay_persisted_rtl_train_v5
-        replay_persisted_rtl_train_v5(
-            conn, facts.transition_id, acquisition_data=acquisition)
-    elif version == "tehm-r5-rtl-train-scoped-v8":
-        from tehm.adapters.research_r5_rtl_scoped_v8 import replay_persisted_rtl_train_v8
-        replay_persisted_rtl_train_v8(
+    from tehm.assets.retired import RETIRED_SCOPED_EXECUTION_VERSIONS
+    if version in RETIRED_SCOPED_EXECUTION_VERSIONS:      # replay in the generation's frozen worktree
+        raise ValueError("retired_scoped_execution_version")
+    if version == "tehm-r5-rtl-train-scoped-i2c-v3":
+        from tehm.adapters.research_r5_rtl_scoped_i2c_v3 import replay_persisted_rtl_train_i2c_v3
+        replay_persisted_rtl_train_i2c_v3(
             conn, facts.transition_id, acquisition_data=acquisition)
     elif version in {"orfs-scoped-record-v1", "orfs-rc1-seed-record-v1"}:
         from tehm.adapters.orfs_scoped import replay_persisted_flow_feasibility

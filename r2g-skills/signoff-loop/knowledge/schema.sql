@@ -107,6 +107,9 @@ CREATE TABLE IF NOT EXISTS fix_events (
     provenance              TEXT,                    -- live | backfill:<source>
     symptom_id              TEXT,
     signature_json          TEXT,
+    situation_id            TEXT,                    -- situation.py sit-v1 (alongside symptom_id)
+    situation_json          TEXT,
+    situation_source        TEXT,                    -- snapshot (pre-fix) | ingest (derived)
     UNIQUE(fix_session_id, iter, strategy)
 );
 CREATE INDEX IF NOT EXISTS idx_fix_events_session ON fix_events(fix_session_id);
@@ -177,7 +180,18 @@ CREATE TABLE IF NOT EXISTS fix_events_archive (
     before_status TEXT, after_status TEXT, verdict TEXT, config_delta_json TEXT,
     cumulative_config_json TEXT, env_flags_json TEXT, tool_versions_json TEXT,
     stage_metrics_json TEXT, stacked INTEGER, elapsed_s REAL, ts TEXT, provenance TEXT,
-    symptom_id TEXT, signature_json TEXT          -- mirror fix_events (SELECT * archive copy)
+    symptom_id TEXT, signature_json TEXT,         -- mirror fix_events (SELECT * archive copy)
+    situation_id TEXT, situation_json TEXT, situation_source TEXT
+);
+
+-- Situation catalog (situation.py, sit-v1): one row per distinct situation_id. The
+-- finer failure context a fix was chosen in (error code, die mode, util/count band);
+-- stored ALONGSIDE the symptom index, never replacing it.
+CREATE TABLE IF NOT EXISTS situations (
+    situation_id    TEXT PRIMARY KEY,
+    situation_json  TEXT NOT NULL,
+    version         TEXT NOT NULL,
+    first_seen      TEXT
 );
 
 -- ── Symptom-indexed memory (spec 2026-06-09) ─────────────────────────────

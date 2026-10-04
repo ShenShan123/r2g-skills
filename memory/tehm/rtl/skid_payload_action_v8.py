@@ -37,16 +37,3 @@ def payload_from_source_v8(source, public_context):
             "binding_contract": binder.CONTRACT}
 
 
-def apply_skid_payload_action_v8(source, payload):
-    if not isinstance(payload, Mapping) or set(payload) != PAYLOAD_KEYS:
-        raise ValueError("v8 action requires exact payload fields")
-    context = payload["public_context"]
-    expected = payload_from_source_v8(source, context)
-    if dict(payload) != expected:
-        raise ValueError("v8 action payload is stale or tampered")
-    binder, binding = source_binding(source, context)
-    apply = mux.apply_bound_skid_payload_v8 if binder is mux else legacy.apply_bound_skid_payload_v7
-    candidate, receipt = apply({"binding_template": binder.TEMPLATE}, source, context, binding)
-    return candidate, {**receipt, "domain": DOMAIN, "compatibility_profile": PROFILE,
-                       "source_binding_rederived": True,
-                       "memory_authority_granted": False}

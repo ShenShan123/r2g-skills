@@ -54,6 +54,7 @@ except ImportError:                       # knowledge/ not yet on the path
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "knowledge"))
     import symptom
 
+from knob_policy import UNSET              # noqa: E402  the edit REMOVES the knob (D-A1)
 BLOCK_START = "# >>> r2g signoff-fix (auto) >>>"
 BLOCK_END = "# <<< r2g signoff-fix (auto) <<<"
 KLAYOUT_CPP_CRASH = re.compile(r"sort_circuit|gen_log_entry|segmentation|sigsegv", re.I)
@@ -128,7 +129,8 @@ def _all_antenna(categories: dict) -> bool:
 def _applied(cfg: dict, edits: dict) -> bool:
     if not edits:
         return False
-    return all(str(cfg.get(k)) == str(v) for k, v in edits.items())
+    return all((k not in cfg) if str(v) == UNSET else (str(cfg.get(k)) == str(v))
+               for k, v in edits.items())
 
 
 def _antenna_catalog(cfg: dict) -> list:
@@ -606,7 +608,9 @@ def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | Non
 
 
 def apply_edits(config_text: str, edits: dict) -> str:
-    """Replace the marked auto-block with `edits` (idempotent; re-apply replaces)."""
+    """Replace the marked auto-block with `edits` (idempotent; re-apply replaces).
+    An UNSET value removes EVERY assignment of that knob (base config included)."""
+    removed = {k for k, v in edits.items() if str(v) == UNSET}
     out, skip = [], False
     for ln in config_text.splitlines():
         s = ln.strip()
@@ -616,10 +620,12 @@ def apply_edits(config_text: str, edits: dict) -> str:
         if s == BLOCK_END:
             skip = False
             continue
-        if not skip:
+        m = re.match(r"\s*(?:export\s+)?([A-Z0-9_]+)\s*[:?]?=", ln)
+        if not skip and not (m and m.group(1) in removed):
             out.append(ln)
     body = "\n".join(out).rstrip("\n")
-    block = [BLOCK_START] + [f"export {k} = {v}" for k, v in edits.items()] + [BLOCK_END]
+    block = [BLOCK_START] + [f"export {k} = {v}" for k, v in edits.items()
+                             if k not in removed] + [BLOCK_END]
     prefix = (body + "\n\n") if body else ""
     return prefix + "\n".join(block) + "\n"
 
@@ -821,6 +827,71 @@ def _current_vclass(check: str, drc: dict, lvs: dict) -> str | None:
     return None
 
 
+def _current_situation(proj: Path, check: str, drc: dict, lvs: dict) -> dict | None:
+    """The pre-fix situation (knowledge/situation.py sit-v1). fix_signoff.sh exports
+    the snapshot it logs (R2G_LOG_SITUATION), so the decision and its fix_log row see
+    the SAME situation; computed here only when called outside a fix iteration."""
+    raw = os.environ.get("R2G_LOG_SITUATION")
+    if raw:
+        try:
+            return json.loads(raw)
+        except ValueError:
+            pass
+    try:
+        import situation
+        count = (drc.get("total_violations") if check == "drc" else
+                 lvs.get("mismatch_count") if check == "lvs" else None)
+        return situation.from_project(proj, check, _current_vclass(check, drc, lvs), count)
+    except Exception:
+        return None
+
+
+def _family(strategy_id: str | None) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "_", str(strategy_id or "")).strip("_").upper()
+
+
+def _gate_memory_strategies(strategies: list, cfg: dict, exclude: set) -> list:
+    """B4 (R2G memory redesign 2026-10-01): a memory (TEHM) strategy passes the same
+    exclusion as the catalogue (already tried this session), is dropped when its edits
+    are already in effect, and every edit must pass the hard knob policy
+    (knowledge/knob_policy.py). Each drop is logged with its reason."""
+    import knob_policy
+    kept = []
+    for st in strategies or []:
+        sid = st.get("id")
+        why = None
+        if sid in exclude:
+            why = "already tried (exclude)"
+        elif _applied(cfg, st.get("config_edits") or {}):
+            why = "edits already in effect"
+        else:
+            bad = knob_policy.edits_violations(st.get("config_edits") or {})
+            if bad:
+                why = "knob policy: " + "; ".join(bad)
+        if why:
+            print(f"TEHM strategy {sid} dropped: {why}", file=sys.stderr)
+            continue
+        kept.append(st)
+    return kept
+
+
+def _apply_vetoes(strategies: list, vetoes: dict) -> list:
+    """B5: drop every strategy — catalogue or memory — that the verified evidence
+    vetoes in THIS situation (situation-scoped, never per project or design class)."""
+    vetoed = {_family(k): k for k in vetoes}
+    kept = []
+    for st in strategies:
+        fam = _family(st.get("transformation_family") or st.get("id"))
+        if fam in vetoed:
+            ev = vetoes[vetoed[fam]]
+            print(f"strategy {st.get('id')} vetoed in this situation: {ev['failures']} "
+                  f"verified failure(s) on {len(ev['designs'])} design(s), "
+                  f"{ev['passes']} pass(es)", file=sys.stderr)
+            continue
+        kept.append(st)
+    return kept
+
+
 def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
                          sid: str | None = None, design_class: str = "",
                          platform: str = "", db_path=None) -> dict:
@@ -863,14 +934,25 @@ def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
         # P1-12 (2026-07-15): key dead-evidence by SYMPTOM when known — a strategy that
         # failed on DRC symptom A must NOT be blacklisted for a DIFFERENT DRC symptom B
         # on the same project (the old (project, check, strategy) key over-generalized).
-        sym_sql = " AND symptom_id=?" if sid else ""
-        sym_params = (sid,) if sid else ()
+        # Route fix iterations are STORED as check_type='orfs_stage', class 'route'
+        # (fix_signoff.sh _log_iter remaps them): querying check_type='route' matched
+        # zero rows, so the dead gate could never fire for route (failure-patterns.md
+        # "Route dead-fix gate never fired"). Key it to the stored route symptom.
+        # Scoped to the dead gate ONLY: the lifecycle annotation below keeps using `sid`
+        # (route still does not consult recipe_status -- that is a separate decision).
+        db_check, dead_sid = check, sid
+        if check == "route":
+            db_check = "orfs_stage"
+            if not dead_sid:
+                dead_sid = symptom.symptom_id(symptom.canonical_signature("orfs_stage", "route", {}))
+        sym_sql = " AND symptom_id=?" if dead_sid else ""
+        sym_params = (dead_sid,) if dead_sid else ()
         rows = conn.execute(
             f"SELECT strategy, "
             f"SUM(CASE WHEN verdict IN ('no_change','regression') THEN 1 ELSE 0 END), "
             f"SUM(CASE WHEN verdict IN ('cleared','win') THEN 1 ELSE 0 END) "
             f"FROM fix_events WHERE project_path IN ({ph}) AND check_type=?{sym_sql} "
-            f"GROUP BY strategy", (*paths, check, *sym_params)).fetchall()
+            f"GROUP BY strategy", (*paths, db_check, *sym_params)).fetchall()
         dead = {s: int(nf or 0) for s, nf, ns in rows
                 if s and s != "none" and int(ns or 0) == 0
                 and int(nf or 0) >= dead_after}
@@ -956,14 +1038,23 @@ def main(argv=None) -> int:
     # Decision-8 indexed lookup first (engineer-loop §5.7): exact (symptom,
     # design_class, platform) -> pooled class -> pooled platform; only PROMOTED
     # recipes rank live. Falls back to the symptom/family path when absent.
+    # design_class through the ONE derivation ingest stores (ppa.json cell count,
+    # else this project's prior ingested count; redesign A3). A read-only connection:
+    # a diagnosis never migrates or writes the store.
     try:
-        import suggest_config as _sc
-        _stats = _sc.parse_synth_stats(proj / "synth")
-        _cells = _stats.get("cell_count", 0)
-        _size = ("unknown" if not _cells else "tiny" if _cells < 100 else
-                 "small" if _cells < 5000 else "medium" if _cells < 50000
-                 else "large")
-        design_class = f"{_sc.detect_design_type(proj, cfg)}/{_size}"
+        import sqlite3
+        import ingest_run as _ir
+        import knowledge_db
+        _ro = None
+        if _ir.ppa_cell_count(proj) is None:
+            _dbp = Path(os.environ.get("R2G_KNOWLEDGE_DB") or knowledge_db.DEFAULT_DB_PATH)
+            if _dbp.exists():
+                _ro = sqlite3.connect(f"file:{_dbp}?mode=ro", uri=True)
+        try:
+            design_class = _ir.project_design_class(proj, cfg, conn=_ro)
+        finally:
+            if _ro is not None:
+                _ro.close()
     except Exception:
         design_class = "unknown/unknown"
     # Route (backend-abort) symptoms index under check=orfs_stage/class=route, not
@@ -1029,19 +1120,34 @@ def main(argv=None) -> int:
     # Backend-routed TEHM authority, ahead of the shared cold-start catalog.
     if memory_backend == "tehm":
         try:
-            _MEM = Path(__file__).resolve().parents[3] / "memory"
+            # <repo>/r2g-skills/signoff-loop/scripts/reports/ -> parents[4] = <repo>.
+            # parents[3] (r2g-skills/) silently disabled TEHM consultation since the
+            # import (fail-closed ImportError; found by the Phase D2 smoke run).
+            _MEM = Path(__file__).resolve().parents[4] / "memory"
             if str(_MEM) not in sys.path:
                 sys.path.insert(0, str(_MEM))
-            from runtime_router import signoff_strategies
+            from runtime_router import signoff_strategies, signoff_vetoes
+            _sit = _current_situation(proj, args.check, drc, lvs)
+            try:                             # graded severity for composition (Phase G2)
+                import severity as _sev
+                _cur_sev = _sev.from_project(
+                    proj, args.check, _current_vclass(args.check, drc, lvs)
+                    or ("route" if args.check == "route" else None))
+            except Exception:
+                _cur_sev = None
             _tehm_st = signoff_strategies(
                 project_dir=proj, check=args.check,
                 design_id=cfg.get("DESIGN_NAME"), platform=plat, cfg=cfg,
                 reports={"drc": drc, "lvs": lvs, "timing": tcheck,
-                         "route": route})
+                         "route": route}, situation=_sit, severity=_cur_sev)
+            _tehm_st = _gate_memory_strategies(_tehm_st, cfg, exclude)
+            _vetoes = signoff_vetoes(situation=_sit)
             if _tehm_st:
                 plan["strategies"] = list(_tehm_st) + list(plan.get("strategies") or [])
                 print(f"TEHM consultation: {len(_tehm_st)} tehm_rule strategy(ies) "
                       f"prepended", file=sys.stderr)
+            if _vetoes:
+                plan["strategies"] = _apply_vetoes(plan.get("strategies") or [], _vetoes)
         except Exception as _exc:
             print(f"WARNING: TEHM consultation skipped (fail-closed): {_exc}",
                   file=sys.stderr)
@@ -1173,8 +1279,11 @@ def main(argv=None) -> int:
         if strat["config_edits"]:
             cfg_after = cfg_path.read_text(encoding="utf-8") if cfg_path.exists() else ""
             for k, v in strat["config_edits"].items():
-                if not re.search(rf"(?m)^\s*export\s+{re.escape(str(k))}\s*=\s*"
-                                 rf"{re.escape(str(v))}\s*$", cfg_after):
+                if str(v) == UNSET:
+                    if k in parse_config(cfg_after):
+                        unmet.append(f"config_unset_not_landed:{k}")
+                elif not re.search(rf"(?m)^\s*export\s+{re.escape(str(k))}\s*=\s*"
+                                   rf"{re.escape(str(v))}\s*$", cfg_after):
                     unmet.append(f"config_edit_not_landed:{k}")
         if sdc_new_p is not None:
             sdc_after = sdc_path.read_text(encoding="utf-8") if sdc_path.exists() else ""
@@ -1194,7 +1303,18 @@ def main(argv=None) -> int:
                               "config_edits": {}}))
             return 0
         out = {"status": "applied", "applied": strat["id"],
-               "config_edits": strat["config_edits"]}
+               "config_edits": strat["config_edits"],
+               # Pre-fix values of the edited knobs: the parametric (delta) form of
+               # this fix for memory (R2G memory redesign B2).
+               "config_before": {k: cfg.get(k) for k in strat["config_edits"]}}
+        if strat.get("source") in ("tehm_rule", "tehm_compose"):
+            # D-A1 attribution: log the fix under its rule's family, with the rule id
+            # and whether this application is a candidate trial.
+            out.update(memory_rule=strat.get("rule_id"),
+                       strategy_family=strat.get("transformation_family"),
+                       memory_trial=bool(strat.get("memory_trial")),
+                       witness_selected=strat.get("witness_selected") or [],
+                       memory_mechanisms=strat.get("mechanisms") or [])   # Phase H attribution
         if sdc_edits:
             out["sdc_edits"] = sdc_edits
         print(json.dumps(out))

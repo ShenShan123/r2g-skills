@@ -46,6 +46,24 @@ _ORACLE_TYPE = {
 }
 
 
+def capture_rows(conn, store, rows: list[dict]) -> int:
+    """Capture fix_log-style rows that carry their own ``design`` / ``platform`` (e.g. the
+    Phase G component trials) through the same record builder as a live project; one
+    synthetic evidence bundle per design. Returns the number of captured transitions."""
+    by_design: dict[tuple, list] = {}
+    for r in rows:
+        by_design.setdefault((r["design"], r["platform"]), []).append(r)
+    n = 0
+    for (design, platform), rs in sorted(by_design.items(), key=lambda kv: str(kv[0])):
+        evidence = {"project": Path("/rows") / str(design), "config": {
+            "DESIGN_NAME": design, "PLATFORM": platform}, "reports": {}, "stage_log": [],
+            "fix_log": rs}
+        for record in build_execution_records(evidence):
+            capture(conn, store, record)
+            n += 1
+    return n
+
+
 def capture_r2g_project(conn, store, project: Path,
                         *, materialized_at: str | None = None) -> list[CaptureReceipt]:
     """Capture every repair transition from a real R2G project dir.
@@ -162,7 +180,8 @@ def build_execution_records(evidence: dict) -> list[ExecutionRecord]:
                 is_terminal=(i == len(rows) - 1), all_verdicts=[r.get("verdict") for r in rows])
             records.append(record)
             cumulative = _parse_json_field(row.get("cumulative_config")) or \
-                {**config, **(_parse_json_field(row.get("config_delta")) or {})}
+                {**config, **{k: v["after"] for k, v in
+                              normalize_knob_edits(row.get("config_delta")).items()}}
             prev_cumulative = cumulative
     return records
 
@@ -170,7 +189,11 @@ def build_execution_records(evidence: dict) -> list[ExecutionRecord]:
 def _iter_record(*, project, config, reports, row, prev_cumulative, design_name,
                  platform, session_id, step_index, is_terminal, all_verdicts) -> ExecutionRecord:
     check = str(row.get("check") or "unknown")
-    strategy = str(row.get("strategy") or "unknown")
+    # A memory-applied fix is attributed to its RULE's family (Phase D amendment
+    # D-A1), so evidence accumulates on the rule instead of one family per candidate
+    # id ("tehm_<id>"); the rule id and trial flag ride the payload for audit.
+    strategy = str((row.get("strategy_family") or "").lower() or row.get("strategy")
+                   or "unknown")
     before_count = row.get("before")
     after_count = row.get("after")
     verdict = str(row.get("verdict") or "unknown")
@@ -179,22 +202,30 @@ def _iter_record(*, project, config, reports, row, prev_cumulative, design_name,
     cumulative = _parse_json_field(row.get("cumulative_config")) or {}
     global_regressions = _parse_json_field(row.get("global_regressions")) or []
 
-    after_config = {**config, **cumulative} if cumulative else {**config, **config_delta}
+    flat_delta = {k: v["after"] for k, v in normalize_knob_edits(config_delta).items()}
+    after_config = {**config, **cumulative} if cumulative else {**config, **flat_delta}
     before_config = dict(prev_cumulative) if prev_cumulative else dict(config)
 
-    before_categories = _parse_json_field(row.get("before_categories")) or {}
+    before_categories = _rule_categories(row.get("before_categories"))
     before_reports = _state_reports(
         reports, check, _status_from_count(before_count), before_count,
-        before_categories if isinstance(before_categories, dict) else {})
+        before_categories)
     after_reports = _state_reports(reports, check, after_status, after_count, {})
 
-    original_failure = _original_failure(verdict, after_count)
+    measured = measured_outcome(row)
+    original_failure = (measured["original_failure"] if measured
+                        else _original_failure(verdict, after_count))
+    if measured and measured["target_regression"]:
+        global_regressions = list(global_regressions) + [
+            f"{check}_target_regression:{measured['before']:g}->{measured['after']:g}"]
     delta = {
         "original_failure": original_failure,
         "first_divergence": {"before": before_count, "after": after_count},
         "failing_tests": {
-            "before": 1 if before_count else 0,
-            "after": 1 if after_count else 0,
+            # numeric, not truthiness (fix_signoff logs counts as strings, "0");
+            # the measured outcome supplies the stage-completion counts.
+            "before": 1 if ((measured or {}).get("before", _num(before_count)) or 0) > 0 else 0,
+            "after": 1 if ((measured or {}).get("after", _num(after_count)) or 0) > 0 else 0,
         },
         "created_regressions": list(global_regressions),
         "newly_observed_failures": [],
@@ -205,7 +236,13 @@ def _iter_record(*, project, config, reports, row, prev_cumulative, design_name,
 
     oracle_type = _ORACLE_TYPE.get(check, "UNKNOWN")
     verification = {
-        "verdict": _verifier_verdict(verdict, after_status),
+        "verdict": (measured["verdict"] if measured
+                    else _verifier_verdict(verdict, after_status)),
+        # B1 (R2G memory redesign 2026-10-01): only a MEASURED recheck — numeric
+        # before/after counts of an applied fix — is a complete oracle. Unmeasured
+        # rows (stop/apply/rerun failures, missing counts) stay non-crystallisable.
+        "oracle_complete": bool(measured),
+        "target_regression": bool(measured and measured["target_regression"]),
         "oracle_type": oracle_type,
         "scope": f"signoff:{check}",
         "confidence_tier": {"REGRESSION": "R", "TARGET_TEST": "T"}.get(oracle_type, "H"),
@@ -214,12 +251,31 @@ def _iter_record(*, project, config, reports, row, prev_cumulative, design_name,
     }
 
     rerun_from = row.get("from_stage") or None
+    situation = row.get("situation") if isinstance(row.get("situation"), dict) else None
+    knob_edits = normalize_knob_edits(config_delta, row.get("config_before"))
     action = {
         "domain": _action_domain(config_delta, rerun_from),
         "transformation_family": _normalize_family(strategy),
         "payload": {
             "strategy": strategy,
-            "config_edits": config_delta,
+            "config_edits": {k: v["after"] for k, v in knob_edits.items()},
+            # {knob: {before, after}}: the parametric form (B2) — role_normalize
+            # derives a per-knob delta when both sides are numeric.
+            "knob_edits": knob_edits,
+            # The pre-fix situation (knowledge/situation.py sit-v1) the action was
+            # taken in; role_normalize turns it into match slots and crystallisation
+            # into hard preconditions (B3). Not part of the executable action.
+            "situation": situation,
+            "memory_rule": row.get("memory_rule"),
+            "memory_trial": bool(row.get("memory_trial")),
+            **({"evidence_tier": row["evidence_tier"], "provenance": row.get("provenance")}
+               if row.get("evidence_tier") else {}),   # Phase E backfill tag; live rows unchanged
+            # Phase G0 graded severity (r2g knowledge/severity.py; lower is better, <= 0 clear).
+            # In the payload: canonical capture keeps only known observation-delta fields.
+            **({"graded_severity": {"before": _num(row.get("severity_before")),
+                                    "after": _num(row.get("severity_after"))}}
+               if row.get("severity_before") is not None or row.get("severity_after") is not None
+               else {}),
             "rerun_from": rerun_from,
             "recheck": check,
             "dependency_cone_changed": bool(rerun_from),
@@ -238,6 +294,7 @@ def _iter_record(*, project, config, reports, row, prev_cumulative, design_name,
             "class": row.get("violation_class"),
             "predicates": _parse_json_field(row.get("predicates")) or {},
         },
+        "situation": situation,
     }
     after_content = {
         "repository_ref": None,
@@ -269,8 +326,89 @@ def _iter_record(*, project, config, reports, row, prev_cumulative, design_name,
 
 
 # ---------------------------------------------------------------------------
+# Measured outcome (B1) and knob normalization (B2)
+# ---------------------------------------------------------------------------
+
+# Backend-stage fix rows: measured by stage completion (abort -> 1, clean -> 0).
+_STAGE_CHECKS = ("orfs_stage", "route")
+# fix_log verdicts of an iteration whose fix never produced a measured recheck.
+_UNMEASURED_PREFIXES = ("stop_", "apply_failed", "rerun_failed")
+
+
+def measured_outcome(row: dict) -> dict | None:
+    """The verified outcome of an APPLIED fix with a measured recheck, else None.
+
+    PASS = target cleared (after 0) or strictly reduced; FAIL = unchanged or
+    increased (``target_regression`` when increased), and any measured global
+    regression or a ``regression`` verdict is FAIL with ``target_regression``
+    only when the target itself rose. A stage abort counts 1/0, so a route or
+    place recovery is measured by stage completion.
+    """
+    verdict = str(row.get("verdict") or "")
+    if not verdict or str(row.get("strategy") or "none") == "none":
+        return None
+    before, after = _num(row.get("before")), _num(row.get("after"))
+    if row.get("check") in _STAGE_CHECKS:
+        # Stage-completion oracle (card B1): the fix ran BECAUSE the stage aborted
+        # (fix_signoff logs a route abort with before=null), and a re-run that
+        # aborts again is a measured failure. A clear is logged as after "0".
+        if before is None:
+            before = 1.0
+        if after is None and verdict.startswith("rerun_failed"):
+            after = 1.0
+    elif verdict.startswith(_UNMEASURED_PREFIXES):
+        return None
+    if before is None or after is None or verdict.startswith(("stop_", "apply_failed")):
+        return None
+    globals_ = _parse_json_field(row.get("global_regressions")) or []
+    if after == 0 and before > 0 and not globals_ and verdict != "regression":
+        out = ("PASS", "REMOVED")
+    elif after < before and not globals_ and verdict != "regression":
+        out = ("PASS", "PRESENT")
+    else:
+        out = ("FAIL", "PRESENT" if after > 0 else "UNKNOWN")
+    return {"verdict": out[0], "original_failure": out[1], "before": before,
+            "after": after, "target_regression": after > before}
+
+
+def _num(value) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def normalize_knob_edits(config_delta, config_before=None) -> dict:
+    """{knob: {"before": b, "after": a}} from either fix_log shape: the flat
+    ``{KNOB: value}`` fix_signoff writes (pre-fix values ride ``config_before``)
+    or the ``{KNOB: {"before", "after"}}`` engineer_loop recoveries write."""
+    before_map = _parse_json_field(config_before) or {}
+    out: dict = {}
+    for knob, value in sorted((_parse_json_field(config_delta) or {}).items()):
+        if isinstance(value, dict) and ("after" in value or "before" in value):
+            out[knob] = {"before": value.get("before"), "after": value.get("after")}
+        else:
+            out[knob] = {"before": before_map.get(knob), "after": value}
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Small helpers
 # ---------------------------------------------------------------------------
+
+def _rule_categories(raw) -> dict:
+    """Per-rule category vector {rule: {"count": n, ...}} from a fix_log row.
+
+    Only dict-valued entries are rule categories. fix_signoff.sh snapshots a route
+    abort as ``{"total_violations": null}`` and an LVS check as
+    ``{"mismatch_count": n}`` — scalar summaries, not categories; passing them on
+    crashed the run-context graph on the first route fix (Phase D1, 2026-10-01).
+    """
+    cats = _parse_json_field(raw)
+    if not isinstance(cats, dict):
+        return {}
+    return {k: v for k, v in cats.items() if isinstance(v, dict)}
+
 
 def _state_reports(base_reports: dict, check: str, status: str, count,
                    categories: dict) -> dict:
@@ -287,13 +425,16 @@ def _state_reports(base_reports: dict, check: str, status: str, count,
 def _status_from_count(count) -> str:
     if count is None:
         return "unknown"
-    return "clean" if int(count) == 0 else "violations"
+    n = _num(count)
+    if n is None:
+        return "unknown"
+    return "clean" if n == 0 else "violations"
 
 
 def _original_failure(verdict: str, after_count) -> str:
     if verdict in CLEAN_VERDICTS:
         return "REMOVED"
-    if after_count is not None and int(after_count) > 0:
+    if (_num(after_count) or 0) > 0:
         return "PRESENT"
     return "UNKNOWN"
 

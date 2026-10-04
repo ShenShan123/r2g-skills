@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Mapping
-from dataclasses import replace
 import hashlib
 import re
 
@@ -130,17 +129,6 @@ def locate_guard_conjunction(source: str) -> dict:
     if len(candidates) != 1:
         raise ValueError("acceptance/completion mismatch is absent or ambiguous")
     return candidates[0]
-
-
-def with_guard_conjunction_binding(proposal, training_source: str):
-    located = locate_guard_conjunction(training_source)
-    definition = copy.deepcopy(proposal.definition)
-    action = definition.get("action") or {}
-    if action.get("domain") != DOMAIN or action.get("payload") != located["payload"]:
-        raise ValueError("training proposal does not match the source-only locator")
-    definition["binding_template"] = {"contract": CONTRACT, "spec": dict(SPEC),
-                                      "spec_digest": _digest(SPEC)}
-    return replace(proposal, definition=definition)
 
 
 def bind_guard_asset_to_source(asset: Mapping, source: str, *, design_id: str) -> dict:

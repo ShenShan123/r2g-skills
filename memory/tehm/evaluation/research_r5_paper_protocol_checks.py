@@ -10,7 +10,7 @@ def run_checks() -> dict:
     cases={}
     def check(name, fn):
         try: cases[name]=bool(fn())
-        except Exception as error: cases[name]=False
+        except Exception: cases[name]=False
     def rejected(fn):
         try: fn()
         except ProtocolError: return True

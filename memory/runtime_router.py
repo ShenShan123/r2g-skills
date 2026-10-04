@@ -7,6 +7,7 @@ adapts its candidates/proposals to the existing signoff strategy contract.
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
 from contracts import RepairContext
 from factory import open_memory_backend
@@ -33,7 +34,8 @@ def ingest_project(project_dir: Path) -> dict:
 
 def signoff_strategies(*, project_dir: Path, check: str, design_id: str | None,
                        platform: str | None, cfg: dict, reports: dict,
-                       limit: int = 5) -> list[dict]:
+                       limit: int = 5, situation: dict | None = None,
+                       backend=None, severity=None) -> list[dict]:
     """Return backend-attributed strategies for a signoff repair context.
 
     ``none`` naturally returns no candidates.  The legacy runtime continues to
@@ -41,12 +43,16 @@ def signoff_strategies(*, project_dir: Path, check: str, design_id: str | None,
     only by the TEHM arm today.  Errors are fail-closed and are intentionally
     allowed to reach the call site for visible reporting (H12).
     """
-    backend = open_memory_backend()
+    backend = backend or open_memory_backend()   # explicit backend: offline replay (Phase D1)
     if backend.name != "tehm":
         return []
+    # Route fixes are stored as backend-stage evidence (check orfs_stage, class
+    # route — r2g knowledge/symptom.py), so their rules match on orfs_stage; the
+    # situation's violation_class then separates route from place/floorplan.
     context = RepairContext(
         project_dir=project_dir, design_id=design_id, platform=platform,
-        check=check, reports=reports, cfg=cfg,
+        check=("orfs_stage" if check == "route" else check), reports=reports,
+        cfg=cfg, situation=situation,
     )
     query = backend.build_query(context)
     strategies: list[dict] = []
@@ -70,6 +76,15 @@ def signoff_strategies(*, project_dir: Path, check: str, design_id: str | None,
             "recheck": action_payload.get("recheck") or check,
             "auto_apply": True,
             "tehm_score": candidate.score,
+            "transformation_family": (binding.get("transformation_family") or
+                                      (candidate.payload or {}).get("transformation_family")),
+            # D-A1: a candidate (not yet promoted) rule's application is a trial.
+            "memory_lifecycle": binding.get("lifecycle_status"),
+            "memory_trial": binding.get("lifecycle_status") != "promoted",
+            "witness_selected": action_payload.get("witness_selected") or [],
+            "categorical_selected": action_payload.get("categorical_selected") or [],
+            "dropped_knobs": action_payload.get("dropped_knobs") or [],   # Phase F unblocker 2
+            "value_tolerated": bool(binding.get("value_tolerated")),
             "activation_id": proposal.activation_id,
             "obligation_coverage": proposal.obligation_coverage,
         }
@@ -85,8 +100,97 @@ def signoff_strategies(*, project_dir: Path, check: str, design_id: str | None,
                                       execution.get("rerun_from"))
             strategy["recheck"] = (strategy["recheck"] or
                                    execution.get("recheck") or check)
+        # B4: never hand the fix loop an action it cannot execute faithfully.
+        reason = _reject_reason(strategy, action_payload)
+        if reason:
+            print(f"TEHM strategy {strategy['id']} rejected: {reason}", file=sys.stderr)
+            continue
+        strategy["recheck"] = check
+        strategy["mechanisms"] = mechanisms(strategy)
+        print("TEHM mechanisms: %s %s" % (strategy["id"], ",".join(strategy["mechanisms"])), file=sys.stderr)
         strategies.append(strategy)
+    # Phase G2 compositions follow the rule strategies (the default since Phase H).
+    strategies += _composition_strategies(backend, check, cfg, situation, severity)
     return strategies
+
+
+def _composition_strategies(backend, check, cfg, situation, severity) -> list[dict]:
+    """Phase G2: compositions of verified components (tehm.retrieval.compose), AFTER the
+    rule strategies. Every composition is a trial (never promoted here); the knob policy
+    and exclusion gates of the caller still apply."""
+    from tehm.retrieval.compose import compositions
+    from tehm.retrieval.vetoes import verified_outcomes
+    conn, _ = backend._open()
+    out = []
+    for c in compositions(verified_outcomes(conn), situation or {}, cfg or {}, severity):
+        out.append({
+            "id": "tehm_" + c["id"], "source": "tehm_compose", "rule_id": c["id"],
+            "rationale": "TEHM composition of verified components (%s, predicted severity %s)"
+                         % (c["reason"], c["predicted_severity"]),
+            "config_edits": c["edits"], "rerun_from": "floorplan", "recheck": check,
+            "auto_apply": True, "transformation_family": "COMPOSE_" + "_".join(c["dims"]),
+            "memory_trial": True, "witness_selected": [], "dropped_knobs": [],
+            "composition": {"predicted_severity": c["predicted_severity"], "tested": c["tested"],
+                            "components": c["components"], "current_severity": severity},
+        })
+        out[-1]["mechanisms"] = mechanisms(out[-1])
+        print("TEHM mechanisms: %s %s" % (out[-1]["id"], ",".join(out[-1]["mechanisms"])), file=sys.stderr)
+        print("TEHM composition proposed: %s %s predicted=%s tested=%s components=%d"
+              % (out[-1]["id"], c["edits"], c["predicted_severity"], c["tested"], len(c["components"])),
+              file=sys.stderr)
+    return out
+
+
+def mechanisms(strategy: dict) -> list[str]:
+    """Phase H attribution: which memory mechanisms produced this strategy.
+
+    rule_llm / rule_r2g / rule_component /   what kind of stored rule (crystallised from LLM fixes,
+    rule_knob_subset                         from r2g's own fixes, from component trials, or a
+                                             knob-subset projection)
+    trial_candidate                          a not-yet-promoted rule applied as a checked trial
+    value_median / value_categorical         a holed knob filled from verified witnesses
+    categorical_drop                         a tied categorical knob left out
+    v4_tolerance                             the rule passed V4 only thanks to value tolerance
+    compose_tested / compose_untested        a composition of verified components
+    (The knowledge SOURCE of a rule's evidence is resolved offline from the store; the path --
+    diagnose or B6 -- and the safety gates are logged by the caller.)"""
+    if strategy.get("source") == "tehm_compose":
+        return ["compose_tested" if (strategy.get("composition") or {}).get("tested") else "compose_untested"]
+    family = str(strategy.get("transformation_family") or "")
+    tags = ["rule_knob_subset" if family.startswith("KNOB_SUBSET") else
+            "rule_llm" if family.startswith("LLM_EDIT") else
+            "rule_component" if family.startswith("COMPONENT_") else "rule_r2g"]
+    if strategy.get("memory_trial"):
+        tags.append("trial_candidate")
+    if strategy.get("witness_selected"):
+        tags.append("value_median")
+    if strategy.get("categorical_selected"):
+        tags.append("value_categorical")
+    if strategy.get("dropped_knobs"):
+        tags.append("categorical_drop")
+    if strategy.get("value_tolerated"):
+        tags.append("v4_tolerance")
+    return tags
+
+
+def signoff_vetoes(*, situation: dict | None, backend=None) -> dict[str, dict]:
+    """B5: {strategy: evidence} vetoed in this situation (TEHM backend only)."""
+    backend = backend or open_memory_backend()
+    if backend.name != "tehm" or not situation:
+        return {}
+    return backend.situation_vetoes(situation)
+
+
+def _reject_reason(strategy: dict, action_payload: dict) -> str | None:
+    if action_payload.get("unresolved_knobs"):
+        return "unfilled knob(s) " + ",".join(action_payload["unresolved_knobs"])
+    edits = strategy.get("config_edits")
+    if not isinstance(edits, dict) or not edits:
+        return "empty config_edits"
+    if any(v is None or (isinstance(v, str) and v.startswith("$H"))
+           for v in edits.values()):
+        return "unbound hole in config_edits"
+    return None
 
 
 def config_recommendation(*, project_dir: Path, design_id: str | None,

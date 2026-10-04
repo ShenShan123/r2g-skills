@@ -113,13 +113,15 @@ def _backfill_family(design: str, identity: str | None,
 
 
 def _verdict(before: float | None, after: float | None) -> str:
-    """cleared iff after==0, else win if after<before, else no_change."""
+    """cleared iff after==0, win if after<before, regression if after>before, else no_change."""
     if after is None:
         return "no_change"
     if after == 0:
         return "cleared"
     if before is not None and after < before:
         return "win"
+    if before is not None and after > before:
+        return "regression"   # a fix that worsened its own target is harm, not a no-op
     return "no_change"
 
 

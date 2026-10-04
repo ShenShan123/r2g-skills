@@ -36,8 +36,10 @@ def apply_symbolic_filter(rule: dict, query: MemoryQuery) -> str:
 
     hard_preconditions = rule.get("hard_preconditions") or []
     if hard_preconditions:
-        # v1: no evaluable hard predicates yet; never silently pass unknowns.
-        return UNRESOLVED
+        verdict = _evaluate_preconditions(
+            hard_preconditions, (query.query_plan or {}).get("situation"))
+        if verdict != APPLICABLE:
+            return verdict
 
     target_check = (rule.get("before_pattern") or {}).get("target_check")
     if isinstance(target_check, str) and not is_hole(target_check):
@@ -49,6 +51,30 @@ def apply_symbolic_filter(rule: dict, query: MemoryQuery) -> str:
 
     # Hole target_check = matches any check; needs at least a check to apply.
     return APPLICABLE if check else UNRESOLVED
+
+
+def _evaluate_preconditions(preconditions: list, situation) -> str:
+    """Evaluate hard preconditions against the query's situation (B3).
+
+    Only ``situation.<field>==<value>`` predicates are evaluable; any other form
+    is UNRESOLVED (never silently passed). A situation field the query lacks is
+    UNRESOLVED; a concrete mismatch is INAPPLICABLE — final, the reranker cannot
+    override it.
+    """
+    unresolved = False
+    for pred in preconditions:
+        if (not isinstance(pred, str) or not pred.startswith("situation.")
+                or "==" not in pred or not isinstance(situation, dict)):
+            unresolved = True
+            continue
+        field_name, value = pred[len("situation."):].split("==", 1)
+        actual = situation.get(field_name)
+        if actual is None:
+            unresolved = True
+            continue
+        if str(actual) != value:
+            return INAPPLICABLE
+    return UNRESOLVED if unresolved else APPLICABLE
 
 
 def _rule_compatibility_profile(rule: dict):

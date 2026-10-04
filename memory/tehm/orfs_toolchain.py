@@ -105,64 +105,6 @@ def manifest_digest(manifest: Mapping) -> str:
     return hashlib.sha256(stable_dumps(_unsigned(manifest)).encode()).hexdigest()
 
 
-def build_toolchain_manifest(
-        preflight: Mapping, *, pdk_root: str | Path | None = None,
-        require_internal: bool = False, allow_dirty: bool = False,
-        dependency_files: tuple[str | Path, ...] = ()) -> dict:
-    """Build a deterministic manifest from ``preflight_orfs_toolchain``.
-
-    ``preflight`` is intentionally passed in by the caller so this module does
-    not discover a second executable set.  A blocked preflight, missing binary
-    digest or dirty ORFS tree is rejected unless the caller explicitly marks
-    the result as a diagnostic manifest.
-    """
-    if not isinstance(preflight, Mapping):
-        raise ToolchainManifestError("toolchain preflight must be an object")
-    status = str(preflight.get("status") or "blocked")
-    if status not in {"bound_internal", "bound_external"}:
-        raise ToolchainManifestError(
-            f"cannot lock blocked toolchain preflight: {status}")
-    if require_internal and status != "bound_internal":
-        raise ToolchainManifestError(
-            f"production manifest requires bound_internal, got {status}")
-    root_value = preflight.get("orfs_root")
-    if not root_value:
-        raise ToolchainManifestError("preflight has no ORFS root")
-    root = Path(str(root_value)).expanduser().resolve()
-    identity = _orfs_identity(root)
-    if not (root / "flow" / "Makefile").is_file():
-        raise ToolchainManifestError(f"ORFS flow/Makefile is missing: {root}")
-    if identity["git_dirty"] and not allow_dirty:
-        raise ToolchainManifestError(
-            "ORFS tree is dirty; use a clean checkout or explicitly mark a diagnostic lock")
-    tools = {}
-    for name in ("openroad", "yosys"):
-        raw = preflight.get("tools", {}).get(name)
-        if not isinstance(raw, Mapping) or not raw.get("path"):
-            raise ToolchainManifestError(f"preflight has no {name} binding")
-        if not raw.get("sha256"):
-            raise ToolchainManifestError(f"preflight has no {name} SHA256")
-        tools[name] = json.loads(json.dumps(dict(raw), sort_keys=True))
-    manifest = {
-        "schema": MANIFEST_SCHEMA,
-        "manifest_version": MANIFEST_VERSION,
-        "binding_status": status,
-        "compatibility": preflight.get("compatibility"),
-        "toolchain_root": preflight.get("toolchain_root"),
-        "orfs": identity,
-        "tools": tools,
-        "pdk": _pdk_identity(pdk_root),
-        "policy": {
-            "requires_internal": bool(require_internal),
-            "allow_dirty": bool(allow_dirty),
-        },
-    }
-    if dependency_files:
-        manifest["dependency_files"] = _dependency_identity(dependency_files)
-    manifest["manifest_digest"] = manifest_digest(manifest)
-    return manifest
-
-
 def _dependency_identity(paths) -> list[dict]:
     """Explicit additional inputs; absent from old locks, never auto-discovered.
 

@@ -9,7 +9,6 @@ import hashlib
 import sqlite3
 from collections import defaultdict
 
-from tehm import db as tehm_db
 from tehm.causal.mechanism import load_transition_facts
 from tehm.ids import stable_dumps
 

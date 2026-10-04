@@ -11,9 +11,7 @@ from tehm.ids import stable_dumps
 
 from .receipts import MemoryRelationReceipt
 from .schema import ensure_state_schema
-from .validation import (
-    normalize_evidence_refs, normalize_scope, relation_content, relation_digest,
-)
+from .validation import relation_content, relation_digest
 
 
 @dataclass(frozen=True)

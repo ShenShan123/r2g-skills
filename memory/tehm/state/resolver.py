@@ -377,7 +377,6 @@ def resolve_current_state(
     relation_ids = tuple(item.relation_id for item in applicable)
     shadow_ids = tuple(item.relation_id for item in applicable
                        if not _validate_authority(conn, item, requested, mode))
-    authority_ids = set(relation_ids) - set(shadow_ids)
     _detect_cycles(applicable)
 
     existing = _existing_objects(conn)

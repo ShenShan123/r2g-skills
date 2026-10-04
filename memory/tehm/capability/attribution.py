@@ -14,12 +14,7 @@ from collections.abc import Mapping
 
 from tehm.ids import stable_dumps
 
-from .delta import (
-    AssetDeltaReceipt, KnowledgeDeltaReceipt, MemoryDeltaReceipt,
-    MEMORY_DELTA_VERSION,
-    evaluate_asset_delta, evaluate_knowledge_delta, evaluate_memory_delta,
-    memory_delta_from_shadow_update,
-)
+from .delta import AssetDeltaReceipt, KnowledgeDeltaReceipt, MemoryDeltaReceipt, MEMORY_DELTA_VERSION, evaluate_memory_delta, memory_delta_from_shadow_update
 from .lineage import CandidateLineageReceipt
 from .policy_snapshot import validate_policy_load_row, validate_policy_snapshot_row
 

@@ -96,6 +96,7 @@ SURROGATE_COLS: dict[str, set[str]] = {
 TABLE_ORDER: list[tuple[str, tuple[str, ...]]] = [
     ("runs", ("run_id",)),
     ("symptoms", ("symptom_id",)),
+    ("situations", ("situation_id",)),
     ("meta", ("key",)),
     ("lessons", ("lesson_id",)),
     ("failure_events", ("run_id", "stage", "signature", "detail")),
@@ -213,6 +214,16 @@ def export_bundle(db_path: Path | str,
             cols = _export_columns(conn, table)
             sel = ", ".join(f'"{c}"' for c in cols)
             rows = [dict(r) for r in conn.execute(f"SELECT {sel} FROM {table}")]
+            # A store not yet migrated lacks the additive columns ensure_schema would add
+            # (NULL on every existing row once it runs). Export them as NULL so a bundle
+            # depends on CONTENT, not on whether the store has been opened by a newer
+            # schema — the column-level twin of the missing-table branch above.
+            pending = [c for c in knowledge_db._ADDED_COLUMNS.get(table, {})
+                       if c not in cols and c not in SURROGATE_COLS.get(table, set())]
+            if pending:
+                cols = cols + pending
+                for r in rows:
+                    r.update(dict.fromkeys(pending))
             # TOTAL order: natural key first, then FULL row content as the tie-break.
             # Without the tie-break, two rows sharing the natural key but differing on a
             # non-key column (ab_trials.metrics_json/verdict, config_lineage.current_

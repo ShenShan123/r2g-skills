@@ -11,7 +11,7 @@ import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from contracts import MEMORY_ROUTING_DECISIONS, MemoryRoutingDecision
+from contracts import MemoryRoutingDecision
 from tehm.canonical.transition import HARMFUL_OUTCOMES, POSITIVE_OUTCOMES
 from tehm.evaluation.candidate_executor import (
     P12_ARMS, CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
@@ -19,7 +19,6 @@ from tehm.evaluation.candidate_executor import (
 from tehm.evaluation.counterfactual_oracle import counterfactual_oracle_complete
 from tehm.ids import stable_dumps
 from tehm.state.shift_receipts import StateShiftReceipt
-from contracts import MemoryRoutingDecision
 from tehm.assets.receipts import CapabilityGapReceipt
 from .conflict import ConflictReceipt
 from .counterexample import CounterexampleReceipt

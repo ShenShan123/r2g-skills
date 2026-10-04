@@ -14,7 +14,6 @@ import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from tehm import db as tehm_db
 from tehm.ids import stable_dumps
 from tehm.lifecycle.promotion_gates import (
     CAPABILITY_GATES, evaluate_capability_promotion_gates,

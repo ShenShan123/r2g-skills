@@ -48,9 +48,12 @@ class RepairContext:
     failure_graph_digest: str | None = None
     causal_context_digest: str | None = None
     prior_action_digests: list[str] = field(default_factory=list)
+    # Pre-fix situation (r2g knowledge/situation.py sit-v1) for flow/signoff rule
+    # preconditions (R2G memory redesign B3). None for every other domain.
+    situation: dict | None = None
 
     def to_dict(self) -> dict:
-        return {
+        out = {
             "project_dir": str(self.project_dir) if self.project_dir else None,
             "design_id": self.design_id,
             "platform": self.platform,
@@ -65,6 +68,16 @@ class RepairContext:
             "causal_context_digest": self.causal_context_digest,
             "prior_action_digests": list(self.prior_action_digests),
         }
+        # Only when set: an absent key keeps every pre-B3 context digest (and the
+        # activation ids derived from it) byte-identical.
+        if self.situation is not None:
+            out["situation"] = self.situation
+        return out
+
+
+# A config knob a fix REMOVES (e.g. drop DIE_AREA so ORFS auto-sizes the die).
+# Mirrored by r2g knowledge/knob_policy.UNSET; apply paths delete the assignment.
+CONFIG_UNSET = "<unset>"
 
 
 @dataclass

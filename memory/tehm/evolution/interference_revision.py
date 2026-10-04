@@ -12,9 +12,7 @@ import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from tehm.evaluation.candidate_executor import (
-    CandidateExecutionReceipt, PairedCandidateExecutionReceipt,
-)
+from tehm.evaluation.candidate_executor import PairedCandidateExecutionReceipt
 from tehm.ids import stable_dumps
 
 from .local_revision import LocalizedUpdatePlan

@@ -99,13 +99,6 @@ def _inside(path: Path, root: Path) -> bool:
     return True
 
 
-def _safe_relative(path: Path, root: Path) -> str:
-    try:
-        return path.relative_to(root).as_posix()
-    except ValueError as exc:
-        raise ResearchInventoryError(f"path escapes corpus root: {path}") from exc
-
-
 def _walk(root: Path) -> tuple[list[Path], list[dict[str, Any]], list[str]]:
     """Return regular files, symlink records, and read errors without following links."""
     files: list[Path] = []

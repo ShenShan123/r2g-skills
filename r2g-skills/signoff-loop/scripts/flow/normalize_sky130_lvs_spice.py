@@ -38,6 +38,8 @@ MOS_MODEL_MAP = {
     "pfet_01v8_hvt": "sky130_fd_pr__pfet_01v8_hvt",
     "pfet_01v8_lvt": "sky130_fd_pr__pfet_01v8_lvt",
     "pfet_01v8_mvt": "sky130_fd_pr__pfet_01v8_mvt",
+    # the CDL's special_nfet is the ordinary 1.8 V NFET (same mapping as the layout side)
+    "special_nfet_01v8": "sky130_fd_pr__nfet_01v8",
 }
 FULL_MOS_MODELS = tuple(MOS_MODEL_MAP.values())
 
@@ -116,13 +118,13 @@ def normalize_library(text: str) -> tuple[str, dict[str, int]]:
         text,
     )
 
-    # The HS conb CDL uses ``rI12 VGND LO short`` while Magic extracts the
+    # The HS and HD conb CDLs use ``rI12 VGND LO short`` while Magic extracts the
     # actual two-terminal poly geometry.  Scope this conversion to the known
-    # HS constant cell: a generic ``short`` elsewhere must not silently become
+    # constant cells: a generic ``short`` elsewhere must not silently become
     # a physical resistor model.  The dimensions are the fixed conb geometry
     # observed in the official cell layout/CDL pair.
     conb_block_re = re.compile(
-        r"^\.subckt\s+sky130_fd_sc_hs__conb_1\b.*?^\.ends(?:\s+\S+)?\s*$",
+        r"^\.subckt\s+sky130_fd_sc_h[sd]__conb_1\b.*?^\.ends(?:\s+\S+)?\s*$",
         re.MULTILINE | re.IGNORECASE | re.DOTALL,
     )
     two_terminal_short_count = 0
@@ -134,12 +136,15 @@ def normalize_library(text: str) -> tuple[str, dict[str, int]]:
             r"^[Rr](\S+)\s+(\S+)\s+(\S+)\s+short\s*$", re.MULTILINE
         )
 
+        # fixed conb poly geometry as Magic extracts it: hs w=0.51, hd w=0.48 (both l=0.045)
+        width = "0.48" if re.search(r"sky130_fd_sc_hd__conb_1\b", block, re.IGNORECASE) else "0.51"
+
         def replace_resistor(match: re.Match[str]) -> str:
             nonlocal two_terminal_short_count
             two_terminal_short_count += 1
             return (
                 f"X{match.group(1)} {match.group(2)} {match.group(3)} "
-                "sky130_fd_pr__res_generic_po w=0.51 l=0.045"
+                f"sky130_fd_pr__res_generic_po w={width} l=0.045"
             )
 
         return resistor_re.sub(replace_resistor, block)

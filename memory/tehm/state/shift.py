@@ -7,8 +7,7 @@ from collections.abc import Mapping
 from tehm.ids import stable_dumps
 
 from .receipts import ResolvedMemoryState
-from .shift_receipts import (BOUND_STATE_SHIFT_VERSION, SHIFT_DIMENSIONS,
-                             StateShiftReceipt, _digest)
+from .shift_receipts import BOUND_STATE_SHIFT_VERSION, StateShiftReceipt, _digest
 from .support_envelope import SupportEnvelope
 
 

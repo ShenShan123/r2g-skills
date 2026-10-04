@@ -18,7 +18,6 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from contracts import RepairContext
-from tehm import db as tehm_db
 from tehm.activation.pipeline import activate
 from tehm.artifact_store import ArtifactStore
 from tehm.ids import stable_dumps

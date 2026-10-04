@@ -15,14 +15,7 @@ import math
 import sqlite3
 from collections.abc import Mapping
 
-from contracts import (
-    MEMORY_ROUTING_DECISIONS,
-    MemoryCandidate,
-    MemoryQuery,
-    MemoryRoutingDecision,
-    NO_SKILL_REASONS,
-    RepairContext,
-)
+from contracts import MEMORY_ROUTING_DECISIONS, MemoryCandidate, MemoryQuery, MemoryRoutingDecision, RepairContext
 from tehm.assets.registry import get_asset, get_asset_status
 from tehm.causal.evidence_level import at_least, evidence_rank
 from tehm.causal.path_builder import validate_persisted_path_row
@@ -30,7 +23,6 @@ from tehm.ids import stable_dumps
 from tehm.knowledge.applicability import evaluate_applicability
 from tehm.knowledge.authority import evaluate_knowledge_authority
 from tehm.knowledge.registry import get_knowledge_by_object_id
-from tehm.knowledge.lifecycle import get_knowledge_status
 from tehm.state import (
     RISK_RECEIPT_VERSION, RiskReceipt, StateResolutionError, StateShiftError,
     SupportEnvelope,

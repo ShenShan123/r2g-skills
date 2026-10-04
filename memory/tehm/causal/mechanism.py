@@ -9,7 +9,6 @@ import json
 import sqlite3
 from dataclasses import dataclass
 
-from tehm import db as tehm_db
 from tehm.canonical.transition import (
     Action, ObservationDelta, classify_outcome,
     primary_effect_key as canonical_primary_effect_key,

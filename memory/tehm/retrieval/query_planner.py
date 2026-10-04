@@ -29,6 +29,10 @@ def plan_query(context: RepairContext) -> MemoryQuery:
         "causal_context_digest": getattr(context, "causal_context_digest", None),
         "prior_action_digests": list(getattr(context, "prior_action_digests", []) or []),
     }
+    # Flow/signoff situation (B3) only when present, so every pre-B3 query plan —
+    # persisted verbatim in activation receipts — stays byte-identical.
+    if getattr(context, "situation", None) is not None:
+        query_plan["situation"] = context.situation
     dominant_dimensions = {"temporal": "high", "structural": "high",
                            "width_type": "low"}
     return MemoryQuery(

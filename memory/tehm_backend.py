@@ -122,8 +122,13 @@ class TehmMemoryBackend:
 
     def __init__(self, *, db_path: Path | None = None,
                  artifact_root: Path | None = None,
-                 read_only_eval: bool = False):
+                 read_only_eval: bool = False,
+                 trial_candidates: bool = True):
         self.db_path = Path(db_path) if db_path else tehm_config.default_db_path()
+        # "Trial on first use" (Phase D-A1; the default since Phase H): runtime also
+        # retrieves CANDIDATE rules (never shadow; validity gate unchanged). Their
+        # application is a verified trial; promotion still only via the authority path.
+        self.trial_candidates = bool(trial_candidates)
         self.artifact_root = (Path(artifact_root) if artifact_root
                               else tehm_config.default_artifact_root())
         self.read_only_eval = read_only_eval
@@ -184,7 +189,8 @@ class TehmMemoryBackend:
         from tehm.retrieval.pipeline import retrieve_query
 
         conn, _ = self._open()
-        receipt = retrieve_query(conn, query, limit=limit)
+        receipt = retrieve_query(conn, query, limit=limit,
+                                 lifecycle_statuses=self.runtime_statuses())
         return [
             MemoryCandidate(
                 candidate_id=r.candidate_id,
@@ -397,6 +403,17 @@ class TehmMemoryBackend:
             conn, policy_snapshot_id=policy_snapshot_id, runtime_id=runtime_id,
             loaded=loaded, receipt=receipt)
 
+    def runtime_statuses(self) -> frozenset[str]:
+        return (frozenset({"candidate", "promoted"}) if self.trial_candidates
+                else frozenset({"promoted"}))
+
+    def situation_vetoes(self, situation: dict | None) -> dict[str, dict]:
+        """B5: strategies the verified evidence vetoes in ``situation``."""
+        from tehm.retrieval.vetoes import situation_vetoes
+
+        conn, _ = self._open()
+        return situation_vetoes(conn, situation)
+
     def propose_activation(self, candidate: MemoryCandidate,
                            context: RepairContext) -> ActivationProposal | None:
         from tehm.activation.binding import bind_rule
@@ -410,8 +427,14 @@ class TehmMemoryBackend:
         conn, _ = self._open()
         rule_id = (candidate.payload or {}).get("rule_id") or candidate.candidate_id
         rule = build_index(
-            conn, lifecycle_statuses=frozenset({"promoted"})).get(rule_id)
+            conn, lifecycle_statuses=self.runtime_statuses()).get(rule_id)
         if rule is None:
+            return None
+        rule = {**rule, "hole_witnesses": _hole_witnesses(conn, rule_id)}
+        status_row = conn.execute(
+            "SELECT status FROM tehm_rule_status WHERE rule_id=?", (rule_id,)).fetchone()
+        lifecycle_status = status_row[0] if status_row else None
+        if not is_repair_rule(rule):
             return None
         applicability = (candidate.payload or {}).get(
             "applicability_status", "UNRESOLVED")
@@ -434,7 +457,10 @@ class TehmMemoryBackend:
                      "substitutions": binding.substitutions,
                      "bound_entities": binding.bound_entities,
                      "proof": binding.proof,
-                     "action": action},
+                     "action": action,
+                     "lifecycle_status": lifecycle_status,
+                     "transformation_family": rule.get("transformation_family"),
+                     "value_tolerated": _v4_value_tolerated(rule)},
             obligations=transfer["results"],
             obligation_coverage=transfer["obligation_coverage"],
         )
@@ -669,20 +695,61 @@ class TehmMemoryBackend:
         )
 
     def _store_digest(self) -> str:
-        """Digest the SQLite image plus WAL for frozen-resume identity."""
+        """Logical content digest (``iterdump`` through the OPEN connection) for
+        frozen-resume identity.
+
+        It used to hash the database file and its WAL by opening a second file
+        descriptor. Closing ANY descriptor on a SQLite file drops every POSIX lock
+        this process holds on it ("How To Corrupt An SQLite Database File", 2.2),
+        so the process silently lost its shared lock on the TEHM store. Another
+        process's close then won the exclusive lock, judged itself the last
+        connection, and deleted the WAL/SHM under live connections: "database
+        disk image is malformed" in engineer_loop's write-back rebuild (R2G
+        memory Phase D2 smoke 2, 2026-10-01). Logical content is also
+        checkpoint-invariant, which the file image never was.
+        """
+        conn, _ = self._open()
         h = hashlib.sha256()
-        for path in (self.db_path, Path(str(self.db_path) + "-wal")):
-            if path.is_file():
-                h.update(path.name.encode())
-                with path.open("rb") as fh:
-                    for chunk in iter(lambda: fh.read(65536), b""):
-                        h.update(chunk)
+        for line in conn.iterdump():
+            h.update(line.encode("utf-8"))
+            h.update(b"\n")
         return h.hexdigest()
 
     def close(self) -> None:
         if self._conn is not None:
             self._conn.close()
             self._conn = None
+
+
+def _hole_witnesses(conn, rule_id: str) -> dict[str, list]:
+    """{hole: [value per source transition]} from the rule's crystallisation-time
+    witnesses (tehm_rule_sources). Every source of a PASS rule is a verified fix in
+    the rule's situation; D-A1 instantiates a numeric hole from their median."""
+    out: dict[str, list] = {}
+    for (raw,) in conn.execute(
+            "SELECT source_substitution_json FROM tehm_rule_sources WHERE rule_id=?",
+            (rule_id,)):
+        for subs in (tehm_db.read_json(raw) or {}).values():
+            for hole, value in (subs or {}).items():
+                out.setdefault(hole, []).append(value)
+    return out
+
+
+def _v4_value_tolerated(rule: dict) -> bool:
+    """Phase H attribution: did V4 accept this rule only thanks to numeric-value tolerance?"""
+    gates = ((rule.get("validity_profile") or {}).get("gates") or [])
+    return any(g.get("name") == "V4" and (g.get("detail") or {}).get("value_tolerated")
+               for g in gates if isinstance(g, dict))
+
+
+def is_repair_rule(rule: dict) -> bool:
+    """B4 (R2G memory redesign 2026-10-01): a flow/signoff rule crystallised from
+    FAIL episodes (no_change or regression) is negative evidence — veto material
+    (B5) — never a repair to propose. Only a concrete PASS rewrite qualifies;
+    other domains are unaffected."""
+    if rule.get("domain") != "flow.signoff":
+        return True
+    return (rule.get("after_pattern") or {}).get("verification.verdict") == "PASS"
 
 
 def _source_outcome_profile(conn, rule_id: str) -> dict:

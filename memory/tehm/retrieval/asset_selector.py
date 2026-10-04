@@ -25,8 +25,6 @@ from contracts import MemoryQuery, MemoryRoutingDecision, RepairContext
 from tehm.assets.registry import get_asset, get_asset_status
 from tehm.assets.validation import validate_asset_schema
 from tehm.ids import stable_dumps
-from tehm.knowledge.applicability import evaluate_applicability
-from tehm.knowledge.registry import get_knowledge_by_object_id
 from tehm.state.resolver import StateResolutionError, resolve_current_state
 
 

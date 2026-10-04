@@ -9,31 +9,16 @@ import copy
 from .receipts import RuntimeBindingReceipt
 from .structural_binding import CONTRACT as ALPHA_CONTRACT, bind_rtl_asset_to_source
 from .guard_binding import CONTRACT as GUARD_CONTRACT
-from .skid_binding import CONTRACT as SKID_CONTRACT
-from .skid_binding_v2 import CONTRACT as SKID_V2_CONTRACT
-from .skid_binding_v3 import CONTRACT as SKID_V3_CONTRACT
-from .skid_binding_v4 import CONTRACT as SKID_V4_CONTRACT
-from .skid_binding_v5 import CONTRACT as SKID_V5_CONTRACT
-from .skid_binding_v6 import CONTRACT as SKID_V6_CONTRACT
-from .skid_binding_v7 import CONTRACT as SKID_V7_CONTRACT
-from .skid_binding_v8 import CONTRACT as SKID_V8_CONTRACT
-from tehm.rtl.skid_payload_action import DOMAIN as SKID_DOMAIN
-from tehm.rtl.skid_payload_action_v2 import DOMAIN as SKID_V2_DOMAIN
-from tehm.rtl.skid_payload_action_v3 import DOMAIN as SKID_V3_DOMAIN
-from tehm.rtl.skid_payload_action_v4 import DOMAIN as SKID_V4_DOMAIN
-from tehm.rtl.skid_payload_action_v5 import DOMAIN as SKID_V5_DOMAIN
-from tehm.rtl.skid_payload_action_v6 import DOMAIN as SKID_V6_DOMAIN
-from tehm.rtl.skid_payload_action_v7 import DOMAIN as SKID_V7_DOMAIN
-from tehm.rtl.skid_payload_action_v8 import DOMAIN as SKID_V8_DOMAIN
-from tehm.rtl.skid_payload_action_v9 import DOMAIN as SKID_V9_DOMAIN
+from .i2c_binding_v3 import CONTRACT as I2C_V3_CONTRACT
+from .retired import retired_generation
+from tehm.rtl.i2c_nack_action_v3 import DOMAIN as I2C_V3_DOMAIN
 from tehm.ids import stable_dumps
 from .registry import asset_content_digest
 from .guard_binding import DOMAIN as GUARD_DOMAIN
 
-SOURCE_CONTRACTS = frozenset({ALPHA_CONTRACT, GUARD_CONTRACT, SKID_CONTRACT,
-                              SKID_V2_CONTRACT, SKID_V3_CONTRACT, SKID_V4_CONTRACT,
-                              SKID_V5_CONTRACT, SKID_V6_CONTRACT, SKID_V7_CONTRACT,
-                              SKID_V8_CONTRACT})
+# Retired R5 generations (tehm.assets.retired) have no source contract here: fail closed.
+SOURCE_CONTRACTS = frozenset({ALPHA_CONTRACT, GUARD_CONTRACT, I2C_V3_CONTRACT})
+SOURCE_BOUND_DOMAINS = frozenset({GUARD_DOMAIN, I2C_V3_DOMAIN})
 
 
 def source_contract(asset):
@@ -45,9 +30,7 @@ def source_contract(asset):
 
 def _rebind(registered, source, evidence):
     kwargs = {"design_id": evidence["design_id"]}
-    if source_contract(registered) in {SKID_V2_CONTRACT, SKID_V3_CONTRACT,
-                                       SKID_V4_CONTRACT, SKID_V5_CONTRACT, SKID_V6_CONTRACT,
-                                       SKID_V7_CONTRACT, SKID_V8_CONTRACT}:
+    if source_contract(registered) == I2C_V3_CONTRACT:
         kwargs["public_context"] = evidence["public_context"]
     return bind_rtl_asset_to_source(registered, source, **kwargs)
 
@@ -88,16 +71,8 @@ def verify_candidate_source_replay(candidate, source):
     if replay is None:
         # A source-bound Asset may not downgrade to the legacy proof-less path.
         return (candidate.provenance.get("source_binding_required") is not True
-                and candidate.concrete_action.get("domain") != GUARD_DOMAIN
-                and candidate.concrete_action.get("domain") != SKID_DOMAIN
-                and candidate.concrete_action.get("domain") != SKID_V2_DOMAIN
-                and candidate.concrete_action.get("domain") != SKID_V3_DOMAIN
-                and candidate.concrete_action.get("domain") != SKID_V4_DOMAIN
-                and candidate.concrete_action.get("domain") != SKID_V5_DOMAIN
-                and candidate.concrete_action.get("domain") != SKID_V6_DOMAIN
-                and candidate.concrete_action.get("domain") != SKID_V7_DOMAIN
-                and candidate.concrete_action.get("domain") != SKID_V8_DOMAIN
-                and candidate.concrete_action.get("domain") != SKID_V9_DOMAIN)
+                and candidate.concrete_action.get("domain") not in SOURCE_BOUND_DOMAINS
+                and retired_generation(candidate.concrete_action) is None)
     try:
         registered, bound = replay["registered_asset"], replay["bound_asset"]
         evidence = bound["provenance"]["binding_evidence"]

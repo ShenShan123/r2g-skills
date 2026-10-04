@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from contracts import CONFIG_UNSET
 from tehm.crystallization.effects import effect_key_from_transition_dict
 
 ROLE_NORMALIZE_VERSION = "role-normalize-v0.1"
@@ -73,7 +74,12 @@ def normalize_rewrite(transition_dict: dict, *, effect_key: str | None = None,
     payload = action.get("payload") or {}
 
     config_edits = payload.get("config_edits") or {}
-    knob = min(config_edits) if isinstance(config_edits, dict) and config_edits else None
+    knob_edits = payload.get("knob_edits")
+    multi_knob = isinstance(knob_edits, dict) and bool(knob_edits)
+    # Legacy single-knob projection (kept for rules crystallised before B2 and for
+    # evidence without ``knob_edits``); the multi-knob form below supersedes it.
+    knob = (min(config_edits) if not multi_knob and isinstance(config_edits, dict)
+            and config_edits else None)
     new_value = config_edits.get(knob) if knob is not None else None
 
     rerun_from = payload.get("rerun_from")
@@ -93,6 +99,30 @@ def normalize_rewrite(transition_dict: dict, *, effect_key: str | None = None,
         slots.append(("match.knob", str(knob)))
     if new_value is not None:
         slots.append(("rewrite.value", new_value))
+    if multi_knob:
+        # B2 (R2G memory redesign 2026-10-01): EVERY knob rides its own slots, so
+        # anti-unification generalises per knob. ``.abs`` is the value written;
+        # ``.delta`` (after - before, when both are numeric) is the parametric form —
+        # density_relief takes 12->8 on one design and 70->62 on another: the
+        # absolute values hole, the shared delta -8 stays concrete and executable.
+        slots.append(("match.knobs", ",".join(sorted(knob_edits))))
+        for k in sorted(knob_edits):
+            edit = knob_edits[k] if isinstance(knob_edits[k], dict) else {}
+            if edit.get("after") is not None:
+                slots.append((f"rewrite.knob.{k}.abs", canonical_value(edit["after"])))
+            elif "after" in edit:          # removed knob (D-A1): an explicit value
+                slots.append((f"rewrite.knob.{k}.abs", CONFIG_UNSET))
+            d = knob_delta(edit.get("before"), edit.get("after"))
+            if d is not None:
+                slots.append((f"rewrite.knob.{k}.delta", d))
+    situation = payload.get("situation")
+    if isinstance(situation, dict):
+        # B3: the pre-fix situation as match slots. Shared fields stay concrete and
+        # become hard preconditions; differing fields hole and are dropped.
+        for field_name in sorted(situation):
+            value = situation[field_name]
+            if field_name != "v" and value is not None:
+                slots.append((f"match.situation.{field_name}", str(value)))
     if rerun_from:
         slots.append(("execution.rerun_from", str(rerun_from)))
     if recheck:
@@ -130,6 +160,25 @@ def normalize_rewrite(transition_dict: dict, *, effect_key: str | None = None,
         transition_id=str(transition_dict.get("transition_id") or ""),
         lineage_id=lineage_id,
     )
+
+
+def canonical_value(value) -> str:
+    """One spelling per value: numeric strings via %g ("0.20" and "0.2" are the
+    same setting — as strings they created spurious anti-unification holes, Phase
+    D1); anything else (layer names, area tuples) stripped verbatim."""
+    text = str(value).strip()
+    try:
+        return "%g" % float(text)
+    except ValueError:
+        return text
+
+
+def knob_delta(before, after) -> str | None:
+    """after - before as a canonical string when both are numeric, else None."""
+    try:
+        return "%g" % (float(after) - float(before))
+    except (TypeError, ValueError):
+        return None
 
 
 def _obligations(delta: dict, verifier: dict) -> list[str]:

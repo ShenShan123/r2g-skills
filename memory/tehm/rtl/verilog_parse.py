@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-PARSE_VERSION = "verilog-parse-v0.3"
+PARSE_VERSION = "verilog-parse-v0.4"
 
 
 @dataclass
@@ -102,8 +102,25 @@ class RTLModule:
         }
 
 
-def parse_verilog(source: str) -> list[RTLModule]:
-    """Parse Verilog source into structural RTL modules."""
+def parse_verilog(source: str, defined_macros=()) -> list[RTLModule]:
+    """Parse Verilog source into structural RTL modules.
+
+    v0.4: the v0.3 result is returned unchanged whenever it is non-empty. Only when
+    v0.3 finds no module is it retried on the bounded active text (tehm.rtl.active_text);
+    any unsupported construct there still fails closed with [].
+    """
+    modules = _parse_v03(source)
+    if modules:
+        return modules
+    from .active_text import active_text
+    try:
+        text = active_text(source, defined_macros)
+    except ValueError:
+        return []
+    return _parse_v03(text)
+
+
+def _parse_v03(source: str) -> list[RTLModule]:
     text = _strip_comments(source)
     modules: list[RTLModule] = []
     cursor = 0

@@ -40,6 +40,26 @@ if str(LOOP_DIR_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(LOOP_DIR_SCRIPTS))
 
 
+@pytest.fixture(scope="session")
+def _session_knowledge_copy(tmp_path_factory) -> Path:
+    """One per-session copy of the SHIPPED knowledge.sqlite (see _isolate_knowledge)."""
+    dst = tmp_path_factory.mktemp("shipped_knowledge") / "knowledge.sqlite"
+    shutil.copyfile(SKILL_ROOT / "knowledge" / "knowledge.sqlite", dst)   # content, not mode
+    return dst
+
+
+@pytest.fixture(autouse=True)
+def _isolate_knowledge(_session_knowledge_copy: Path, monkeypatch) -> None:
+    """Point every DEFAULT knowledge-store access (no-arg knowledge_db.connect, and any
+    subprocess that inherits the env: diagnose_signoff_fix, fix_signoff.sh, ingest)
+    at a session copy of the shipped store. Reads see identical content, but nothing a
+    test does can rewrite the TRACKED binary — before this, a diagnose subprocess's
+    ensure_schema migrated the shipped knowledge.sqlite in place the moment the schema
+    gained a column (R2G memory redesign A2, 2026-10-01). Tests that need a specific
+    store still pass an explicit path or set R2G_KNOWLEDGE_DB themselves."""
+    monkeypatch.setenv("R2G_KNOWLEDGE_DB", str(_session_knowledge_copy))
+
+
 @pytest.fixture(autouse=True)
 def _isolate_journal(tmp_path: Path, monkeypatch) -> None:
     """Redirect ALL best-effort journal writes to a per-test temp DB so unit tests

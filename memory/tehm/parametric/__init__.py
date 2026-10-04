@@ -1,14 +1,6 @@
 """Parametric shadow-only experiment interfaces."""
 
-from .shadow import (  # noqa: F401
-    PARAMETRIC_SHADOW_STATUS,
-    PARAMETRIC_SHADOW_VERSION,
-    SHADOW_ABSTAINED,
-    SHADOW_PROPOSED,
-    ParametricShadowError,
-    build_shadow_proposal,
-    proposal_digest,
-)
+from .shadow import ParametricShadowError, build_shadow_proposal, proposal_digest
 from .shadow_campaign import (  # noqa: F401
     AppendOnlyShadowLog,
     ShadowCampaignError,

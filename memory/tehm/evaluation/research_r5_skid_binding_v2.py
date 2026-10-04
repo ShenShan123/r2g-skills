@@ -136,21 +136,3 @@ def bind_skid_payload_v2(asset: Mapping, source: str, public_context: Mapping) -
     return _broadcast(source, context)
 
 
-def apply_bound_skid_payload_v2(asset: Mapping, source: str,
-                                public_context: Mapping, binding: Mapping) -> tuple[str, dict]:
-    """Rebind exact source bytes and perform exactly one witnessed RHS edit."""
-    fresh = bind_skid_payload_v2(asset, source, public_context)
-    if fresh.get("status") != "BOUND" or not isinstance(binding, Mapping) or dict(binding) != fresh:
-        raise ValueError("binding is stale, tampered, or not uniquely supported")
-    witness = fresh["witness"]
-    start, end = witness["rhs_span"]
-    edited = source[:start] + witness["replacement_rhs"] + source[end:]
-    if (edited == source or
-            bind_skid_payload_v2(asset, edited, public_context).get("reason") !=
-            "payload_source_already_temp_register"):
-        raise ValueError("candidate did not become the supported healthy structure")
-    return edited, {"contract": CONTRACT, "operator": OPERATOR,
-                    "before_sha256": v1._source_sha(source),
-                    "after_sha256": v1._source_sha(edited),
-                    "binding_digest": fresh["witness_digest"], "rewritten": 1,
-                    "functional_correctness": "not_asserted_requires_native_oracle"}

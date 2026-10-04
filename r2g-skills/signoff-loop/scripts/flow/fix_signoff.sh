@@ -392,6 +392,8 @@ else:
         import symptom
         preds=symptom.predicates_for(check, report)
     except Exception: preds={}
+try: situation=json.loads(os.environ.get("R2G_LOG_SITUATION") or "null")
+except Exception: situation=None
 env_keys=("PLACE_FAST","ROUTE_FAST","SKIP_ANTENNA_REPAIR","ROUTE_FAST_DRT_ITERS")
 env_flags={k:os.environ[k] for k in env_keys if k in os.environ}
 # A route abort is the backend-stage analogue of a DRC/LVS violation. The symptom
@@ -419,6 +421,22 @@ o=dict(check=check,iter=int(it),strategy=strategy,
        cumulative_config=json.dumps(cum,sort_keys=True),
        config_delta=config_delta, env_flags=json.dumps(env_flags,sort_keys=True),
        predicates=preds, global_regressions=global_regs, ts=ts)
+if isinstance(situation,dict): o["situation"]=situation
+try: config_before=json.loads(os.environ.get("R2G_LOG_CONFIG_BEFORE") or "{}")
+except Exception: config_before={}
+if isinstance(config_before,dict) and config_before: o["config_before"]=config_before
+try: memory=json.loads(os.environ.get("R2G_LOG_MEMORY") or "{}")
+except Exception: memory={}
+if isinstance(memory,dict): o.update({k:v for k,v in memory.items() if v is not None})
+# Graded severity (Phase G0): before = the pre-fix snapshot; after = the report/log now.
+try:
+    sys.path.insert(0, os.environ.get("R2G_KNOWLEDGE_DIR",""))
+    import severity as _sev
+    _sb=os.environ.get("R2G_LOG_SEVERITY_BEFORE") or ""
+    o["severity_before"]=float(_sb) if _sb.strip() else None
+    o["severity_after"]=_sev.from_project(proj, check, vclass or None)
+except Exception:
+    pass
 open(logp,"a").write(json.dumps(o)+"\n")' \
     "$1" "$2" "$3" "$4" "$5" "$6" "${7:-}" "$PROJECT_DIR" "$FIX_SESSION_ID" "$LOG" \
     "${8:-}" "${9:-}" "$(date +%FT%T%:z)" "${10:-}" "${11:-}"
@@ -528,6 +546,17 @@ except Exception: print("")' "$antenna_marker")"
     # Gap 3: the symptom_id this iteration is fixing (same recipe the ingester
     # uses), so config_knob_delta / stage_rerun journal rows link to the symptom.
     sym="$(_compute_symptom_id "$check" "$before_vclass" "$R2G_LOG_PREDICATES")"
+    # Situation signature (knowledge/situation.py sit-v1): the pre-fix failure context
+    # (error code, die mode, util/count band) stored alongside the symptom. Snapshot
+    # it here for the same reason as the predicates — the fix edit changes config.mk.
+    export R2G_LOG_SITUATION="$(python3 "$KNOWLEDGE_DIR/situation.py" snapshot "$PROJECT_DIR" \
+      --check "$check" --vclass "$before_vclass" --before "$before" 2>/dev/null || true)"
+    # Graded severity BEFORE the fix (knowledge/severity.py, R2G memory Phase G0): how far
+    # the failure is from clear, so a component that helps without clearing is visible.
+    export R2G_LOG_SEVERITY_BEFORE="$(python3 "$KNOWLEDGE_DIR/severity.py" snapshot "$PROJECT_DIR" \
+      --check "$check" --vclass "${before_vclass:-$([[ $check == route ]] && echo route)}" 2>/dev/null || true)"
+    export R2G_LOG_CONFIG_BEFORE=""   # set from --apply below; never leaks across iterations
+    export R2G_LOG_MEMORY=""          # memory-rule attribution from --apply (D-A1), same lifetime
     local all_excl="${tried}${R2G_FIX_EXCLUDE:+${tried:+,}$R2G_FIX_EXCLUDE}"
     line="$("$DIAGNOSE" "$PROJECT_DIR" --check "$check" --exclude "$all_excl" \
             ${R2G_FIX_RANK_FIRST:+--rank-first "$R2G_FIX_RANK_FIRST"} --next)"
@@ -568,6 +597,19 @@ except Exception: print("")' "$antenna_marker")"
     fi
     cfg_delta="$(python3 -c 'import json,sys
 try: print(json.dumps(json.loads(sys.stdin.read()).get("config_edits") or {}))
+except Exception: print("{}")' <<<"$apply_out")"
+    # Pre-fix values of the edited knobs (diagnose --apply reports them): the delta
+    # form of this fix that parametric memory rules learn from (redesign B2).
+    export R2G_LOG_CONFIG_BEFORE="$(python3 -c 'import json,sys
+try: print(json.dumps(json.loads(sys.stdin.read()).get("config_before") or {}))
+except Exception: print("{}")' <<<"$apply_out")"
+    # A memory (TEHM) rule's application is logged under its rule family + rule id,
+    # and whether it is a candidate trial (Phase D amendment D-A1).
+    export R2G_LOG_MEMORY="$(python3 -c 'import json,sys
+try:
+    d=json.loads(sys.stdin.read())
+    keys=("memory_rule","strategy_family","memory_trial","witness_selected","memory_mechanisms")
+    print(json.dumps({k:d[k] for k in keys if d.get("memory_rule") and k in d}))
 except Exception: print("{}")' <<<"$apply_out")"
     # Gap 3+4: stamp symptom_id on each knob row; chain iteration 2+ to the first
     # iteration's action via parent_action_id (the first call prints its action_id).
@@ -652,6 +694,19 @@ except Exception: print("{}")' <<<"$apply_out")"
       _capture_vector "$REPORTS/.rv_post.json" "$check"
       global_regs="$(_compare_vectors "$rv_pre" "$REPORTS/.rv_post.json" "$check")"
       [[ -n "$global_regs" ]] || global_regs="[]"
+    fi
+    # The TARGET count itself got worse (e.g. density_relief took sky130hs li.3 4->6).
+    # Before this it was labelled no_improvement -> no_change, so the learner never saw
+    # the harm and the next design repeated it (failure-patterns.md "Fix that worsens its
+    # own target recorded as no_change"). Treat it exactly like a measured global
+    # regression: same rollback, same `regression` verdict, the signal recorded.
+    if [[ -n "$before" && -n "$after" ]] && \
+       python3 -c "import sys;sys.exit(0 if float('$after')>float('$before') else 1)" 2>/dev/null; then
+      global_regs="$(python3 -c 'import json,sys
+regs = json.loads(sys.argv[1] or "[]")
+fmt = lambda v: ("%g" % float(v))
+regs.append("%s_target_regression:%s->%s" % (sys.argv[2], fmt(sys.argv[3]), fmt(sys.argv[4])))
+print(json.dumps(regs))' "$global_regs" "$check" "$before" "$after")"
     fi
     if [[ "$global_regs" != "[]" ]]; then
       # A measured global regression is a hard verdict override: the target may
