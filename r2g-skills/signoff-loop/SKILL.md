@@ -139,9 +139,17 @@ After ORFS completes, extract PPA and run the timing gate:
 5. The JSON includes `wns_tier` and `tns_tier` fields so the agent can explain which metric triggered the tier (e.g., "TNS escalated this from minor to moderate").
 6. Only proceed to signoff checks (step 6) after timing is resolved.
 
-### 5a. (Optional) Fmax search — find the fastest closing period
+### 5a. Fmax search — find the fastest closing period
 
-Before committing to a clock period, you can characterize the design's Fmax:
+Optional for a hand-built project, but **required for an rtl-acquire-promoted
+project to reach strict admission**. `signoff_gate.py` blocks any project stamped
+`promoted_from` with `task_provenance` (missing `qualified_constraint`) until
+`signoff_manifest.constraint.qualified` is true. `build_signoff_manifest.py` sets
+that only when a `reports/fmax_search.json` winner matches the stamped SDC period and
+final timing is `clean`. So run the search, stamp the winner into `constraint.sdc`, and
+re-run the flow before expecting a `pass`.
+
+Before committing to a clock period, characterize the design's Fmax:
 
     python3 scripts/reports/fmax_search.py <project-dir> [platform] [--verify]
 
@@ -568,6 +576,9 @@ design_cases/<design-name>/
 11. Run timing gate: `scripts/reports/check_timing.py <project-dir>` — reads `reports/timing_check.json`:
     - `tier=clean`: proceed to step 12.
     - `tier=minor`: auto-fix clock period per `suggested_clock_period`, re-run step 9, then re-check.
+      In an Fmax-searched project, record the bump first
+      (`scripts/reports/fmax_search.py --record-relax <old> <new> check_timing_minor <project-dir>`)
+      or the signoff manifest cannot bind the new period to the search winner (failure-patterns P0-2b).
     - `tier=moderate/severe/unconstrained`: **stop, present options to user, wait for decision**.
     - Check `wns_tier` and `tns_tier` to explain which metric drove the tier.
 12. Run signoff checks (only after timing gate passes or user approves):
@@ -779,7 +790,13 @@ The `scripts/flow/run_orfs.sh` script:
 Resource control via environment variables:
 ```bash
 ORFS_TIMEOUT=7200    # Per-stage max runtime in seconds (default: 2 hours)
-ORFS_MAX_CPUS=4      # Limit CPU cores via taskset (default: all)
+NUM_CORES=4          # Per-flow thread budget: openroad -threads + OMP/MKL/OpenBLAS
+                     # pools (default: nproc, which honours a cpuset). On a shared
+                     # host give each worker a DISJOINT cpuset (taskset -c) too.
+ORFS_MAX_CPUS=4      # Alias for NUM_CORES when that is unset. A thread cap, NOT
+                     # CPU pinning (it used to pin every flow to cores 0..N-1).
+ORFS_CPU_SET=32-35   # Pin the flow to this explicit taskset CPU list; give each
+                     # concurrent worker a DISJOINT set.
 PLACE_FAST=1         # Disable GPL_TIMING_DRIVEN/ROUTABILITY_DRIVEN — use for
                      # BOOM-class designs (>1M nets) where the timing-repair
                      # loop in gpl spins for hours after Nesterov has already

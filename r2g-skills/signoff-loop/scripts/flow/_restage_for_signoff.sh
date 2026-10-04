@@ -27,6 +27,16 @@ _R2G_RESTAGE_FOR_SIGNOFF=1
 : "${FLOW_DIR:?FLOW_DIR must be set}"
 : "${CONFIG_MK:?CONFIG_MK must be set}"
 
+# Hold the workspace from restage to verdict (released when the checker exits).
+# Runs that share a variant (e.g. base/<task> and fix/<task>, both defaulting to the
+# basename) otherwise restage into one results dir and grade each other's GDS
+# (CORRECTIONS #16). Contention fails fast, exactly like run_orfs.sh.
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_workspace_lock.sh"
+if [[ "${R2G_SKIP_WORKSPACE_LOCK:-0}" != "1" ]]; then
+  _r2g_acquire_workspace_lock "$PLATFORM" "$DESIGN_NAME" "$FLOW_VARIANT" || exit 1
+fi
+
 ORFS_DESIGN_DIR="$FLOW_DIR/designs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
 ORFS_RESULTS_DIR="$FLOW_DIR/results/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
 ORFS_LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"

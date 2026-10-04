@@ -35,7 +35,9 @@ diagnose_signoff_fix.py <project-dir> --check drc|lvs|timing|route [--apply <str
   # >>> r2g signoff-fix (auto) >>>
   # <<< r2g signoff-fix (auto) <<<
   ```
-  Re-applying the same (or a new) strategy replaces the block — never duplicates lines.
+  A new strategy's edits STACK onto the block (a key already present is overridden in
+  place; earlier accepted fixes are kept) — never duplicates lines. Rejected attempts
+  are rolled back from the snapshot, so the block is always the accepted fix set.
   Exit 2 = unknown strategy id. Exit 3 = operator-only strategy (no auto-apply allowed).
 - **`--next`:** prints one tab-separated action line consumed by `fix_signoff.sh`:
   `<id>\t<rerun_from>\t<recheck>`, or `STOP\t<status>\t<reason>` when no auto strategy

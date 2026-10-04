@@ -49,7 +49,12 @@ AUTO_EXCLUDE_PATTERNS = [
 
 MISSING_INCLUDE_RE = re.compile(r"can't open include file [`']([^`']+)[`']!?|cannot open include file [`']([^`']+)[`']?", re.IGNORECASE)
 MISSING_MODULE_RE = re.compile(r"module `([^`]+)` (?:not part of the design|not found)", re.IGNORECASE)
-MEMORY_LIMIT_RE = re.compile(r"synth_memory_max_bits|synthesized memory size", re.IGNORECASE)
+# expand_candidates.py records a memory-guard abort as the structured tail
+# `memory_limit observed_bits=N …` and its notes need not carry the Yosys wording,
+# so match that marker too (same set as classify_failed_candidates.MEMORY_LIMIT_RE).
+MEMORY_LIMIT_RE = re.compile(
+    r"synth_memory_max_bits|synthesized memory size|\bmemory_limit\s+observed_bits=",
+    re.IGNORECASE)
 OOM_RE = re.compile(r"out of memory|oom|killed process|killed signal|std::bad_alloc", re.IGNORECASE)
 INVALID_MACRO_DEF_RE = re.compile(r"invalid name for macro definition", re.IGNORECASE)
 SIMULATION_SYSTEM_TASK_RE = re.compile(
@@ -57,6 +62,11 @@ SIMULATION_SYSTEM_TASK_RE = re.compile(
     re.IGNORECASE,
 )
 ABSTRACT_MODULE_REDEF_RE = re.compile(r"re-definition of module `\$abstract\\", re.IGNORECASE)
+# Yosys resolves a relative $readmem path against its CWD (the shared ORFS flow
+# dir) and the consumer's own directory only; repos routinely keep init files at
+# the repo root because their simulation runs from there (wave-3 E5L).
+READMEM_OPEN_RE = re.compile(r"can not open file `([^`]+)` for \\?\$readmem[hb]", re.IGNORECASE)
+READMEM_LITERAL_RE = re.compile(r'(\$readmem[hb]\s*\(\s*)"([^"]+)"')
 STUB_PORT_RE = re.compile(r"\.(\w+)\s*\(")
 
 DEFAULT_MEM_LIMIT = "131072"
@@ -168,7 +178,7 @@ def save_failure_families(path: Path, payload: dict[str, dict]) -> None:
 def classify_failure_family(notes: str) -> dict[str, str]:
     lower = (notes or "").lower()
     failure_class = "unknown"
-    if "synth_memory_max_bits" in lower or "synthesized memory size" in lower:
+    if MEMORY_LIMIT_RE.search(lower):
         failure_class = "memory_limit"
     elif "can't open include file" in lower or "cannot open include file" in lower:
         failure_class = "missing_include"
@@ -586,6 +596,62 @@ def write_simulation_sanitized_bundle(out_root: Path, design: str, rtl_files: li
     return updated_bundle
 
 
+
+def _repo_root_of(path: Path) -> Path | None:
+    """The acquired repo a file came from: the directory directly under `_downloads`."""
+    parts = path.resolve().parts
+    if "_downloads" not in parts:
+        return None
+    i = len(parts) - 1 - parts[::-1].index("_downloads")
+    return Path(*parts[: i + 2]) if i + 1 < len(parts) - 1 else None
+
+
+def resolve_readmem_payload(reference: str, consumer: Path) -> Path | None:
+    """Find a relative $readmem payload in the consumer's directory or an ancestor,
+    never above the consumer's repo root. No filename guessing."""
+    raw = Path(reference)
+    if raw.is_absolute():
+        return raw if raw.is_file() else None
+    stop = _repo_root_of(consumer)
+    directory = consumer.resolve().parent
+    for _ in range(12):
+        candidate = directory / raw
+        if candidate.is_file():
+            return candidate.resolve()
+        if stop is None or directory == stop or directory.parent == directory:
+            break
+        directory = directory.parent
+    return None
+
+
+def write_readmem_resolved_bundle(out_root: Path, design: str, rtl_files: list[Path]) -> list[Path] | None:
+    """Copies of the consumers with relative $readmem literals rewritten to the
+    absolute path of the payload they name (the acquired tree is never modified)."""
+    temp_dir = out_root / "_tmp_cfg"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    updated_bundle: list[Path] = []
+    modified = 0
+    for idx, path in enumerate(rtl_files):
+        try:
+            original = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            updated_bundle.append(path)
+            continue
+
+        def _absolute(match: re.Match) -> str:
+            resolved = resolve_readmem_payload(match.group(2), path)
+            return f'{match.group(1)}"{resolved}"' if resolved else match.group(0)
+
+        rewritten = READMEM_LITERAL_RE.sub(_absolute, original)
+        if rewritten == original:
+            updated_bundle.append(path)
+            continue
+        out_path = temp_dir / f"{design}_readmem_resolved_{idx}_{path.stem}{path.suffix}"
+        out_path.write_text(rewritten, encoding="utf-8")
+        updated_bundle.append(out_path)
+        modified += 1
+    return updated_bundle if modified else None
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Auto-apply safe failure fixes based on known signatures.")
     parser.add_argument("--index-csv", type=Path, default=DEFAULT_INDEX)
@@ -723,6 +789,7 @@ def main() -> None:
         oom_hit = bool(OOM_RE.search(notes))
         simulation_system_task_hit = bool(SIMULATION_SYSTEM_TASK_RE.search(notes))
         abstract_module_redef_hit = bool(ABSTRACT_MODULE_REDEF_RE.search(notes))
+        readmem_open_hit = bool(READMEM_OPEN_RE.search(notes))
 
         action_hits = []
         if signature_hash in signature_actions:
@@ -755,7 +822,7 @@ def main() -> None:
             )
             continue
 
-        if not (missing_include_match or missing_module_match or memory_limit_hit or simulation_system_task_hit or abstract_module_redef_hit or action_hits):
+        if not (missing_include_match or missing_module_match or memory_limit_hit or simulation_system_task_hit or abstract_module_redef_hit or readmem_open_hit or action_hits):
             continue
 
         retry_base = retry_by_design.get(design) or retry_by_source.get(source_path) or {}
@@ -862,6 +929,18 @@ def main() -> None:
                 current_source_path = materialized_source
                 applied_any_fix = True
                 retry_row["notes"] = f"auto_fix:template_materialization:{materialized_source.name}; {notes}".strip()
+
+        if readmem_open_hit:
+            resolved_bundle = write_readmem_resolved_bundle(args.out_root, design, rtl_files)
+            if resolved_bundle:
+                original_bundle = list(rtl_files)
+                rtl_files = resolved_bundle
+                if current_source_path in original_bundle:
+                    source_idx = original_bundle.index(current_source_path)
+                    retry_row["source_path"] = str(resolved_bundle[source_idx])
+                    current_source_path = resolved_bundle[source_idx]
+                applied_any_fix = True
+                retry_row["notes"] = f"auto_fix:resolve_readmem_path; {notes}".strip()
 
         if "sanitize_simulation_system_tasks" in action_hits:
             sanitized_bundle = write_simulation_sanitized_bundle(args.out_root, design, rtl_files)

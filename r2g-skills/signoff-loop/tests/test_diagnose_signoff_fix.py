@@ -664,3 +664,99 @@ def test_antenna_precondition_keeps_density_relief_elsewhere(monkeypatch):
                        {"PLATFORM": "sky130hd", "CORE_UTILIZATION": "40"}, set())
     ids = [s["id"] for s in plan["strategies"]]
     assert "antenna_density_relief" in ids and "antenna_diode_iters" not in ids
+
+
+def test_apply_period_relax_records_fmax_relaxation_chain(tmp_path):
+    """Fmax-mode project: a period_relax loosening is appended to fmax_search.json
+    so the signoff manifest can bind the stamped period back to the winner."""
+    p = _mk_timing_project(
+        tmp_path, sdc="set clk_period 4.0\n"
+                      "create_clock -name clk -period $clk_period [get_ports clk]\n")
+    (p / "reports" / "fmax_search.json").write_text(json.dumps(
+        {"status": "ok", "winner": {"period": 4.0}}))
+    r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "timing",
+                        "--apply", "period_relax"], capture_output=True, text=True,
+                       env=_isolated_knowledge_env(tmp_path))
+    assert r.returncode == 0, r.stderr
+    new_p = float(json.loads(r.stdout)["sdc_edits"]["CLOCK_PERIOD"])
+    rep = json.loads((p / "reports" / "fmax_search.json").read_text())
+    [step] = rep["relaxations"]
+    assert step["from"] == 4.0 and step["to"] == new_p and step["source"] == "period_relax"
+
+
+def test_apply_period_relax_without_fmax_search_writes_no_report(tmp_path):
+    """Fixed-period task (no Fmax search): nothing to extend, no report invented."""
+    p = _mk_timing_project(
+        tmp_path, sdc="set clk_period 4.0\n"
+                      "create_clock -name clk -period $clk_period [get_ports clk]\n")
+    r = subprocess.run([sys.executable, str(MOD), str(p), "--check", "timing",
+                        "--apply", "period_relax"], capture_output=True, text=True,
+                       env=_isolated_knowledge_env(tmp_path))
+    assert r.returncode == 0, r.stderr
+    assert not (p / "reports" / "fmax_search.json").exists()
+
+
+# ── LVS port-feedthrough recipe (2026-10-01) ─────────────────────────────────
+
+def test_top_pin_mismatch_offers_ab_gated_feedthrough_buffer():
+    """AIC Fmax cohort: 8 Netgen 'Top level cell failed pin matching' residuals had no
+    strategy (status 'mismatch' was not even actionable). The port-alias hook exists."""
+    lvs = {"status": "mismatch", "tool": "netgen", "mismatch_class": "top_pin_mismatch"}
+    plan = d.build_plan({}, lvs, {"PLATFORM": "sky130hd"}, check="lvs")
+    [s] = [s for s in plan["strategies"] if s["id"] == "lvs_port_feedthrough_buffer"]
+    assert s["config_edits"]["POST_GLOBAL_PLACE_TCL"].endswith("buffer_port_feedthroughs.tcl")
+    assert s["rerun_from"] == "place" and s["recheck"] == "lvs"
+    assert s["requires_ab_promotion"] is True
+
+
+def test_feedthrough_buffer_not_offered_for_other_lvs_classes_or_when_hooked():
+    cfg = {"PLATFORM": "sky130hd"}
+    short = {"status": "mismatch", "tool": "netgen", "mismatch_class": "pin_pdn_short"}
+    assert not [s for s in d.build_plan({}, short, cfg, check="lvs")["strategies"]
+                if s["id"] == "lvs_port_feedthrough_buffer"]
+    hooked = {**cfg, "POST_GLOBAL_PLACE_TCL": "/x/buffer_port_feedthroughs.tcl"}
+    pin = {"status": "mismatch", "tool": "netgen", "mismatch_class": "top_pin_mismatch"}
+    assert not [s for s in d.build_plan({}, pin, hooked, check="lvs")["strategies"]
+                if s["id"] == "lvs_port_feedthrough_buffer"]
+
+
+def test_feedthrough_buffer_detected_from_netgen_report(tmp_path):
+    rpt = tmp_path / "netgen_lvs.rpt"
+    rpt.write_text("...\nFinal result: Top level cell failed pin matching.\n")
+    lvs = {"status": "mismatch", "tool": "netgen", "log_info": {"report_file": str(rpt)}}
+    plan = d.build_plan({}, lvs, {"PLATFORM": "sky130hd"}, check="lvs")
+    assert [s["id"] for s in plan["strategies"]] == ["lvs_port_feedthrough_buffer"]
+
+
+def test_feedthrough_buffer_has_an_ab_application_path():
+    """A new catalog recipe missing from engineer_loop's known-apply set is PARKED as
+    a guaranteed no-op by ab-drain and can never be validated (2026-10-01)."""
+    import engineer_loop
+    assert engineer_loop._known_apply_strategy(None, "lvs_port_feedthrough_buffer")
+    assert "lvs_port_feedthrough_buffer" in engineer_loop._KNOWN_APPLY_STRATEGIES
+
+
+def test_ab_enqueue_refuses_lvs_recipe_under_timing_symptom(tmp_path):
+    import engineer_loop
+    import knowledge_db
+    conn = knowledge_db.connect(tmp_path / "k.sqlite")
+    knowledge_db.ensure_schema(conn)
+    conn.execute("INSERT INTO symptoms(symptom_id, check_type, class) VALUES "
+                 "('t1','timing','clean'), ('l1','lvs','top_pin_mismatch')")
+    why = engineer_loop._enqueue_check_mismatch(conn, "t1", "lvs_port_feedthrough_buffer")
+    assert why and "timing|clean" in why
+    assert engineer_loop._enqueue_check_mismatch(conn, "l1", "lvs_port_feedthrough_buffer") is None
+    assert engineer_loop._enqueue_check_mismatch(conn, "t1", "pin_side_rebalance") is None
+    assert engineer_loop._enqueue_check_mismatch(conn, "unknown", "lvs_x") is None
+
+
+def test_apply_edits_stacks_on_accepted_fixes():
+    """A later fix (timing) must not erase an earlier accepted one (LVS hook)."""
+    cfg = "export DESIGN_NAME = t\nexport CORE_UTILIZATION = 20\n"
+    lvs = d.apply_edits(cfg, {"POST_GLOBAL_PLACE_TCL": "/hooks/ft.tcl"})
+    both = d.apply_edits(lvs, {"CORE_UTILIZATION": "15"})
+    assert "export POST_GLOBAL_PLACE_TCL = /hooks/ft.tcl" in both
+    assert "export CORE_UTILIZATION = 15" in both
+    again = d.apply_edits(both, {"CORE_UTILIZATION": "12"})       # same key: override
+    assert again.count("CORE_UTILIZATION = 1") == 1 and "= 12" in again
+    assert again.count(d.BLOCK_START) == 1

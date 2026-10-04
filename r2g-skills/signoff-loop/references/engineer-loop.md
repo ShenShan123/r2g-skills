@@ -57,6 +57,12 @@ python3 scripts/loop/engineer_loop.py run \
     --ledger design_cases/_batch/campaign.jsonl \
     [--max N]
 
+# Fmax mode: search each pending design's fastest closing period + stamp its SDC
+# (run BEFORE `run`); afterwards, re-search designs whose first search was blocked
+# by a since-repaired backend abort (e.g. PPL-0024) and re-queue them, then `run` again
+python3 scripts/loop/engineer_loop.py fmax-drain --ledger L --workers N --no-place-fast
+python3 scripts/loop/engineer_loop.py fmax-retry --ledger L --no-place-fast
+
 # Inspect current state of each design in the ledger
 python3 scripts/loop/engineer_loop.py status \
     --ledger design_cases/_batch/campaign.jsonl

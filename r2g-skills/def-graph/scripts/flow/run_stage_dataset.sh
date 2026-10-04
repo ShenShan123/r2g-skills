@@ -64,11 +64,21 @@ PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 # shellcheck source=/dev/null
 source "$HERE/_env.sh" 1>&2
 export ORFS_ROOT FLOW_DIR
+# The graph venv is a separate interpreter: variables that bind the CALLER's python
+# must not reach it. A driver running under the oss-cad python3 wrapper exports
+# PYTHONHOME, and the venv then dies at init ("No module named 'encodings'"), which
+# the torch import probe reported as a benign skip (same leak as 9ba9bc4).
+unset PYTHONHOME PYTHONEXECUTABLE PYTHONNOUSERSITE
 
 PY="${R2G_GRAPH_PYTHON:-}"
 if [[ -z "$PY" || ! -x "$PY" ]]; then
   echo "ERROR: the four-stage builder needs the torch venv." >&2
   echo "HINT: export R2G_GRAPH_PYTHON=/path/to/venv/bin/python (see references/env.local.sh)" >&2
+  exit 3
+fi
+if ! _py_err="$("$PY" -c pass 2>&1)"; then
+  echo "ERROR: R2G_GRAPH_PYTHON=$PY is configured but cannot start: ${_py_err:-no output}" >&2
+  echo "HINT: likely a broken venv or a leaked PYTHONHOME; fix the pin (reporting this as a missing torch would hide it)." >&2
   exit 3
 fi
 for module in torch torch_geometric; do

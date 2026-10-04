@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import subprocess
 
+import pytest
+
 
 REPO = Path(__file__).resolve().parents[2]
 MODULE_PATH = REPO / "tools/run_repair_family_probe.py"
@@ -23,6 +25,21 @@ def test_parallel_probe_environment_bounds_workers_and_cpu_affinity(tmp_path, mo
     assert env["NUM_CORES"] == "4"
     assert env["ORFS_TIMEOUT"] == "600"
     assert env["ORFS_MAX_CPUS"] == "4"
+
+
+def test_probe_environment_accepts_explicit_cpu_set(tmp_path):
+    args = argparse.Namespace(timeout_seconds=600, cores=4, cpu_set="32-35,40")
+
+    env = MODULE.execution_environment(args, tmp_path)
+
+    assert env["ORFS_CPU_SET"] == "32-35,40"
+
+
+def test_probe_environment_rejects_invalid_cpu_set(tmp_path):
+    args = argparse.Namespace(timeout_seconds=600, cores=4, cpu_set="32-35;echo bad")
+
+    with pytest.raises(ValueError, match="invalid --cpu-set"):
+        MODULE.execution_environment(args, tmp_path)
 
 
 def test_frozen_probe_input_integrity_fails_closed_on_mutated_sdc(tmp_path):

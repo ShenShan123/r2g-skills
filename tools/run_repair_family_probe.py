@@ -567,6 +567,11 @@ def execution_environment(args: argparse.Namespace, state: Path) -> dict[str, st
     stages = getattr(args, "orfs_stages", None)
     if stages:
         env["ORFS_STAGES"] = stages
+    cpu_set = getattr(args, "cpu_set", None)
+    if cpu_set:
+        if not re.fullmatch(r"\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*", cpu_set):
+            raise ValueError(f"invalid --cpu-set: {cpu_set}")
+        env["ORFS_CPU_SET"] = cpu_set
     return env
 
 
@@ -842,6 +847,10 @@ def parser() -> argparse.ArgumentParser:
     run = sub.add_parser("execute")
     run.add_argument("--project", type=Path, required=True)
     run.add_argument("--cores", type=int, default=4)
+    run.add_argument(
+        "--cpu-set",
+        help="explicit taskset-compatible CPU list for this ORFS flow (for example 32-35)",
+    )
     run.add_argument("--timeout-seconds", type=int, default=7200)
     run.add_argument(
         "--orfs-stages",

@@ -25,6 +25,8 @@ import pytest
 
 import platform_capability as pc
 
+from .conftest import production_toolchain_env
+
 SKILL_MD = Path(__file__).resolve().parents[1] / "SKILL.md"
 
 # Matrix column header -> (probe capability key, human label).
@@ -76,13 +78,53 @@ MATRIX = _parse_matrix(SKILL_MD.read_text())
 # Resolve the SAME environment main() probes under (RMD3-P1-02): _env.sh, not
 # ambient. Probing ambient made every row skip for want of a flow dir, and a
 # suite of skips reads exactly like a suite of passes.
-_ENV = pc.resolve_signoff_env()
+# conftest isolates every other test from this machine's pins; the matrix check
+# is about THIS machine's toolchain, so it resolves it the production way.
+with production_toolchain_env():
+    _ENV = pc.resolve_signoff_env()
 _PROBE_ENV = _ENV if _ENV is not None else None
 FLOW_DIR = pc.find_flow_dir(env=_PROBE_ENV)
+_PIN_FILE = Path(__file__).resolve().parents[1] / "references" / "env.local.sh"
+
+
+def test_probe_resolves_the_pinned_toolchain_when_pins_exist():
+    """A pinned worktree whose probe silently fell back to another ORFS would turn
+    every row below into a skip (review F1, 2026-09-23). Fail, never skip, then."""
+    if not _PIN_FILE.is_file():
+        pytest.skip(f"no pin file at {_PIN_FILE}: nothing pinned to resolve")
+    m = re.search(r'^\s*export\s+ORFS_ROOT="?([^"\s]+)"?', _PIN_FILE.read_text(), re.M)
+    if not m:
+        pytest.skip(f"{_PIN_FILE} does not pin ORFS_ROOT")
+    assert FLOW_DIR and Path(FLOW_DIR).resolve() == (Path(m.group(1)) / "flow").resolve(), (
+        f"pinned ORFS_ROOT={m.group(1)} but the probe resolved {FLOW_DIR}")
 
 
 def _installed(platform: str) -> bool:
     return bool(FLOW_DIR) and (Path(FLOW_DIR) / "platforms" / platform).is_dir()
+
+
+def _unprovisioned_reasons(caps: dict) -> list[str] | None:
+    """Why each capability the probe reports missing is absent from THIS checkout,
+    or None when any of them has no provisioning explanation.
+
+    SKILL.md documents a provisioned toolchain: decks the skill installs
+    (tools/install_nangate45_*.sh, tools/patch_sky130hs_lyt.py; the probe returns
+    their `hint`) and the sky130 netgen LVS stack (magic, netgen and a readable
+    sky130A PDK, which eda-install provides). A checkout without them is an
+    environment gap, not a false matrix. A missing capability with neither is
+    exactly the overclaim this test exists to catch, so it is never skipped.
+    """
+    reasons = []
+    for key in caps.get("missing") or []:
+        cap = caps.get(key) or {}
+        if cap.get("hint"):
+            reasons.append(f"{key}: {cap['hint']}")
+        elif cap.get("engine") == "netgen" and not all(
+                cap.get(k) for k in ("magic", "netgen", "pdk_tech")):
+            reasons.append(f"{key}: magic/netgen/sky130A PDK not provisioned")
+        else:
+            return None
+    return reasons or None
 
 
 def test_matrix_is_not_vacuous():
@@ -117,6 +159,10 @@ def test_matrix_row_matches_probe(row):
         pytest.skip(f"{platform} not installed in this ORFS checkout")
 
     caps = pc.probe_platform(FLOW_DIR, platform, env=_PROBE_ENV)
+    if caps.get("tier") != _strip_footnote(row["Tier"]):
+        reasons = _unprovisioned_reasons(caps)
+        if reasons:
+            pytest.skip(f"{platform} is not provisioned in {FLOW_DIR}: " + "; ".join(reasons))
 
     assert _strip_footnote(row["Tier"]) == caps.get("tier"), (
         f"SKILL.md says {platform} tier={row['Tier']!r} but the probe reports "

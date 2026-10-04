@@ -12,7 +12,9 @@ reports/signoff_manifest.json:
                status/mismatches, route residuals, rcx status, timing tier/wns)
   constraint   the SDC digest + parsed clk_period, the Fmax-search winner, and the
                FINAL timing confirmation — `fmax_qualification.qualified` is true
-               only when the stamped SDC period matches the search winner AND the
+               only when the stamped SDC period matches the search winner (or is
+               reached from it by an unbroken recorded chain of loosenings —
+               `period_source`/`confirmed_period`/`relax_ratio`) AND the
                confirming full flow's timing_check tier is clean. `missing`
                ENUMERATES what still blocks qualification (pilot H3: the failure
                must name the absent final-timing confirmation, not just echo the
@@ -39,11 +41,14 @@ import re
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fmax_model  # noqa: E402  (sibling module; relaxation-chain resolver)
+
 REPORT_FILES = ("drc.json", "lvs.json", "route.json", "rcx.json",
                 "timing_check.json", "ppa.json", "fmax_search.json")
 # Relative tolerance for stamped-SDC-vs-winner period match: the stamp rounds to
 # ~6 significant digits (1.0243910000000003 -> 1.02439), never more than 1e-3 off.
-PERIOD_RTOL = 1e-3
+PERIOD_RTOL = fmax_model.PERIOD_RTOL
 
 
 def _sha256(path):
@@ -143,10 +148,16 @@ def build(project_dir):
     if stamped is None:
         missing.append("stamped SDC clk_period (constraints/constraint.sdc)")
     period_match = None
+    period = fmax_model.resolve_confirmed_period(
+        fmax if isinstance(fmax, dict) else None, stamped, PERIOD_RTOL)
     if winner is not None and stamped is not None:
-        period_match = abs(stamped - winner) <= PERIOD_RTOL * max(abs(winner), 1e-9)
-        if not period_match:
-            missing.append(f"stamped period {stamped} does not match search winner {winner}")
+        period_match = fmax_model.periods_match(stamped, winner, PERIOD_RTOL)
+        # A timing-repair loosening (check_timing minor bump / period_relax) is
+        # qualified only through an unbroken recorded chain from the winner
+        # (fmax_search.json "relaxations"; failure-patterns "Fmax relaxed-period").
+        if period["period_source"] is None:
+            missing.append(f"stamped period {stamped} does not match search winner "
+                           f"{winner} ({period['chain_error']})")
     if tier is None:
         missing.append("FINAL timing confirmation (reports/timing_check.json from the "
                        "confirming full flow) — the search winner is a placement proxy "
@@ -159,6 +170,10 @@ def build(project_dir):
         "fmax_winner_period": winner,
         "fmax_status": fmax.get("status") if isinstance(fmax, dict) else None,
         "period_match": period_match,
+        "period_source": period["period_source"],
+        "confirmed_period": period["confirmed_period"],
+        "relax_ratio": period["relax_ratio"],
+        "relaxations": period["relaxations"],
         "final_timing_tier": tier,
         "final_timing_wns": tc.get("wns", tc.get("wns_ns")),
         "qualified": not missing,

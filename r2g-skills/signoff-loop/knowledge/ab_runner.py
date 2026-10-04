@@ -469,6 +469,34 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
                     "platform": platform, "strategy": strategy},
         }
 
+    # This named physical scope spans timing severity labels, not arbitrary symptoms.
+    # Keep the original per-run labels intact; plan only measured eligible subjects.
+    import setup_scope
+    if dict(symptom_id=symptom_id, design_class=design_class,
+            platform=platform, strategy=strategy) == setup_scope.KEY:
+        rows = conn.execute(
+            "SELECT r.design_name,r.project_path,r.cell_count FROM runs r "
+            "JOIN run_violations v USING(run_id) JOIN symptoms s ON s.symptom_id=v.symptom_id "
+            "WHERE r.platform='sky130hd' AND r.abc_area=1 AND r.orfs_status='pass' "
+            "AND r.wns_ns>=-3.0 AND r.wns_ns<0 AND s.check_type='timing' "
+            "AND r.drc_status IN ('clean','clean_beol') AND r.lvs_status='clean' "
+            "ORDER BY r.cell_count,r.project_path").fetchall()
+        designs, seen = [], set()
+        for row in rows:
+            name, path, cells = row
+            if (name in seen or _is_arm_dir(path) or not path or not os.path.isdir(path)
+                    or not _allowed_subject(path, allowed_project_paths)):
+                continue
+            try:
+                with open(os.path.join(path, 'reports', 'route.json')) as f:
+                    if json.load(f).get('status') != 'clean':
+                        continue
+            except (OSError, ValueError):
+                continue
+            seen.add(name)
+            designs.append(dict(design_name=name, project_path=path, cell_count=cells))
+        return _trial(designs, 'measured_setup_scope') if len(designs) >= n_designs else None
+
     # Tier 1 — run_violations (POST-fix residual exhibitors of the symptom). NEVER pool
     # across platforms (2026-06-25): an A/B arm flows at the recipe's `platform`, so a
     # sky130hd subject under a nangate45 recipe runs the WRONG platform and the verdict is

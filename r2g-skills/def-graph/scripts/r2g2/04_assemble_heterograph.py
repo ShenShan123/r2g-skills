@@ -2,7 +2,8 @@
 """阶段4：按稳定实体键组合基础拓扑、特征表和多任务原始标签。
 
 最终输出 PyG HeteroData，包含 Gate/Net/IO Pin/Pin 四类节点、三类逻辑正向关系，
-一类只供拥塞任务使用的同2.1um网格无向Gate–Gate几何关系；每点最多5个邻居，
+一类只供拥塞任务使用的四偏移同网格无向Gate–Gate几何关系；每个窗口每点最多
+5个邻居且跨窗口去重，
 floorplan/placement预测因无可信标准单元坐标而不建立该关系。旧实验可显式启用
 有向 Pin/IO Pin timing_path 关系，但通用数据集默认只保留节点Slack。RC任务另外使用Net→Net耦合虚拟边和
 Driver Pin/IO Pin→Sink Pin/IO Pin等效电阻虚拟边；真实Cc/Reff只存入edge_y。
@@ -454,10 +455,11 @@ def build_congestion_geom_edges(
     origin_x: float,
     origin_y: float,
 ) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor], dict[str, Any]]:
-    """构造同2.1um网格、无向且每点度数至多5的Gate几何关系。
+    """构造四个半窗偏移、距离优先、双端度数受限的Gate几何关系。
 
     PyG用两条反向``edge_index``记录表达一条无向边。候选对按中心距离稳定排序，
-    只有两端当前度数均小于容量时才接纳，因此无向度数上限是真正的全局上限。
+    每个偏移窗口内只有两端当前度数均小于容量时才接纳。不同窗口重复发现的
+    节点对只保留一次，因此没有重复边，而跨网格边界的近邻仍有机会相连。
     floorplan/placement预测没有可信标准单元坐标，几何关系必须为空。
     """
 
@@ -498,17 +500,27 @@ def build_congestion_geom_edges(
             center_y,
         )
 
-    buckets: dict[tuple[int, int], list[int]] = defaultdict(list)
-    for node_id, (x, y, _, _) in geometry.items():
-        buckets[
-            (
-                math.floor((x - origin_x) / width),
-                math.floor((y - origin_y) / height),
-            )
-        ].append(node_id)
+    window_shifts = (
+        (0.0, 0.0),
+        (width / 2.0, 0.0),
+        (0.0, height / 2.0),
+        (width / 2.0, height / 2.0),
+    )
+    buckets_by_pass: list[dict[tuple[int, int], list[int]]] = []
+    for x_offset, y_offset in window_shifts:
+        buckets: dict[tuple[int, int], list[int]] = defaultdict(list)
+        for node_id, (x, y, _, _) in geometry.items():
+            buckets[
+                (
+                    math.floor((x - origin_x + x_offset) / width),
+                    math.floor((y - origin_y + y_offset) / height),
+                )
+            ].append(node_id)
+        buckets_by_pass.append(buckets)
 
     candidate_pair_count = sum(
         len(node_ids) * (len(node_ids) - 1) // 2
+        for buckets in buckets_by_pass
         for node_ids in buckets.values()
     )
     if candidate_pair_count > candidate_limit:
@@ -517,32 +529,47 @@ def build_congestion_geom_edges(
             "当成了可信位置: "
             f"stage={prediction_stage}, candidates={candidate_pair_count}, "
             f"limit={candidate_limit}, max_bucket="
-            f"{max((len(v) for v in buckets.values()), default=0)}"
+            f"{max((len(v) for buckets in buckets_by_pass for v in buckets.values()), default=0)}"
         )
 
-    accepted: list[tuple[int, int, float, int, int]] = []
-    degree: dict[int, int] = defaultdict(int)
-    for (grid_x, grid_y), node_ids in sorted(buckets.items()):
-        ordered = sorted(set(node_ids))
-        candidates: list[tuple[float, int, int]] = []
-        for position, source in enumerate(ordered):
-            sx, sy = geometry[source][2:4]
-            for target in ordered[position + 1 :]:
-                tx, ty = geometry[target][2:4]
-                candidates.append((math.hypot(tx - sx, ty - sy), source, target))
-        for distance, source, target in sorted(candidates):
-            if degree[source] >= capacity or degree[target] >= capacity:
-                continue
-            accepted.append((source, target, distance, grid_x, grid_y))
-            degree[source] += 1
-            degree[target] += 1
+    accepted: list[tuple[int, int, float, int, int, int]] = []
+    accepted_pairs: set[tuple[int, int]] = set()
+    duplicate_candidate_pairs_skipped = 0
+    total_degree: dict[int, int] = defaultdict(int)
+    for window_pass, buckets in enumerate(buckets_by_pass):
+        pass_degree: dict[int, int] = defaultdict(int)
+        for (grid_x, grid_y), node_ids in sorted(buckets.items()):
+            ordered = sorted(set(node_ids))
+            candidates: list[tuple[float, int, int]] = []
+            for position, source in enumerate(ordered):
+                sx, sy = geometry[source][2:4]
+                for target in ordered[position + 1 :]:
+                    tx, ty = geometry[target][2:4]
+                    candidates.append(
+                        (math.hypot(tx - sx, ty - sy), source, target)
+                    )
+            for distance, source, target in sorted(candidates):
+                pair = (source, target)
+                if pair in accepted_pairs:
+                    duplicate_candidate_pairs_skipped += 1
+                    continue
+                if pass_degree[source] >= capacity or pass_degree[target] >= capacity:
+                    continue
+                accepted.append(
+                    (source, target, distance, grid_x, grid_y, window_pass)
+                )
+                accepted_pairs.add(pair)
+                pass_degree[source] += 1
+                pass_degree[target] += 1
+                total_degree[source] += 1
+                total_degree[target] += 1
 
     directed = [
-        (source, target, distance, grid_x, grid_y)
-        for node_u, node_v, distance, grid_x, grid_y in accepted
+        (source, target, distance, grid_x, grid_y, window_pass)
+        for node_u, node_v, distance, grid_x, grid_y, window_pass in accepted
         for source, target in ((node_u, node_v), (node_v, node_u))
     ]
-    directed.sort(key=lambda row: (row[0], row[1], row[3], row[4]))
+    directed.sort(key=lambda row: (row[0], row[1], row[5], row[3], row[4]))
     edge_index = (
         torch.tensor(
             [[row[0], row[1]] for row in directed], dtype=torch.long
@@ -563,17 +590,18 @@ def build_congestion_geom_edges(
         )
     )
     debug = {
-        "window_pass": torch.zeros(len(directed), dtype=torch.int8),
+        "window_pass": torch.tensor(
+            [row[5] for row in directed], dtype=torch.int8
+        ),
         "grid_x": torch.tensor([row[3] for row in directed], dtype=torch.int32),
         "grid_y": torch.tensor([row[4] for row in directed], dtype=torch.int32),
     }
-    connected_nodes = {
-        node for row in directed for node in row[:2]
-    }
+    connected_nodes = {node for row in directed for node in row[:2]}
     degree_histogram = {
-        str(value): sum(observed == value for observed in degree.values())
-        for value in sorted(set(degree.values()))
+        str(value): sum(total_degree.get(node, 0) == value for node in geometry)
+        for value in sorted({total_degree.get(node, 0) for node in geometry})
     }
+    unique_directed_pairs = {(row[0], row[1]) for row in directed}
     stats = {
         "enabled": enabled,
         "requested": requested,
@@ -589,7 +617,7 @@ def build_congestion_geom_edges(
             )
         ),
         "construction": (
-            f"fixed_{width:g}um_same_grid_undirected_degree_capped_nearest"
+            f"four_shifted_{width:g}um_same_grid_undirected_degree_capped_nearest"
         ),
         "grid_derivation": (
             f"{int(cfg.get('congestion_grid_tracks', FAST_ROUTE_GRID_TRACKS))}"
@@ -601,14 +629,15 @@ def build_congestion_geom_edges(
         "window_width_um": width,
         "window_height_um": height,
         "link_capacity_per_gate_per_window": capacity,
-        "max_undirected_degree": capacity,
-        "max_undirected_degree_observed": max(degree.values(), default=0),
+        "max_undirected_degree_per_window": capacity,
+        "max_undirected_degree": capacity * len(window_shifts),
+        "max_undirected_degree_observed": max(total_degree.values(), default=0),
         "neighbor_selection": "deterministic_nearest_with_both_endpoint_degree_cap",
         "undirected_storage": "two_symmetric_directed_edge_index_entries",
-        "shifted_windows": False,
-        "window_passes": 1,
-        "window_shifts_um": [[0.0, 0.0]],
-        "windows_per_pass": [len(buckets)],
+        "shifted_windows": True,
+        "window_passes": len(window_shifts),
+        "window_shifts_um": [list(offset) for offset in window_shifts],
+        "windows_per_pass": [len(buckets) for buckets in buckets_by_pass],
         "cell_bbox_window_membership": False,
         "gate_to_grid_mapping": f"gate_origin_fixed_{width:g}um_grid",
         "multiedges_across_windows_preserved": False,
@@ -617,14 +646,24 @@ def build_congestion_geom_edges(
         "invalid_position_gates": len(gate_keys) - len(available_geometry),
         "connected_gates": len(connected_nodes),
         "isolated_valid_gates": len(geometry) - len(connected_nodes),
-        "grid_count": len(buckets),
+        "grid_count": sum(len(buckets) for buckets in buckets_by_pass),
         "max_bucket_occupancy": max(
-            (len(node_ids) for node_ids in buckets.values()), default=0
+            (
+                len(node_ids)
+                for buckets in buckets_by_pass
+                for node_ids in buckets.values()
+            ),
+            default=0,
         ),
         "candidate_undirected_pairs": candidate_pair_count,
         "candidate_pair_limit": candidate_limit,
         "undirected_pairs": len(accepted),
-        "unique_directed_pairs": len(directed),
+        "unique_undirected_pairs": len(accepted_pairs),
+        "duplicate_candidate_pairs_across_windows_skipped": (
+            duplicate_candidate_pairs_skipped
+        ),
+        "duplicate_undirected_edges_across_windows": 0,
+        "unique_directed_pairs": len(unique_directed_pairs),
         "directed_edges": len(directed),
         "degree_histogram": degree_histogram,
     }
@@ -1542,7 +1581,7 @@ def main() -> None:
     data.task_stage = prediction_stage
     data.input_stage = data.feature_cutoff
     data.topology_source = getattr(base, "topology_source", "")
-    data.data_contract_version = "r2g2_four_stage_hetero_pipeline_v2"
+    data.data_contract_version = "r2g2_four_stage_hetero_pipeline_v3"
     data.feature_availability_contract = STAGE_FEATURE_AVAILABILITY[
         prediction_stage
     ]
@@ -1808,9 +1847,9 @@ def main() -> None:
             "trusted gate origins for grid membership; centers for nearest selection"
         ),
         "congestion_geom_edge_reference": (
-            "fixed 15xMetal3-pitch (2.1um/4200DBU), same-grid undirected "
-            "nearest edges with maximum degree five; disabled until standard-cell "
-            "placement has completed"
+            "four half-window-shifted technology-derived GCell passes; same-grid "
+            "undirected nearest edges with degree five per pass and global pair "
+            "deduplication; disabled until standard-cell placement has completed"
         ),
     }
 

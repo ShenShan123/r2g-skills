@@ -247,6 +247,7 @@ def test_env_sh_detects_conda_staged_pdk(tmp_path):
         "HOME": str(tmp_path / "nohome"),            # keep $HOME/miniconda3 from matching a real one
         "CONDA_PREFIX": str(tmp_path / "miniconda3"),
         "R2G_CONDA_ENV": "eda",
+        "R2G_IGNORE_ENV_LOCAL": "1",                 # a campaign worktree pins eda-install too
     }
     script = (f'source "{envsh}" >/dev/null 2>&1; '
               f'echo "PDK_ROOT=${{PDK_ROOT:-}}"; echo "SKY=${{SKY130A_DIR:-}}"')
@@ -278,6 +279,7 @@ def test_env_sh_detects_relocated_conda_tools_and_staged_pdk(tmp_path):
         "PATH": "/usr/bin:/bin",
         "HOME": str(tmp_path),
         "R2G_CONDA_ENV": "eda",
+        "R2G_IGNORE_ENV_LOCAL": "1",                 # a campaign worktree pins eda-install too
     }
     script = (f'source "{envsh}" >/dev/null 2>&1; '
               f'for v in IVERILOG_EXE VVP_EXE MAGIC_EXE NETGEN_EXE PDK_ROOT; do '
@@ -287,6 +289,33 @@ def test_env_sh_detects_relocated_conda_tools_and_staged_pdk(tmp_path):
                       ("magic", "MAGIC_EXE"), ("netgen", "NETGEN_EXE")):
         assert f"{var}={conda_bin / tool}" in out, f"{var} not autodetected from conda env bin:\n{out}"
     assert f"PDK_ROOT={staged_pdk}" in out, f"staged sky130_pdk not autodetected:\n{out}"
+
+
+def test_env_sh_pinned_tools_survive_third_party_env_scripts(tmp_path):
+    """A caller-exported (or env.local.sh-pinned) tool must outrank the ORFS env.sh
+    and /opt/openroad_tools_env.sh, which export tool vars UNCONDITIONALLY
+    (failure-patterns #29b: on the 203 host /opt/openroad_tools_env.sh replaced a
+    pinned yosys 0.64 with 0.51, which rejects ORFS `stat -hierarchy`, and every
+    synth failed). Exercised through the ORFS env.sh hop, which shares the restore."""
+    orfs = tmp_path / "orfs"
+    (orfs / "flow").mkdir(parents=True)
+    (orfs / "flow" / "Makefile").write_text("")
+    bogus = tmp_path / "old_yosys"
+    pinned = tmp_path / "new_yosys"
+    for exe in (bogus, pinned):
+        exe.write_text("#!/bin/sh\nexit 0\n")
+        exe.chmod(0o755)
+    (orfs / "env.sh").write_text(f'export YOSYS_EXE="{bogus}"\n')
+    envsh = ENV_COPIES[0]
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "ORFS_ROOT": str(orfs),
+           "YOSYS_EXE": str(pinned)}
+    script = f'source "{envsh}" >/dev/null 2>&1; echo "YOSYS_EXE=$YOSYS_EXE"'
+    out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env).stdout
+    assert f"YOSYS_EXE={pinned}" in out, out
+    # Unpinned: the third-party value still applies (no regression of order 4).
+    env.pop("YOSYS_EXE")
+    out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env).stdout
+    assert f"YOSYS_EXE={bogus}" in out, out
 
 
 def test_write_env_local_preserves_all_pins(tmp_path):

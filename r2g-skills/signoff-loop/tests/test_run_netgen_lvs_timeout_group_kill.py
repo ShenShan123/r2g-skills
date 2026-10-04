@@ -47,12 +47,23 @@ echo "magic extraction ok"
 """
 
 
+# An OpenROAD that writes a powered netlist to the path in its `write_verilog` line
+# (and records the TCL it was given, so tests can check the read order).
+OK_OPENROAD = """#!/usr/bin/env bash
+tcl="${@: -1}"
+cp "$tcl" "$(dirname "$tcl")/openroad_seen.tcl"
+out=$(sed -n 's/^write_verilog -include_pwr_gnd "\\(.*\\)"$/\\1/p' "$tcl")
+printf 'module demo(VPWR, VGND); endmodule\\n' > "$out"
+"""
+
+
 def _make_exec(path: Path, text: str):
     path.write_text(text)
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def _setup(tmp_path, magic_body: str, netgen_body: str):
+def _setup(tmp_path, magic_body: str, netgen_body: str, openroad_body: str | None = None):
+    openroad_body = openroad_body or OK_OPENROAD
     skill = tmp_path / "skill"
     (skill / "scripts").mkdir(parents=True)
     shutil.copytree(SKILL / "scripts" / "flow", skill / "scripts" / "flow")
@@ -66,7 +77,12 @@ def _setup(tmp_path, magic_body: str, netgen_body: str):
     (flow / "Makefile").write_text("# fake ORFS Makefile\n")
     (rdir / "6_final.gds").write_text("gds-bytes")
     (rdir / "6_final.v").write_text("module demo(); endmodule\n")
-    # deliberately NO 6_final.odb -> the powered-netlist OpenROAD step is skipped
+    # The powered-netlist step is mandatory (no silent fallback to the unpowered
+    # 6_final.v), so the harness provides an ODB, a Liberty and a working OpenROAD.
+    (rdir / "6_final.odb").write_text("odb-bytes")
+    (flow / "platforms" / PLATFORM / "lib").mkdir(parents=True)
+    (flow / "platforms" / PLATFORM / "lib" / "sky130_fd_sc_hd__tt_025C_1v80.lib").write_text(
+        "library (x) { }\n")
 
     pdk = tmp_path / "pdk"
     (pdk / "sky130A" / "libs.tech" / "magic").mkdir(parents=True)
@@ -78,6 +94,7 @@ def _setup(tmp_path, magic_body: str, netgen_body: str):
     bindir.mkdir()
     _make_exec(bindir / "magic", magic_body)
     _make_exec(bindir / "netgen", netgen_body)
+    _make_exec(bindir / "openroad", openroad_body)
 
     proj = tmp_path / "proj"
     (proj / "constraints").mkdir(parents=True)
@@ -88,17 +105,19 @@ def _setup(tmp_path, magic_body: str, netgen_body: str):
     return skill, orfs, pdk, bindir, proj
 
 
-def _run(tmp_path, skill, orfs, pdk, bindir, proj):
+def _run(tmp_path, skill, orfs, pdk, bindir, proj, **extra_env):
     env = dict(
         os.environ,
         ORFS_ROOT=str(orfs),
         PDK_ROOT=str(pdk),
         MAGIC_EXE=str(bindir / "magic"),
         NETGEN_EXE=str(bindir / "netgen"),
+        OPENROAD_EXE=str(bindir / "openroad"),
         NETGEN_TIMEOUT="2",
         NETGEN_KILL_GRACE="2",
     )
     env.pop("R2G_ENV_FILE", None)
+    env.update(extra_env)
     return subprocess.run(
         ["bash", str(skill / "scripts" / "flow" / "run_netgen_lvs.sh"),
          str(proj), PLATFORM],

@@ -26,6 +26,7 @@ from skill_env import (
     default_seed_root,
     default_workspace_root,
     graph_python,
+    graph_python_start_error,
     resolve_path_env,
 )
 
@@ -102,6 +103,11 @@ def tracked_global_targets() -> dict[str, Path]:
     }
 
 
+# Variables that bind the CALLER's interpreter must not reach the graph venv
+# (same set as expand_candidates.GRAPH_PYTHON_DROP_ENV, 9ba9bc4).
+GRAPH_PYTHON_DROP_ENV = ("PYTHONHOME", "PYTHONEXECUTABLE", "PYTHONNOUSERSITE")
+
+
 def run(
     cmd: list[str],
     *,
@@ -109,6 +115,7 @@ def run(
     log_path: Path,
     payload: dict,
     extra_env: dict[str, str] | None = None,
+    drop_env: tuple[str, ...] = (),
 ) -> None:
     printable = " ".join(cmd)
     print("+", printable, flush=True)
@@ -126,7 +133,8 @@ def run(
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            env={**os.environ, **(extra_env or {})},
+            env={**{k: v for k, v in os.environ.items() if k not in drop_env},
+                 **(extra_env or {})},
         )
         last_line = ""
         assert proc.stdout is not None
@@ -738,7 +746,11 @@ def main() -> None:
             gpython = graph_python()
             if gpython:
                 payload["phase"] = "dataset_scale_report"
-                run([gpython, str(SCALE_SCRIPT)], status_path=args.status_json, log_path=args.status_log, payload=payload)
+                start_error = graph_python_start_error(gpython, GRAPH_PYTHON_DROP_ENV)
+                if start_error:
+                    raise RuntimeError(start_error)
+                run([gpython, str(SCALE_SCRIPT)], status_path=args.status_json, log_path=args.status_log, payload=payload,
+                    drop_env=GRAPH_PYTHON_DROP_ENV)
             else:
                 print("HINT: R2G_GRAPH_PYTHON unset — skipping dataset_scale_report (needs torch).", flush=True)
 

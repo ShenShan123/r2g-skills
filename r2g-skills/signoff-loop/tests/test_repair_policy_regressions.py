@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 
 import diagnose_signoff_fix as dsf
+import knowledge_db
+import recipe_lifecycle
 import suggest_config
 
 
@@ -106,10 +108,15 @@ def test_fixed_task_policy_keeps_synthesis_recipe_but_blocks_area_and_clock(
     dsf._apply_repair_action_policy(plan)
 
     assert [s["id"] for s in plan["strategies"]] == [
-        "backend_aware_synth_retune"
+        "hierarchical_synthesis_mapping",
+        "backend_aware_synth_retune",
     ]
     assert {r["strategy"] for r in plan["action_policy_rejections"]} == {
-        "period_relax", "utilization_reduce"
+        "abc_overdrive_8ns",
+        "early_place_timing_repair",
+        "hierarchical_place_timing_repair",
+        "period_relax",
+        "utilization_reduce",
     }
 
 
@@ -206,3 +213,195 @@ def test_ab_gated_strategy_becomes_live_only_after_promotion():
     assert dsf._live_auto_strategy({"strategies": [candidate]}) is None
     assert dsf._live_auto_strategy(
         {"strategies": [candidate]}, rank_first=strategy["id"])["id"] == strategy["id"]
+
+
+def test_preregistered_candidate_attempt_executes_without_claiming_promotion():
+    strategy = {
+        "id": "early_place_timing_repair",
+        "config_edits": {"ENABLE_PLACE_REPAIR_TIMING": "1"},
+        "sdc_edits": {},
+        "auto_apply": True,
+        "requires_ab_promotion": True,
+        "lifecycle_status": "candidate",
+    }
+    policy = {
+        "candidate_attempt_policy": {
+            "mode": "single_preregistered_attempt",
+            "entries": [{
+                "policy_id": "exp2-early-place-v1",
+                "check": "timing",
+                "platform": "sky130hd",
+                "strategy": "early_place_timing_repair",
+                "effect_fingerprint": {"ENABLE_PLACE_REPAIR_TIMING": "1"},
+            }],
+        },
+    }
+    authorization = dsf._candidate_attempt_authorized(
+        policy, check="timing", platform="sky130hd", strategy=strategy,
+        lifecycle_status="candidate")
+    assert authorization["policy_id"] == "exp2-early-place-v1"
+    live = {**strategy, "candidate_attempt_authorized": True}
+    assert dsf._live_auto_strategy({"strategies": [live]})["id"] == strategy["id"]
+
+    assert dsf._candidate_attempt_authorized(
+        policy, check="timing", platform="sky130hd", strategy=strategy,
+        lifecycle_status="shadow") is None
+    assert dsf._candidate_attempt_authorized(
+        policy, check="drc", platform="sky130hd", strategy=strategy,
+        lifecycle_status="candidate") is None
+    changed_effect = {
+        **strategy, "config_edits": {"ENABLE_PLACE_REPAIR_TIMING": "0"},
+    }
+    assert dsf._candidate_attempt_authorized(
+        policy, check="timing", platform="sky130hd", strategy=changed_effect,
+        lifecycle_status="candidate") is None
+
+
+def test_pin_side_scope_transfer_is_narrow_and_exact_status_wins(tmp_path: Path):
+    conn = knowledge_db.connect(tmp_path / "knowledge.sqlite")
+    knowledge_db.ensure_schema(conn)
+    key = {
+        "symptom_id": "04d38c5a585fd332",
+        "design_class": "*",
+        "platform": "sky130hd",
+        "strategy": "pin_side_rebalance",
+    }
+    recipe_lifecycle._set(conn, "promoted", "test:platform_geometric", **key)
+    conn.commit()
+    strategy = {
+        "id": "pin_side_rebalance",
+        "config_edits": {"PLACE_PINS_ARGS": "-exclude right:*"},
+        "geometry_evidence": {
+            "rule": "m3.2", "side": "right", "edge_count": 5,
+            "edge_fraction": 1.0,
+        },
+    }
+
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, symptom_id=key["symptom_id"],
+        design_class="crypto/large", platform="sky130hd", strategy=strategy,
+    ) == ("promoted", "platform_geometric")
+
+    low_confidence = {
+        **strategy,
+        "geometry_evidence": {**strategy["geometry_evidence"], "edge_fraction": 0.79},
+    }
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, symptom_id=key["symptom_id"],
+        design_class="crypto/large", platform="sky130hd", strategy=low_confidence,
+    ) == (None, None)
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, symptom_id=key["symptom_id"],
+        design_class="crypto/large", platform="sky130hd",
+        strategy={**strategy, "id": "unrelated_recipe"},
+    ) == (None, None)
+
+    exact = {**key, "design_class": "crypto/large"}
+    recipe_lifecycle._set(conn, "shadow", "test:exact_veto", **exact)
+    conn.commit()
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, symptom_id=key["symptom_id"],
+        design_class="crypto/large", platform="sky130hd", strategy=strategy,
+    ) == ("shadow", "exact")
+    conn.close()
+
+
+def test_untested_learner_candidate_does_not_veto_promoted_pin_transfer(tmp_path: Path):
+    """2026-09-30 AIC v2: pcie_7x / matmul (right-edge m3.2 at a tighter clock) were
+    classed bus_heavy, whose only exact row was a learner_diff candidate with no
+    A/B trial -- it vetoed the promoted wildcard pin_side_rebalance. Such a row
+    carries no verdict; any A/B-judged, shadow, parked or demoted row still wins."""
+    conn = knowledge_db.connect(tmp_path / "knowledge.sqlite")
+    knowledge_db.ensure_schema(conn)
+    sid, plat, strat_id = "04d38c5a585fd332", "sky130hd", "pin_side_rebalance"
+    recipe_lifecycle._set(conn, "promoted", "ab_corpus:2w0l", symptom_id=sid,
+                          design_class="*", platform=plat, strategy=strat_id)
+    exact = dict(symptom_id=sid, design_class="bus_heavy/small", platform=plat, strategy=strat_id)
+    recipe_lifecycle._set(conn, "candidate", "learner_diff", **exact)
+    conn.commit()
+    strategy = {"id": strat_id, "config_edits": {"PLACE_PINS_ARGS": "-exclude right:*"},
+                "geometry_evidence": {"rule": "m3.2", "side": "right", "edge_count": 4,
+                                      "edge_fraction": 1.0}}
+    args = dict(symptom_id=sid, design_class="bus_heavy/small", platform=plat)
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, strategy=strategy, **args) == (
+        "promoted", "platform_geometric_over_untested_candidate")
+    # no geometry proof -> the exact candidate still wins
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, strategy={**strategy, "geometry_evidence": {}}, **args) == (
+        "candidate", "exact")
+    # a non-geometric strategy keeps the strict exact rule
+    recipe_lifecycle._set(conn, "candidate", "learner_diff",
+                          **{**exact, "strategy": "density_relief"})
+    conn.commit()
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, strategy={**strategy, "id": "density_relief"}, **args) == (
+        "candidate", "exact")
+    # once the class has an A/B trial, its candidate verdict owns it again
+    conn.execute("INSERT INTO ab_trials (symptom_id, design_class, platform, strategy, verdict) "
+                 "VALUES (?,?,?,?,?)", (sid, "bus_heavy/small", plat, strat_id, "inconclusive"))
+    conn.commit()
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, strategy=strategy, **args) == ("candidate", "exact")
+    # shadow still vetoes
+    recipe_lifecycle._set(conn, "shadow", "ab_corpus:0w2l", **exact)
+    conn.commit()
+    assert dsf._lifecycle_status_with_scope_transfer(
+        conn, recipe_lifecycle, strategy=strategy, **args) == ("shadow", "exact")
+    conn.close()
+
+
+def test_fixed_target_timing_candidates_are_visible_but_not_live():
+    plan = dsf.build_plan(
+        {}, {},
+        {"PLATFORM": "sky130hd", "CORE_UTILIZATION": "20", "ABC_AREA": "1"},
+        check="timing",
+        tcheck={"tier": "minor", "wns_ns": -0.27, "clock_period_ns": 10.0},
+        route={"status": "clean", "total_violations": 0},
+    )
+
+    ids = [strategy["id"] for strategy in plan["strategies"]]
+    assert ids == [
+        "abc_overdrive_8ns",
+        "early_place_timing_repair",
+        "hierarchical_synthesis_mapping",
+        "hierarchical_place_timing_repair",
+        "utilization_reduce",
+    ]
+    for strategy in plan["strategies"]:
+        if strategy["id"] != "utilization_reduce":
+            assert strategy["requires_ab_promotion"] is True
+    assert dsf._live_auto_strategy(plan) is not None
+
+    fixed_task_plan = {
+        "strategies": [strategy for strategy in plan["strategies"]
+                       if strategy["id"] != "utilization_reduce"]
+    }
+    assert dsf._live_auto_strategy(fixed_task_plan) is None
+
+
+def test_lvs_feedthrough_mechanism_transfer_uses_wildcard_promotion(tmp_path: Path):
+    import symptom
+    sid = symptom.symptom_id(symptom.canonical_signature("lvs", "top_pin_mismatch", {}))
+    assert (sid, "sky130hd", "lvs_port_feedthrough_buffer") in dsf._MECHANISM_SCOPE_TRANSFER
+    conn = knowledge_db.connect(tmp_path / "knowledge.sqlite")
+    knowledge_db.ensure_schema(conn)
+    key = {"symptom_id": sid, "design_class": "*", "platform": "sky130hd",
+           "strategy": "lvs_port_feedthrough_buffer"}
+    strategy = {"id": "lvs_port_feedthrough_buffer"}
+
+    def status(design_class, platform="sky130hd", sid_=sid):
+        return dsf._lifecycle_status_with_scope_transfer(
+            conn, recipe_lifecycle, symptom_id=sid_, design_class=design_class,
+            platform=platform, strategy=strategy)
+
+    assert status("bus_heavy/large") == (None, None)          # nothing promoted yet
+    recipe_lifecycle._set(conn, "promoted", "test:ab_corpus", **key)
+    conn.commit()
+    assert status("bus_heavy/large") == ("promoted", "mechanism_class_transfer")
+    assert status("bus_heavy/large", platform="nangate45") == (None, None)
+    assert status("bus_heavy/large", sid_="64a358c75ba4b86b") == (None, None)
+    exact = {**key, "design_class": "bus_heavy/large"}
+    recipe_lifecycle._set(conn, "shadow", "test:exact_veto", **exact)
+    conn.commit()
+    assert status("bus_heavy/large") == ("shadow", "exact")    # exact evidence still wins

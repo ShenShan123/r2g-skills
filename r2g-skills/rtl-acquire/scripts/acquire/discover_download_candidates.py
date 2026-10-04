@@ -609,7 +609,8 @@ def extract_instantiated_modules(rtl_text: str) -> set[str]:
     refs: set[str] = set()
     for match in INSTANTIATION_RE.finditer(strip_verilog_comments(rtl_text)):
         token = match.group(1)
-        if token.lower() in VERILOG_KEYWORDS:
+        # Keywords are case-sensitive: `Reg` is a legal module name (wave-3 E5L).
+        if token in VERILOG_KEYWORDS:
             continue
         refs.add(token)
     return refs
@@ -699,7 +700,7 @@ def extract_macro_instantiations(rtl_text: str) -> set[str]:
     out: set[str] = set()
     for match in MACRO_INSTANTIATION_RE.finditer(strip_verilog_comments(rtl_text)):
         macro, inst = match.group(1), match.group(2)
-        if macro.lower() in _DIRECTIVE_NAMES or inst.lower() in VERILOG_KEYWORDS:
+        if macro.lower() in _DIRECTIVE_NAMES or inst in VERILOG_KEYWORDS:
             continue
         out.add(macro)
     return out
@@ -758,6 +759,60 @@ def bundle_closure(
         cut = {p for p in queue if p not in seen}
         unresolved = sorted({m for m, p in module_to_path.items() if p in cut})
     return ordered, unresolved
+
+
+INCLUDE_RE = re.compile(r'(?m)^\s*`include\s+"([^"]+)"')
+
+
+def repo_file_index(repo_dir: Path) -> dict[str, list[Path]]:
+    """Every file in the repo (outside .git), keyed by basename."""
+    index: dict[str, list[Path]] = {}
+    for path in sorted(repo_dir.rglob("*")):
+        if ".git" in path.relative_to(repo_dir).parts or not path.is_file():
+            continue
+        index.setdefault(path.name, []).append(path)
+    return index
+
+
+def header_include_dirs(bundle_paths: list[Path], index: dict[str, list[Path]],
+                        *, max_files: int = 512) -> list[Path]:
+    """Extra include directories for `include targets outside the bundle's dirs.
+
+    Wave-3 E5L: include_dirs were the bundle files' parents only, so a header
+    in its own directory (rtl/core/include/defines.v) was never found. A target
+    that does not resolve from an existing search dir is looked up in the repo;
+    its directory is added only when every match has identical bytes. Divergent
+    copies are a real choice and are left unresolved, never guessed.
+    """
+    search = {p.parent.resolve() for p in bundle_paths}
+    extra: list[Path] = []
+    queue, seen = list(bundle_paths), set()
+    while queue and len(seen) < max_files:
+        f = queue.pop(0)
+        if f in seen:
+            continue
+        seen.add(f)
+        try:
+            text = strip_verilog_comments(f.read_text(errors="ignore"))
+        except OSError:
+            continue
+        for name in INCLUDE_RE.findall(text):
+            local = [d / name for d in [f.parent.resolve(), *search] if (d / name).is_file()]
+            if local:
+                queue.append(local[0])
+                continue
+            rel = Path(name)
+            if rel.is_absolute() or ".." in rel.parts:
+                continue
+            matches = [p for p in index.get(rel.name, [])
+                       if p.parts[-len(rel.parts):] == rel.parts]
+            if not matches or len({file_sha1(p) for p in matches}) != 1:
+                continue
+            inc_dir = matches[0].resolve().parents[len(rel.parts) - 1]
+            search.add(inc_dir)
+            extra.append(inc_dir)
+            queue.append(matches[0])
+    return extra
 
 
 def helper_like_file(info: dict, refcount: Counter[str]) -> bool:
@@ -972,7 +1027,10 @@ def main() -> None:
                 ok = False
                 reason = "duplicate_module_defs"
             instantiated = extract_instantiated_modules(rtl_text)
-            if not ok and not module_defs:
+            # A package-only file is rejected as a candidate (`no_module`) but must
+            # still register its packages, or `import pkg::*` never resolves and
+            # the importer loses the package from its closure (wave-3 E5L).
+            if not ok and not module_defs and not package_defs:
                 continue
             rel = path.relative_to(args.downloads_root)
             info = {
@@ -1035,6 +1093,7 @@ def main() -> None:
 
         candidates.sort(key=rank_candidate)
         kept_for_repo = 0
+        repo_index: dict[str, list[Path]] | None = None
         for info in candidates:
             if args.max_candidates_per_repo > 0 and kept_for_repo >= args.max_candidates_per_repo:
                 break
@@ -1050,7 +1109,11 @@ def main() -> None:
             seen_designs.add(design_norm)
             seen_paths.add(path_key)
             bundle_paths = info["bundle_paths"]
-            include_dirs = sorted({str(p.parent.resolve()) for p in bundle_paths})
+            if repo_index is None:
+                repo_index = repo_file_index(repo_dir)
+            include_dirs = sorted({str(p.parent.resolve()) for p in bundle_paths}
+                                  | {str(d) for d in header_include_dirs(bundle_paths,
+                                                                          repo_index)})
             base_priority = choose_priority(rel, rtl_text=info["rtl_text"], non_empty_line_count=info["non_empty_line_count"])
             generated_hit = any(part in GENERATED_DIR_PARTS for part in (p.lower() for p in rel.parts))
             priority = boost_priority(base_priority) if (build_markers and generated_hit) else base_priority

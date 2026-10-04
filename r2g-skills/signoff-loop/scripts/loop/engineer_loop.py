@@ -269,7 +269,7 @@ def _run_flow(entry: dict) -> int:
 # them to 'both' -> identical inert arms that can never promote and burn a full
 # multi-hour signoff per repeat (2026-06-24 audit, bugs #1/#3).
 _PLACE_STRATEGIES = frozenset({"core_util_relief", "pin_perimeter_floor"})
-_TIMING_STRATEGIES = frozenset({"setup_slack_margin", "period_relax", "utilization_reduce",
+_TIMING_STRATEGIES = frozenset({"hierarchical_place_timing_repair", "setup_slack_margin", "period_relax", "utilization_reduce",
                                 "backend_aware_synth_retune", "abc_area_physical_mapping"})
 # synth_memory_relax is a SYNTH backend-abort recovery (raise SYNTH_MEMORY_MAX_BITS +
 # pair a die auto-size): its A/B arm applies the recipe up-front and flows once, like the
@@ -296,7 +296,7 @@ AB_INCONCLUSIVE_MAX = 3
 _KNOWN_APPLY_STRATEGIES = frozenset({
     "antenna_diode_repair", "antenna_diode_iters", "antenna_density_relief",
     "density_relief", "pin_side_rebalance", "route_relief", "lvs_resolve_unknown", "lvs_macro_cdl",
-    "beol_only_drc", "rerun_from_stage", "pdn_die_floor",
+    "beol_only_drc", "rerun_from_stage", "pdn_die_floor", "lvs_port_feedthrough_buffer",
 }) | _PLACE_STRATEGIES | _TIMING_STRATEGIES | _SYNTH_STRATEGIES
 
 
@@ -422,6 +422,31 @@ def _symptom_check(conn, symptom_id: str | None, strategy: str | None = None) ->
         if row[1] == "synth":
             return "synth"
     return "both"
+
+
+def _strategy_check(strategy: str | None) -> str | None:
+    """The signoff check a strategy repairs, when its name/catalog proves it."""
+    if strategy and strategy.startswith("lvs_"):
+        return "lvs"
+    if strategy in _TIMING_STRATEGIES:
+        return "timing"
+    return None
+
+
+def _enqueue_check_mismatch(conn, symptom_id: str, strategy: str) -> str | None:
+    """Why (symptom, strategy) can never match a live diagnosis, or None.
+
+    Live diagnosis looks a recipe up under the symptom of the check it is repairing,
+    so an LVS recipe enqueued under a TIMING symptom would be A/B-promoted on a key
+    no LVS plan ever reads (2026-10-01: lvs_port_feedthrough_buffer was first judged
+    under the run's timing|clean symptom)."""
+    want = _strategy_check(strategy)
+    row = conn.execute("SELECT check_type, class FROM symptoms WHERE symptom_id=?",
+                       (symptom_id,)).fetchone()
+    if want and row and row[0] and row[0] != want:
+        return (f"symptom {symptom_id} is {row[0]}|{row[1]} but {strategy} repairs "
+                f"{want}; enqueue it under the {want} symptom of the failing check")
+    return None
 
 
 def _run_fix(entry: dict) -> int:
@@ -3186,6 +3211,65 @@ def fmax_drain(ledger_path: Path, *, platform: str | None = None,
     return sum(1 for r in results if isinstance(r, (int, float)))
 
 
+def fmax_retry(ledger_path: Path, *, platform: str | None = None,
+               max_workers: int = 1, place_fast: bool = True) -> int:
+    """Re-search Fmax for designs whose FIRST search was blocked by a backend abort
+    that the repair loop has since fixed, and re-queue them to flow at the winner.
+
+    fmax-drain runs BEFORE any repair, so a design whose place stage aborts at the
+    template config (e.g. PPL-0024: more IO pins than the die perimeter holds) gets
+    `inconclusive` — then `run` repairs it (pin_perimeter_floor grows DIE_AREA in
+    config.mk) and it signs off at the seed period with NO Fmax (2026-09-29 AIC
+    cohort: RequestBlock1CH_BRIDGE / inputDMAfifo / hbm_controller). Eligible: a
+    normal, `clean` design, inconclusive search, config.mk edited after the search
+    (a repair landed), not yet retried. The old report is kept as
+    fmax_search.pre_repair.json; one retry per design. Returns the re-queued count."""
+    led = Ledger(ledger_path)
+    led.reclaim_orphans()
+    led.reroot_project_paths()
+    todo = []
+    for e in led.entries():
+        if e.get("kind", "normal") != "normal" or e.get("state") != "clean":
+            continue
+        if e.get("fmax_retried") or (platform and e.get("platform") != platform):
+            continue
+        proj = Path(e["project_path"])
+        rep, cfg = proj / "reports" / "fmax_search.json", proj / "constraints" / "config.mk"
+        try:
+            status = json.loads(rep.read_text()).get("status")
+        except (OSError, ValueError):
+            continue
+        if status != "inconclusive" or not cfg.exists():
+            continue
+        if cfg.stat().st_mtime <= rep.stat().st_mtime:
+            continue                       # no repair landed since -> retry is pointless
+        todo.append(e)
+
+    def _one(e: dict):
+        proj = Path(e["project_path"])
+        rep = proj / "reports" / "fmax_search.json"
+        os.replace(rep, rep.with_name("fmax_search.pre_repair.json"))
+        try:
+            return _fmax_one(e, place_fast=place_fast)
+        except Exception:
+            return None
+
+    if max_workers > 1 and len(todo) > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            results = list(ex.map(_one, todo))
+    else:
+        results = [_one(e) for e in todo]
+    n = 0
+    for e, r in zip(todo, results):
+        if isinstance(r, (int, float)):
+            led.add({"design": e["design"], "project_path": e["project_path"],
+                     "platform": e.get("platform", "sky130hd"), "fmax_retried": True})
+            n += 1
+        else:
+            led.set_state(e["design"], "clean", fmax_retried=True)
+    return n
+
+
 def run(ledger_path: Path, *, max_designs: int | None = None,
         max_workers: int = 1, learn: bool = True) -> None:
     import knowledge_db
@@ -3265,6 +3349,13 @@ def main(argv=None) -> int:
                          "sequential; cap workers*NUM_CORES <= host cores)")
     pf.add_argument("--no-place-fast", action="store_true",
                     help="disable PLACE_FAST in the place probes (slower, more accurate)")
+    pr2 = sub.add_parser("fmax-retry",
+                         help="re-search Fmax for clean designs whose first search was "
+                              "blocked by a since-repaired backend abort, and re-queue them")
+    pr2.add_argument("--ledger", required=True, type=Path)
+    pr2.add_argument("--platform", default=None)
+    pr2.add_argument("--workers", type=int, default=1)
+    pr2.add_argument("--no-place-fast", action="store_true")
     pe = sub.add_parser("ab-enqueue",
                         help="force a (grandfathered) recipe into A/B candidate")
     pe.add_argument("--symptom", required=True)
@@ -3303,11 +3394,20 @@ def main(argv=None) -> int:
                        max_workers=args.workers, max_designs=args.max,
                        place_fast=not args.no_place_fast)
         print(f"fmax_drain characterized {n} design(s)")
+    elif args.cmd == "fmax-retry":
+        n = fmax_retry(args.ledger, platform=args.platform, max_workers=args.workers,
+                       place_fast=not args.no_place_fast)
+        print(f"fmax_retry re-queued {n} design(s)")
     elif args.cmd == "ab-enqueue":
         import knowledge_db
         import recipe_lifecycle
         conn = knowledge_db.connect()
         knowledge_db.ensure_schema(conn)
+        why = _enqueue_check_mismatch(conn, args.symptom, args.strategy)
+        if why:
+            conn.close()
+            print(f"ab-enqueue refused: {why}", file=sys.stderr)
+            return 2
         created = recipe_lifecycle.enqueue_candidate(
             conn, symptom_id=args.symptom, design_class=args.design_class,
             platform=args.platform, strategy=args.strategy)

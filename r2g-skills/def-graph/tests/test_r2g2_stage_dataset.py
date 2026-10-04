@@ -46,9 +46,42 @@ def stage04():
 
 
 @pytest.fixture(scope="module")
+def stage03():
+    pytest.importorskip("torch")
+    return _load("03_extract_labels.py", "t_r2g2_labels")
+
+
+def test_route_patch_rectangle_offsets_are_not_wire_endpoints(stage03):
+    clause = '( 82570 63410 ) RECT ( -255 -70 0 70 )'
+    assert list(stage03.segments_from_clause(clause)) == []
+    assert list(stage03.segments_from_clause('( 10 20 ) ( 30 * ) RECT ( -5 -5 5 5 )')) == [(10, 20, 30, 20)]
+
+
+@pytest.fixture(scope="module")
 def stage01():
     pytest.importorskip("torch")
     return _load("01_build_base_graph.py", "t_r2g2_base")
+
+
+@pytest.mark.parametrize("orientation", ["N", "S", "FN", "FS", "E", "W", "FE", "FW"])
+def test_gate_geometry_uses_snapshot_resized_master(stage02, orientation):
+    lef = {"INV_1": {"width": 1.38, "height": 2.72},
+           "INV_8": {"width": 4.14, "height": 2.72}}
+    component = {"master": "inv_8", "orient": orientation}
+    actual = stage02.gate_geometry_size("inv_1", component, lef)
+    expected = (2.72, 4.14) if orientation in {"E", "W", "FE", "FW"} else (4.14, 2.72)
+    assert actual == expected
+    assert component == {"master": "inv_8", "orient": orientation}
+    assert stage02.gate_geometry_size("inv_1", {}, lef) == (1.38, 2.72)
+
+
+def test_gate_geometry_missing_physical_lef_is_unknown(stage02):
+    import math
+    lef = {"INV_1": {"width": 1.38, "height": 2.72}}
+    assert all(math.isnan(v) for v in stage02.gate_geometry_size("inv_1", {"master": "unknown"}, lef))
+    for width in (0., -1., float("inf"), float("nan")):
+        lef["INV_8"] = {"width": width, "height": 2.72}
+        assert all(math.isnan(v) for v in stage02.gate_geometry_size("inv_1", {"master": "inv_8"}, lef))
 
 
 # --------------------------------------------------------------------------
@@ -250,6 +283,8 @@ def test_stage02_fails_closed_on_an_empty_cell_table():
 
 def test_encode_map_generator_rejects_an_empty_liberty(tmp_path):
     """Exit-code contract through the CLI."""
+    # The CLI runs under this interpreter and 01_build_base_graph imports torch.
+    pytest.importorskip("torch", reason="build_encode_map.py's imports need torch")
     bogus = tmp_path / "empty.lib"
     bogus.write_text("nothing here\n", encoding="utf-8")
     result = subprocess.run(
@@ -347,10 +382,24 @@ def test_lef_pin_geometry_reads_polygon_pins(stage02, tmp_path):
     macros = stage02.parse_lef_geometry([lef])
 
     assert "DEMO_POLY" in macros
-    # bbox of the polygon is x∈[0.71,1.07], y∈[1.21,2.53] → centre (0.89, 1.87)
-    assert macros["DEMO_POLY"]["pins"]["I"] == pytest.approx((0.89, 1.87))
+    # OpenDB stores the L-shape as [0.71,1.21,1.015,2.3] + [0.71,2.3,1.07,2.53] and
+    # getAvgXY averages their centres -> (0.87625, 2.085). The polygon's bbox centre
+    # (0.89, 1.87) asserted here before 2026-09-23 is not what OpenDB reports (D14).
+    assert macros["DEMO_POLY"]["pins"]["I"] == pytest.approx((0.87625, 2.085))
     # RECT pins keep working unchanged
     assert macros["DEMO_RECT"]["pins"]["A"] == pytest.approx((0.2, 0.4))
+
+
+def test_lef_pin_geometry_uses_opendb_shape_center_mean(stage02, tmp_path):
+    lef = tmp_path / "multi.lef"
+    lef.write_text(
+        "MACRO m\n  SIZE 2 BY 3 ;\n  PIN Y\n    PORT\n"
+        "      RECT 0 0 0.2 0.2 ;\n      RECT 0.6 1 1 2 ;\n"
+        "    END\n  END Y\nEND m\n",
+        encoding="utf-8",
+    )
+    macros = stage02.parse_lef_geometry([lef])
+    assert macros["M"]["pins"]["Y"] == pytest.approx((0.45, 0.8))
 
 
 def test_lef_polygon_needs_at_least_three_points(stage02, tmp_path):
@@ -469,6 +518,110 @@ def test_stage02_and_stage04_grid_resolvers_agree(stage02, stage04):
         assert stage02.resolve_congestion_grid_um(cfg) == pytest.approx(
             stage04.resolve_congestion_grid_um(cfg)
         ), cfg
+
+
+# --------------------------------------------------------------------------
+# R2G2.0 v3: numerical RUDY, hierarchical timing and shifted geometry edges.
+# --------------------------------------------------------------------------
+
+
+def test_rudy_skips_numerically_degenerate_net_bbox(stage02):
+    place = {
+        "dbu": 1000.0,
+        "die": (0.0, 0.0, 10000.0, 10000.0),
+        "components": {
+            "g0": {
+                "master": "BUF",
+                "x": 1000.0,
+                "y": 1000.0,
+                "orient": "N",
+            }
+        },
+        "iopins": {
+            "a": {"net": "n0", "x": 1000.0, "y": 1000.0},
+            "b": {"net": "n0", "x": 1000.0000005, "y": 2000.0},
+        },
+    }
+    route = {
+        "nets": {"n0": {"connections": [("PIN", "a"), ("PIN", "b")]}}
+    }
+    values, _ = stage02.compute_congestion_features(
+        gate_names=["g0"],
+        gate_masters={"g0": "BUF"},
+        place=place,
+        route=route,
+        lef={"BUF": {"width": 1.0, "height": 1.0, "pins": {}}},
+        connections_by_net={},
+        io_by_net={},
+        io_only_nets={},
+        prediction_stage="cts",
+    )
+    assert stage02.RUDY_BBOX_TOLERANCE_UM == pytest.approx(1e-9)
+    assert values["g0"]["congestion_feature_valid"] == 1
+    assert values["g0"]["congestion_rudy"] == 0.0
+
+
+def test_hierarchical_sta_point_preserves_final_pin_separator(stage03):
+    assert (
+        stage03.canonical_timing_point(r"top/u_core/u_reg/D")
+        == "top.u_core.u_reg/D"
+    )
+    assert stage03._is_pin_of("top.u_core.u_reg/D", "top/u_core/u_reg/D")
+    assert stage03._is_pin_of("top.u_core.u_reg/D", "top/u_core/u_reg")
+    assert stage03.classify_point(
+        "top/u_core/u_reg/D",
+        {("top.u_core.u_reg", "D")},
+        set(),
+    ) == ("pin", ("top.u_core.u_reg", "D"))
+
+
+def test_four_shifted_windows_connect_boundary_neighbours_without_duplicates(stage04):
+    gate_index = {
+        "a": {
+            "placement_valid": "1",
+            "x_um": "2.0",
+            "y_um": "1.0",
+            "center_x_um": "2.0",
+            "center_y_um": "1.0",
+        },
+        "b": {
+            "placement_valid": "1",
+            "x_um": "2.2",
+            "y_um": "1.0",
+            "center_x_um": "2.2",
+            "center_y_um": "1.0",
+        },
+    }
+    edge_index, edge_attr, debug, stats = stage04.build_congestion_geom_edges(
+        ["a", "b"], gate_index, {}, "cts", 0.0, 0.0
+    )
+    assert set(map(tuple, edge_index.t().tolist())) == {(0, 1), (1, 0)}
+    assert edge_attr[:, 0].tolist() == pytest.approx([0.2, 0.2])
+    assert set(debug["window_pass"].tolist()) == {1}
+    assert stats["shifted_windows"] is True
+    assert stats["window_passes"] == 4
+    assert stats["max_undirected_degree_per_window"] == 5
+    assert stats["max_undirected_degree"] == 20
+    assert stats["unique_undirected_pairs"] == 1
+    assert stats["duplicate_undirected_edges_across_windows"] == 0
+    assert stats["duplicate_candidate_pairs_across_windows_skipped"] >= 1
+
+
+def test_shifted_windows_keep_platform_specific_grid(stage04):
+    _, _, _, stats = stage04.build_congestion_geom_edges(
+        [],
+        {},
+        {"congestion_grid_tracks": 15, "congestion_grid_pitch_um": 0.46},
+        "cts",
+        0.0,
+        0.0,
+    )
+    assert stats["window_width_um"] == pytest.approx(6.9)
+    expected = [[0.0, 0.0], [3.45, 0.0], [0.0, 3.45], [3.45, 3.45]]
+    for actual_shift, expected_shift in zip(
+        stats["window_shifts_um"], expected, strict=True
+    ):
+        assert actual_shift == pytest.approx(expected_shift)
 
 
 # --------------------------------------------------------------------------
@@ -718,6 +871,74 @@ def test_timing_endpoint_budget_favours_breadth(timing_mod):
     assert "-group_path_count 10000" in tcl
     # the pre-fix shape: the same large number on both knobs
     assert "-endpoint_path_count 10000" not in tcl
+
+
+@pytest.mark.parametrize(
+    ("help_text", "expected"),
+    [
+        (
+            "report_checks [-group_path_count path_count] "
+            "[-endpoint_path_count path_count]",
+            ("-group_path_count", "-endpoint_path_count"),
+        ),
+        (
+            "report_checks [-group_count path_count] [-endpoint_count path_count]",
+            ("-group_count", "-endpoint_count"),
+        ),
+    ],
+)
+def test_report_checks_flags_supports_old_and_new_opensta(
+    timing_mod, monkeypatch, help_text, expected
+):
+    monkeypatch.setattr(
+        timing_mod.subprocess,
+        "run",
+        lambda *args, **kwargs: timing_mod.subprocess.CompletedProcess(args[0], 0, help_text),
+    )
+    assert timing_mod.report_checks_flags("/fake/openroad") == expected
+
+
+# `help report_checks` of this host's OpenROAD v2.0-17598-ga008522d8 (2026-09-23).
+_HELP_V2_17598 = """\
+report_checks [-from from_list|-rise_from from_list|-fall_from from_list]
+   [-path_delay min|min_rise|min_fall|max|max_rise|max_fall|min_max]
+   [-corner corner] [-group_count path_count] [-endpoint_count path_count]
+   [-unique_paths_to_endpoint] [-slack_max slack_max] [-slack_min slack_min]
+"""
+
+
+@pytest.mark.parametrize(
+    "help_text,expected",
+    [
+        (_HELP_V2_17598, ("-group_count", "-endpoint_count")),
+        ("[-group_path_count n] [-endpoint_path_count n] [-unique_paths_to_endpoint]",
+         ("-group_path_count", "-endpoint_path_count")),
+        ("[-max_paths n] [-nworst n]", ("-max_paths", "-nworst")),
+    ],
+)
+def test_timing_flags_follow_the_openroad_build(timing_mod, help_text, expected):
+    """Each OpenSTA generation gets its own pair of path-cap spellings.
+
+    Regression (E12, 2026-09-23): the probe only knew the newest spellings and
+    fell back to ``-group_count`` + ``-max_paths``. This host's build accepts
+    ``-endpoint_count``, not ``-max_paths``, so every run died with STA-0563
+    and the four-stage timing labels shipped as NaN with valid=0.
+    """
+    assert timing_mod.pick_report_checks_flags(help_text) == expected
+
+
+def test_timing_flags_fail_loud_when_no_spelling_matches(timing_mod):
+    # A substring must not count: -group_count_x is not -group_count.
+    with pytest.raises(SystemExit, match="report_checks accepts none"):
+        timing_mod.pick_report_checks_flags("[-group_count_x n] [-endpoint_count n]")
+
+
+def test_timing_flags_probe_reads_the_binary(timing_mod, tmp_path):
+    fake = tmp_path / "openroad"
+    fake.write_text("#!/bin/sh\ncat <<'HELP'\n" + _HELP_V2_17598 + "HELP\n",
+                    encoding="utf-8")
+    fake.chmod(0o755)
+    assert timing_mod.report_checks_flags(str(fake)) == ("-group_count", "-endpoint_count")
 
 
 def test_timing_endpoint_paths_defaults_to_one():

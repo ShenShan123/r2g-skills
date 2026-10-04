@@ -367,4 +367,36 @@ def test_learn_emits_closing_period_and_deterioration(tmp_knowledge_dir):
     assert abs(sd["d_fp_pl"]["ns_p90"] - 0.3) < 1e-9
     # d_pl_fin per row = place-finish = [0.2,0.2,0.2,0.2]; p90 = 0.2
     assert abs(sd["d_pl_fin"]["ns_p90"] - 0.2) < 1e-9
+    # Platform-pooled Fmax model (fallback for family n<8; 2026-09-29 AIC cohort):
+    # pools only runs with period <= PLATFORM_POOL_MAX_PERIOD_NS.
+    short = [r for r in rows if r[0] <= learn_heuristics.PLATFORM_POOL_MAX_PERIOD_NS]
+    if len(short) == len(rows):
+        assert data["platforms"]["nangate45"]["slack_deterioration"] == sd
+    else:
+        assert data["platforms"].get("nangate45", {}).get("slack_deterioration", {}).get("n", 0) == len(short)
+    conn.close()
+
+
+def test_platform_pool_excludes_long_period_runs(tmp_knowledge_dir):
+    """The pooled Fmax model is max(ns_floor, pct*period); a ns p90 learned from long
+    periods would become a huge floor at 2 ns, so only period <= 10 ns runs pool."""
+    import knowledge_db, learn_heuristics
+    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    rows = [(2.5, 0.4, 0.2, 0.21), (2.5, 0.5, 0.3, 0.3), (3.0, 0.6, 0.3, 0.29),
+            (100.0, 20.0, 10.0, 5.0), (200.0, 30.0, 15.0, 3.0)]
+    for i, (period, fp, pl, fin) in enumerate(rows):
+        conn.execute(
+            "INSERT INTO runs (run_id, project_path, design_name, design_family, "
+            "platform, ingested_at, clock_period_ns, floorplan_setup_ws, "
+            "place_setup_ws, finish_setup_ws, wns_ns, drc_status, lvs_status) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (f"r{i}", f"/tmp/r{i}", f"d{i}", f"fam{i}", "sky130hd", "2026-01-01T00:00:00Z",
+             period, fp, pl, fin, fin, "clean", "clean"))
+    conn.commit()
+    data = learn_heuristics.learn(tmp_knowledge_dir / "runs.sqlite",
+                                  tmp_knowledge_dir / "heuristics.json")
+    sd = data["platforms"]["sky130hd"]["slack_deterioration"]
+    assert sd["n"] == 3
+    assert sd["d_pl_fin"]["ns_p90"] < 0.05          # long-period 5-12 ns erosion excluded
     conn.close()

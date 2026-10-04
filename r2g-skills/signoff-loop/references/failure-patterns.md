@@ -395,7 +395,7 @@ Large designs (swerv, bp_multi_top, tinyRocket) can take hours for PnR. The proc
 
 **Action:**
 - Increase timeout: `ORFS_TIMEOUT=14400 scripts/flow/run_orfs.sh ...` (4 hours)
-- Limit CPU usage: `ORFS_MAX_CPUS=4 scripts/flow/run_orfs.sh ...` (prevent thermal/resource issues)
+- Limit CPU usage: `NUM_CORES=4 scripts/flow/run_orfs.sh ...` (a thread cap; `ORFS_MAX_CPUS` is an alias). For concurrent flows also give each one a disjoint cpuset: a shared `taskset -c 0-3` makes them contend for the same cores
 - For faster convergence, add to config.mk:
   - `export SKIP_LAST_GASP = 1` (skip last-gasp optimization)
   - `export SKIP_CTS_REPAIR_TIMING = 1` (skip CTS timing repair)
@@ -4223,6 +4223,24 @@ about to overwrite" self-heal is added for one variable, the defect class is *th
 that didn't recall* — patch the loop, not the variable; and every pinned path must also
 be autodetectable, or the pin file is a single point of silent environmental collapse.
 
+### 29b. A host-wide env script overrode pinned tools — every synth failed on `stat -hierarchy` (2026-09-28)
+
+`_env.sh` documents "caller env > env files > ORFS env.sh > /opt/openroad_tools_env.sh >
+autodetect", but it *sourced* the two third-party scripts, and both `export` tool vars
+unconditionally. On the 203 host `/opt/openroad_tools_env.sh` sets
+`YOSYS_EXE=/opt/pdk_klayout_openroad/oss-cad-suite/bin/yosys` (0.51), so an exported or
+`env.local.sh`-pinned ORFS yosys 0.64 was silently replaced; ORFS `synth.tcl` calls
+`stat -hierarchy`, which 0.51 rejects ("Unknown option"), and all 8 designs of the Fmax pilot
+failed synth in 4 s — `fmax_search` then reported every design `inconclusive`
+(`place_probe_inconclusive`), which reads like a timing result, not an environment fault.
+**Fix:** `_env.sh` snapshots every already-set tool var (`OPENROAD_EXE YOSYS_EXE KLAYOUT_CMD
+MAGIC_EXE NETGEN_EXE STA_EXE IVERILOG_EXE VVP_EXE VERILATOR_EXE PDK_ROOT`) before sourcing
+the third-party scripts and restores them after, so orders 1–3 really outrank 4–5; unpinned
+vars still take the third-party value. Test:
+`eda-install/tests/test_bootstrap.py::test_env_sh_pinned_tools_survive_third_party_env_scripts`
+(fails on the old `_env.sh`). **Lesson:** an `inconclusive` Fmax search on *every* design of a
+batch is an environment alarm — check the probe's `1_2_yosys.log` before reading it as timing.
+
 ### 31. Crash-orphaned transient ledger states stranded designs FOREVER — round could end "ALL_DONE" with non-terminal designs (2026-07-09)
 
 Found by the sky130hs /r2g-debug tick's Step-0 gate after a host reboot: the ledger held
@@ -5054,6 +5072,115 @@ sha256s, the SDC digest + stamped period, the Fmax winner, the confirming run + 
 and a `strict_clean` verdict whose `strict_missing`/`constraint.missing` ENUMERATE what blocks
 (H3: the absent final-timing confirmation is named, never just the matching proxy/SDC periods).
 Test: `test_build_signoff_manifest.py`.
+
+### P0-2b — a timing-repaired Fmax run read as unqualified (2026-09-27)
+The manifest demanded `stamped SDC period == fmax_search winner` (rtol 1e-3). The winner is a
+placement proxy; when the confirming full flow missed timing, the repair path loosened the SDC
+(`check_timing` minor bump → `suggested_clock_period`, or `diagnose_signoff_fix` `period_relax`)
+and the design then closed clean — yet `constraint.qualified=false`, so every such design counted
+as a strict failure in Fmax-mode campaigns (success rate silently under-reported). **Guard:** each
+loosening is appended to `reports/fmax_search.json["relaxations"]` as `{from,to,source,ts}`
+(`fmax_search.record_period_relax` / `fmax_search.py --record-relax OLD NEW SOURCE <proj>`, called
+by `diagnose_signoff_fix.py` on any CLOCK_PERIOD increase and by `tools/run_sky130_design.sh` on
+the minor bump). `fmax_model.resolve_confirmed_period` qualifies the stamped period ONLY through
+an unbroken chain from the winner, every step strictly looser; a gap, a tightening, or an
+unrecorded hand edit still disqualifies with a named reason. The manifest records
+`period_source` (`search_winner`|`relaxed_chain`), `confirmed_period`, and `relax_ratio`
+(confirmed/winner) — report Fmax from `confirmed_period`, and the proxy's optimism from
+`relax_ratio`. An operator/agent who hand-applies a minor bump must record it the same way.
+Tests: `test_build_signoff_manifest.py` (chain cases), `test_fmax_search.py`,
+`test_diagnose_signoff_fix.py::test_apply_period_relax_records_fmax_relaxation_chain`.
+
+### P0-2c — Fmax-mode gaps found by the 161-design AIC cohort (2026-09-29)
+Three ways a design lost (or under-reported) its Fmax, none a design fault:
+(1) **Search before repair:** `fmax-drain` probes the template config, so a place
+abort (PPL-0024) made the search `inconclusive`; `run` then grew DIE_AREA and the
+design signed off at the seed period with no winner → `constraint.qualified=false`
+(RequestBlock1CH_BRIDGE, inputDMAfifo, hbm_controller). **Guard:** `engineer_loop
+fmax-retry` (re-search once after a config-editing repair, re-queue).
+(2) **Minor miss never relaxed:** `_timing_plan` offered `period_relax` only for
+moderate/severe, so shake128 (WNS −0.17 ns at the winner) burned
+`utilization_reduce` (an area change) and stopped at minor. **Guard:** Fmax-mode
+projects (ok `fmax_search.json`) get `period_relax` on minor too; fixed-period tasks
+unchanged. (3) **Static model on unknown families:** see orfs-playbook "Model
+selection" — platform-pooled fallback. (4) **One relax, then area changes:** a relax
+re-runs from synth, and the noisy re-placement can land worse (chacha20: WNS −0.17 ns at
+the 3.67 ns winner, relax to 3.89 ns, violators 40 → 101); `period_relax` was then
+excluded as "tried", so the loop spent its remaining iterations on non-clock strategies
+and stopped at minor. **Guard:** in Fmax mode `period_relax` stays available after use
+(`repeatable`), each repeat computed from the CURRENT period/WNS (no-improvement does not
+roll back) and bounded by `FMAX_RELAX_CAP` (1.20) × the search winner; the FIRST relax is
+unchanged, and fixed-period tasks never repeat it. Tests: `test_loop_fmax_drain.py::test_fmax_retry_*`,
+`test_diagnose_timing.py::test_fmax_mode_minor_*`/`test_fixed_period_minor_*`,
+`test_fmax_model.py::test_select_model_platform_fallback`,
+`test_diagnose_timing.py::test_fmax_mode_period_relax_*`.
+(5) **An untested learner candidate vetoed a validated transfer:** at a tighter Fmax clock
+pcie_7x / matmul (right-edge m3.2, exactly the pin_side_rebalance mechanism) were classed
+`bus_heavy/*`, whose only exact `recipe_status` row was a `learner_diff` candidate with
+zero `ab_trials`; "exact row always wins" let that no-verdict row veto the PROMOTED
+wildcard, so the loop stopped with no strategy (and tt_um_example / qmap fell back to an
+area-changing density_relief). **Guard:** for the approved geometric scope transfer only
+(`_PLATFORM_GEOMETRIC_SCOPE_TRANSFER` + proven edge geometry), an exact row that is a
+learner auto-enqueued candidate with no A/B trial no longer vetoes a promoted wildcard
+(match level `platform_geometric_over_untested_candidate`); shadow / parked / demoted /
+A/B-judged rows still win, and every other strategy keeps the strict exact rule. Test:
+`test_repair_policy_regressions.py::test_untested_learner_candidate_does_not_veto_promoted_pin_transfer`.
+
+### P0-2d — Fmax probes leaked their ORFS scratch and filled the disk (2026-09-28/30)
+`fmax_search.cleanup_variants` removed each probe's project dir but not what ORFS wrote
+under `flow/{results,logs,objects,reports}/<platform>/<design>/<variant>` (~1 GB per
+probe on mid-size sky130hd designs). A 161-design Fmax campaign runs ~800 probes: on
+203 (shared 879 G root fs) it reached 100% on 2026-09-28 (3 designs corrupted, other
+users affected) and 88 G of orphaned probe dirs again on 2026-09-30. **Guard:**
+`cleanup_variants` now also deletes the variant's ORFS scratch, located via its
+`run-meta.json` `orfs_results` and only when that path's basename is the variant
+itself. Batch operators should still gate dispatch on free space. Tests:
+`test_fmax_search.py::test_cleanup_variants_removes_orfs_scratch`,
+`test_cleanup_variants_ignores_foreign_orfs_path`.
+
+### P0-2e — Netgen `top_pin_mismatch` had no repair at all (2026-10-01)
+`extract_lvs` reports Netgen failures as status `mismatch` (class `top_pin_mismatch` when
+"Top level cell failed pin matching"), but `_lvs_plan` only acted on `fail`/`failed`, so
+every such residual stopped with no strategy — 8 of the AIC Fmax cohort's residuals, all
+with port-to-port `assign`s or shared tie-offs. The fix (`buffer_port_feedthroughs.tcl`
+as `POST_GLOBAL_PLACE_TCL`, "sky130 LVS" cause 5) existed only as operator guidance.
+**Recipe:** `lvs_port_feedthrough_buffer` (wire the hook, re-run from place, recheck LVS)
+for `mismatch`/`fail` with class `top_pin_mismatch` (or the Netgen phrase when the class is
+absent) and no hook wired; never for other classes (e.g. a geometry-proven pin-vs-PDN
+short). New recipe → `requires_ab_promotion`: validated by A/B on designs OUTSIDE the
+cohort before live use. Tests: `test_diagnose_signoff_fix.py::test_*feedthrough*`.
+
+**A/B result (2026-10-01, sky130hd, 5 non-cohort designs, k=2), keyed on the LVS symptom
+`a0d6b4c6ae5c8c4c` = sha1(lvs, top_pin_mismatch, {}):** win on darkcache, wb_arbiter_2,
+spirom_axi, core_soc (arm A mismatch ×2 → arm B LVS clean ×2, 1 fix iter) → promoted
+`ab_corpus:4w0l` under class `*`; **inconclusive** on fft_freq_pipe — the hook inserted 0
+buffers: its residual is whole output buses (`Fr[*]`/`Fi[*]`) with "no matching pin", i.e.
+constant/shared tie-off outputs, NOT port feedthroughs. The recipe correctly logs
+`recipe_no_effect` there; that sub-class still has no repair.
+Live use of the `*` row goes through `_MECHANISM_SCOPE_TRANSFER` (diagnosis otherwise reads
+only the exact design class); exact-class evidence still wins.
+Harness gotchas found getting there: (1) a new catalog strategy must also be listed in
+`engineer_loop._KNOWN_APPLY_STRATEGIES`, else `ab-drain` parks it `nondivergent_unknown_strategy`
+and judges 0 trials (test `test_feedthrough_buffer_has_an_ab_application_path`); (2) the first
+run was enqueued under the run's TIMING symptom (`timing|clean`) — promoted on a key no LVS
+plan ever reads; `ab-enqueue` now refuses a symptom whose check differs from the strategy's
+(test `test_ab_enqueue_refuses_lvs_recipe_under_timing_symptom`); (3) the independent-subject
+vote keys on `runs.design_family`, which ingest infers from the project-dir PREFIX — batch dirs
+named `<tag>_<hash>_<design>` collapse every design into family `<tag>` (one vote; read
+`ab_corpus_insufficient:1w0l` despite 3 wins). Name A/B projects by design, or add explicit
+`families.json` mappings before ingest.
+
+**Cohort application (AIC v2.2, 9 cohort residuals with this symptom, frozen recipe):** first
+pass exposed two fixer bugs that hid every win — (a) `fix_signoff --check both` graded DRC
+BEFORE the LVS phase, so the place-rerun left drc.json bound to the old layout and the
+manifest refused the design ("reports name 2 different runs" / `drc: status=None`); now the
+DRC (then LVS) verdict is re-graded when the newest GDS post-dates drc.json; (b) `apply_edits`
+REPLACED the auto block, so the timing fix that followed (`CORE_UTILIZATION`) dropped the
+`POST_GLOBAL_PLACE_TCL` hook and LVS regressed — edits now stack (same key overrides). With
+both fixed: LVS clean 8/9 (lumi_rx_ready: `recipe_no_effect`, not a feedthrough case) and
+3/3 designs with an Fmax winner reach strict signoff (apb2per, axicb_slv_switch,
+axi_ram_wr_rd_if). Tests: `test_apply_edits_stacks_on_accepted_fixes`,
+`test_fix_signoff_stale_baseline.py::test_lvs_phase_reflow_regrades_drc_on_new_layout`.
 
 ### P0-3 — green ENV with strict signoff impossible
 `check_env.sh` passed while nangate45 had no LVS deck and `ANTENNA_X1` carried

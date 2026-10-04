@@ -14,9 +14,38 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 import build_signoff_manifest as bsm
 
+from .conftest import production_toolchain_env
+
 MOD = Path(bsm.__file__).resolve()
+
+
+def _nangate45_not_strict_here() -> str | None:
+    """Why the resolved ORFS checkout cannot back a strict nangate45 bundle, if so.
+
+    build() cross-checks strict_clean against the capability probe of the checkout
+    _env.sh resolves (RMD3-P1-02), so the clean-bundle tests need a checkout where
+    nangate45 is strict_signoff_ready (tools/install_nangate45_{lvs,antenna}.sh).
+    """
+    import platform_capability as pc
+    with production_toolchain_env():     # this machine's toolchain, pins honoured
+        env = pc.resolve_signoff_env()
+    flow_dir = pc.find_flow_dir(env=env)
+    if not flow_dir:
+        return "no ORFS flow dir resolves on this machine"
+    caps = pc.probe_platform(flow_dir, "nangate45", env=env)
+    if caps.get("strict_signoff_ready"):
+        return None
+    hints = [str((caps.get(k) or {}).get("hint") or k) for k in caps.get("missing") or []]
+    return f"nangate45 is not strict_signoff_ready in {flow_dir}: {'; '.join(hints)}"
+
+
+_NOT_STRICT = _nangate45_not_strict_here()
+needs_strict_nangate45 = pytest.mark.skipif(_NOT_STRICT is not None,
+                                            reason=_NOT_STRICT or "")
 
 
 def _proj(tmp_path, *, drc="clean", lvs="clean", route=0, rcx="complete",
@@ -49,6 +78,8 @@ def _proj(tmp_path, *, drc="clean", lvs="clean", route=0, rcx="complete",
     return proj
 
 
+@needs_strict_nangate45
+@pytest.mark.usefixtures("production_toolchain")
 def test_clean_bundle_is_strict_and_qualified(tmp_path):
     man = bsm.build(str(_proj(tmp_path)))
     assert man["strict_clean"] and not man["strict_missing"], man["strict_missing"]
@@ -109,6 +140,8 @@ def test_promoted_project_requires_complete_task_provenance(tmp_path):
     assert man["strict_clean"] is False
 
 
+@needs_strict_nangate45
+@pytest.mark.usefixtures("production_toolchain")
 def test_cli_writes_manifest_and_strict_exit(tmp_path):
     proj = _proj(tmp_path, drc="fail")
     r = subprocess.run([sys.executable, str(MOD), str(proj), "--strict"],
@@ -120,3 +153,62 @@ def test_cli_writes_manifest_and_strict_exit(tmp_path):
     r = subprocess.run([sys.executable, str(MOD), str(proj2), "--strict"],
                        capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+# ── Fmax relaxed-period chain (2026-09-27) ───────────────────────────────────
+# A confirming flow that misses timing at the proxy winner gets its SDC loosened
+# by the repair path. The manifest must qualify that ONLY through an unbroken,
+# recorded, strictly-loosening chain from the winner to the stamped period.
+
+def _with_relax(proj, steps):
+    rep = proj / "reports" / "fmax_search.json"
+    doc = json.load(open(rep))
+    doc["relaxations"] = steps
+    json.dump(doc, open(rep, "w"))
+    return proj
+
+
+def test_recorded_relaxation_chain_qualifies(tmp_path):
+    proj = _with_relax(_proj(tmp_path, winner=2.0, stamped="2.6"),
+                       [{"from": 2.0, "to": 2.3, "source": "check_timing_minor"},
+                        {"from": 2.3, "to": 2.6, "source": "period_relax"}])
+    man = bsm.build(str(proj))
+    c = man["constraint"]
+    assert c["period_match"] is False
+    assert c["period_source"] == "relaxed_chain" and c["qualified"] is True, c
+    assert c["confirmed_period"] == 2.6 and abs(c["relax_ratio"] - 1.3) < 1e-9
+    # Environment-independent: the relaxed period adds no constraint blocker (the
+    # overall strict_clean also depends on this machine's capability probe).
+    assert not [m for m in man["strict_missing"] if m.startswith("constraint:")], man["strict_missing"]
+
+
+def test_winner_match_reports_search_winner_source(tmp_path):
+    c = bsm.build(str(_proj(tmp_path)))["constraint"]
+    assert c["period_source"] == "search_winner" and c["relax_ratio"] == 1.0
+
+
+def test_unrecorded_relaxation_still_disqualifies(tmp_path):
+    c = bsm.build(str(_proj(tmp_path, winner=2.0, stamped="2.6")))["constraint"]
+    assert c["qualified"] is False and c["period_source"] is None
+    assert any("no recorded relaxation" in m for m in c["missing"]), c["missing"]
+
+
+def test_broken_chain_disqualifies(tmp_path):
+    proj = _with_relax(_proj(tmp_path, winner=2.0, stamped="2.6"),
+                       [{"from": 2.2, "to": 2.6, "source": "period_relax"}])
+    c = bsm.build(str(proj))["constraint"]
+    assert c["qualified"] is False and any("starts at 2.2" in m for m in c["missing"])
+
+
+def test_tightening_step_disqualifies(tmp_path):
+    proj = _with_relax(_proj(tmp_path, winner=2.0, stamped="1.8"),
+                       [{"from": 2.0, "to": 1.8, "source": "hand"}])
+    c = bsm.build(str(proj))["constraint"]
+    assert c["qualified"] is False and any("not a loosening" in m for m in c["missing"])
+
+
+def test_hand_edit_after_chain_disqualifies(tmp_path):
+    proj = _with_relax(_proj(tmp_path, winner=2.0, stamped="3.0"),
+                       [{"from": 2.0, "to": 2.6, "source": "period_relax"}])
+    c = bsm.build(str(proj))["constraint"]
+    assert c["qualified"] is False and any("chain ends at 2.6" in m for m in c["missing"])

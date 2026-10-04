@@ -27,6 +27,18 @@ from pathlib import Path
 _LIVE_BLOCKED_LIFECYCLE = frozenset({"candidate", "shadow"})
 _REPAIR_POLICY_ENV = "R2G_REPAIR_ACTION_POLICY_FILE"
 _PIN_EDGE_DRC_RULES = frozenset({"m3.2"})
+_PLATFORM_GEOMETRIC_SCOPE_TRANSFER = frozenset({
+    ("04d38c5a585fd332", "sky130hd", "pin_side_rebalance"),
+})
+# Mechanism-gated class transfer (2026-10-01): a recipe whose catalog entry is ONLY
+# offered when the tool has named the mechanism (Netgen "Top level cell failed pin
+# matching" -> top_pin_mismatch) may use its '*'-class promotion for any design class,
+# because that promotion was won across several classes on independent designs.
+# Key = (symptom_id, platform, strategy); the symptom is the LVS one,
+# sha1(lvs, top_pin_mismatch, {})[:16].
+_MECHANISM_SCOPE_TRANSFER = frozenset({
+    ("a0d6b4c6ae5c8c4c", "sky130hd", "lvs_port_feedthrough_buffer"),
+})
 _SETUP_MARGIN_PLATFORMS = frozenset({"sky130hd"})
 _SETUP_MARGIN_NS = 0.2
 _SETUP_MARGIN_MAX_DEFICIT_NS = 0.2
@@ -373,6 +385,49 @@ def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
     return plan
 
 
+FEEDTHROUGH_HOOK = (Path(__file__).resolve().parents[1] / "flow" / "orfs_hooks"
+                    / "buffer_port_feedthroughs.tcl")
+_PIN_MATCH_FAIL = re.compile(r"Top level cell failed pin matching", re.I)
+
+
+def _port_feedthrough_strategy(lvs: dict, cfg: dict) -> dict | None:
+    """Netgen 'Top level cell failed pin matching' with an otherwise matching netlist
+    is the port-alias case (failure-patterns "sky130 LVS" cause 5): a net that carries
+    2+ top-level ports (`assign out = in`, or outputs tied to one constant) cannot be
+    expressed in SPICE. The existing buffer_port_feedthroughs.tcl hook splits those
+    nets after the last remove_buffers; the repair wires it in and re-places. New
+    recipe -> A/B-gated (2026-10-01; found on the AIC Fmax cohort: 8 LVS residuals)."""
+    if cfg.get("POST_GLOBAL_PLACE_TCL"):
+        return None                         # a hook is already wired (maybe this one)
+    mclass = lvs.get("mismatch_class")
+    if mclass and mclass != "top_pin_mismatch":
+        return None                         # e.g. a geometry-proven pin-vs-PDN short
+    if mclass == "top_pin_mismatch" and FEEDTHROUGH_HOOK.exists():
+        return _feedthrough_recipe()
+    info = lvs.get("log_info") or {}
+    text = " ".join(str(x) for x in (info.get("errors") or []))
+    rpt = info.get("report_file") or lvs.get("report_file")
+    if rpt:
+        try:
+            text += Path(rpt).read_text(encoding="utf-8", errors="ignore")[-20000:]
+        except OSError:
+            pass
+    if not _PIN_MATCH_FAIL.search(text) or not FEEDTHROUGH_HOOK.exists():
+        return None
+    return _feedthrough_recipe()
+
+
+def _feedthrough_recipe() -> dict:
+    return {"id": "lvs_port_feedthrough_buffer",
+            "rationale": "Netgen reports 'Top level cell failed pin matching': a net carries "
+                         "2+ top-level ports (port-to-port assign or shared tie-off), which "
+                         "SPICE cannot express. Wire buffer_port_feedthroughs.tcl as "
+                         "POST_GLOBAL_PLACE_TCL and re-place so every such port gets its own net.",
+            "config_edits": {"POST_GLOBAL_PLACE_TCL": str(FEEDTHROUGH_HOOK)},
+            "rerun_from": "place", "recheck": "lvs", "auto_apply": True,
+            "requires_ab_promotion": True}
+
+
 def _lvs_plan(lvs: dict, cfg: dict, exclude: set) -> dict:
     status = lvs.get("status", "unknown")
     plan = {"check": "lvs", "status": status, "violation_count": lvs.get("mismatch_count"),
@@ -398,6 +453,12 @@ def _lvs_plan(lvs: dict, cfg: dict, exclude: set) -> dict:
         if s["id"] not in exclude:
             plan["strategies"].append(s)
         return plan
+    if status in ("mismatch", "fail", "failed"):
+        feedthrough = _port_feedthrough_strategy(lvs, cfg)
+        if feedthrough is not None:
+            if feedthrough["id"] not in exclude:
+                plan["strategies"].append(feedthrough)
+            return plan
     if status in ("fail", "failed"):
         errors = " ".join((lvs.get("log_info") or {}).get("errors", []))
         if KLAYOUT_CPP_CRASH.search(errors):
@@ -484,8 +545,15 @@ def explain_ranking(plan: dict) -> list[str]:
     return lines
 
 
+# Fmax mode: period_relax may repeat (post-route repair is noisy -- one loosening can
+# land on a worse placement), but the cumulative loosening is capped relative to the
+# search winner so the "Fmax" never silently degrades into an arbitrary slow clock.
+FMAX_RELAX_CAP = 1.20
+
+
 def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
-                 routing_clean: bool = False) -> dict:
+                 routing_clean: bool = False, fmax_mode: bool = False,
+                 fmax_winner: float | None = None) -> dict:
     tier = tcheck.get("tier", "unknown")
     wns = tcheck.get("wns_ns")
     plan = {"check": "timing", "status": tier, "violation_count": None,
@@ -523,18 +591,83 @@ def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
              "config_edits": {"SETUP_SLACK_MARGIN": str(_SETUP_MARGIN_NS)},
              "sdc_edits": {}, "rerun_from": "floorplan", "recheck": "timing",
              "auto_apply": True, "requires_ab_promotion": True})
-    if tier in ("moderate", "severe") and wns is not None:
+    # Fixed-target timing development candidates. These are deliberately
+    # independent effects and remain inert in blind runs until the exact
+    # (symptom, design-class, platform, strategy) lifecycle key is promoted.
+    # Keep them visible for every routed negative-WNS task so the A/B trainer
+    # can evaluate them instead of stopping merely because the miss falls
+    # outside the narrow setup_slack_margin band.
+    if (cfg.get("PLATFORM") in _SETUP_MARGIN_PLATFORMS
+            and routing_clean
+            and isinstance(wns, (int, float))
+            and math.isfinite(float(wns))
+            and float(wns) < 0):
+        if str(cfg.get("ABC_CLOCK_PERIOD_IN_PS", "")).strip() != "8000":
+            strategies.append(
+                {"id": "abc_overdrive_8ns",
+                 "rationale": "Use an 8 ns internal ABC mapping target while "
+                              "retaining the registered 10 ns signoff clock.",
+                 "config_edits": {"ABC_CLOCK_PERIOD_IN_PS": "8000"},
+                 "sdc_edits": {}, "rerun_from": "synth", "recheck": "timing",
+                 "auto_apply": True, "requires_ab_promotion": True})
+        if str(cfg.get("ENABLE_PLACE_REPAIR_TIMING", "")).strip() != "1":
+            strategies.append(
+                {"id": "early_place_timing_repair",
+                 "rationale": "Enable ORFS placement-parasitic timing repair "
+                              "without changing the registered clock or footprint.",
+                 "config_edits": {"ENABLE_PLACE_REPAIR_TIMING": "1"},
+                 "sdc_edits": {}, "rerun_from": "floorplan", "recheck": "timing",
+                 "auto_apply": True, "requires_ab_promotion": True})
+        if str(cfg.get("SYNTH_HIERARCHICAL", "0")).strip() != "1":
+            strategies.append(
+                {"id": "hierarchical_synthesis_mapping",
+                 "rationale": "Evaluate hierarchical synthesis as an isolated "
+                              "mapping effect under the fixed signoff task.",
+                 "config_edits": {"SYNTH_HIERARCHICAL": "1"},
+                 "sdc_edits": {}, "rerun_from": "synth", "recheck": "timing",
+                 "auto_apply": True, "requires_ab_promotion": True})
+    import setup_scope
+    scope_evidence = setup_scope.evidence(cfg, tcheck, routing_clean)
+    if scope_evidence and any(str(cfg.get(k, '0')).strip() != v
+                              for k, v in setup_scope.EDITS.items()):
+        strategies.append({
+            'id': setup_scope.STRATEGY,
+            'rationale': 'Test hierarchy plus placement timing repair on routed Sky130HD '
+                         'area-mapped setup misses within 3 ns; no RTL or clock changes.',
+            'config_edits': dict(setup_scope.EDITS), 'sdc_edits': {},
+            'rerun_from': 'synth', 'recheck': 'timing', 'auto_apply': True,
+            'requires_ab_promotion': True, 'setup_scope_evidence': scope_evidence,
+        })
+    # Fmax-mode projects (an ok reports/fmax_search.json) OWN their clock: the
+    # searched winner is a placement proxy, so a minor post-route miss is closed by
+    # loosening the period (recorded as a relaxation chain, failure-patterns P0-2b),
+    # not by an area change. Fixed-period tasks (e.g. Experiment 2's registered
+    # 10 ns) never relax on minor — that would change the task. (2026-09-29 AIC
+    # cohort: shake128 stalled at minor after utilization_reduce.)
+    relax_tiers = ("moderate", "severe", "minor") if fmax_mode else ("moderate", "severe")
+    if tier in relax_tiers and wns is not None:
         period = tcheck.get("clock_period_ns")
         if period:
             # Absorb the negative slack then add 5% margin (proven iccad2015
             # period_relax recipe: 3 att / 2 succ, 97.5% WNS reduction).
             relaxed = round((float(period) - float(wns)) * 1.05, 3)
-            strategies.append(
-                {"id": "period_relax",
-                 "rationale": f"Relax clock period {period} -> {relaxed} ns to "
-                              "absorb WNS with 5% margin (validated recipe).",
-                 "config_edits": {}, "sdc_edits": {"CLOCK_PERIOD": str(relaxed)},
-                 "rerun_from": "synth", "recheck": "timing", "auto_apply": True})
+            # The FIRST relax is unchanged (any tier that relaxes, any size); only a
+            # REPEAT -- possible in Fmax mode once period_relax was tried -- is
+            # bounded by the cumulative cap.
+            cap = (float(fmax_winner) * FMAX_RELAX_CAP
+                   if fmax_mode and fmax_winner else None)
+            repeat = "period_relax" in exclude
+            if not repeat or (cap is not None and relaxed <= cap):
+                strategies.append(
+                    {"id": "period_relax",
+                     "rationale": f"Relax clock period {period} -> {relaxed} ns to "
+                                  "absorb WNS with 5% margin (validated recipe).",
+                     "config_edits": {}, "sdc_edits": {"CLOCK_PERIOD": str(relaxed)},
+                     "rerun_from": "synth", "recheck": "timing", "auto_apply": True,
+                     # Fmax mode: may be re-applied after a noisy re-run (2026-09-30
+                     # AIC v2: chacha20's one relax re-placed worse, 40 -> 101
+                     # violators, and the loop then spent its iterations on area).
+                     "repeatable": cap is not None})
     strategies.append(
         {"id": "utilization_reduce",
          "rationale": "Lower CORE_UTILIZATION to give placement/CTS slack "
@@ -580,13 +713,34 @@ def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
              "config_edits": {"ABC_AREA": "0", "SYNTH_HIERARCHICAL": "0"},
              "sdc_edits": {}, "rerun_from": "synth", "recheck": "timing",
              "auto_apply": True, "requires_ab_promotion": True})
-    plan["strategies"] = [s for s in strategies if s["id"] not in exclude]
+    plan["strategies"] = [s for s in strategies
+                          if s["id"] not in exclude or s.get("repeatable")]
     return plan
+
+
+def _fmax_winner(proj) -> float | None:
+    """The Fmax search winner period when the project's clock is owned by an ok
+    search, else None (fixed-period task)."""
+    try:
+        rep = json.loads((Path(proj) / "reports" / "fmax_search.json").read_text())
+    except (OSError, ValueError):
+        return None
+    w = rep.get("winner") if rep.get("status") == "ok" else None
+    try:
+        return float(w["period"]) if isinstance(w, dict) else None
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _is_fmax_mode(proj) -> bool:
+    """True when the project's clock is owned by an Fmax search (ok winner)."""
+    return _fmax_winner(proj) is not None
 
 
 def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
                exclude=(), recipes: dict | None = None,
-               tcheck: dict | None = None, route: dict | None = None) -> dict:
+               tcheck: dict | None = None, route: dict | None = None,
+               fmax_mode: bool = False, fmax_winner: float | None = None) -> dict:
     """Pure: (drc.json, lvs.json, parsed config.mk) -> ordered fix plan dict.
     When `recipes` (a Tier-3 fix_recipes entry for this check/violation_class)
     is given, strategies are re-ranked by empirical clearance (fix_model)."""
@@ -602,7 +756,8 @@ def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
             routing_clean = route_status == "clean"
         else:
             routing_clean = (drc or {}).get("status") in ("clean", "clean_beol")
-        plan = _timing_plan(tcheck or {}, cfg, excl, routing_clean=routing_clean)
+        plan = _timing_plan(tcheck or {}, cfg, excl, routing_clean=routing_clean,
+                            fmax_mode=fmax_mode, fmax_winner=fmax_winner)
     elif check == "drc":
         plan = _drc_plan(drc or {}, cfg, excl)
     elif check == "route":
@@ -648,14 +803,16 @@ def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | Non
     for s in strategies:
         if not s.get("auto_apply"):
             continue
+        candidate_attempt = s.get("candidate_attempt_authorized") is True
         if (s.get("requires_ab_promotion")
-                and s.get("lifecycle_status") != "promoted"):
-            continue        # candidate recipe: only live after an A/B promotion
-        # A/B-unvalidated ('candidate') or A/B-demoted ('shadow') recipe: never
-        # auto-applied in a blind live run, on ANY lookup path (P1-10 + 2026-07-04).
-        # A candidate that re-enters via the static catalog with a neutral cold-start
-        # score must NOT execute before it wins its A/B trial ('parked' stays applicable).
-        if s.get("lifecycle_status") in _LIVE_BLOCKED_LIFECYCLE:
+                and s.get("lifecycle_status") != "promoted"
+                and not candidate_attempt):
+            continue        # candidate recipe: live only after promotion or frozen authorization
+        # A/B-unvalidated ('candidate') or A/B-demoted ('shadow') recipe is inert by
+        # default.  A candidate can execute only through the separately frozen,
+        # effect-fingerprint-bound attempt policy; shadow evidence always blocks it.
+        if (s.get("lifecycle_status") in _LIVE_BLOCKED_LIFECYCLE
+                and not candidate_attempt):
             continue
         if s.get("dead_here") and not retry_dead:
             continue        # repeatedly failed on THIS design+check, never cleared
@@ -664,8 +821,14 @@ def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | Non
 
 
 def apply_edits(config_text: str, edits: dict) -> str:
-    """Replace the marked auto-block with `edits` (idempotent; re-apply replaces)."""
-    out, skip = [], False
+    """Stack `edits` onto the marked auto-block (idempotent; a key already in the block
+    is overridden in place, every other accepted fix is KEPT).
+
+    The block holds the ACCEPTED fixes only -- a rejected attempt is rolled back from
+    the snapshot before the next apply -- so replacing it wholesale silently undid
+    earlier repairs: an LVS feedthrough hook dropped by the timing fix that followed
+    (2026-10-01 AIC v2.2, failure-patterns P0-2e)."""
+    out, skip, kept = [], False, {}
     for ln in config_text.splitlines():
         s = ln.strip()
         if s == BLOCK_START:
@@ -674,10 +837,15 @@ def apply_edits(config_text: str, edits: dict) -> str:
         if s == BLOCK_END:
             skip = False
             continue
-        if not skip:
-            out.append(ln)
+        if skip:
+            if s.startswith("export ") and "=" in s:
+                k, v = s[len("export "):].split("=", 1)
+                kept[k.strip()] = v.strip()
+            continue
+        out.append(ln)
+    kept.update({k: v for k, v in edits.items()})
     body = "\n".join(out).rstrip("\n")
-    block = [BLOCK_START] + [f"export {k} = {v}" for k, v in edits.items()] + [BLOCK_END]
+    block = [BLOCK_START] + [f"export {k} = {v}" for k, v in kept.items()] + [BLOCK_END]
     prefix = (body + "\n\n") if body else ""
     return prefix + "\n".join(block) + "\n"
 
@@ -783,6 +951,41 @@ def _apply_repair_action_policy(plan: dict) -> dict:
             + (f": {error}" if error else "")
         )
     return plan
+
+
+def _candidate_attempt_authorized(policy: dict | None, *, check: str,
+                                  platform: str, strategy: dict,
+                                  lifecycle_status: str | None) -> dict | None:
+    """Return the matching operator-owned candidate-attempt entry, if any.
+
+    This is intentionally separate from lifecycle promotion.  It lets a frozen
+    experiment execute one pre-registered, action-policy-safe candidate without
+    claiming that the candidate was promoted.  Exact negative lifecycle evidence
+    remains authoritative, and the effect fingerprint prevents strategy-name
+    aliasing from widening the authorized action.
+    """
+    if lifecycle_status not in (None, "candidate") or not isinstance(policy, dict):
+        return None
+    candidate_policy = policy.get("candidate_attempt_policy")
+    if not isinstance(candidate_policy, dict):
+        return None
+    if candidate_policy.get("mode") != "single_preregistered_attempt":
+        return None
+    entries = candidate_policy.get("entries")
+    if not isinstance(entries, list):
+        return None
+    edits = strategy.get("config_edits") or {}
+    if strategy.get("sdc_edits") or strategy.get("env") or strategy.get("env_flags"):
+        return None
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if (entry.get("check") == check
+                and entry.get("platform") == platform
+                and entry.get("strategy") == strategy.get("id")
+                and entry.get("effect_fingerprint") == edits):
+            return entry
+    return None
 
 
 def _latest_final_def(project: Path) -> Path | None:
@@ -1144,12 +1347,13 @@ def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
         fp_of = {s["id"]: _effect_fp(s) for s in plan_strats}
         dead_effects = {fp_of[s] for s in dead if fp_of.get(s)}
         statuses = {}
+        action_policy, action_policy_error = _load_repair_action_policy()
         if sid:
             import recipe_lifecycle
             for s in plan_strats:
-                statuses[s["id"]] = recipe_lifecycle.get_status(
-                    conn, symptom_id=sid, design_class=design_class,
-                    platform=platform, strategy=s["id"], default=None)
+                statuses[s["id"]] = _lifecycle_status_with_scope_transfer(
+                    conn, recipe_lifecycle, symptom_id=sid,
+                    design_class=design_class, platform=platform, strategy=s)
         for s in plan_strats:
             fp = fp_of.get(s["id"])
             if s["id"] in dead:
@@ -1157,8 +1361,18 @@ def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
             elif fp and fp in dead_effects:
                 s["dead_here"] = dead_after      # alias of a dead-by-effect strategy
                 s["dead_by_effect"] = True
-            if statuses.get(s["id"]):
-                s["lifecycle_status"] = statuses[s["id"]]
+            status, match_level = statuses.get(s["id"], (None, None))
+            if status:
+                s["lifecycle_status"] = status
+                s["lifecycle_match_level"] = match_level
+            authorization = None
+            if action_policy_error is None:
+                authorization = _candidate_attempt_authorized(
+                    action_policy, check=check, platform=platform, strategy=s,
+                    lifecycle_status=status)
+            if authorization is not None:
+                s["candidate_attempt_authorized"] = True
+                s["candidate_attempt_policy_id"] = authorization.get("policy_id")
         plan["lifecycle_gate_ok"] = True          # store read OK: gates are authoritative
     except Exception as exc:
         print(f"WARNING: negative-evidence gates unavailable "
@@ -1167,6 +1381,128 @@ def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
     finally:
         conn.close()
     return plan
+
+
+def _has_pin_edge_geometry(strategy: dict) -> bool:
+    geometry = strategy.get("geometry_evidence") or {}
+    count = geometry.get("edge_count")
+    fraction = geometry.get("edge_fraction")
+    return (
+        str(geometry.get("rule", "")).strip("'\"") in _PIN_EDGE_DRC_RULES
+        and geometry.get("side") in {"left", "right", "top", "bottom"}
+        and isinstance(count, int) and not isinstance(count, bool) and count >= 2
+        and isinstance(fraction, (int, float)) and not isinstance(fraction, bool)
+        and 0.8 <= float(fraction) <= 1.0
+        and (strategy.get("config_edits") or {}).get("PLACE_PINS_ARGS")
+        == f"-exclude {geometry.get('side')}:*"
+    )
+
+
+def _prioritize_geometric_pin_strategy(plan: dict) -> None:
+    """Prefer a validated localized repair; never authorize a candidate here."""
+    context = plan.get("routing_context") or {}
+    if plan.get("lifecycle_gate_ok") is not True or plan.get("action_policy_gate_ok") is False:
+        return
+    strategies = plan.get("strategies", [])
+    for index, strategy in enumerate(strategies):
+        key = (context.get("symptom_id"), context.get("platform"), strategy.get("id"))
+        if (key in _PLATFORM_GEOMETRIC_SCOPE_TRANSFER
+                and strategy.get("lifecycle_status") == "promoted"
+                and _has_pin_edge_geometry(strategy)
+                and _live_auto_strategy({**plan, "strategies": [strategy]}) is strategy):
+            plan["strategies"] = [strategy] + strategies[:index] + strategies[index + 1:]
+            plan["geometric_priority"] = {
+                "strategy": strategy["id"], "reason": "promoted_edge_localized_repair",
+                "side": strategy["geometry_evidence"]["side"],
+            }
+            return
+
+
+def _untested_learner_candidate(conn, recipe_lifecycle, *, symptom_id, design_class,
+                                platform, strategy) -> bool:
+    """True when the exact row is a learner auto-enqueued candidate with no A/B trial."""
+    row = conn.execute(
+        "SELECT status, provenance FROM recipe_status WHERE symptom_id=? AND "
+        "design_class=? AND platform=? AND strategy=?",
+        (symptom_id, design_class, platform, strategy)).fetchone()
+    if not row or row[0] != "candidate" or row[1] not in recipe_lifecycle._AUTO_LEARNER_PROVENANCE:
+        return False
+    try:
+        n = conn.execute(
+            "SELECT COUNT(*) FROM ab_trials WHERE symptom_id=? AND design_class=? AND "
+            "platform=? AND strategy=?", (symptom_id, design_class, platform, strategy)).fetchone()[0]
+    except Exception:
+        return False                       # unknown trial history -> keep the strict rule
+    return n == 0
+
+
+def _lifecycle_status_with_scope_transfer(conn, recipe_lifecycle, *,
+                                          symptom_id: str,
+                                          design_class: str,
+                                          platform: str,
+                                          strategy: dict) -> tuple[str | None, str | None]:
+    """Resolve an exact lifecycle row, then one narrowly approved scope transfer.
+
+    The transfer is deliberately not a generic design-class wildcard.  It is
+    available only for the Sky130HD m3.2 pin-placement mechanism and only when
+    diagnosis has independently proved a unique edge concentration.  An exact
+    lifecycle row wins, including shadow/parked/demoted and A/B-judged candidates;
+    the one exception is a learner auto-enqueued candidate with no A/B trial, which
+    carries no verdict and so does not veto a promoted wildcard of this mechanism.
+    """
+    strategy_id = strategy.get("id", "")
+    exact = recipe_lifecycle.get_status(
+        conn, symptom_id=symptom_id, design_class=design_class,
+        platform=platform, strategy=strategy_id, default=None)
+    if exact and not (exact == "candidate" and _untested_learner_candidate(
+            conn, recipe_lifecycle, symptom_id=symptom_id, design_class=design_class,
+            platform=platform, strategy=strategy_id)):
+        return exact, "exact"
+    if exact:
+        # An exact row that is only an auto-enqueued, never-A/B-tested learner
+        # candidate carries no verdict for this class -- it must not veto the
+        # approved geometric scope transfer of a PROMOTED wildcard recipe (2026-09-30
+        # AIC v2: pcie_7x / matmul, right-edge m3.2 at a tighter clock, were blocked
+        # by a 'learner_diff' candidate for their bus_heavy class). Shadow, parked,
+        # demoted or A/B-judged candidates still win.
+        transfer_key = (symptom_id, platform, strategy_id)
+        if transfer_key in _PLATFORM_GEOMETRIC_SCOPE_TRANSFER and _has_pin_edge_geometry(strategy):
+            wild = recipe_lifecycle.get_status(
+                conn, symptom_id=symptom_id, design_class="*", platform=platform,
+                strategy=strategy_id, default=None)
+            if wild == "promoted":
+                return wild, "platform_geometric_over_untested_candidate"
+        if transfer_key in _MECHANISM_SCOPE_TRANSFER:
+            wild = recipe_lifecycle.get_status(
+                conn, symptom_id=symptom_id, design_class="*", platform=platform,
+                strategy=strategy_id, default=None)
+            if wild == "promoted":
+                return wild, "mechanism_over_untested_candidate"
+        return exact, "exact"
+
+    import setup_scope
+    if platform == 'sky130hd' and setup_scope.matches(strategy):
+        status = recipe_lifecycle.get_status(conn, default=None, **setup_scope.KEY)
+        return (status, 'validated_setup_scope') if status else (None, None)
+
+    transfer_key = (symptom_id, platform, strategy_id)
+    if transfer_key in _MECHANISM_SCOPE_TRANSFER:
+        wild = recipe_lifecycle.get_status(
+            conn, symptom_id=symptom_id, design_class="*", platform=platform,
+            strategy=strategy_id, default=None)
+        return (wild, "mechanism_class_transfer") if wild else (None, None)
+    transfer_allowed = (
+        transfer_key in _PLATFORM_GEOMETRIC_SCOPE_TRANSFER
+        and _has_pin_edge_geometry(strategy)
+    )
+    if not transfer_allowed:
+        return None, None
+
+    transferred = recipe_lifecycle.get_status(
+        conn, symptom_id=symptom_id, design_class="*", platform=platform,
+        strategy=strategy_id, default=None)
+    return ((transferred, "platform_geometric") if transferred
+            else (None, None))
 
 
 def attach_lessons(plan: dict, *, check: str, vclass: str | None, platform: str) -> dict:
@@ -1278,7 +1614,8 @@ def main(argv=None) -> int:
             proj, check=args.check, drc=drc, lvs=lvs,
             heuristics=heuristics_path)
     plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes,
-                      tcheck=tcheck, route=route)
+                      tcheck=tcheck, route=route, fmax_mode=_is_fmax_mode(proj),
+                      fmax_winner=_fmax_winner(proj))
     if args.check == "drc" and "pin_side_rebalance" not in exclude:
         pin_strategy = _edge_localized_pin_strategy(proj, drc, cfg)
         if pin_strategy is not None:
@@ -1304,6 +1641,12 @@ def main(argv=None) -> int:
                    vclass=_current_vclass(args.check, drc, lvs, tcheck), platform=plat)
     _annotate_live_gates(plan, proj, check=args.check, sid=_sid,
                          design_class=design_class, platform=plat)
+    plan["routing_context"] = {
+        "symptom_id": _sid,
+        "design_class": design_class,
+        "platform": plat,
+    }
+    _prioritize_geometric_pin_strategy(plan)
 
     if args.rank_first:
         head = [s for s in plan["strategies"] if s["id"] == args.rank_first]
@@ -1395,6 +1738,8 @@ def main(argv=None) -> int:
             cfg_path.write_text(apply_edits(cfg_text, strat["config_edits"]), encoding="utf-8")
         if sdc_new_p is not None:
             sdc_text = sdc_path.read_text(encoding="utf-8")
+            _m_old = _SDC_VAR_RE.search(sdc_text) or _SDC_LIT_RE.search(sdc_text)
+            sdc_old_p = _m_old.group(2) if _m_old else None
             if _SDC_VAR_RE.search(sdc_text):
                 sdc_text = _SDC_VAR_RE.sub(lambda m: m.group(1) + sdc_new_p, sdc_text)
             else:
@@ -1415,6 +1760,16 @@ def main(argv=None) -> int:
                 _sp.run(_ja, check=False)
             except Exception:
                 pass
+            # Fmax-mode projects: bind the loosening into fmax_search.json so the
+            # signoff manifest can trace the stamped period back to the search
+            # winner (no-op when the project never ran an Fmax search).
+            try:
+                if sdc_old_p is not None and float(sdc_new_p) > float(sdc_old_p):
+                    import fmax_search as _fs
+                    _fs.record_period_relax(proj, float(sdc_old_p), float(sdc_new_p),
+                                            strat["id"])
+            except Exception as _exc:             # fail-closed: manifest will disqualify
+                print(f"WARN: Fmax relaxation not recorded ({_exc})", file=sys.stderr)
         # Post-apply effect verification: re-read every touched file and confirm each
         # declared edit is REALLY there. A declared-but-unlanded edit (write raced,
         # regex drifted, block clobbered) must not report rc=0.

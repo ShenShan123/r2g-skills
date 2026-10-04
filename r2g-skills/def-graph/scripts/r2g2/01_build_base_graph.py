@@ -334,6 +334,16 @@ def resolve_yosys_hierarchy_libs(
     return unique
 
 
+def yosys_signal_names(name: str, detail: dict[str, Any]) -> list[str]:
+    """Yosys stores signal bits LSB first, including ascending/nonzero ranges."""
+    count = len(detail.get("bits", []))
+    offset = int(detail.get("offset", 0))
+    upto = bool(detail.get("upto", 0))
+    is_bus = count > 1 or offset != 0 or upto
+    return [f"{name}[{offset + (count - 1 - i if upto else i)}]" if is_bus else name
+            for i in range(count)]
+
+
 def parse_synth_verilog_with_yosys(
     path: Path,
     top_module: str,
@@ -400,7 +410,6 @@ def parse_synth_verilog_with_yosys(
 
     gate_reference = unique_reference_index(set(reference_gates), "Gate")
     net_reference = unique_reference_index(set(reference_nets), "Net")
-    net_vectors = vector_reference_names(set(reference_nets))
 
     # 同一个JSON bit可能同时拥有顶层端口名、父module端口名和内部Net名。若其中有名称
     # 能在DEF中唯一命中，就使用DEF正式拼写；否则选择最短的可见综合名称。
@@ -409,14 +418,7 @@ def parse_synth_verilog_with_yosys(
         name = canonical_name(raw_name)
         bits = list(detail.get("bits", []))
         hidden = int(detail.get("hide_name", 0))
-        reference_vector = net_vectors.get(hierarchy_key(name), [])
-        indexed_names: list[str]
-        if len(bits) > 1 and len(reference_vector) == len(bits):
-            indexed_names = [item[1] for item in reference_vector]
-        elif len(bits) > 1:
-            indexed_names = [f"{name}[{index}]" for index in range(len(bits))]
-        else:
-            indexed_names = [name]
+        indexed_names = yosys_signal_names(name, detail)
         for bit, alias in zip(bits, indexed_names):
             if isinstance(bit, int):
                 bit_aliases[bit].append((alias, hidden))
@@ -514,11 +516,7 @@ def parse_synth_verilog_with_yosys(
         port_name = canonical_name(raw_name)
         bits = list(detail.get("bits", []))
         direction = canonical_name(detail.get("direction", "")).upper()
-        port_names = (
-            [f"{port_name}[{index}]" for index in range(len(bits))]
-            if len(bits) > 1
-            else [port_name]
-        )
+        port_names = yosys_signal_names(port_name, detail)
         for bit, bit_port_name in zip(bits, port_names):
             if isinstance(bit, str):
                 net_name = "CONST1" if bit == "1" else "CONST0"

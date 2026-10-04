@@ -66,7 +66,10 @@ crashing on the absent manifest (H2).
 
 Dependencies: torch + torch_geometric + pandas — the only stage needing them.
 `run_graphs.sh` probes `R2G_GRAPH_PYTHON` (default `python3`) and SKIPs cleanly
-with an install HINT when absent. Install the venv on /proj, never $HOME:
+with an install HINT when absent. A *configured* `R2G_GRAPH_PYTHON` (caller or
+`env.local.sh` pin) that cannot even start (`-c pass` fails: missing path, broken
+venv, leaked `PYTHONHOME`) is a toolchain error, not a skip: exit **4**, no skip
+manifest, the interpreter's own error on stderr. Install the venv on /proj, never $HOME:
 
 ```bash
 python3 -m venv /proj/<you>/pyenvs/r2g-graph

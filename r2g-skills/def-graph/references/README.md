@@ -40,7 +40,7 @@ skill; see `../../signoff-loop/SKILL.md`.
 | --- | --- |
 | [`feature-extraction.md`](feature-extraction.md) | The dataset **X** side: `run_features.sh` per-node/per-edge/graph feature tables plus per-design stats. |
 | [`four-stage-dataset.md`](four-stage-dataset.md) | The four-stage causal dataset: `run_stage_dataset.sh`, the vendored R2G2.0 `01..05`, the ORFS adapters, and its two mandatory checkers. |
-| [`graph-dataset.md`](graph-dataset.md) | Training-ready PyG graphs: `run_graphs.sh` joins X+Y into the five b–f graph topologies + the synthesis-netlist graph (torch venv, fail-soft). |
+| [`graph-dataset.md`](graph-dataset.md) | Training-ready PyG graphs: `run_graphs.sh` joins X+Y into the five b–f graph topologies + the synthesis-netlist graph (torch venv, fail-soft; a configured venv that cannot start exits 4). |
 | [`label-extraction.md`](label-extraction.md) | The dataset **Y** side: `run_labels.sh` per-cell/per-net regression-target tables plus per-design stats. |
 
 > `env.local.sh.template` in this directory is a **config sample**, not a doc — copy it to

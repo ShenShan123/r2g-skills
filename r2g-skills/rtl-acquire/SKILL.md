@@ -138,7 +138,9 @@ Knobs specific to this skill:
   concurrent flows × cores ≈ machine cores)
 - `R2G_GRAPH_PYTHON` — torch venv for graph conversion + scale reports; when
   unset those stages **SKIP with a HINT** and designs record `graph_skipped`
-  (never `success`)
+  (never `success`); when set but unable to start, `expand_candidates.py` refuses
+  the round (exit 2) and the scale report fails the round, both naming the
+  interpreter
 - `R2G_KNOWLEDGE_DB` — override the knowledge DB (tests only; default is the
   committed signoff-loop store)
 - `R2G_ACQUIRE_ENABLE_LLM=1` — opt-in for the LLM patch path (default OFF)
@@ -166,7 +168,7 @@ retry after a fix).
 `scripts/execute/expand_candidates.py` per candidate: sanitize RTL (encoding,
 helper modules, iscas89 dff) → write `synth_projects/<design>/` → synth via
 **run_orfs.sh** (`ORFS_STAGES=synth`, FLOW_VARIANT = the unique candidate id)
-→ sv2v/vhd2vl fallback + LEC-lite when needed → dedup by rtl/netlist
+→ GHDL (`yosys -m ghdl`, then `-fsynopsys`) / vhd2vl / sv2v fallback + LEC-lite when needed → dedup by rtl/netlist
 signature → convert via **def-graph netlist_graph.py** → `cell_stats.json`
 (liberty-driven seq/comb split) → **ingest into knowledge.sqlite** (every
 flow, pass or fail).

@@ -126,7 +126,13 @@ def manage(db_path, *, out_path=None, autolearn=True) -> dict:
     # Closure Failures"). Sandbox db → sibling heuristics.json next to it.
     db_is_default = Path(db_path).resolve() == knowledge_db.DEFAULT_DB_PATH.resolve()
     if out_path is None:
-        if db_is_default:
+        # R2G_HEURISTICS_PATH is where every reader (suggest_config, ab_runner,
+        # ingest_run) looks, so the learner must write there too. Ignoring it rewrote
+        # <store dir>/heuristics.json, the SHIPPED file when the db was the default,
+        # while the campaign's own heuristics never updated (CORRECTIONS #80).
+        if os.environ.get("R2G_HEURISTICS_PATH"):
+            out_path = Path(os.environ["R2G_HEURISTICS_PATH"])
+        elif db_is_default:
             out_path = knowledge_db.DEFAULT_KNOWLEDGE_DIR / "heuristics.json"
         else:
             out_path = Path(db_path).resolve().parent / "heuristics.json"

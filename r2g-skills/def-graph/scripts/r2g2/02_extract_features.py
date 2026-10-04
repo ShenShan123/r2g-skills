@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import re
@@ -36,6 +37,7 @@ GROUND_PINS = {"VSS", "VGND", "GND", "VSSA", "VSSD"}
 FAST_ROUTE_GRID_TRACKS = 15
 METAL3_PITCH_UM = 0.14
 FIXED_CONGESTION_GRID_UM = FAST_ROUTE_GRID_TRACKS * METAL3_PITCH_UM
+RUDY_BBOX_TOLERANCE_UM = 1e-9
 
 
 def resolve_congestion_grid_um(cfg: dict[str, Any]) -> float:
@@ -473,6 +475,21 @@ def validate_manifest_stage(
     return {"manifest": str(manifest_path), "semantics": semantics}
 
 
+def sha256_file(path: Path) -> str:
+    """阶段输入DEF实际被读取字节的摘要。
+
+    ``feature_source_path``只记录声明的路径；同一路径下被替换成后续阶段DEF的
+    字节（E12 C8b）在路径比较下不可见。这里记录内容，由
+    ``checks/validate_four_stage.py``与流程记录的阶段产物摘要比对。
+    """
+
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def iter_def_entries(path: Path, section: str):
     active = False
     buffer: list[str] = []
@@ -819,6 +836,37 @@ def parse_liberty(paths: list[Path]) -> dict[str, Any]:
     return db
 
 
+def _polygon_rectangles(
+    xs: list[float], ys: list[float]
+) -> list[tuple[float, float, float, float]]:
+    """r2g-skills D14: the boxes OpenDB decomposes a rectilinear LEF POLYGON into.
+
+    Horizontal slabs at every vertex y, merged upward while the x-span repeats.
+    This matches dbMPin's boxes on all 836 gf180 9t polygon pins, and getAvgXY
+    averages those boxes' centers.
+    """
+
+    ring = list(zip(xs, ys))
+    if ring[0] == ring[-1]:
+        ring.pop()
+    vertical = [
+        (x0, min(y0, y1), max(y0, y1))
+        for (x0, y0), (x1, y1) in zip(ring, ring[1:] + ring[:1])
+        if x0 == x1 and y0 != y1
+    ]
+    levels = sorted(set(ys))
+    boxes: list[tuple[float, float, float, float]] = []
+    active: dict[tuple[float, float], float] = {}
+    for low, high in zip(levels, levels[1:]):
+        middle = (low + high) / 2.0
+        cuts = sorted(x for x, y0, y1 in vertical if y0 < middle < y1)
+        spans = {span: active.pop(span, low) for span in zip(cuts[0::2], cuts[1::2])}
+        boxes.extend((a, y0, b, low) for (a, b), y0 in active.items())
+        active = spans
+    boxes.extend((a, y0, b, levels[-1]) for (a, b), y0 in active.items())
+    return boxes
+
+
 def parse_lef_geometry(paths: list[Path]) -> dict[str, dict[str, Any]]:
     """解析LEF宏类别、尺寸与Pin几何，用于坐标可信性和绝对Pin位置。"""
 
@@ -881,21 +929,20 @@ def parse_lef_geometry(paths: list[Path]) -> dict[str, dict[str, Any]]:
                 if current_pin and polygon:
                     values = [float(v) for v in polygon.group(1).split()]
                     if len(values) >= 6 and len(values) % 2 == 0:
-                        xs_p = values[0::2]
-                        ys_p = values[1::2]
-                        # Store the polygon's bbox as one rectangle so the
-                        # centroid rule below is identical for both shapes.
-                        rectangles.append((min(xs_p), min(ys_p), max(xs_p), max(ys_p)))
+                        # D14: a POLYGON is the boxes OpenDB stores it as, not
+                        # its bbox, so the getAvgXY mean below counts each box.
+                        rectangles.extend(
+                            _polygon_rectangles(values[0::2], values[1::2]))
                 end_match = re.match(r"END\s+(\S+)", line)
                 if end_match and current_pin and canonical_name(
                     end_match.group(1)
                 ) == current_pin:
                     if rectangles:
-                        xs = [v for rect_row in rectangles for v in (rect_row[0], rect_row[2])]
-                        ys = [v for rect_row in rectangles for v in (rect_row[1], rect_row[3])]
                         macros[current_macro]["pins"][current_pin] = (
-                            (min(xs) + max(xs)) / 2.0,
-                            (min(ys) + max(ys)) / 2.0,
+                            sum((row[0] + row[2]) / 2.0 for row in rectangles)
+                            / len(rectangles),
+                            sum((row[1] + row[3]) / 2.0 for row in rectangles)
+                            / len(rectangles),
                         )
                     current_pin = ""
                     rectangles = []
@@ -1101,6 +1148,25 @@ def oriented_size(
     if (orientation or "N").upper() in {"E", "W", "FE", "FW"}:
         return height, width
     return width, height
+
+
+def gate_geometry_size(
+    synthesized_master: str,
+    component: dict[str, Any],
+    lef: dict[str, dict[str, Any]],
+) -> tuple[float, float]:
+    """Use the permitted snapshot's resized master for physical geometry.
+
+    Logical IDs and Liberty attributes still describe the synthesized cell.
+    Missing physical LEF data must not silently fall back to its old size.
+    """
+    physical_master = str(component.get("master") or synthesized_master)
+    macro = lef.get(physical_master.upper(), {})
+    width = float(macro.get("width", float("nan")))
+    height = float(macro.get("height", float("nan")))
+    if not (math.isfinite(width) and math.isfinite(height) and width > 0 and height > 0):
+        return float("nan"), float("nan")
+    return oriented_size(width, height, str(component.get("orient", "N")))
 
 
 def grid_keys_for_bbox(
@@ -1341,7 +1407,10 @@ def compute_congestion_features(
             net_density[key] += 1.0
         width = right - left
         height = top - bottom
-        if width <= 0 or height <= 0:
+        # R2G2.0 v3: reject numerically degenerate boxes as well as exact zero.
+        # Tiny positive widths can otherwise amplify RUDY by many orders of
+        # magnitude after coordinate conversion or subtraction.
+        if width <= RUDY_BBOX_TOLERANCE_UM or height <= RUDY_BBOX_TOLERANCE_UM:
             continue
         factor = 1.0 / width + 1.0 / height
         for grid_x, grid_y in keys:
@@ -2240,6 +2309,7 @@ def main() -> None:
 
     if config_key is None:
         snapshot_path = None
+        snapshot_sha256 = ""
         snapshot_manifest = {"manifest": "", "semantics": "post_yosys"}
         snapshot = empty_physical_snapshot()
     else:
@@ -2254,6 +2324,8 @@ def main() -> None:
             snapshot_path,
             feature_cutoff,
         )
+        # 解析前记录内容摘要：绑定的是本阶段实际读取的字节，而不是声明路径。
+        snapshot_sha256 = sha256_file(snapshot_path)
         snapshot = parse_def(snapshot_path)
     # 旧实现的place/route两个变量均绑定到同一个合法快照。后续计算无法看到Route DEF。
     place = snapshot
@@ -2398,12 +2470,7 @@ def main() -> None:
         lib_cell = lib["cells"].get(master.upper(), {})
         function_name = cell_function_name(master, lib_cell)
         gate_functions[name] = function_name
-        lef_macro = lef.get(master.upper(), {})
-        oriented_width, oriented_height = oriented_size(
-            float(lef_macro.get("width", 0.0)),
-            float(lef_macro.get("height", 0.0)),
-            str(component.get("orient", "N")),
-        )
+        oriented_width, oriented_height = gate_geometry_size(master, component, lef)
         origin_x = (
             float(component["x"]) / place["dbu"]
             if placement_valid
@@ -2506,7 +2573,8 @@ def main() -> None:
     ]
     for name in sorted(io_map):
         physical = place["iopins"].get(name, {})
-        net_name = canonical_name(physical.get("net") or io_map[name]["net"])
+        # Physical aliases may change across snapshots; logical edges stay canonical.
+        net_name = canonical_name(io_map[name]["net"])
         direction = str(
             physical.get("direction") or io_map[name]["direction"]
         ).upper()
@@ -3140,6 +3208,7 @@ def main() -> None:
             "prediction_stage": prediction_stage,
             "feature_cutoff": feature_cutoff,
             "feature_source_path": str(snapshot_path or ""),
+            "feature_source_sha256": snapshot_sha256,
             "coordinate_source_stage": feature_cutoff,
             "coordinate_trust_policy": coordinate_trust_stats["policy"],
             "standard_cell_coordinates_trusted": coordinate_trust_stats[

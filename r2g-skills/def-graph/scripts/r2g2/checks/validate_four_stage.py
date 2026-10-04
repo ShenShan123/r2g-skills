@@ -10,6 +10,9 @@ import csv
 import hashlib
 import json
 import math
+import re
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +50,17 @@ AUXILIARY_RELATIONS = {
     "rc_resistance",
 }
 SUPERVISION_RELATIONS = {"timing_path", "rc_coupling", "rc_resistance"}
+# 预测阶段 -> (ORFS流程阶段, 其输入DEF导出自的.odb)。与
+# stage_dataset/make_sample_config.py的STAGE_ARTIFACTS及signoff-loop
+# stage_artifacts.STAGE_ARTIFACT使用同一组ORFS规范产物名。
+STAGE_INPUT_ODB = {
+    "placement": ("floorplan", "2_floorplan.odb"),
+    "cts": ("place", "3_place.odb"),
+    "route": ("cts", "4_cts.odb"),
+}
+ODB_TO_DEF = (
+    Path(__file__).resolve().parents[2] / "extract" / "graph" / "odb_to_def.py"
+)
 AUXILIARY_LABEL_COLUMNS = {
     "setup_delay_ns",
     "hold_delay_ns",
@@ -72,6 +86,98 @@ def sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def flow_recorded_sha256(run_dir: Path, flow_stage: str, artifact: str) -> str:
+    """流程产出该阶段.odb时记录的sha256。
+
+    来源是run_orfs.sh逐阶段写入的stage_artifact_manifest.jsonl（同一阶段取最后
+    一行，与signoff_gate.py一致）；resume/repair代次中本run未重跑的阶段，改用
+    resume_meta.json的parent_lineage。两者都在特征抽取之前由流程写下，且不在
+    数据集目录树内。
+    """
+
+    recorded = ""
+    manifest = run_dir / "stage_artifact_manifest.jsonl"
+    if manifest.is_file():
+        for line in manifest.read_text(encoding="utf-8").splitlines():
+            try:
+                row = json.loads(line) if line.strip() else {}
+            except ValueError:
+                continue
+            if row.get("stage") == flow_stage and row.get("artifact") == artifact:
+                recorded = str(row.get("sha256") or "")
+    if not recorded:
+        resume = run_dir / "resume_meta.json"
+        if resume.is_file():
+            entry = (
+                json.loads(resume.read_text(encoding="utf-8")).get("parent_lineage")
+                or {}
+            ).get(flow_stage) or {}
+            if entry.get("artifact") == artifact:
+                recorded = str(entry.get("sha256") or "")
+    if not re.fullmatch(r"[0-9a-f]{64}", recorded):
+        raise ValueError(
+            f"{run_dir}没有流程记录的{artifact} sha256，阶段输入内容无法绑定"
+        )
+    return recorded
+
+
+def export_def(odb: Path, out_def: Path) -> None:
+    """与make_sample_config.py导出阶段DEF相同的路径：odb_to_def.py。"""
+
+    result = subprocess.run(
+        [sys.executable, str(ODB_TO_DEF), str(odb), "--def", str(out_def)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0 or not out_def.is_file():
+        raise ValueError(
+            f"{odb.name}重新导出DEF失败: {(result.stderr or result.stdout)[-500:]}"
+        )
+
+
+def verify_stage_input_digest(
+    config_path: Path,
+    cfg: dict[str, Any],
+    stage: str,
+    metadata: dict[str, str],
+) -> dict[str, str]:
+    """把阶段特征绑定到流程记录的阶段产物内容，而不是声明的路径。
+
+    上面的Route DEF检查比较路径：配置声明读取Route DEF时能发现(E12 C8)，但
+    后续阶段DEF的字节写到本阶段自己的路径时发现不了(E12 C8b)。raw manifest
+    的sha256与DEF在同一棵可写目录树里，替换DEF的导出也会写下替换后字节的
+    摘要，因此不能作为参照。可信参照是流程在产出该阶段时记录的.odb摘要：
+    确认run目录保存的.odb仍与该记录一致，再用同一导出路径重新生成DEF（ODB->
+    DEF导出逐字节确定），与02在解析前记录的feature_source_sha256比较。
+    """
+
+    flow_stage, artifact = STAGE_INPUT_ODB[stage]
+    recorded = metadata.get("feature_source_sha256", "")
+    if not recorded:
+        raise ValueError(f"{stage} metadata未记录feature_source_sha256")
+    run_dir_raw = str(cfg.get("orfs_run_dir", ""))
+    if not run_dir_raw:
+        raise ValueError(f"配置缺少orfs_run_dir，{stage}阶段输入内容无法绑定")
+    run_dir = Path(run_dir_raw)
+    if not run_dir.is_absolute():
+        run_dir = (config_path.parent / run_dir).resolve()
+    flow_sha = flow_recorded_sha256(run_dir, flow_stage, artifact)
+    odb = run_dir / "results" / artifact
+    if not odb.is_file() or sha256(odb) != flow_sha:
+        raise ValueError(f"{odb}缺失或内容与流程记录的sha256不一致")
+    with tempfile.TemporaryDirectory() as tmp:
+        exported = Path(tmp) / f"{odb.stem}.def"
+        export_def(odb, exported)
+        expected = sha256(exported)
+    if recorded != expected:
+        raise ValueError(
+            f"{stage} feature读取的DEF内容不是流程记录的{artifact}: "
+            f"read={recorded[:12]}, expected={expected[:12]}"
+        )
+    return {"flow_artifact": artifact, "flow_sha256": flow_sha, "def_sha256": expected}
 
 
 def same_tensor(left: torch.Tensor, right: torch.Tensor) -> bool:
@@ -147,6 +253,10 @@ def main() -> None:
         feature_source = metadata.get("feature_source_path", "")
         if feature_source and Path(feature_source).resolve() == route_label_path:
             raise ValueError(f"{stage} feature读取了Route DEF")
+        if stage in STAGE_INPUT_ODB:
+            per_stage["feature_source_binding"] = verify_stage_input_digest(
+                config_path, cfg, stage, metadata
+            )
         if stage != "floorplan":
             grid_step = float(metadata["congestion_grid_step_x_um"])
             if not math.isclose(grid_step, expected_grid_um, abs_tol=1e-9):
@@ -301,6 +411,10 @@ def main() -> None:
         cfg.get("timing_use_report_path_edges", False)
     )
     for stage, graph in graphs.items():
+        if graph.data_contract_version != "r2g2_four_stage_hetero_pipeline_v3":
+            raise ValueError(
+                f"{stage}数据契约版本不是r2g2_four_stage_hetero_pipeline_v3"
+            )
         if not bool(
             graph.shared_label_contract[
                 "same_values_and_masks_across_all_prediction_stages"
@@ -368,7 +482,7 @@ def main() -> None:
         )
         geom_stats = sidecar["congestion_geom_stats"]
         expected_construction = (
-            f"fixed_{expected_grid_um:g}um_same_grid_undirected_degree_capped_nearest"
+            f"four_shifted_{expected_grid_um:g}um_same_grid_undirected_degree_capped_nearest"
         )
         if (
             geom_stats["construction"] != expected_construction
@@ -390,8 +504,14 @@ def main() -> None:
             raise ValueError(f"{stage}具备可信坐标但缺少Gate-Gate边类型")
         if not expected_enabled and geom_edge_type in graph.edge_types:
             raise ValueError(f"{stage}没有可信坐标但仍建立Gate-Gate边类型")
-        if int(geom_stats["max_undirected_degree"]) != 5:
-            raise ValueError(f"{stage} Gate-Gate最大无向度数配置不是5")
+        if int(geom_stats["max_undirected_degree_per_window"]) != 5:
+            raise ValueError(f"{stage} Gate-Gate每个偏移窗口的度数配置不是5")
+        if int(geom_stats["window_passes"]) != 4:
+            raise ValueError(f"{stage} Gate-Gate偏移窗口数量不是4")
+        if int(geom_stats["max_undirected_degree"]) != 20:
+            raise ValueError(f"{stage} Gate-Gate四窗口最大无向度数配置不是20")
+        if int(geom_stats["duplicate_undirected_edges_across_windows"]) != 0:
+            raise ValueError(f"{stage} Gate-Gate偏移窗口产生了重复边")
         if expected_enabled:
             edge_index = graph[geom_edge_type].edge_index
             pairs = {
@@ -405,8 +525,8 @@ def main() -> None:
             degree = torch.bincount(
                 edge_index[0], minlength=int(graph["gate"].num_nodes)
             )
-            if int(degree.max()) > 5:
-                raise ValueError(f"{stage} Gate-Gate节点度数超过5")
+            if int(degree.max()) > 20:
+                raise ValueError(f"{stage} Gate-Gate节点度数超过四窗口上限20")
         label_only_edge_types = set(graph.edge_types) - set(LOGICAL_EDGE_TYPES) - {
             geom_edge_type
         }
@@ -477,6 +597,7 @@ def main() -> None:
             "missing_physical_values_are_nan": True,
             "graph_x_preserves_nan": True,
             "route_def_not_used_by_features": True,
+            "stage_input_content_bound_to_flow_lineage": True,
             "same_logical_edge_index": True,
             "same_node_labels_and_masks": True,
             "same_shared_edge_labels_and_masks": True,
@@ -493,7 +614,7 @@ def main() -> None:
             "fixed_congestion_grid_consistent_across_stages": True,
             "stage_aware_trusted_coordinate_policy": True,
             "stage_aware_hpwl_and_congestion_feature_policy": True,
-            "fixed_same_grid_undirected_degree5_gate_gate_edges": True,
+            "four_shifted_same_grid_undirected_degree5_per_window_edges": True,
         },
     }
     report_path = output / "four_stage.validation.json"
