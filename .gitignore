@@ -282,3 +282,22 @@ Dataset_R2G2.0(B)/
 
 # V1 validation registry outputs (machine-local run evidence — never commit)
 docs/superpowers/plans/validation-reports/
+
+# JetBrains project config (gnn-node/ and gnn-edge/ each carry one)
+.idea/
+*.iml
+
+# RTL corpus handoff archives — the tar is transport for the corpus, not source
+rtl-certified-handoff-*.tar.gz
+rtl-certified-handoff-0*/
+
+# Pre-sync knowledge-store copies written before a knowledge_sync.py merge:
+# machine-local safety nets, regenerable, same class as knowledge/store/
+backups/
+
+# Pasted screenshots dropped at the repo root
+/*.png
+
+# Stray 0-byte knowledge DB created when a tool opened the wrong filename:
+# the real store is knowledge.sqlite
+r2g-skills/signoff-loop/knowledge/knowledge.db
