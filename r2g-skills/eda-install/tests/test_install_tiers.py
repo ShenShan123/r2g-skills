@@ -157,3 +157,70 @@ def test_graph_idempotent_when_python_pinned():
     assert out.returncode == 0
     assert "already satisfied" in out.stderr
     assert "+ " not in out.stdout
+
+
+def test_ensure_conda_returns_only_the_path_on_stdout(tmp_path):
+    """ensure_conda's stdout is captured as a command; nothing else may land there.
+
+    `conda_env_install` does `conda="$(ensure_conda)"`, so every byte
+    ensure_conda writes to stdout becomes part of the command it then runs. The
+    Miniconda installer prints PREFIX=..., "Unpacking payload...",
+    "installation finished." to stdout, and on a host with no conda those lines
+    were captured too:
+
+        _setup_lib.sh: line 96: PREFIX=/.../miniconda3: No such file or directory
+        ERROR: magic/netgen install failed
+
+    Only on the FIRST run -- the next tier found conda already present, skipped
+    the installer and worked, so the failure looked intermittent (216,
+    2026-10-07: sky130 failed, pdk right behind it succeeded).
+
+    The fake installer here writes chatter to stdout exactly as the real one
+    does, and creates bin/conda so ensure_conda reaches its final echo.
+    """
+    import subprocess
+
+    lib = SETUP / "_setup_lib.sh"
+    assert lib.is_file()
+
+    bigv = tmp_path / "bigv"
+    bigv.mkdir()
+    # stands in for the downloaded miniconda.sh: noisy on stdout, like the real one
+    fake = bigv / "miniconda.sh"
+    fake.write_text(
+        "#!/usr/bin/env bash\n"
+        "while [ $# -gt 0 ]; do case $1 in -p) shift; target=$1;; esac; shift; done\n"
+        'echo "PREFIX=$target"\n'
+        'echo "Unpacking payload ..."\n'
+        'echo "installation finished."\n'
+        'mkdir -p "$target/bin"\n'
+        'printf "#!/usr/bin/env bash\\necho fake-conda\\n" > "$target/bin/conda"\n'
+        'chmod +x "$target/bin/conda"\n'
+    )
+    fake.chmod(0o755)
+
+    script = f"""
+set -uo pipefail
+export R2G_PREFIX={bigv}
+export R2G_CONDA=""
+export PATH=/nonexistent-so-no-real-conda:/usr/bin:/bin
+source {lib}
+# pick_big_volume and the download are both bypassed: the prefix is writable and
+# miniconda.sh is already in place, so ensure_conda goes straight to running it.
+pick_big_volume() {{ echo {bigv}; }}
+have_cmd() {{ case "$1" in curl) return 0 ;; *) command -v "$1" >/dev/null 2>&1 ;; esac; }}
+curl() {{ return 0; }}
+out="$(ensure_conda)"
+printf 'CAPTURED<%s>\\n' "$out"
+"""
+    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                       timeout=60)
+    captured = ""
+    for line in r.stdout.splitlines():
+        if line.startswith("CAPTURED<"):
+            captured = line[len("CAPTURED<"):-1]
+    assert captured, f"ensure_conda produced nothing\nstdout:{r.stdout}\nstderr:{r.stderr}"
+    assert "\n" not in captured, \
+        f"installer chatter leaked into the captured path:\n{captured!r}"
+    assert captured.endswith("/bin/conda"), captured
+    assert "PREFIX=" not in captured and "Unpacking" not in captured, captured

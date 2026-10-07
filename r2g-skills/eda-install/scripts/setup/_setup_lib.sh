@@ -76,7 +76,16 @@ ensure_conda() {
   log "installing Miniconda (no-sudo) → $target"
   curl -fsSL -o "$bigv/miniconda.sh" "$MINICONDA_URL" \
     || { hint "Miniconda download failed (offline/proxy?) — fetch $MINICONDA_URL to $bigv/miniconda.sh, then re-run"; return 1; }
-  bash "$bigv/miniconda.sh" -b -p "$target" \
+  # >&2: ensure_conda returns the conda path on STDOUT, and the Miniconda
+  # installer writes PREFIX=..., "Unpacking payload...", "installation
+  # finished." there too. Captured by `conda="$(ensure_conda)"` those lines
+  # become part of the command, which then fails as
+  #   _setup_lib.sh: line NN: PREFIX=/.../miniconda3: No such file or directory
+  # on the FIRST run only -- a second run finds conda already present, skips
+  # the installer and works, which is what made this look intermittent
+  # (216, 2026-10-07: the sky130 tier failed, the pdk tier right after it
+  # succeeded).
+  bash "$bigv/miniconda.sh" -b -p "$target" >&2 \
     || { hint "Miniconda install failed"; return 1; }
   echo "$target/bin/conda"
 }
