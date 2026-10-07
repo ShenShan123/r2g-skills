@@ -142,9 +142,16 @@ for candidate in \
   fi
 done
 
-if [[ -z "$VERILOG_NETLIST" ]]; then
+# This gate predates the powered-netlist step below, which is what the
+# comparison actually uses. A harvested run can hold 6_final.def and no .v at
+# all; the powered netlist is then rebuilt from LEF + DEF, so an absent Verilog
+# is not a reason to stop here -- only an absent DEF is.
+if [[ -z "$VERILOG_NETLIST" ]] \
+   && { [[ "${R2G_LVS_DEF_NETLIST:-auto}" == "0" ]] \
+        || [[ -z "$(find "$RESULTS_DIR" -name "6_final.def" 2>/dev/null | head -1)" ]]; }; then
   echo "ERROR: No Verilog netlist found for LVS comparison" >&2
   echo "Searched: $RESULTS_DIR/6_final.v, synth_output.v" >&2
+  echo "       and no 6_final.def to rebuild a powered netlist from" >&2
   exit 1
 fi
 
@@ -194,7 +201,19 @@ PYEOF
   exit 1
 }
 ODB_FILE=$(find "$RESULTS_DIR" -name "6_final.odb" 2>/dev/null | head -1)
-[[ -n "$ODB_FILE" ]] || _powered_netlist_unavailable "no 6_final.odb in $RESULTS_DIR"
+# A harvested corpus run may keep only 6_final.def -- keeping every stage costs
+# ~1.1 GB per design. read_lef + read_def rebuilds a database with the same
+# power connectivity (DEF's SPECIALNETS `( * VPWR )` wildcard expands to
+# per-instance connections), so the ODB's absence is not the absence of power
+# information that this script refuses to work around. R2G_LVS_DEF_NETLIST=0
+# disables the fallback.
+DEF_FILE=""
+if [[ -z "$ODB_FILE" && "${R2G_LVS_DEF_NETLIST:-auto}" != "0" ]]; then
+  DEF_FILE=$(find "$RESULTS_DIR" -name "6_final.def" 2>/dev/null | head -1)
+  [[ -n "$DEF_FILE" ]] && echo "No 6_final.odb; rebuilding the database from LEF + $DEF_FILE"
+fi
+[[ -n "$ODB_FILE" || -n "$DEF_FILE" ]] \
+  || _powered_netlist_unavailable "no 6_final.odb and no 6_final.def in $RESULTS_DIR"
 [[ -n "${OPENROAD_EXE:-}" ]] || _powered_netlist_unavailable "OPENROAD_EXE not resolved"
 LVS_LIBS=()
 for _lib_dir in "$FLOW_DIR/objects/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT/lib" \
@@ -210,9 +229,35 @@ fi
 (( ${#LVS_LIBS[@]} )) || _powered_netlist_unavailable "no Liberty found for $PLATFORM (write_verilog needs it)"
 POWERED_NETLIST="$LVS_DIR/powered.v"
 rm -f "$POWERED_NETLIST"
+# Liberty first either way: without it openroad's write_verilog corrupts the
+# heap on some designs, with or without -include_pwr_gnd (2026-09-23).
 {
   for _lib in "${LVS_LIBS[@]}"; do printf 'read_liberty "%s"\n' "$_lib"; done
-  printf 'read_db "%s"\n' "$ODB_FILE"
+  if [[ -n "$ODB_FILE" ]]; then
+    printf 'read_db "%s"\n' "$ODB_FILE"
+  else
+    # tech LEF first, then the standard-cell and any macro LEFs, resolved from
+    # the platform config the same way the decks are
+    # run_lvs.sh defines PLATFORM_DIR; this script never did, so the lookup
+    # below silently found nothing and the tcl came out with no read_lef at all.
+    # plain variable, not `local`: this runs inside a { ... } group command,
+    # where bash rejects `local` at runtime (and `bash -n` does not catch it).
+    _pdir="${PLATFORM_DIR:-$FLOW_DIR/platforms/$PLATFORM}"
+    # ORFS platform configs assign with `?=` as often as `=`
+    # (export TECH_LEF ?= $(PLATFORM_DIR)/lef/...), so match either -- the
+    # first version of this matched only `=` and produced a tcl with no
+    # read_lef at all, which openroad answered with ORD-0005 "No technology
+    # has been read."
+    _r2g_lef() {
+      grep -E "^[[:space:]]*(override[[:space:]]+)?export[[:space:]]+$1[[:space:]]*[?:]?=" \
+        "$_pdir/config.mk" 2>/dev/null | head -1 | sed 's/^[^=]*=[[:space:]]*//' \
+        | sed "s|\$(PLATFORM_DIR)|$_pdir|g"
+    }
+    for _lef in $(_r2g_lef TECH_LEF) $(_r2g_lef SC_LEF) $(_r2g_lef ADDITIONAL_LEFS); do
+      [[ -n "$_lef" && -f "$_lef" ]] && printf 'read_lef "%s"\n' "$_lef"
+    done
+    printf 'read_def "%s"\n' "$DEF_FILE"
+  fi
   printf 'write_verilog -include_pwr_gnd "%s"\n' "$POWERED_NETLIST"
   printf 'exit\n'
 } > "$LVS_DIR/write_powered_verilog.tcl"
@@ -227,7 +272,7 @@ if [[ $_PWR_RC -ne 0 || ! -s "$POWERED_NETLIST" ]] || ! grep -q 'VPWR' "$POWERED
         "$LVS_DIR/write_powered_verilog.log"; then
   _powered_netlist_unavailable "openroad write_verilog exit=$_PWR_RC (see $LVS_DIR/write_powered_verilog.log)"
 fi
-echo "Using power-aware netlist from ODB: $POWERED_NETLIST"
+echo "Using power-aware netlist from ${ODB_FILE:+ODB}${ODB_FILE:-LEF+DEF}: $POWERED_NETLIST"
 VERILOG_NETLIST="$POWERED_NETLIST"
 
 echo "Running Netgen LVS for design: $DESIGN_NAME"

@@ -1081,6 +1081,74 @@ nangate45's KLayout LVS is sound (10 of 10 verdicts across five sizes, both
 netlist sources), so the complete sign-off funnel comes from there; sky130hd
 stops at the DRC level. Guard: `tests/test_sky130hd_lvs_deck.py`.
 
+### Netgen LVS is the working sky130hd route, and it needs no ODB (2026-10-07)
+
+KLayout's comparer cannot reconcile sky130's drive strength, expressed as device
+multiplicity (see the previous section). Netgen can: `sky130A_setup.tcl`
+declares `property ... series enable` and `parallel enable` with `w add` /
+`l add`, which is exactly the reduction KLayout lacks. Verified on the same six
+designs the KLayout sweep used, each flow re-run so the comparison is over its
+own layout:
+
+| cells | design | KLayout (fixed deck) | Netgen |
+| --- | --- | --- | --- |
+| 1 | full_adder | match | **Circuits match uniquely** (8 s) |
+| 48 | up_counter | match | **match uniquely** (9 s) |
+| 236 | instruction_fetch | match | **match uniquely** (10 s) |
+| 597 | debug_display | mismatch (m=2) | **match uniquely** (12 s) |
+| 1735 | jt6295_adpcm | mismatch (m=2) | **match uniquely** (19 s) |
+| 6921 | cfg_dprio_ctrl_stat_reg | not reached | **match uniquely** (48 s) |
+
+Runtime is near-linear, unlike KLayout's LVS (80 s at 7.8K cells but past 124
+minutes without converging at 282K).
+
+**The checker was proven able to FAIL, not only to pass.** Six matches say
+nothing on their own -- earlier in the same session three LVS configurations
+"agreed" and all three had failed. Three independent corruptions of a matching
+netlist were each detected: a swapped input connection and a substituted drive
+strength both as `Top level cell failed pin matching`, a deleted instance as
+`do not match`. **Parse `failed pin matching` as a failure**: a hand-rolled grep
+for "match uniquely|do not match" scored two detected corruptions as "no
+verdict". run_netgen_lvs.sh already classifies it correctly.
+
+**No ODB is needed.** The script builds its netlist with
+`write_verilog -include_pwr_gnd` from 6_final.odb and refuses the unpowered
+6_final.v; a harvested run may hold only 6_final.def. `read_lef` + `read_def`
+rebuilds a database with the same connectivity -- see "A DEF-rebuilt database
+yields the same netlists as the ODB" above -- and `R2G_LVS_DEF_NETLIST=0`
+disables the fallback. The ODB is still preferred when present: both sides then
+descend from different serializations.
+
+**Four defects in run_netgen_lvs.sh, each a guard in
+`tests/test_netgen_lvs_def_netlist.py`:**
+
+- the Verilog-netlist gate rejected a DEF-only run *before* the powered-netlist
+  step it precedes, so the fallback was never reached;
+- the LEF lookup matched `=` while ORFS platform configs write
+  `export TECH_LEF ?= $(PLATFORM_DIR)/lef/...`, leaving a tcl with no `read_lef`
+  at all and openroad answering `ORD-0005 No technology has been read`;
+- `PLATFORM_DIR` is defined in run_lvs.sh and never in this script, so the
+  lookup silently found nothing;
+- `local` inside the `{ ... } > file` group command that writes the tcl is a
+  **runtime** error `bash -n` does not catch.
+
+**Environment trap worth its own line.** `eda-install` pins what it detects into
+`references/env.local.sh`, and on a shared host that can be ANOTHER ACCOUNT's
+ORFS (`/proj/workarea/user5/...` here). Every r2g script run inside the ORFS
+container auto-sources that file, so the pin overrode the image's own ORFS with
+a path absent there and `_env.sh` reported "ORFS not found" with ORFS sitting
+right beside it. The magic/netgen/PDK pins from the same file are correct and
+wanted -- the conda env is mounted into the container at its own path. Comment
+out the ORFS line and let each side detect it. Related: putting the conda `bin`
+FIRST on PATH inside the container shadows the image's `openroad` and produces
+the same message for a different reason -- append it, do not prepend.
+
+**Installing the tools is `eda-install`'s job**:
+`bash bootstrap.sh --yes --tiers sky130,pdk --prefix <big volume>` brings up a
+no-sudo Miniconda, magic, netgen and `open_pdks.sky130a`. On 216 that gave magic
+8.3.464, netgen 1.5.272 and sky130A with both `libs.tech/magic` and
+`libs.tech/netgen`, after which `check_env.sh` reads sky130hd as STRICT-READY.
+
 ### LVS symmetric-matcher residual (KLayout `Netlists don't match`, layout actually correct)
 
 <!-- r2g-lesson:
