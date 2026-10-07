@@ -21,29 +21,88 @@
 
 ## 一、开跑前要保留哪些文件（本轮最大的教训）
 
-本轮 harvest 只留了 `6_final.{def,spef,sdc}` + `1_synth.v`。后果：
+本轮 harvest 最初只留了 `6_final.{def,spef,sdc}` + `1_synth.v`。后果：
 
 | 想做的事 | 能不能补 | 原因 |
 |---|---|---|
 | DRC | **能** | ORFS 的 GDS 是从 `6_final.def` 流出的（`def2stream.py`，`-rd in_def=…`），不是从 ODB |
-| LVS | **不能** | r2g 的 `run_lvs.sh` 正确拒绝：`make lvs` 会重建物理阶段，而签核器不能重新生成它要评判的版图（RMD-P0-01） |
+| LVS | **能，但要 `6_final.odb`** | 网表用 `write_cdl` 从冻结的 ODB 导出；没有 ODB 就真的只能重跑 |
 
 **空间从来不是约束**：harvest 后单设计中位 1.3 MB，全语料 2.5 GB，而卷有 35 TB。
 当初裁掉 GDS/ODB 是过度节省。
 
-**下一轮必须保留**（已写进 `orfs_baseline.py` 的 harvest 清单，但换机器要重新确认）：
+**必须保留**（已写进 `orfs_baseline.py` 的 harvest 清单，但换机器要重新确认）：
 
 ```
-6_final.def   6_final.spef  6_final.sdc           已有
-6_final.gds   6_final.v                           本轮补上，DRC/LVS 直接可读
-6_final.odb                                       LVS 的 CDL 要它
-1_synth.odb … 5_route.odb                         ← 关键：r2g 的 LVS 护栏要完整中间链
-reports/  logs/                                   已有，cells/面积/卡住阶段都从这里回填
+6_final.def   6_final.spef  6_final.sdc           基本
+6_final.gds   6_final.v                           DRC/LVS 直接可读
+6_final.odb                                       LVS 导网表要它 —— 这一个就够
+reports/  logs/                                   cells/面积/卡住阶段都从这里回填
 ```
 
-没有中间产物，LVS 只有两条路：重跑整条流程（约 28 小时 / 2000 设计），
-或者跳过护栏——而跳过等于重跑（`make lvs` 自己会重建），
-**代价一样但评判的是另一个版图**，漏斗里"过 DRC 的"和"过 LVS 的"说的不是同一批。不要做。
+每设计约 200 MB，全语料约 500 GB，占 35 TB 的 1.4%。
+**不需要留 `1_synth.odb … 4_cts.odb`**——那是 1.07 GB/设计、全语料 2.6 TB，而且留了也没用（见下）。
+
+### 为什么"留全链"是错的解法（2026-10-06 纠正）
+
+这一节最初写的是"r2g 的 LVS 护栏要完整中间链，没有中间产物 LVS 就只能重跑整条流程"。
+**这个判断错了两次，值得完整记下来，因为错的方式比结论有价值。**
+
+第一次：以为缺的是 `5_route.odb` / `6_final.odb`。补上，仍然失败。
+
+第二次（真实原因）：`make lvs` 的依赖链回溯到 RTL 综合——
+
+```
+lvs → 6_lvs.lvsdb → objects/6_final_concat.cdl → 6_final.cdl → cdl.tcl → 6_final.odb
+                                                 ↑ make 问到这里，会越过已存在的 6_final.odb
+                                                   去查 4_cts.odb、3_place.odb… 一路到
+                                                   1_1_yosys_canonicalize.rtlil，断在缺失的 RTL
+```
+
+所以"补几个 odb"永远不够：**要么全链，要么另找路**。全链 2.6 TB 虽然放得下，
+但它让签核依赖一堆与判决无关的字节，而且 make 一旦决定重建某一步就违反 RMD-P0-01。
+
+**正解是绕开 make，照 Makefile 自己的配方跑三步**：`write_cdl -masters` 从冻结 ODB 导网表 →
+`cat` 拼平台 CDL → `klayout -r <平台 deck>`。已修进 `signoff-loop/scripts/flow/run_lvs.sh`
+（`R2G_LVS_FROZEN`：`auto` 默认 / `1` 强制 / `0` 禁用），回归测试
+`tests/test_run_lvs_frozen_layout.py`。
+
+### 护栏为什么没拦住（这是本轮最该记的一条）
+
+`run_lvs.sh` 的 RMD-P0-01 预检用 `make --question` 问
+`5_route.odb` / `6_final.{def,v,sdc}`。这四个**确实都在、确实是最新的**，
+于是预检什么都不打印、返回 0 —— **`lvs_preflight.log` 是 0 字节，
+旁边却是一个根本起不来的 `make lvs`**。
+
+预检没坏，它回答的是另一个问题。
+
+- 不要"修"成去预检 `6_final.cdl`：完整树里那个文件也不存在，答案永远是"要重建"，
+  于是每个 run 都走回退，等于没有护栏。
+- 正确的触发点是 **make 自己失败之后**：`No rule to make target` 意味着
+  make 在跑任何配方之前就停了，**什么都没构建**，所以此时回退是安全的。
+- 触发条件必须是"make 跑不起来"，**不能是"rc 非 0"**——否则真正的
+  `Netlists don't match` 会被回退劫持。回归测试里专门有这条负向控制。
+
+### 等价性要用产物证明，不是用判决一致证明
+
+回退路径省掉了 `cdl.tcl` 的 `load.tcl` 前导（liberty + 约 80 个 make 变量）。
+我推断 liberty 到不了 CDL 输出，但推断不是证据。验证方式是**同一个版图跑两条路径**：
+
+```
+                    make lvs（20 个中间 odb 齐全）      直接路径（只读 odb/gds）
+6_final.cdl         608 行  md5 93e51383de02           608 行  md5 93e51383de02   逐字节相同
+extracted.cir       md5 42f5873d09df                   md5 42f5873d09df           相同
+判决                Netlists match                     Netlists match
+```
+
+**"两边都通过"本身证明不了任何事**——本轮早些时候我把三种 LVS 配置"判决一致"
+当成等价性证据，而那三种其实全都失败了，一致的是失败。
+settle 这件事的是 md5，不是判决。
+
+### 顺带的一条资源事实
+
+冻结路径的 LVS 在小设计上只要 **1.6 秒**，比同一设计的 DRC（约 320 秒）便宜两个数量级。
+所以"补签核"的成本预算里，DRC 是全部，LVS 几乎免费。
 
 ## 二、并发与资源
 
@@ -198,6 +257,16 @@ RTL 前端   约 49%   解析/综合/yosys 规范化失败 —— 语料自身�
 
 我手搓调用时**原原本本撞到这两个**，绕了很多弯才发现 r2g 早就修了。
 → **先看 r2g 有没有现成的，再动手。**
+
+**第三个缺陷是本轮发现并修掉的**（`run_lvs.sh`，2026-10-06）：`make lvs` 的依赖链
+回溯到 RTL 综合，所以**收获式的 run 它一个都签不了**，而 RMD-P0-01 预检问的四个文件
+恰好都是最新的，于是放行后才在 `make lvs` 里炸。现已加冻结版图回退
+（`R2G_LVS_FROZEN`，默认 `auto`）。完整原因、两次误判过程、等价性的 md5 证据
+见第一节；失败类条目在 `signoff-loop/references/failure-patterns.md`
+"`make lvs` cannot grade a harvested run"。
+
+**签核的成本结构**：冻结路径的 LVS 在小设计上 1.6 秒，同一设计的 DRC 约 320 秒。
+排产时按 DRC 估算就够，LVS 可以忽略。
 
 **各平台该用哪种 DRC（文档写定的）**：
 

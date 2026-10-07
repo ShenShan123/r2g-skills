@@ -262,12 +262,123 @@ LVS_STARTED_AT="$(date -Iseconds)"
 # "Error 11" while a multi-GB klayout child kept spinning — reaps ANY session
 # survivor before returning, replacing the fragile pattern-scoped pkill reaper
 # (2026-07-04 audit H2 documented those patterns misfiring).
+# ── Frozen-layout LVS fallback (nangate45/sky130hd corpus runs, 2026-10-06).
+# A harvested backend run keeps only the tail of the flow — 6_final.* plus
+# 5_route.odb — because keeping every stage costs ~1.1 GB per design. `make
+# lvs` cannot grade such a run at all:
+#
+#   6_lvs.lvsdb: 6_final.gds + <plat>.lylvs + objects/6_final_concat.cdl
+#   6_final_concat.cdl: 6_final.cdl + $(CDL_FILE)     # recipe: cat $^ > $@
+#   6_final.cdl <- cdl.tcl, which loads 6_final.odb
+#
+# Asked for 6_final.cdl, make walks straight past the existing 6_final.odb
+# into 4_cts.odb, 3_place.odb, ... and finally the synthesis inputs, and stops
+# with "No rule to make target '<rtl>.v'". Note where the RMD-P0-01 preflight
+# sits relative to this: it asks about 5_route.odb/6_final.{def,v,sdc}, which
+# ARE up to date, so it prints nothing and returns 0 — a 0-byte preflight log
+# beside a `make lvs` that cannot start. The preflight is not wrong, it is
+# answering a different question, so the fallback triggers on make's OWN
+# failure rather than on a prediction: "No rule to make target" means make
+# stopped before running any recipe, so nothing was rebuilt and the layout is
+# still the one the flow produced.
+#
+# The three steps are then run directly. This is not a reimplementation: step 1
+# issues the same `write_cdl -masters` as ORFS's cdl.tcl, step 2 is the
+# Makefile's own `cat`, step 3 is the Makefile's own klayout command line with
+# the platform deck. What is dropped is cdl.tcl's load.tcl preamble, which
+# reads liberty and ~80 make variables a standalone openroad cannot supply and
+# which a CDL dump does not consult — verified on nangate45 lcd_timing by
+# running both paths over one layout: 6_final.cdl matched byte for byte
+# (md5 93e51383de02, 608 lines), the extracted netlist matched
+# (md5 42f5873d09df), and both returned "Netlists match".
+#
+# RMD-P0-01 holds more strictly here than on the make path: nothing is asked
+# not to rebuild the layout, nothing *can*. Only 6_final.odb and 6_final.gds
+# are read; only a netlist and a report are written. The digest postcondition
+# below still runs over whichever path produced the verdict.
+#
+# R2G_LVS_FROZEN: auto (default) falls back after make proves it cannot run,
+# 1 skips make entirely, 0 disables the fallback (make's failure stands).
+_LVS_FROZEN=0
+_LVS_FROZEN_MODE="${R2G_LVS_FROZEN:-auto}"
+
+# CDL masters for steps 1-2 — the same variable `make lvs` consumes. A project
+# override wins, exactly as the sky130 slash-fix injection above honors one.
+_LVS_CDL_MASTERS=""
+if [[ "${#_CDL_MAKE_ARGS[@]}" -gt 0 && "${_CDL_MAKE_ARGS[0]}" == CDL_FILE=* ]]; then
+  _LVS_CDL_MASTERS="${_CDL_MAKE_ARGS[0]#CDL_FILE=}"
+else
+  _LVS_CDL_MASTERS=$(grep -E '^[[:space:]]*(override[[:space:]]+)?export[[:space:]]+CDL_FILE' \
+    "$CONFIG_MK" 2>/dev/null | head -1 | sed 's/.*=[[:space:]]*//' | tr -d ' ' || true)
+  if [[ -z "$_LVS_CDL_MASTERS" ]]; then
+    _LVS_CDL_MASTERS=$(grep 'CDL_FILE' "$PLATFORM_DIR/config.mk" 2>/dev/null | head -1 \
+      | sed 's/.*=[[:space:]]*//' | sed "s|\$(PLATFORM_DIR)|$PLATFORM_DIR|g" | tr -d ' ' || true)
+  fi
+fi
+
+# True when the frozen path has everything it needs to produce a verdict.
+_r2g_lvs_frozen_available() {
+  [[ "$_LVS_FROZEN_MODE" != "0" ]] || return 1
+  [[ -f "$RESULTS_DIR/6_final.odb" ]] || return 1
+  [[ -f "$GDS_FILE" ]] || return 1
+  [[ -n "$_LVS_CDL_MASTERS" && -f "$_LVS_CDL_MASTERS" ]] || return 1
+  [[ -n "${OPENROAD_EXE:-}" ]] || return 1
+  return 0
+}
+
+# Why make could not start, as opposed to a real LVS failure. Make stops on an
+# unresolvable prerequisite before running any recipe.
+_r2g_lvs_chain_unresolvable() {
+  grep -qaE "No rule to make target.*(\.v|\.sv|\.rtlil|\.odb)'" "$1" 2>/dev/null
+}
+
+# Output goes to the same run log `make lvs` would write, so the verdict
+# parsing, the digest postcondition and the provenance sidecar are unchanged.
+_r2g_lvs_frozen_run() {
+  local tcl="$PROJECT_DIR/lvs/write_cdl.tcl"
+  local concat="$ORFS_OBJECTS_DIR/6_final_concat.cdl"
+  mkdir -p "$PROJECT_DIR/lvs" "$ORFS_OBJECTS_DIR" "$LOGS_DIR"
+  printf 'read_db $::env(R2G_LVS_ODB)\nwrite_cdl -masters $::env(R2G_LVS_MASTERS) $::env(R2G_LVS_CDL_OUT)\n' \
+    > "$tcl"
+  R2G_LVS_ODB="$RESULTS_DIR/6_final.odb" \
+  R2G_LVS_MASTERS="$_LVS_CDL_MASTERS" \
+  R2G_LVS_CDL_OUT="$RESULTS_DIR/6_final.cdl" \
+    "$OPENROAD_EXE" -no_init -exit "$tcl" || return 1
+  [[ -s "$RESULTS_DIR/6_final.cdl" ]] || {
+    echo "frozen LVS: write_cdl produced no netlist" >&2; return 1; }
+  cat "$RESULTS_DIR/6_final.cdl" "$_LVS_CDL_MASTERS" > "$concat" || return 1
+  $KLAYOUT_CMD -b -rd in_gds="$GDS_FILE" -rd cdl_file="$concat" \
+    -rd report_file="$RESULTS_DIR/6_lvs.lvsdb" -r "$KLAYOUT_LVS_RESOLVED" 2>&1 \
+    | tee "$LOGS_DIR/6_lvs.log"
+  return "${PIPESTATUS[0]}"
+}
+
+# r2g_bounded_run puts the checker in its own session via `bash -c`, so the
+# runner's variables have to travel as environment, not as shell state.
+_r2g_lvs_frozen_bounded() {
+  export RESULTS_DIR GDS_FILE LOGS_DIR ORFS_OBJECTS_DIR PROJECT_DIR \
+         KLAYOUT_LVS_RESOLVED KLAYOUT_CMD OPENROAD_EXE _LVS_CDL_MASTERS
+  r2g_bounded_run "$LVS_TIMEOUT" "${LVS_KILL_GRACE:-60}" "$LVS_RUN_LOG" \
+    bash -c "$(declare -f _r2g_lvs_frozen_run); _r2g_lvs_frozen_run"
+}
+
 LVS_RUN_LOG="/tmp/lvs_run_$$.log"
 LVS_STATUS=0
 for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
   set +e +o pipefail
-  r2g_bounded_run "$LVS_TIMEOUT" "${LVS_KILL_GRACE:-60}" "$LVS_RUN_LOG" \
-    make DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" "${_CDL_MAKE_ARGS[@]}" lvs
+  if [[ "$_LVS_FROZEN_MODE" == "1" ]]; then
+    if _r2g_lvs_frozen_available; then
+      _LVS_FROZEN=1
+      echo "LVS path: frozen layout (forced by R2G_LVS_FROZEN=1)"
+      _r2g_lvs_frozen_bounded
+    else
+      echo "ERROR: R2G_LVS_FROZEN=1 but the frozen inputs are incomplete" >&2
+      false
+    fi
+  else
+    r2g_bounded_run "$LVS_TIMEOUT" "${LVS_KILL_GRACE:-60}" "$LVS_RUN_LOG" \
+      make DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" "${_CDL_MAKE_ARGS[@]}" lvs
+  fi
   LVS_STATUS=$?
   set -e -o pipefail
   # Output goes straight to the log (no pipe reader can outlive the checker) —
@@ -293,6 +404,31 @@ for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
     fi
     echo "ERROR: LVS still crashing after $LVS_CRASH_RETRIES attempts (KLayout 0.30.7 comparer bug, no newer build on host)" >&2
     break
+  fi
+
+  # make could not resolve the stage chain -> it ran no recipe, so nothing was
+  # rebuilt and the frozen artifacts are still the flow's own. Grade those
+  # rather than recording a tool-path defect as an LVS verdict.
+  if [[ $LVS_STATUS -ne 0 && "$_LVS_FROZEN" != "1" ]] \
+     && _r2g_lvs_chain_unresolvable "$LVS_RUN_LOG"; then
+    if _r2g_lvs_frozen_available; then
+      echo "LVS path: frozen layout — 'make lvs' cannot resolve the stage chain" >&2
+      grep -am1 "No rule to make target" "$LVS_RUN_LOG" | sed 's/^/  /' >&2 || true
+      echo "  reading 6_final.odb/.gds only; no stage is rebuilt (RMD-P0-01)" >&2
+      _LVS_FROZEN=1
+      set +e +o pipefail
+      _r2g_lvs_frozen_bounded
+      LVS_STATUS=$?
+      set -e -o pipefail
+      tail -n 25 "$LVS_RUN_LOG" 2>/dev/null || true
+    else
+      echo "ERROR: 'make lvs' cannot resolve the stage chain and the frozen path is unavailable" >&2
+      if [[ ! -f "$RESULTS_DIR/6_final.odb" ]]; then
+        echo "  no 6_final.odb in the restaged results — keep it in the harvest" >&2
+      elif [[ -z "$_LVS_CDL_MASTERS" || ! -f "$_LVS_CDL_MASTERS" ]]; then
+        echo "  no CDL masters for platform $PLATFORM" >&2
+      fi
+    fi
   fi
 
   # No crash this attempt -> the verdict (clean or fail) is trustworthy. Stop.

@@ -897,6 +897,48 @@ auto-draining its escalations (`_mark_clean` → `escalations.resolve_for_design
   "has a rule now" ≠ "will pass" — large designs (>300K cells, e.g. the verilog-ethernet udp/eth_mac
   family) re-run to `incomplete` (matcher non-convergent within cap), not `clean`.
 
+### `make lvs` cannot grade a harvested run — the chain reaches back to the RTL (2026-10-06)
+
+- **Symptom:** every design in a corpus run comes back `lvs_failed`, with
+  `make: *** No rule to make target '<rtl>.v', needed by '1_1_yosys_canonicalize.rtlil'.  Stop.`
+  in the LVS log, while DRC on the same layouts is clean. The layouts are fine;
+  nothing was graded.
+- **Cause:** a corpus harvest keeps only the tail of the flow (`6_final.*` plus
+  `5_route.odb`) because keeping every stage costs ~1.1 GB per design. `make lvs`
+  needs `objects/6_final_concat.cdl`, whose recipe is `cat 6_final.cdl $(CDL_FILE)`,
+  and `6_final.cdl` comes from `cdl.tcl` loading `6_final.odb`. Asked for
+  `6_final.cdl`, make walks **past** the existing `6_final.odb` into `4_cts.odb`,
+  `3_place.odb`, ... and finally the synthesis inputs. Adding `5_route.odb` +
+  `6_final.odb` to the harvest does NOT fix it — the whole chain is needed, or none.
+- **Why the RMD-P0-01 preflight did not catch it:** it asks `make --question` about
+  `5_route.odb` / `6_final.{def,v,sdc}`, which all exist and ARE up to date, so it
+  prints nothing and returns 0 — a **0-byte `lvs_preflight.log` beside a `make lvs`
+  that cannot start**. The preflight is not broken; it is answering a different
+  question than "can `make lvs` run". Do not try to fix this by preflighting
+  `6_final.cdl`: that file does not exist in a complete tree either, so the answer
+  is always "would rebuild" and every run would take the fallback.
+- **Fix (in `run_lvs.sh`):** a **frozen-layout fallback** keyed on make's OWN failure.
+  `No rule to make target` means make stopped before running any recipe, so nothing
+  was rebuilt and the layout is still the flow's own; the three steps then run
+  directly — `write_cdl -masters` from `6_final.odb`, the Makefile's `cat`, the
+  Makefile's klayout command line with the platform deck. `R2G_LVS_FROZEN`: `auto`
+  (default) falls back after make proves it cannot run, `1` skips make entirely,
+  `0` disables the fallback so make's failure stands.
+- **Equivalence is verified, not assumed.** The fallback drops `cdl.tcl`'s `load.tcl`
+  preamble (liberty + ~80 make variables a standalone openroad cannot supply). Both
+  paths were run over one nangate45 `lcd_timing` layout: `6_final.cdl` matched byte
+  for byte (md5 `93e51383de02`, 608 lines), the extracted netlist matched
+  (md5 `42f5873d09df`), and both returned `Netlists match`. Agreement of two verdicts
+  proves nothing on its own — it was the **artifact digests** that settled it.
+- **RMD-P0-01 is stronger on this path, not weaker:** nothing is asked not to rebuild
+  the layout, nothing *can*. Only `6_final.odb` and `6_final.gds` are read; only a
+  netlist and a report are written. The digest postcondition still runs.
+- **Guard:** `tests/test_run_lvs_frozen_layout.py`, including the negative control that
+  matters — a genuine `Netlists don't match` must NOT be overwritten by the fallback,
+  because the trigger is make being *unable to run*, not a non-zero rc.
+- **Corpus cost note:** LVS on a frozen layout took **1.6 s** per small design here,
+  two orders of magnitude cheaper than the DRC on the same design (~320 s).
+
 ### LVS symmetric-matcher residual (KLayout `Netlists don't match`, layout actually correct)
 
 <!-- r2g-lesson:
