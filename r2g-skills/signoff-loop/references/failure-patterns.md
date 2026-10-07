@@ -939,6 +939,55 @@ auto-draining its escalations (`_mark_clean` → `escalations.resolve_for_design
 - **Corpus cost note:** LVS on a frozen layout took **1.6 s** per small design here,
   two orders of magnitude cheaper than the DRC on the same design (~320 s).
 
+### A DEF-rebuilt database yields the same netlists as the ODB (2026-10-06)
+
+Both LVS netlist paths need a database, and `run_lvs.sh` / `run_netgen_lvs.sh`
+take it from `6_final.odb`. A corpus that kept only `6_final.def` is not
+therefore unsignable: `read_lef` + `read_def` rebuilds a database that produces
+the same netlists. Measured on nangate45, the only platform here holding both
+artifacts:
+
+| Netlist | From `6_final.odb` | From LEF + DEF | Difference |
+| --- | --- | --- | --- |
+| CDL (`write_cdl -masters`) | 541 instances, 75 ports | identical set and connectivity | `.SUBCKT` port ORDER only (VDD/VSS first vs last) |
+| Powered Verilog (`write_verilog -include_pwr_gnd`) | 2127 inst, VDD 1406, VSS 1406 | 2127 inst, VDD 1406, VSS 1406 | `module` port declaration order only (2 lines) |
+
+The PDN survives the round trip: `read_def` expands the SPECIALNETS wildcard
+`( * VPWR )` into per-instance connections. On a sky130hd design with no ODB at
+all, the DEF-derived powered netlist carries VPWR/VGND on 15,201 instances and
+VNB/VPB on 13,936, with VDD/VSS fanout 29,137 — not the fanout-1 signature that
+`run_netgen_lvs.sh` warns about and refuses to compare against.
+
+- **Measure the supply NET name, not the pin name.** A first attempt counted
+  zero VPWR connections on sky130hd and looked like a dead end. In sky130 the
+  nets are VDD/VSS while the cell pins are VPWR/VGND, so the netlist reads
+  `.VPWR(VDD)`; the count was wrong, not the path. Take the names from the DEF's
+  SPECIALNETS rather than assuming them.
+- **Load Liberty before `write_verilog`**, with or without `-include_pwr_gnd`
+  (see the heap-corruption note in `run_netgen_lvs.sh`).
+- This is a property of the artifacts, not a licence to stop keeping the ODB:
+  both sides of the comparison then descend from one DEF, one serialization less
+  independent than ODB-vs-DEF. Keep `6_final.odb` in the harvest; this is what
+  to do when an earlier harvest did not.
+
+### Netgen LVS unavailable on 216: no magic, no netgen, no sky130A libs.tech (2026-10-06)
+
+sky130hd's KLayout LVS reports `Netlists don't match` even on a 1-cell full
+adder, and the documented alternative is `run_netgen_lvs.sh` (Netgen + Magic).
+It cannot run on this host:
+
+```
+magic / netgen / netgen-lvs   absent from the ORFS container AND from the 216 host
+sky130A libs.tech/{magic,netgen}   absent (ORFS's sky130 platform ships LEF/liberty/GDS only)
+conda absent; dnf needs root (uid 1027); outbound network reachable
+```
+
+So the deck files Netgen and Magic need are not merely unconfigured, they are
+not present, and installing them means a full sky130A PDK plus two tools from
+source or prebuilt tarballs. Recorded rather than attempted: the netlist half of
+the route is verified (previous section), the toolchain half is an installation
+task, and nangate45's KLayout LVS works (10 of 10 verdicts across five sizes).
+
 ### LVS symmetric-matcher residual (KLayout `Netlists don't match`, layout actually correct)
 
 <!-- r2g-lesson:

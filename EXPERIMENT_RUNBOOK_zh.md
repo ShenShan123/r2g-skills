@@ -265,8 +265,43 @@ RTL 前端   约 49%   解析/综合/yosys 规范化失败 —— 语料自身�
 见第一节；失败类条目在 `signoff-loop/references/failure-patterns.md`
 "`make lvs` cannot grade a harvested run"。
 
-**签核的成本结构**：冻结路径的 LVS 在小设计上 1.6 秒，同一设计的 DRC 约 320 秒。
-排产时按 DRC 估算就够，LVS 可以忽略。
+**签核的成本结构**（修正：上面那句"LVS 可以忽略"只对小设计成立）：
+
+```
+cells        LVS 耗时              同规模 DRC 参考
+     1          6s
+   104          8s
+   652          9s
+ 2,216      16-19s
+ 7,813      80-83s                8,852 单元约 324s   ← LVS 便宜约 4 倍
+282,473     >124 分钟未收敛       同规模 DRC 约 5-10 分钟  ← 反过来贵一个数量级以上
+```
+
+LVS 的网表提取是**超线性**的（`run_lvs.sh` 自己的注释记着 51K 单元约 2700 秒）。
+所以排产要分段：几千单元以下按 DRC 估就够，十万单元以上必须给 LVS 单独留预算和超时。
+（我写那个标度实验时漏了 `timeout`，282K 那个跑了 124 分钟才被手动停掉。
+批量跑 LVS 一定要包 `timeout`，`run_lvs.sh` 自己有 5400s 默认上限，手搓调用没有。）
+
+**sky130hd 本轮没有可用的 LVS 路径**，两条都断：
+
+```
+KLayout LVS   对 1 单元全加器就报 Netlists don't match
+              对照验证过不是我的配方：ORFS 自己从 ODB 导网表、走完整 20 个 odb 的
+              make 路径，判决相同（原生 deck 更早挂在 pin-count 缺陷上）
+              → 命中 failure-patterns.md 已有的 "symmetric-matcher residual"
+Netgen LVS    容器和 216 宿主机都没有 magic/netgen，也没有 sky130A 的 libs.tech
+              装它要连完整 PDK 一起装，没有 conda、dnf 要 root
+```
+
+nangate45 的 KLayout LVS 是好的（5 个规模 × 2 种网表来源 = 10 次判决全部 match），
+所以**完整签核漏斗这一轮由 nangate45 提供**，130 只出到 DRC 级。
+
+**一条可复用的正面结论**：没有 `6_final.odb` 也能导网表——`read_lef` + `read_def`
+重建的数据库产出的 CDL 和带电源 Verilog 都和 ODB 版等价（只差端口声明顺序），
+`read_def` 会把 SPECIALNETS 的 `( * VPWR )` 通配展开成实例级电源连接。
+细节和两处计量陷阱见 `failure-patterns.md` "A DEF-rebuilt database yields the same
+netlists as the ODB"。这不是"可以不留 ODB"的理由（两边都源自同一个 DEF，少一层
+独立性），而是**上一轮没留时的补救办法**。
 
 **各平台该用哪种 DRC（文档写定的）**：
 
