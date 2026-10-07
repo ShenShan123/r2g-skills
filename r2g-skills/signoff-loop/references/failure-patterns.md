@@ -988,6 +988,99 @@ source or prebuilt tarballs. Recorded rather than attempted: the netlist half of
 the route is verified (previous section), the toolchain half is an installation
 task, and nangate45's KLayout LVS works (10 of 10 verdicts across five sizes).
 
+### sky130hd KLayout LVS: three deck defects, and one residual that blocks the corpus (2026-10-07)
+
+sky130hd reported `Netlists don't match` on every design tried, from a 1-cell
+full adder to 1,735 cells. It is not the netlist source (a DEF-derived netlist
+gives the same verdict as the ODB-derived one) and not a missing checker
+(KLayout and both decks are installed). ORFS's bundled `sky130hd.lylvs` is a
+**Nangate deck with sky130 layer numbers patched in** -- its 40
+`equivalent_pins` entries still name Nangate cells -- and r2g's deck inherited
+that. Three defects, all fixed; one residual, not fixed.
+
+**Diagnosing it needed the deck to talk first.** It ended at
+
+    if ! compare
+      puts "ERROR : Netlists don't match"
+
+with no `report_lvs` call, so `report_file` -- which the Makefile passes -- was
+ignored and a mismatch left no database. Four designs were investigated on that
+one line before a `report_lvs` + cross-reference dump was added. Two API traps
+on the way: `each_net_pair` and friends live on the **NetlistCrossReference**
+and take ONE argument (the circuit pair), which is what the deck's own
+`VERBOSE-LVS` block got wrong (`undefined method 'device_count'`); and
+enumerating a circuit's nets and devices in full crashes KLayout 0.30.7
+(`malloc_consolidate(): unaligned fastbin chunk`, Signal 6) -- the pair
+iterators are safe, a full `each_net`/`each_device` walk is not.
+
+**Defect 1 -- the substrate had no geometry.** `SUB = polygons(236, 0)` reads a
+layer sky130 standard cells never draw, so SUB was empty, every nfet took its
+bulk from it (`"W" => SUB`), and they all landed on a global net with no path to
+ground. `connect(SUB, PTAP)` was already in the deck and had nothing to connect.
+Extraction reported substrate and ground as two nets while the schematic ties
+each cell's VNB pin to VSS, so every subcircuit mismatched even though the cells
+compared clean at transistor level. Fix: `SUB = extent - NWELL` -- the substrate
+is the area outside the n-well, contacted by the p+ taps. Naming the global
+"VSS" instead does NOT work: `connect_global` names a net, it does not merge one
+that has no physical path (two nets then both read VSS, still unconnected).
+
+**Defect 2 -- device-less cells blocked the comparison.** FILL/TAP/CONB cells
+extract to no layout circuit but appear as schematic subcircuit instances, which
+left the TOP cell's status at `Skipped`: the real netlists were never compared at
+all. `align` covers circuits present on one side only and did flatten the
+layout-only VIA cells, but not these. Fix: flatten schematic circuits with **no
+devices and no subcircuits**. Detect by PROPERTY, not by name -- a first pass
+matched `FILL|TAP|DECAP|DIODE|ANTENNA` and missed `CONB_1`, a constant cell with
+no transistors. Two gotchas: `flatten_circuit` is a `Netlist` method, not an
+LVS-engine one; and it destroys the Circuit, so collect names first or the loop
+dies on `Object has been destroyed already in Circuit::name`.
+
+**Defect 3 -- no sky130 pin equivalences.** All 40 entries named Nangate cells,
+so no commutative input was ever swappable. `scripts/flow/gen_sky130_equivalent_pins.py`
+derives 227 from the liberty, group by group: `a21oi` gets `("A1","A2")` only,
+because A1/A2 feed the AND stage and B1 does not swap with them -- declaring all
+inputs of a complex gate equivalent would make LVS accept layouts that are
+wrong. **Patterns must be UPPERCASE**: the CDL reader upcases every name, so
+lowercase patterns taken from the liberty match nothing and change no verdict
+(one full verification round was spent discovering this). Note the names cannot
+distinguish the two decks -- sky130's `and2_1` upcases to `AND2_1`, Nangate's
+name for the same gate -- so the guard test keys on the count and on cells only
+sky130 has.
+
+**With all three: designs built from simple gates pass.** Verified across sizes,
+each design's full flow re-run so `make lvs` works from its own ODB, original
+deck vs fixed deck on the same layout:
+
+| cells | design | original deck | fixed deck |
+| --- | --- | --- | --- |
+| 1 | full_adder | mismatch | **match** |
+| 48 | up_counter | mismatch | **match** |
+| 236 | instruction_fetch | mismatch | **match** |
+| 597 | debug_display | mismatch | mismatch (residual below) |
+| 1735 | jt6295_adpcm | mismatch | mismatch (residual below) |
+
+**The residual -- drive strength as device multiplicity.** `a21oi_2`'s master
+declares
+
+    MMPA0 pndA A1 VPWR VPB pfet_01v8_hvt m=2 w=1.0 l=0.15 ...
+
+so the schematic holds ONE device with W scaled to 2.0 um, while extraction
+finds TWO parallel series-stacks, each with its own internal node (the lvsdb
+shows the layout carrying unnamed nets `$10`/`$11` against the schematic's
+`A1`/`A2`/`SNDA1`). `combine_devices` cannot reconcile them: parallel reduction
+needs identical nets and the two stacks' internal nodes are different nets,
+while series reduction needs identical gates and A1/A2 differ. Enabling
+`combine_devices` on both sides, `simplify` on both sides, and the correct
+uppercase equivalences each changed nothing. This is structural, not a deck
+setting.
+
+**Therefore sky130hd LVS is NOT usable for the corpus yet.** Cells with `m>=2`
+drive strength are common, so a full pass would record mismatches on correct
+layouts -- fabricating design failures, which is worse than having no LVS level.
+nangate45's KLayout LVS is sound (10 of 10 verdicts across five sizes, both
+netlist sources), so the complete sign-off funnel comes from there; sky130hd
+stops at the DRC level. Guard: `tests/test_sky130hd_lvs_deck.py`.
+
 ### LVS symmetric-matcher residual (KLayout `Netlists don't match`, layout actually correct)
 
 <!-- r2g-lesson:
