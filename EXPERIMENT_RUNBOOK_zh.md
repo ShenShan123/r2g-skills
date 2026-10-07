@@ -241,6 +241,57 @@ RTL 前端   约 49%   解析/综合/yosys 规范化失败 —— 语料自身�
 
 → 漏斗必须把"无约束路径"单列一桶，不要并入达标。
 
+### 早返回路径会吃掉判决（2026-10-07，这条让三个设计从分母里消失）
+
+漏斗一度读作 `flow 完成 2159，DRC 已签核 2156`。那 3 个不是"还没跑"——
+`signoff.log` 里明明写着：
+
+```
+19:33:31  timeout  7229s  C00559__jpeg_output        97582 单元
+01:54:18  timeout  7242s  C02848__sram_controller   106996 单元
+03:28:45  timeout  7237s  C03279__sv_chip2           94170 单元
+```
+
+它们是全语料最大的三个设计，KLayout DRC 撞了 7200 秒上限。
+**但 `result.json` 里一个字都没有**，而漏斗脚本只读 `result.json`。
+
+原因在驱动脚本的结构：
+
+```python
+def one(run_dir, ...):
+    ...
+    except subprocess.TimeoutExpired:
+        out.update(drc_status="timeout", ...)
+        return out                      # ← 在末尾写回之前就返回了
+    ...
+    # 写回 result.json 在这里，三条早返回路径全都绕过了它
+```
+
+早返回有三条：`not_a_pass`、`gds_failed`、`timeout`。
+
+**超时的设计和从未尝试的设计，在数据里长得一样。** 这正是 CLAUDE.md 警告的那类缺陷
+——不是报错，是静默少算。
+
+**修法不是逐条在 `return` 前补写回**：下一个分支还会漏。要让写回**绕不过去**：
+
+```python
+def one(...)                 只计算判决，不碰 result.json
+def record(run_dir, out)     写回，对每种结局都调用
+def one_and_record(...)      执行器只调这个
+```
+
+`record()` 里再加一道：判决为空或 `not_a_pass` 时不动记录，
+这样"没判决"和"判了但失败"仍然分得开。
+
+**同一个模板复制出去的脚本有同一个缺陷。** 本轮 `lvs130.py` 是照
+`signoff_pass.py` 写的，一模一样的早返回问题，在它跑到最大设计之前修掉了
+（已判决的会被跳过，所以修完续跑不浪费）。
+**写完一个驱动脚本，先数一遍有几条 `return`。**
+
+**回填用日志，不要重跑。** 那三个的判决在 `signoff.log` 里有确凿记录，
+重跑只是再花 2 小时/个去得到同一个答案。但回填要留痕——
+我在 `result.json` 里加了 `drc_backfilled_from: "signoff.log"`。
+
 ## 八、签核：本轮做到哪、下轮怎么做全
 
 **用 r2g 的 `run_drc.sh`，不是 ORFS 原生 `make drc`。** r2g 带三样原生没有的东西，
