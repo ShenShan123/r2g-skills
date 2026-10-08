@@ -402,7 +402,23 @@ rm -rf "$EXT_SCRATCH"; mkdir -p "$EXT_SCRATCH"
 # Option names are exact: capacitance/coupling/resistance/adjust/length ("adjustment"
 # is a syntax error). `extract all` extracts all cells using these do/no settings.
 # See references/failure-patterns.md "sky130 Netgen LVS Magic top-cell extraction hang".
+# gf180's cells carry their well names as GDS text -- VNW on 21/10 and VPW on
+# 204/10 -- but ORFS's per-cell GDS omits both layers, so Magic has no name for
+# the well nodes and emits SUB and w_<n>#. Netgen then "alters pin lists to
+# match" and, in doing so, stops comparing those pins' connections: a negative
+# control that tied VNW to VSS (an n-well held at ground) still read "Circuits
+# match uniquely". Reading the PDK's own library GDS first defines every cell
+# WITH its well labels; `gds noduplicates true` then keeps the design GDS from
+# redefining them, so only the top level comes from it. sky130 needs none of
+# this -- its cells expose the wells as ordinary VPB/VNB pins.
+_PDK_CELL_GDS=""
+if [[ "$PLATFORM" == "gf180" ]]; then
+  _PDK_CELL_GDS="$PDK_ROOT/gf180mcuC/libs.ref/gf180mcu_fd_sc_mcu${TRACK_OPTION:-9t}${POWER_OPTION:-5v0}/gds/gf180mcu_fd_sc_mcu${TRACK_OPTION:-9t}${POWER_OPTION:-5v0}.gds"
+  [[ -f "$_PDK_CELL_GDS" ]] || _PDK_CELL_GDS=""
+fi
 cat > "$EXTRACT_TCL" << MAGIC_EOF
+${_PDK_CELL_GDS:+gds read "$_PDK_CELL_GDS"}
+${_PDK_CELL_GDS:+gds noduplicates true}
 gds read "$GDS_FILE"
 load "$DESIGN_NAME"
 select top cell
