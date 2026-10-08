@@ -671,7 +671,82 @@ tech LEF 的固定下限，流程动不了；这里是流程产出的几何，�
 **ORFS 自己从未发现这两类**：它对 gf180 的门槛和 asap7 一样只用布线器内部检查，
 我们跑的 5 份 `route_drc` 全是 0。
 
-### LVS 卡住的根因：ORFS 的 gf180 LEF 缺 VNW/VPW 引脚
+### LVS 已通（2026-10-08 补）：四个缺陷叠在一起，最后一个才让前三个现形
+
+**结果**：5/5 份设计（93 到 3,025 单元，规模跨 32 倍）读出 `Circuits match uniquely`，
+器件数和网络数两边逐项精确相等。
+
+| 设计 | 单元 | 器件 | 网络 |
+|---|---|---|---|
+| corescore_emitter_uart | 93 | 106 = 106 | 120 = 120 |
+| wbarbiter | 111 | 330 = 330 | 478 = 478 |
+| rom_divide | 521 | 527 = 527 | 538 = 538 |
+| avg_n_per_clk | 1,108 | 1,280 = 1,280 | 1,558 = 1,558 |
+| rotate_mapper | 3,025 | 3,002 = 3,002 | 3,784 = 3,784 |
+
+**四个缺陷**（`run_netgen_lvs.sh`，提交 bd5aa01）：
+
+1. **ORFS 的 gf180 std-cell LEF 缺 VNW/VPW 井引脚**。`write_cdl` 直接报出来：
+   `[WARNING ODB-0286] Terminal VNW of CDL master ... not found in LEF`。
+   于是网表把井端口填成 `_unconnected_N`，比对看到 332 个原理图网络对 120 个提取网络。
+   → 改读 PDK 自己的 std-cell LEF（25,973 行，`PIN VNW USE POWER` / `PIN VPW USE GROUND`），
+   平台的 tech LEF 保留。
+2. **引脚有了但没连接**——ORFS 的 PDN 从未布过它不知道存在的井。
+   → 声明物理事实：`add_global_connection -net VDD -pin_pattern {^VNW$} -power`
+   和 `-net VSS -pin_pattern {^VPW$} -ground`。
+   验证：`_unconnected_108 _unconnected_109` → `VDD VSS`。
+3. **有 ODB 时脚本走 `read_db`，整段 LEF 逻辑被跳过**，而那个 ODB 正是 ORFS 用缺引脚的
+   LEF 建的，所以全局连接无处可连。
+   → gf180 即使有 ODB 也强制从 LEF + DEF 重建；其他平台继续优先用 ODB
+   （两个独立序列化比"版图和网表同源于一个 DEF"多一层独立性）。
+4. **LEF 路径只展开了 `$(PLATFORM_DIR)`**，而 gf180 的 TECH_LEF 是
+   `lef/gf180mcu_$(METAL_OPTION)_$(KVALUE)K_$(TRACK_OPTION)_tech.lef`。
+   未展开的文件名不存在 → `read_lef` 被静默跳过 → DEF 报
+   `ODB-0421`「UNITS DISTANCE MICRONS 换算因子 2000 大于数据库单位」外加
+   `unknown site GF018hv5v_green_sc9`。
+   **这两条症状都像 DEF 的问题，其实都是缺 tech LEF。** 这是整件事里最隐蔽的一环。
+   → `_r2g_lef` 现在展开 METAL_OPTION / KVALUE / TRACK_OPTION / POWER_OPTION / CORNER。
+
+### 为什么用 Netgen 而不是 PDK 的 KLayout LVS deck
+
+两者都在、都能跑完并给出判决。用实测区分：
+
+| | 填充单元处理 | 在填充过的数字版图上的实测 |
+|---|---|---|
+| KLayout LVS deck（291 文件） | **没有任何处理** | 器件只配上 21%（75/362）、网络 13%、引脚 11% |
+| Netgen setup | **11 条 `ignore class`**，覆盖 `__antenna`/`__endcap`/`__fill_`/`__fillcap_`/`__filltie` | 全部匹配 |
+
+→ KLayout 那套是为定制模拟版图设计的；Netgen 那套就是为数字流程设计的。
+（顺带：KLayout LVS 还要 `metal_level` 显式传——它默认 `6LM` 而 ORFS 用 5LM；
+`combine=true` 在这里反而有害，因为 CDL 侧是逐个 MOS 展开的、没有 `m=N`；
+`write_cdl -masters` 只用于查端口顺序，不会把 229 个单元定义拼进 CDL，要显式 `cat`；
+PDK 内部两套 CDL 方言，标准单元 CDL 的二极管用位置参数 + `$m=1`，
+KLayout 的 reader 只认 `AREA=`/`PJ=`/`m=` 那种——只有 `antenna` 一个单元受影响。）
+
+### 检出能力的边界（三个负对照，其中一个暴露了盲区）
+
+| 破坏 | 结果 |
+|---|---|
+| 改接一个输入（`_087_ I` → `_087_ ZN`） | 网络 120 vs **121**，`Netlists do not match` ✅ |
+| 删掉一个实例 | `LVS NOT EXECUTED`——DEF 的 COMPONENTS 计数不一致，openroad 诚实拒绝（不是假通过） |
+| **单个实例换驱动强度**（`inv_2` → `inv_4`） | 网络 120 vs 120，`Circuits match uniquely` ❌ **未检出** |
+
+未检出的原因查清了：破坏确实两边都在（`powered.v` 里 `inv_4` 出现 1 次，
+`extracted.spice` 里 0 次、`inv_2` 30 次），但版图侧根本没有 `inv_4` 这个子电路，
+Netgen 把网表侧那个找不到对应的实例展平，而 `inv_2` 和 `inv_4` 的拓扑相同
+（各 1 对 PMOS/NMOS，只有 W 不同），展平后晶体管数和连接都不变。
+W 的比较只在**配对上的**器件之间进行，这里走的是另一条路径。
+
+→ **边界**：连接错误和拓扑改变能检出；单个实例替换成同拓扑、仅尺寸不同的变体检不出。
+对 r2g 的用途影响有限（换驱动强度是 resizer 做的，它同时更新 DEF 和 ODB，
+不会产生版图与网表不一致），但**不能宣称「LVS 全面可用」**。
+
+**顺带一条测试纪律**：第一轮负对照里两个 `sed` 用了 2 空格缩进而 DEF 实际是 4 空格，
+破坏根本没发生，却给出了 `Circuits match uniquely`。
+→ **每个负对照必须先断言破坏生效**（本轮改成比对 md5，不变则标记该对照无效）。
+一个什么都没做的测试会给出通过的结果——这是本轮反复出现的同一类错误。
+
+### LVS 原先卡住的根因（已解决，保留记录）：ORFS 的 gf180 LEF 缺 VNW/VPW 引脚
 
 三条路（Magic+Netgen、KLayout LVS）都倒在同一处，证据链：
 
