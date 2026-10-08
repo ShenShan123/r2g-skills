@@ -189,11 +189,13 @@ _count() {  # read current violation count from a report json
 d=json.load(open(sys.argv[1]))
 v=d.get("total_violations"); v=d.get("mismatch_count") if v is None else v
 # timing: timing_check.json has no violation count — emit a NON-NEGATIVE badness
-# that is 0 iff timing is MET (wns>=0) and grows with worse slack, so fix_one`s
+# that is 0 iff timing is MET (wns>=0) AND no max-slew/max-cap limit is exceeded,
+# growing with worse slack (ps) plus the design-rule violator count, so fix_one`s
 # before/after improvement logic (after==0 => CLEAN) works unchanged.
 if v is None and ("tier" in d or "wns" in d or "wns_ns" in d):
     w=d.get("wns", d.get("wns_ns"))
-    if isinstance(w,(int,float)): v=round(max(0.0,-float(w))*1000)
+    if isinstance(w,(int,float)):
+        v=round(max(0.0,-float(w))*1000)+int((d.get("drv") or {}).get("total") or 0)
 print("" if v is None else v)' "$1" 2>/dev/null || echo ""
 }
 
@@ -244,6 +246,29 @@ _snapshot_accepted_bundle() {
   # Manifest of what the snapshot owns, so restore knows which files must be
   # DELETED (a report the rejected run created that the accepted run never had).
   ( cd "$_ACCEPTED_DIR" 2>/dev/null && ls -A ) > "$_ACCEPTED_DIR.manifest" 2>/dev/null || true
+}
+
+# --- memory containment (Phase R amendment R-A3, failure-patterns "memory step blocks the
+# catalogue") ------------------------------------------------------------------------------
+# A memory (TEHM) strategy is prepended ahead of the catalogue and may be an untested
+# candidate. Its failure must never take away a repair the no-memory baseline would reach:
+# a failed memory step is rolled back, does NOT consume the catalogue's non-improvement
+# budget, and after R2G_MEMORY_FAIL_BUDGET (default 2) failed memory steps memory is
+# suspended for the rest of this fix session, so the catalogue proceeds as in the baseline.
+# Catalogue strategies are untouched (the no-memory arm behaves exactly as before).
+_MEMFAIL=0
+_is_memory_strategy() { [[ "$1" == tehm_* ]]; }
+_memory_rollback() {  # restore the pre-step config AND evidence bundle (called inside fix_one: $cfg_backup)
+  [[ -n "${cfg_backup:-}" && -f "$cfg_backup" ]] && cp -f "$cfg_backup" "$PROJECT_DIR/constraints/config.mk"
+  _restore_accepted_bundle || true
+}
+_memory_step_failed() {  # $1 = check, $2 = strategy, $3 = why
+  _MEMFAIL=$((_MEMFAIL+1))
+  echo "[$1] memory step $2 failed ($3); rolled back, catalogue budget kept ($_MEMFAIL/${R2G_MEMORY_FAIL_BUDGET:-2})"
+  if (( _MEMFAIL >= ${R2G_MEMORY_FAIL_BUDGET:-2} )) && [[ "${R2G_MEMORY_BACKEND:-}" != "none" ]]; then
+    export R2G_MEMORY_BACKEND=none
+    echo "[$1] memory suspended for the rest of this fix session after $_MEMFAIL failed memory steps; catalogue continues"
+  fi
 }
 
 _restore_accepted_bundle() {  # returns 1 when there is no snapshot to restore
@@ -590,7 +615,10 @@ except Exception: print("")' "$antenna_marker")"
     # R2G_FIX_RANK_FIRST rides through to --apply too: the apply-time lifecycle
     # gate (2026-07-16 issue 6) blocks candidate/shadow recipes, and arm B of an
     # A/B trial must be able to force exactly the candidate under test.
-    if ! apply_out="$("$DIAGNOSE" "$PROJECT_DIR" --check "$check" \
+    # The SAME exclusions as --next: a ladder rung (cell_pad_relief_*, drv_route_margin_*) is
+    # chosen from the untried rungs, so without them the apply-time plan offers a different rung
+    # after a rollback and the chosen one is "not in current plan" (Phase R S2 on v3, R-A2).
+    if ! apply_out="$("$DIAGNOSE" "$PROJECT_DIR" --check "$check" --exclude "$all_excl" \
           ${R2G_FIX_RANK_FIRST:+--rank-first "$R2G_FIX_RANK_FIRST"} --apply "$sid")"; then
       echo "[$check] apply '$sid' failed; aborting" >&2
       _log_iter "$check" "$it" "$sid" "$before" "$before" "apply_failed" "$rerun" "$before_vclass" "$before_cats" "{}"; return 1
@@ -643,6 +671,30 @@ except Exception: print("{}")' <<<"$apply_out")"
       else
         FROM_STAGE="$rerun" R2G_RERUN_REASON="$rerun_reason" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || rc=$?
       fi
+      if [[ $rc -ne 0 ]] && _is_memory_strategy "$sid"; then
+        # memory containment: a memory step whose rerun fails is rolled back, never aborts the check
+        _memory_rollback
+        _log_iter "$check" "$it" "$sid" "$before" "$before" "memory_rerun_failed_rc$rc" "$rerun" "$before_vclass" "$before_cats" "{}"
+        _memory_step_failed "$check" "$sid" "rerun failed rc=$rc"
+        continue
+      fi
+      if [[ $rc -ne 0 && "$check" == "route" && $rc -ne 124 ]]; then
+        # route_relief ladder (failure-patterns "Routing Congestion" -> ladder, 2026-10-05):
+        # the rerun aborted again (still congested). Not a regression and not a crash:
+        # re-extract route.json so the next diagnosis sees the new state, count it as
+        # non-improving, and let the next step (lower CORE_UTILIZATION) run. The
+        # non-improvement stop and MAX_ITERS bound the ladder; a timeout (124) keeps
+        # the abort below (the to-floor policy already used its one jump).
+        echo "[$check] rerun still fails (rc=$rc); continuing the relief ladder" >&2
+        _run_extract route || true
+        after="$(_count "$report")"
+        _log_iter "$check" "$it" "$sid" "$before" "${after:-$before}" "rerun_failed_still_congested" "$rerun" "$before_vclass" "$before_cats" "{}"
+        noimp=$((noimp+1))
+        if (( it >= BASE_ITERS && noimp >= 2 )); then
+          echo "[$check] $noimp non-improving past base $BASE_ITERS; stopping"; return 1
+        fi
+        continue
+      fi
       if [[ $rc -ne 0 ]]; then
         echo "[$check] run_orfs failed (rc=$rc); aborting this check" >&2
         _log_iter "$check" "$it" "$sid" "$before" "$before" "rerun_failed_rc$rc" "$rerun" "$before_vclass" "$before_cats" "{}"
@@ -661,7 +713,8 @@ except Exception: print("{}")' <<<"$apply_out")"
     if [[ -n "$rerun" && ( "$check" == "drc" || "$check" == "lvs" ) && \
           -n "$pre_layout" && "$pre_layout" == "$post_layout" ]]; then
       verdict="recipe_no_effect"; after="$before"
-      noimp=$((noimp+1))
+      if _is_memory_strategy "$sid"; then _memory_rollback; _memory_step_failed "$check" "$sid" "no layout effect"
+      else noimp=$((noimp+1)); fi
       local is_antenna_iter=0
       [[ "$sid" == antenna* || "$before_vclass" == *[Aa]ntenna* ]] && is_antenna_iter=1
       (( is_antenna_iter )) && antenna_noimp=$((antenna_noimp+1))
@@ -745,7 +798,8 @@ print(json.dumps({"strategy":sys.argv[1],"reason":"global_regression",
                   "evidence_bundle_restored":sys.argv[3]=="1",
                   "restored_target_count":(sys.argv[4] or None)}))' \
         "$sid" "$global_regs" "$bundle_restored" "${after_rollback:-}")" "$sym"
-      noimp=$((noimp+1))
+      if _is_memory_strategy "$sid"; then _memory_step_failed "$check" "$sid" "regression (already rolled back)"
+      else noimp=$((noimp+1)); fi
       # The ledger records what the ATTEMPT measured ($after) — the rejected
       # run's count is the negative evidence. The project's ACTIVE state is the
       # restored baseline ($after_rollback).
@@ -776,8 +830,14 @@ print(json.dumps({"strategy":sys.argv[1],"reason":"global_regression",
     local is_antenna_iter=0
     [[ "$sid" == antenna* || "$before_vclass" == *[Aa]ntenna* ]] && is_antenna_iter=1
     if [[ -n "$before" ]] && python3 -c "import sys;sys.exit(0 if float('$after')>=float('$before') else 1)" 2>/dev/null; then
-      verdict="no_improvement"; noimp=$((noimp+1))
-      (( is_antenna_iter )) && antenna_noimp=$((antenna_noimp+1))
+      verdict="no_improvement"
+      if _is_memory_strategy "$sid"; then
+        _memory_rollback                      # memory edits persist only when they improve
+        _memory_step_failed "$check" "$sid" "no improvement"
+      else
+        noimp=$((noimp+1))
+        (( is_antenna_iter )) && antenna_noimp=$((antenna_noimp+1))
+      fi
     else
       noimp=0
       # An IMPROVING antenna strategy RESETS the consecutive counter: a design
@@ -820,7 +880,10 @@ print(json.dumps({"strategy":sys.argv[1],"reason":"global_regression",
   echo "[$check] reached max-iters=$MAX_ITERS"
 }
 
-: > "$LOG"
+# The fix ledger is evidence, not a per-invocation scratch file.  An engineer-loop
+# turn can call us once for timing repair and again for final DRC/LVS validation;
+# truncating here would erase the timing attempt before ingest can learn from it.
+touch "$LOG"
 # RMD3-P0-01 session baseline: the state this whole invocation starts from. A
 # stale compare file from a prior (possibly crashed) invocation must not be
 # matched against the new log — remove it; the ingester also keys the compare
@@ -840,6 +903,19 @@ _capture_vector "$REPORTS/.rv_session_start.json" "$CHECK"
 [[ "$CHECK" == "timing" ]] && fix_one timing || true
 [[ "$CHECK" == "drc" || "$CHECK" == "both" ]] && fix_one drc || true
 [[ "$CHECK" == "lvs" || "$CHECK" == "both" ]] && fix_one lvs || true
+# An LVS repair that re-flows (lvs_port_feedthrough_buffer reruns from place) leaves
+# drc.json describing a layout that no longer exists: the manifest then refuses the
+# design (two runs bound / no DRC status). Re-grade DRC on the new layout (fix_one's
+# baseline is staleness-aware and may repair), then re-grade LVS once if that in turn
+# re-flowed. Bounded: one extra pass, no LVS repair in it (2026-10-01, P0-2e).
+if [[ "$CHECK" == "both" ]]; then
+  _gds_now="$(ls -t "$PROJECT_DIR"/backend/RUN_*/final/*.gds 2>/dev/null | head -1 || true)"
+  if [[ -n "$_gds_now" && ( ! -f "$REPORTS/drc.json" || "$_gds_now" -nt "$REPORTS/drc.json" ) ]]; then
+    echo "[drc] layout re-flowed after DRC was graded (LVS repair) — re-grading DRC"
+    fix_one drc || true
+    _ensure_baseline lvs
+  fi
+fi
 
 # Markdown summary from the JSONL log
 python3 -c 'import json,sys

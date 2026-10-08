@@ -46,6 +46,14 @@ except Exception: print("")
 fi
 export WORK_HOME="${R2G_ORFS_WORK_HOME:-${_R2G_RECORDED_WORK_HOME:-$FLOW_DIR}}"
 export DESIGN_HOME="${R2G_ORFS_DESIGN_HOME:-$FLOW_DIR/designs}"
+# Hold the workspace from restage to verdict (released when the checker exits).
+# Runs that share a workspace otherwise restage into one results dir and grade each
+# other's GDS (CORRECTIONS #16). Contention fails fast, exactly like run_orfs.sh.
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_workspace_lock.sh"
+if [[ "${R2G_SKIP_WORKSPACE_LOCK:-0}" != "1" ]]; then
+  _r2g_acquire_workspace_lock "$PLATFORM" "$DESIGN_NICKNAME" "$FLOW_VARIANT" || exit 1
+fi
 if [[ "$WORK_HOME" == "$FLOW_DIR" ]]; then
   ORFS_DESIGN_DIR="$FLOW_DIR/designs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
 else

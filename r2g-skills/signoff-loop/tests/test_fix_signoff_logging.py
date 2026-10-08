@@ -15,6 +15,13 @@ def test_log_iter_records_config_delta_env_and_predicates(tmp_path):
     (proj / "reports").mkdir()
     (proj / "constraints" / "config.mk").write_text(
         "export DESIGN_NAME = demo\nexport PLATFORM = nangate45\n")
+    historical = {
+        "check": "timing", "iter": 1, "strategy": "utilization_reduce",
+        "before": -4.0, "after": -4.0, "verdict": "no_improvement",
+        "fix_session_id": "previous-session",
+    }
+    (proj / "reports" / "fix_log.jsonl").write_text(
+        json.dumps(historical) + "\n", encoding="utf-8")
     lvs_json = json.dumps({
         "status": "fail", "mismatch_class": "symmetric_matcher", "mismatch_count": 8,
         "net_mismatches_schematic_only": 3, "net_mismatches_layout_only": 3,
@@ -53,8 +60,9 @@ EOF
     assert log_file.exists(), f"no fix_log. stdout={res.stdout}\nstderr={res.stderr}"
     lines = [l for l in log_file.read_text().splitlines() if l.strip()]
     assert lines, f"fix_log is empty. stdout={res.stdout}\nstderr={res.stderr}"
-    # The first line should be the applied iteration (iter 1, strategy=lvs_same_nets_seed)
-    log = json.loads(lines[0])
+    logs = [json.loads(line) for line in lines]
+    assert logs[0] == historical, "a later validation pass must not erase repair evidence"
+    log = next(row for row in logs if row["strategy"] == "lvs_same_nets_seed")
     assert log["strategy"] == "lvs_same_nets_seed", f"unexpected first row: {log}"
     assert json.loads(log["config_delta"]) == {"LVS_SEED": "1"}, f"config_delta wrong: {log}"
     assert json.loads(log["env_flags"]).get("ROUTE_FAST") == "1", f"env_flags wrong: {log}"

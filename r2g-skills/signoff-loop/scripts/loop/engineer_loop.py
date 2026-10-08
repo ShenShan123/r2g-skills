@@ -310,9 +310,11 @@ def _run_flow(entry: dict) -> int:
 # (period_relax's 913f3c.../c9aba8... are absent), so a symptom-only lookup mis-routes
 # them to 'both' -> identical inert arms that can never promote and burn a full
 # multi-hour signoff per repeat (2026-06-24 audit, bugs #1/#3).
-_PLACE_STRATEGIES = frozenset({"core_util_relief"})
-_TIMING_STRATEGIES = frozenset({"period_relax", "utilization_reduce",
-                                "backend_aware_synth_retune"})
+_PLACE_STRATEGIES = frozenset({"core_util_relief", "pin_perimeter_floor"})
+_TIMING_STRATEGIES = frozenset({"hierarchical_place_timing_repair", "setup_slack_margin", "period_relax", "utilization_reduce",
+                                "backend_aware_synth_retune", "abc_area_physical_mapping",
+                                "drv_route_margin_10", "drv_route_margin_20",
+                                "drv_route_margin_40"})
 # synth_memory_relax is a SYNTH backend-abort recovery (raise SYNTH_MEMORY_MAX_BITS +
 # pair a die auto-size): its A/B arm applies the recipe up-front and flows once, like the
 # place/route backend-abort arms, and is judged on 'synth cleared' (2026-06-28).
@@ -336,9 +338,19 @@ AB_INCONCLUSIVE_MAX = 3
 # because this static list is stale — only a fabricated/unapplyable strategy is caught.
 _KNOWN_APPLY_STRATEGIES = frozenset({
     "antenna_diode_repair", "antenna_diode_iters", "antenna_density_relief",
-    "density_relief", "route_relief", "lvs_resolve_unknown", "lvs_macro_cdl",
-    "beol_only_drc", "rerun_from_stage", "pdn_die_floor",
+    "density_relief", "pin_side_rebalance", "route_relief", "lvs_resolve_unknown", "lvs_macro_cdl",
+    "beol_only_drc", "rerun_from_stage", "pdn_die_floor", "lvs_port_feedthrough_buffer",
+    "cell_pad_relief_2", "cell_pad_relief_4", "route_layer_relief",
 }) | _PLACE_STRATEGIES | _TIMING_STRATEGIES | _SYNTH_STRATEGIES
+
+
+def _strategy_excluded(strategy: str) -> bool:
+    """Honor the same campaign exclusion set in direct recovery paths and fix_signoff."""
+    return strategy in {
+        item.strip()
+        for item in os.environ.get("R2G_FIX_EXCLUDE", "").split(",")
+        if item.strip()
+    }
 
 
 def _recipe_generation(conn, key: dict):
@@ -375,6 +387,29 @@ def _recipe_status_version(conn, key: dict):
         return row[0] if row else None
     except Exception:
         return None
+
+
+def _lifecycle_move_is_same_ab_corpus(conn, key: dict) -> bool:
+    """True when the current lifecycle move was produced by A/B aggregation.
+
+    ``ab-drain`` judges completed subjects incrementally. The first subject can
+    therefore move candidate -> promoted/shadow while another subject from the
+    same planned cohort is still running. That transition changes no Recipe
+    content and must not invalidate the remaining independent evidence. External
+    moves (operator demotion, live regression, manual revalidation) retain the
+    fail-closed cancellation semantics.
+    """
+    if conn is None:
+        return False
+    try:
+        row = conn.execute(
+            "SELECT provenance FROM recipe_status WHERE symptom_id=? AND "
+            "design_class=? AND platform=? AND strategy=?",
+            (key["symptom_id"], key["design_class"], key["platform"],
+             key["strategy"])).fetchone()
+    except Exception:
+        return False
+    return bool(row and str(row[0] or "").startswith("ab_corpus"))
 
 
 def _known_apply_strategy(conn, strategy: str | None) -> bool:
@@ -433,31 +468,144 @@ def _symptom_check(conn, symptom_id: str | None, strategy: str | None = None) ->
     return "both"
 
 
+def _strategy_check(strategy: str | None) -> str | None:
+    """The signoff check a strategy repairs, when its name/catalog proves it."""
+    if strategy and strategy.startswith("lvs_"):
+        return "lvs"
+    if strategy in _TIMING_STRATEGIES:
+        return "timing"
+    return None
+
+
+def _enqueue_check_mismatch(conn, symptom_id: str, strategy: str) -> str | None:
+    """Why (symptom, strategy) can never match a live diagnosis, or None.
+
+    Live diagnosis looks a recipe up under the symptom of the check it is repairing,
+    so an LVS recipe enqueued under a TIMING symptom would be A/B-promoted on a key
+    no LVS plan ever reads (2026-10-01: lvs_port_feedthrough_buffer was first judged
+    under the run's timing|clean symptom)."""
+    want = _strategy_check(strategy)
+    row = conn.execute("SELECT check_type, class FROM symptoms WHERE symptom_id=?",
+                       (symptom_id,)).fetchone()
+    if want and row and row[0] and row[0] != want:
+        return (f"symptom {symptom_id} is {row[0]}|{row[1]} but {strategy} repairs "
+                f"{want}; enqueue it under the {want} symptom of the failing check")
+    return None
+
+
 def _run_fix(entry: dict) -> int:
     env = dict(os.environ)
+    fix_args = [
+        "bash", _script("R2G_LOOP_FIX", FLOW / "fix_signoff.sh"),
+        entry["project_path"], entry["platform"], "--check",
+        entry.get("check", "both")]
     if entry.get("kind") == "ab_arm":
         if entry.get("arm") == "A":
-            env["R2G_FIX_EXCLUDE"] = entry["strategy"]
+            # The control is a measurement-only baseline. Merely excluding the
+            # target strategy lets diagnose select the next catalog action, so a
+            # timing A arm can silently relax/reconfigure itself and cease to be
+            # a control. Zero iterations runs the fresh check but applies no
+            # Recipe; arm B below remains the sole intervention.
+            fix_args.extend(["--max-iters", "0"])
         else:
             env["R2G_FIX_RANK_FIRST"] = entry["strategy"]
+    rc = subprocess.run(fix_args, env=env).returncode
+    if entry.get("check") == "timing":
+        # A timing reflow changes placement/routing, so WNS closure alone cannot
+        # certify a signoff-safe result. Measure DRC/LVS after every timing path,
+        # with zero repair iterations: this is a checker-only pass, never a second
+        # intervention. This applies to normal live repair as well as A/B arms;
+        # otherwise a timing fix can be accepted without fresh physical signoff.
+        measure_env = dict(env)
+        measure_env.pop("R2G_FIX_EXCLUDE", None)
+        measure_env.pop("R2G_FIX_RANK_FIRST", None)
+        measured = subprocess.run(
+            ["bash", _script("R2G_LOOP_FIX", FLOW / "fix_signoff.sh"),
+             entry["project_path"], entry["platform"], "--check", "both",
+             "--max-iters", "0"], env=measure_env)
+        if rc == 0 and measured.returncode != 0:
+            rc = measured.returncode
+    return rc
+
+
+def _run_backend_signoff_measurement(entry: dict) -> int:
+    """Measure a completed route/place A/B arm without applying another Recipe.
+
+    Backend-abort arms apply their candidate before the one full ORFS run.  A
+    successful flow proves that the formerly aborting stage completed, but it
+    does not prove that the resulting layout is usable.  Run the existing
+    zero-iteration signoff path so DRC/LVS/RCX/timing are measured while the
+    tested config remains frozen.
+    """
+    env = dict(os.environ)
+    env.pop("R2G_FIX_EXCLUDE", None)
+    env.pop("R2G_FIX_RANK_FIRST", None)
     return subprocess.run(
         ["bash", _script("R2G_LOOP_FIX", FLOW / "fix_signoff.sh"),
-         entry["project_path"], entry["platform"], "--check",
-         entry.get("check", "both")],
-        env=env).returncode
+         entry["project_path"], entry["platform"], "--check", "both",
+         "--max-iters", "0"], env=env).returncode
+
+
+def _strict_signoff_manifest_clean(project_path: str) -> bool:
+    """True only for an arm-local, strict *physical* signoff bundle.
+
+    The publication manifest's top-level ``strict_clean`` additionally requires
+    an Fmax-search winner.  Fixed-frequency Recipe A/B deliberately holds the
+    registered clock constant, so introducing Fmax search here would change the
+    task and confound the intervention.  Require every physical checker and its
+    run binding instead; _arm_spec_mismatch separately protects the clock/area
+    objective from relaxation.
+    """
+    try:
+        manifest = json.loads(
+            (Path(project_path) / "reports" / "signoff_manifest.json").read_text(
+                encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        return False
+    reports = manifest.get("reports") or {}
+    drc = reports.get("drc.json") or {}
+    lvs = reports.get("lvs.json") or {}
+    route = reports.get("route.json") or {}
+    rcx = reports.get("rcx.json") or {}
+    timing = reports.get("timing_check.json") or {}
+    capability = manifest.get("platform_capability") or {}
+    confirming = manifest.get("confirming_run") or {}
+    wns = timing.get("wns_ns", timing.get("wns"))
+    return bool(
+        drc.get("present") is True
+        and drc.get("status") == "clean"
+        and drc.get("drc_mode") == "full"
+        and drc.get("total_violations") == 0
+        and lvs.get("present") is True
+        and lvs.get("status") == "clean"
+        and route.get("present") is True
+        and route.get("status") == "clean"
+        and route.get("total_violations") == 0
+        and rcx.get("present") is True
+        and rcx.get("status") == "complete"
+        and timing.get("present") is True
+        and timing.get("tier") == "clean"
+        and isinstance(wns, (int, float)) and wns >= 0
+        and capability.get("strict_signoff_ready") is True
+        and confirming.get("consensus") is True
+        and confirming.get("run_tag")
+    )
 
 
 def _apply_recipe_strategy(entry: dict) -> None:
     """Apply the recipe's backend strategy into the arm's config.mk BEFORE its single
     flow run (arm B of an apply-then-flow backend-abort trial).
 
-    - PLACE (core_util_relief): two sub-cases. A FIXED-die subject (DIE_AREA, no
+    - PLACE (core_util_relief): a FIXED-die subject (DIE_AREA, no
       CORE_UTILIZATION) is converted DIE_AREA -> CORE_UTILIZATION=30 so ORFS auto-sizes a
       die that FITS the cells (the FLW-0024 recovery). A subject that ALREADY auto-sizes
       (CORE_UTILIZATION=N) gets its util LOWERED (more whitespace -> easier place/route).
       Either way arm B's place stage diverges from arm A's (control) untouched config.
       Direct edit — core_util_relief is NOT a diagnose strategy (2026-06-24 audit, bug
       #3-place; the already-auto-sized lowering was the no-op fixed 2026-06-26).
+    - PLACE (pin_perimeter_floor): size an explicit square die from the PPL-0024
+      perimeter requested by the IO placer. This is a different physical effect from
+      core_util_relief and must therefore carry a different Recipe identity.
     - ROUTE (route_relief / route strategies): seed a fail route.json so diagnose can
       resolve the route strategy (no backend exists yet to extract from), then apply it.
     """
@@ -476,7 +624,16 @@ def _apply_recipe_strategy(entry: dict) -> None:
         # The arm copy excludes the subject's backend, so the required perimeter is passed in
         # from the SUBJECT at plan time (pin_perimeter_target); when present, hit it directly.
         tgt = entry.get("pin_perimeter_target")
-        if tgt and _relieve_pin_overflow(entry, perimeter_target=tgt):
+        if entry.get("strategy") == "pin_perimeter_floor":
+            # Replay the exact provenance-bound after-effect. The subject's newest
+            # backend is already clean, so reparsing it for PPL-0024 loses the target
+            # and silently turns B into another control arm.
+            delta = entry.get("recipe_config_delta")
+            if delta and _apply_structured_delta_after(
+                    Path(entry["project_path"]), delta):
+                return
+            if tgt:
+                _relieve_pin_overflow(entry, perimeter_target=tgt)
             return
         # FLW-0024 / generic place relief: a fixed-die subject -> CORE_UTILIZATION=30 (the
         # FLW-0024 recovery). A subject that already auto-sizes makes _resize_to_core_util a
@@ -488,8 +645,28 @@ def _apply_recipe_strategy(entry: dict) -> None:
     proj = Path(entry["project_path"])
     reports = proj / "reports"
     reports.mkdir(parents=True, exist_ok=True)
+    # Preserve the backend-abort severity that made this subject eligible.  The
+    # immutable repair-family probe is copied into every arm and therefore remains
+    # available even after the live subject's reports were replaced by a successful
+    # repair.  A route timeout intentionally jumps to the utilization floor, whereas
+    # an ordinary completed route failure takes one gentler step.  Seeding every arm
+    # as generic ``fail`` made A/B validate 25->17 even when the positive live event
+    # being promoted was the timeout policy's 25->8 effect.
+    route_status = "fail"
+    probe = proj / "repair_family_probe_result.json"
+    try:
+        probe_data = json.loads(probe.read_text(encoding="utf-8"))
+        signatures = {
+            str(item).upper()
+            for item in (probe_data.get("normalized_failure_signature") or [])
+        }
+        if "ROUTE_TIMEOUT" in signatures:
+            route_status = "timeout"
+    except (OSError, json.JSONDecodeError, TypeError):
+        pass
     (reports / "route.json").write_text(
-        json.dumps({"status": "fail", "total_violations": None}), encoding="utf-8")
+        json.dumps({"status": route_status, "total_violations": None}),
+        encoding="utf-8")
     diagnose = _script("R2G_LOOP_DIAGNOSE",
                        SKILL_ROOT / "scripts" / "reports" / "diagnose_signoff_fix.py")
     # --rank-first: arm B FORCES the candidate under test — the apply-time
@@ -530,11 +707,23 @@ def _process_backend_ab_arm(led: "Ledger", entry: dict, conn) -> None:
         # verdict for the trial (2026-06-23 audit, bug #3).
         led.set_state(design, "escalated", reason=f"{check}_arm_incomplete")
         return
+    # A route/place completion is not sufficient promotion evidence: the new
+    # layout must also remain strict-clean on DRC/LVS/RCX/timing.  Measure only;
+    # max-iters=0 forbids a second Recipe from repairing the candidate's output
+    # and therefore preserves causal isolation.  Synth recovery intentionally
+    # retains its stage-local contract and is judged on clearing synth.
+    signoff_rc = 0
+    if rc == 0 and check in ("route", "place"):
+        signoff_rc = _run_backend_signoff_measurement(entry)
     _ingest(entry)
-    # The judge reads the ingested run's is_success; rc only drives the ledger
-    # terminal state (clean vs escalated) so judge_finished_trials picks it up.
-    led.set_state(design, "clean" if rc == 0 else "escalated",
-                  **({} if rc == 0 else {"reason": f"{check}_arm_failed"}))
+    clean = rc == 0 and (
+        check not in ("route", "place")
+        or _strict_signoff_manifest_clean(entry["project_path"])
+    )
+    reason = (f"{check}_arm_failed" if rc != 0
+              else f"{check}_arm_signoff_failed")
+    led.set_state(design, "clean" if clean else "escalated",
+                  **({} if clean else {"reason": reason}))
 
 
 def _journal_ab_launch(entry: dict) -> None:
@@ -584,9 +773,15 @@ def _ingest(entry: dict) -> str | None:
     proj = Path(entry["project_path"])
     if not _has_backend_run(entry) and not (proj / "reports" / "ppa.json").exists():
         return None
-    r = subprocess.run(
-        [sys.executable, _script("R2G_LOOP_INGEST", KNOWLEDGE / "ingest_run.py"),
-         entry["project_path"]], capture_output=True, text=True)
+    cmd = [sys.executable,
+           _script("R2G_LOOP_INGEST", KNOWLEDGE / "ingest_run.py"),
+           entry["project_path"]]
+    # Keep A/B and test campaigns isolated. ingest_run's CLI also honors this
+    # environment variable, but passing it explicitly makes the subprocess
+    # contract auditable and protects against a future CLI-default regression.
+    if env_db := os.environ.get("R2G_KNOWLEDGE_DB"):
+        cmd.extend(["--db", env_db])
+    r = subprocess.run(cmd, capture_output=True, text=True)
     for tok in (r.stdout or "").split():
         if tok.startswith("run_id="):
             return tok.split("=", 1)[1]
@@ -742,6 +937,7 @@ def _resize_to_core_util(entry: dict, util: int = 30) -> bool:
 # core_util_relief on a subject that ALREADY auto-sizes: how far arm B lowers util.
 _CORE_UTIL_RELIEF_FACTOR = 0.6   # lower an existing CORE_UTILIZATION=N to ~60% of N
 _CORE_UTIL_FLOOR = 10            # never below 10% (the die is already huge; lower is moot)
+_PLACE_RELIEF_MAX = 2            # live FLW-0024 relief steps on an auto-sized die (e.g. 89 -> 53 -> 32)
 
 
 def _lower_core_util(entry: dict, *, factor: float = _CORE_UTIL_RELIEF_FACTOR,
@@ -989,6 +1185,37 @@ def _record_resize_fix(entry: dict, *, cleared: bool,
     sid = "resize_" + hashlib.sha1(f"{proj}:{run_tag}".encode("utf-8")).hexdigest()[:12]
     row = {
         "fix_session_id": sid, "iter": 1, "strategy": "core_util_relief",
+        "check": "orfs_stage", "violation_class": "place", "from_stage": "place",
+        "before": 1, "after": 0 if cleared else 1,
+        "before_status": "fail", "after_status": "clean" if cleared else "fail",
+        "ts": _now(),
+        **_effect_fields(entry, cleared=cleared),
+        **_severity_fields(entry, "place"),
+    }
+    if situation_:
+        row["situation"] = situation_
+    with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+def _record_pin_perimeter_fix(entry: dict, *, cleared: bool,
+                              situation_: dict | None = None) -> None:
+    """Record the PPL-0024 perimeter-targeted die action under its own identity.
+
+    PPL-0024 is pin-capacity limited and sets an explicit die from the IO placer's
+    requested perimeter. FLW-0024 is cell-area limited and changes utilization. They
+    previously shared ``core_util_relief``, mixing two non-equivalent effects in one
+    Recipe. Keep the same place-stage symptom for A/B subject discovery, while the
+    strategy name and effect fingerprint preserve the causal distinction.
+    """
+    proj = Path(entry["project_path"])
+    reports = proj / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
+    runs = sorted(proj.glob("backend/RUN_*"))
+    run_tag = runs[-1].name if runs else "norun"
+    sid = "pinperim_" + hashlib.sha1(f"{proj}:{run_tag}".encode("utf-8")).hexdigest()[:12]
+    row = {
+        "fix_session_id": sid, "iter": 1, "strategy": "pin_perimeter_floor",
         "check": "orfs_stage", "violation_class": "place", "from_stage": "place",
         "before": 1, "after": 0 if cleared else 1,
         "before_status": "fail", "after_status": "clean" if cleared else "fail",
@@ -1271,22 +1498,65 @@ def _memory_recovery(led, entry: dict, conn, stage: str) -> str | None:
 
 
 def _signoff_status(entry: dict) -> dict:
-    out = {}
-    for check in ("drc", "lvs"):
-        p = Path(entry["project_path"]) / "reports" / f"{check}.json"
+    """Return one normalized global signoff vector for the live-loop gate.
+
+    A local DRC/LVS success is not a clean design when route, RCX, or fixed-target
+    timing is incomplete. Keep every component in this shared status map so both
+    the first-pass short circuit and the post-fix acceptance use the same gate.
+    """
+    reports = Path(entry["project_path"]) / "reports"
+    out: dict[str, str] = {}
+    for check in ("drc", "lvs", "route"):
+        p = reports / f"{check}.json"
         try:
             out[check] = json.loads(p.read_text()).get("status", "unknown")
         except Exception:
             out[check] = "unknown"
+    try:
+        rcx = json.loads((reports / "rcx.json").read_text()).get("status", "unknown")
+        out["rcx"] = "clean" if rcx in ("complete", "clean", "ok") else rcx
+    except Exception:
+        out["rcx"] = "unknown"
+    try:
+        timing = json.loads((reports / "timing_check.json").read_text())
+        tier = timing.get("tier", "unknown")
+        wns = timing.get("wns_ns", timing.get("wns"))
+        # Fail closed on contradictory timing evidence: a label saying clean
+        # cannot override a measured negative WNS.
+        if tier == "clean" and isinstance(wns, (int, float)) and wns < 0:
+            tier = "fail"
+        # Setup met but a max-slew/max-cap limit exceeded: not signoff-clean (acceptance
+        # A8). 'drv' sends the design through the timing repair turn (drv_route_margin).
+        if tier == "clean" and (timing.get("drv") or {}).get("status") == "fail":
+            tier = "drv"
+        out["timing"] = tier
+    except Exception:
+        out["timing"] = "unknown"
     return out
+
+
+def _all_signoff_clean(status: dict) -> bool:
+    return bool(status) and all(
+        value in ("clean", "clean_beol", "skipped") for value in status.values()
+    )
+
+
+def _physical_signoff_clean(status: dict) -> bool:
+    return all(
+        status.get(check) in ("clean", "clean_beol", "skipped")
+        for check in ("drc", "lvs", "route", "rcx")
+    )
 
 
 def _learn() -> dict:
     import learn_heuristics
     import knowledge_db
     try:
-        return learn_heuristics.learn(knowledge_db.DEFAULT_DB_PATH,
-                                      KNOWLEDGE / "heuristics.json")
+        db_path = Path(os.environ.get("R2G_KNOWLEDGE_DB")
+                       or knowledge_db.DEFAULT_DB_PATH)
+        heuristics_path = Path(os.environ.get("R2G_HEURISTICS_PATH")
+                               or (db_path.parent / "heuristics.json"))
+        return learn_heuristics.learn(db_path, heuristics_path)
     except Exception as exc:
         # learn() can raise on malformed session data (e.g. the mixed-check_type
         # trajectory assert). Ingest-time callers are wrapped; THIS one was not,
@@ -1339,7 +1609,7 @@ def _mark_clean(led: Ledger, conn, design: str, note: str) -> None:
 
 
 def process_one(led: Ledger, entry: dict, conn, *,
-                _resized: bool = False) -> str | None:
+                _resized: bool = False, _place_relief: int = 0) -> str | None:
     """Run one design end-to-end. Returns the TERMINAL status it reached —
     'clean' | 'escalated' (or None for an A/B arm handled out-of-band) — so a
     caller (e.g. the FLW-0024 resize retry) can record the honest outcome without
@@ -1357,8 +1627,30 @@ def process_one(led: Ledger, entry: dict, conn, *,
     if entry.get("kind") == "ab_arm" and entry.get("check") in ("route", "place", "synth"):
         _process_backend_ab_arm(led, entry, conn)
         return None
-    led.set_state(design, "flow")
-    rc = _run_flow(entry)
+    # Recipe-training cohorts may already have two digest-bound executions proving the
+    # same baseline failure.  Re-running that baseline a third time before invoking the
+    # fixer wastes the dominant EDA cost (often a full route timeout).  The training
+    # runner therefore opts in with the verified second attempt's return code and
+    # evidence path.  Consume the marker from this in-memory entry so any recursive
+    # post-fix reflow below still executes normally.
+    reused_flow_rc = entry.pop("reuse_existing_flow_returncode", None)
+    if reused_flow_rc is None:
+        led.set_state(design, "flow")
+        rc = _run_flow(entry)
+    else:
+        try:
+            rc = int(reused_flow_rc)
+        except (TypeError, ValueError):
+            led.set_state(design, "escalated", reason="invalid_reused_flow_evidence")
+            return "escalated"
+        led.set_state(
+            design,
+            "flow",
+            reuse_existing_flow_returncode=None,
+            flow_evidence_reused=True,
+            reused_flow_returncode=rc,
+            replay_evidence=entry.get("replay_evidence"),
+        )
     if rc == PROJECT_INPUTS_MISSING_RC:
         # No project dir => no flow ran => there is NOTHING to ingest. Falling through
         # would _ingest() an empty project (a junk/absent-report row) and then diagnose
@@ -1396,6 +1688,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
         # divergence. Auto-size the die (DIE_AREA -> CORE_UTILIZATION) and retry the
         # flow ONCE; never touches PLACE_DENSITY_LB_ADDON. (2026-06-23)
         if (not _resized and entry.get("kind") != "ab_arm"
+                and not _strategy_excluded("core_util_relief")
                 and _fail_stage(entry) == "place" and _is_flw0024(entry)
                 and _resize_to_core_util(entry)):
             entry["_r2g_config_effect"] = _config_effect(
@@ -1411,19 +1704,39 @@ def process_one(led: Ledger, entry: dict, conn, *,
             _record_resize_fix(entry, cleared=(result == "clean"), situation_=pre_sit)
             _ingest(entry)
             return result
+        # FLW-0024 on an ALREADY auto-sized die (CORE_UTILIZATION=N, so the resize above is
+        # a no-op): the cells do not fit at N. Lower N (the A/B arm's core_util_relief,
+        # _lower_core_util: x0.6, floor 10) and retry, at most _PLACE_RELIEF_MAX times.
+        # Before 2026-10-05 the live loop escalated place_density_residual after ONE flow
+        # here (failure-patterns "FLW-0024 ... already auto-sized die"). _resized is passed
+        # through unchanged so a design that now places keeps its route/DRC recoveries.
+        if (entry.get("kind") != "ab_arm" and _place_relief < _PLACE_RELIEF_MAX
+                and not _strategy_excluded("core_util_relief")
+                and _fail_stage(entry) == "place" and _is_flw0024(entry)
+                and _lower_core_util(entry)):
+            entry["_r2g_config_effect"] = _config_effect(
+                repair_config_before, _config_snapshot(entry))
+            led.set_state(design, "fixing")
+            result = process_one(led, entry, conn, _resized=_resized,
+                                 _place_relief=_place_relief + 1)
+            _record_resize_fix(entry, cleared=(result == "clean"), situation_=pre_sit)
+            _ingest(entry)
+            return result
         # PPL-0024 (IO pins exceed die perimeter): the die is too small in PERIMETER for
-        # the design's pin count -- recover by ENLARGING the die (lower CORE_UTILIZATION ->
-        # bigger core -> more perimeter pin slots), the same core_util_relief lever applied
-        # for the pin cause. This was the DOMINANT mislabeled-'unseen_crash' class (2026-06-26
-        # audit: ~35 designs). Retry the flow ONCE; the resize is recorded as a learnable fix.
+        # the design's pin count -- recover by ENLARGING the die to provide enough perimeter
+        # pin slots.  Keep this effect distinct from density-based core_util_relief so evidence
+        # for the two physical causes cannot be pooled under one Recipe identity.  This was the
+        # DOMINANT mislabeled-'unseen_crash' class (2026-06-26 audit: ~35 designs). Retry the
+        # flow ONCE; the resize is recorded as a learnable fix.
         if (not _resized and entry.get("kind") != "ab_arm"
+                and not _strategy_excluded("pin_perimeter_floor")
                 and _fail_stage(entry) == "place" and _is_ppl0024(entry)
                 and _relieve_pin_overflow(entry)):
             entry["_r2g_config_effect"] = _config_effect(
                 repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
             result = process_one(led, entry, conn, _resized=True)
-            _record_resize_fix(entry, cleared=(result == "clean"), situation_=pre_sit)
+            _record_pin_perimeter_fix(entry, cleared=(result == "clean"), situation_=pre_sit)
             _ingest(entry)
             return result
         # Synth memory-cap (Yosys refuses to infer a memory larger than the default
@@ -1433,6 +1746,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
         # 'unseen_crash', hiding 15 mechanically-fixable designs and a learnable recipe
         # (2026-06-28 unseen_crash audit). Mirrors the FLW-0024 / PPL-0024 recoveries.
         if (not _resized and entry.get("kind") != "ab_arm"
+                and not _strategy_excluded("synth_memory_relax")
                 and _fail_stage(entry) == "synth" and _is_synth_memory_cap(entry)
                 and _synth_memory_ff_expandable(entry)
                 and _raise_synth_memory_cap(entry)):
@@ -1466,6 +1780,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
         # (perimeter too short for PINS). Mislabeled 'unseen_crash' before this because the
         # loop had no PDN handler (2026-07-01 sky130 round). Mirrors the FLW/PPL recoveries.
         if (not _resized and entry.get("kind") != "ab_arm"
+                and not _strategy_excluded("pdn_die_floor")
                 and _fail_stage(entry) == "floorplan" and _is_pdn_strap_width(entry)
                 and _relieve_pdn_strap_width(entry)):
             entry["_r2g_config_effect"] = _config_effect(
@@ -1586,24 +1901,38 @@ def process_one(led: Ledger, entry: dict, conn, *,
     # arm B's R2G_FIX_RANK_FIRST actually diverge the two arms — never short-circuit
     # it to clean on an inherited (or genuinely-empty) verdict (2026-06-23 audit,
     # bug #1, defense-in-depth alongside the reports/-exclude copytree fix above).
-    if (entry.get("kind") != "ab_arm"
-            and all(v in ("clean", "clean_beol", "skipped") for v in status.values())):
+    if entry.get("kind") != "ab_arm" and _all_signoff_clean(status):
         _ingest(entry)
         _mark_clean(led, conn, design, "signoff clean on first pass")
         return "clean"
     led.set_state(design, "fixing")
     fix_rc = _run_fix(entry)
     _ingest(entry)
-    if fix_rc == 0:
+    post_fix_status = _signoff_status(entry)
+    if fix_rc == 0 and _all_signoff_clean(post_fix_status):
         _mark_clean(led, conn, design, "signoff fix cleared residual")
         return "clean"
+    # A normal fixed-target run commonly reaches this point after `--check both`:
+    # DRC/LVS/route/RCX are clean, but timing is still violated. Do not fabricate
+    # clean from the local checker return code; give the timing catalog its own
+    # bounded repair turn, then require the full global vector to be clean.
+    if (entry.get("kind") != "ab_arm"
+            and post_fix_status.get("timing") not in ("clean", "clean_beol", "skipped")
+            and _physical_signoff_clean(post_fix_status)):
+        timing_entry = {**entry, "check": "timing"}
+        timing_rc = _run_fix(timing_entry)
+        _ingest(timing_entry)
+        post_fix_status = _signoff_status(entry)
+        if timing_rc == 0 and _all_signoff_clean(post_fix_status):
+            _mark_clean(led, conn, design, "timing repair passed full signoff recheck")
+            return "clean"
     # Record the POST-fix residual, NOT the pre-fix `status` snapshot. On a first signoff
     # pass `status` (line ~838) is read before any DRC/LVS ran, so it is usually
     # {drc:unknown,lvs:unknown}; recording it made 184 catalog_exhausted escalations all
     # read 'unknown,unknown' in the queue, hiding their genuinely diverse residuals
     # (80 drc=stuck / 67 lvs=fail / 29 both — 2026-06-28 audit). _run_fix has now run the
     # checks, so re-reading reflects WHAT the fixer could not clear: the honest residual.
-    residual = _signoff_status(entry)
+    residual = post_fix_status
     reason = _signoff_escalation_reason(residual)
     led.set_state(design, "escalated", reason=reason)
     if conn is not None:
@@ -1679,15 +2008,106 @@ def _localize_arm_platform(dst: Path, platform: str) -> None:
 
 
 def _config_sha(dst: Path) -> str | None:
-    """sha256 (12 hex) of an arm's constraints/config.mk, or None if absent — the
-    baseline-provenance stamp recorded on each ab_arm ledger entry (P0-3)."""
+    """Semantic sha256 (12 hex) of an arm's baseline config.
+
+    Arm-local absolute paths differ by construction, so hashing the raw file made
+    equivalent A/B baselines look different. Hash parsed make knobs after replacing
+    the arm root with a stable token; real constraint/config differences remain visible.
+    """
     cfg = dst / "constraints" / "config.mk"
     if not cfg.is_file():
         return None
-    return hashlib.sha256(cfg.read_bytes()).hexdigest()[:12]
+    knobs = _parse_mk_knobs(cfg.read_text(encoding="utf-8", errors="ignore"))
+    root = str(dst.resolve())
+    normalized = {key: value.replace(root, "<PROJECT>")
+                  for key, value in knobs.items()}
+    payload = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
 
-def _reset_arm_config_baseline(dst: Path) -> str | None:
+def _structured_strategy_delta(source: Path, strategy: str) -> dict | None:
+    """Return the latest trustworthy config delta for ``strategy`` on ``source``.
+
+    Direct backend recoveries write bare make assignments, outside the removable
+    diagnose auto-block. Their fix_log row is therefore the durable record of the
+    pre-intervention baseline. Legacy value-only deltas cannot establish a control.
+    """
+    log = source / "reports" / "fix_log.jsonl"
+    if not log.is_file():
+        return None
+    try:
+        rows = log.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return None
+    for raw in reversed(rows):
+        try:
+            row = json.loads(raw)
+            delta = json.loads(row.get("config_delta") or "{}")
+        except (TypeError, ValueError):
+            continue
+        if row.get("strategy") != strategy or not isinstance(delta, dict) or not delta:
+            continue
+        if all(isinstance(change, dict)
+               and "before" in change and "after" in change
+               for change in delta.values()):
+            if (strategy == "pin_perimeter_floor"
+                    and not set(delta).issubset(
+                        {"CORE_UTILIZATION", "DIE_AREA", "CORE_AREA"})):
+                return None
+            return delta
+    return None
+
+
+def _restore_structured_delta_before(dst: Path, delta: dict) -> bool:
+    """Restore affected make knobs to a structured delta's ``before`` values.
+
+    The copied subject must still match every recorded ``after`` value. A mismatch
+    means stale or unrelated evidence, so restoration fails closed.
+    """
+    cfg = dst / "constraints" / "config.mk"
+    if not cfg.is_file():
+        return False
+    current = _config_snapshot({"project_path": str(dst)})
+    if any(current.get(key) != change.get("after")
+           for key, change in delta.items()):
+        return False
+    affected = set(delta)
+    kept = [line for line in cfg.read_text(encoding="utf-8", errors="ignore").splitlines()
+            if _config_knob(line) not in affected]
+    for key in sorted(affected):
+        before = delta[key].get("before")
+        if before is not None:
+            kept.append(f"export {key} = {before}")
+    cfg.write_text("\n".join(kept).rstrip("\n") + "\n", encoding="utf-8")
+    restored = _config_snapshot({"project_path": str(dst)})
+    return all(restored.get(key) == change.get("before")
+               for key, change in delta.items())
+
+
+def _apply_structured_delta_after(dst: Path, delta: dict) -> bool:
+    """Replay the exact ``after`` side of a provenance-bound config delta."""
+    cfg = dst / "constraints" / "config.mk"
+    if not cfg.is_file() or not delta:
+        return False
+    current = _config_snapshot({"project_path": str(dst)})
+    if any(current.get(key) != change.get("before")
+           for key, change in delta.items()):
+        return False
+    affected = set(delta)
+    kept = [line for line in cfg.read_text(encoding="utf-8", errors="ignore").splitlines()
+            if _config_knob(line) not in affected]
+    for key in sorted(affected):
+        after = delta[key].get("after")
+        if after is not None:
+            kept.append(f"export {key} = {after}")
+    cfg.write_text("\n".join(kept).rstrip("\n") + "\n", encoding="utf-8")
+    applied = _config_snapshot({"project_path": str(dst)})
+    return all(applied.get(key) == change.get("after")
+               for key, change in delta.items())
+
+
+def _reset_arm_config_baseline(dst: Path, *, source: Path | None = None,
+                               strategy: str | None = None) -> str | None:
     """Reconstruct an A/B arm's PRE-RECIPE config baseline by stripping the r2g
     signoff-fix auto-block from its config.mk (P0-3, recipe-lifecycle audit 2026-07-14;
     failure-patterns #48).
@@ -1727,7 +2147,14 @@ def _reset_arm_config_baseline(dst: Path) -> str | None:
     stripped = (body + "\n") if body else ""
     if stripped != text:
         cfg.write_text(stripped, encoding="utf-8")
-    return hashlib.sha256(stripped.encode("utf-8")).hexdigest()[:12]
+
+    # PPL-0024's perimeter floor is a bare config rewrite, not an auto-block edit.
+    # Reconstruct it from exact live evidence; otherwise arm A inherits treatment.
+    if strategy == "pin_perimeter_floor":
+        delta = _structured_strategy_delta(source or dst, strategy)
+        if delta is None or not _restore_structured_delta_before(dst, delta):
+            return None
+    return _config_sha(dst)
 
 
 def _ab_coverage_gap(conn, key: dict) -> bool:
@@ -1813,6 +2240,30 @@ def _ledger_round_platform(led: "Ledger") -> str | None:
     return top if n >= 0.6 * sum(plats.values()) else None
 
 
+def _ledger_round_subject_paths(led: "Ledger") -> set[str]:
+    """Return the normal project roots this ledger explicitly owns.
+
+    A/B planning consults a long-lived knowledge database, which may contain
+    valid-looking paths from past campaigns.  Those paths are evidence, not
+    permission to execute.  Only normal entries registered in the current
+    ledger are legal A/B subjects; an empty set intentionally fails closed.
+    """
+    subjects: set[str] = set()
+    for entry in led.entries():
+        if entry.get("kind", "normal") != "normal":
+            continue
+        project_path = entry.get("project_path")
+        if not project_path:
+            continue
+        try:
+            path = Path(project_path)
+            if path.is_dir():
+                subjects.add(str(path.resolve()))
+        except OSError:
+            continue
+    return subjects
+
+
 def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                              repeats: int | None = None) -> int:
     """For every pending candidate recipe, plan an A/B trial and append its arm
@@ -1833,6 +2284,7 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
     # one change and no arg-threading. None -> indeterminate -> scope disabled (fail-open).
     from collections import Counter as _Counter
     round_platform = _ledger_round_platform(led)
+    round_subject_paths = _ledger_round_subject_paths(led)
     _skipped_offplatform: _Counter = _Counter()
     # Self-heal: park pre-filter NONDIVERGENT candidate rows (guaranteed-inconclusive
     # arms) out of the work queue so they stop being re-skipped every drain — the
@@ -1899,7 +2351,9 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                     pass
             continue
         try:
-            trial = ab_runner.plan_trial(conn, **key, n_designs=n_ab_designs)
+            trial = ab_runner.plan_trial(
+                conn, **key, n_designs=n_ab_designs,
+                allowed_project_paths=round_subject_paths)
         except Exception as exc:
             # plan_trial can raise TRANSIENTLY (a read racing the campaign's concurrent
             # heuristics.json/ingest writes — observed as an intermittent KeyError). ISOLATE
@@ -1954,6 +2408,9 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
         # runner and a timing arm by fix_signoff --check timing (2026-06-24).
         check = _symptom_check(conn, key.get("symptom_id"), key.get("strategy"))
         for d in trial["designs"]:
+            src = Path(d["project_path"])
+            d_recipe_delta = (_structured_strategy_delta(src, key["strategy"])
+                              if key["strategy"] == "pin_perimeter_floor" else None)
             # For a PLACE arm, carry the SUBJECT's PPL-0024 required die perimeter: the arm
             # copy excludes the subject's backend, so arm B cannot re-read the placer message
             # itself. None for FLW-0024/other place aborts -> arm B falls back to the util
@@ -1963,7 +2420,6 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                             if check == "place" else None)
             for arm in ("A", "B"):
                 for r in range(k):
-                    src = Path(d["project_path"])
                     dst = src.parent / f"{src.name}_ab{arm}_{strat8}{trial_h6}_{r}"
                     if not src.is_dir() and not dst.is_dir():
                         # A subject with no dir on disk (wiped round) and no
@@ -2008,7 +2464,16 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                         # previously-fixed subject makes arm A a treated (not control) arm
                         # and arm B's forced recipe a no-op, collapsing the trial to an
                         # uninformative tie. Each arm re-derives its own edits at fix time.
-                        _reset_arm_config_baseline(dst)
+                        _reset_sha = _reset_arm_config_baseline(
+                            dst, source=src, strategy=key["strategy"])
+                        if key["strategy"] == "pin_perimeter_floor" and not _reset_sha:
+                            # A perimeter-fixed subject cannot be a causal control unless
+                            # its exact pre-fix values are recoverable. Remove the unused
+                            # materialization so a later corrected fix_log can be retried.
+                            print(f"[loop] A/B arm skipped (missing/stale pre-recipe "
+                                  f"config evidence): {dst.name}")
+                            shutil.rmtree(dst)
+                            continue
                     # Pin the arm's config.mk PLATFORM to the TRIAL's platform on EVERY plan
                     # (idempotent, guarded on dst.is_dir() so it also corrects an ALREADY-
                     # materialized arm whose config.mk carries a stale prior-round PLATFORM).
@@ -2052,6 +2517,8 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
                         arm_entry["recipe_status_version"] = _rsv
                     if d_pin_target:
                         arm_entry["pin_perimeter_target"] = d_pin_target
+                    if d_recipe_delta:
+                        arm_entry["recipe_config_delta"] = d_recipe_delta
                     led.add(arm_entry)
                     appended += 1
     if _skipped_offplatform:                    # no silent caps: report the scope
@@ -2443,8 +2910,9 @@ def _arm_metric(conn, project_path: str, *, timing: bool = False,
     (or None if the arm produced no judgeable run). outcome_score is captured as
     an ORDERING HINT only — the verdict never depends on it (invariant H4).
 
-    For a TIMING arm, success is whether the design CLOSED timing (timing_tier in
-    {clean,minor} or WNS>=0), NOT the generic is_success: a timing miss does NOT abort
+    For a TIMING arm, success is whether the design CLOSED timing (timing_tier is
+    clean or WNS>=0) AND retained strict ORFS/DRC/LVS/RCX usability, NOT the
+    generic is_success: a timing miss does NOT abort
     the flow, so both arms reach a GDS and knowledge_db.is_success reads true for both
     -> every timing trial would be a tie -> inconclusive forever (2026-06-24 audit,
     bug #3-timing). The timing signal is the ingested wns_ns/timing_tier.
@@ -2479,7 +2947,20 @@ def _arm_metric(conn, project_path: str, *, timing: bool = False,
             # ON-DISK timing verdict so a genuinely-closed arm isn't judged a failure
             # (2026-06-25). The verdict is the timing_check.json tier / ppa setup_wns.
             tier, wns = _ondisk_timing(project_path)
-        success = (tier in ("clean", "minor")) or (wns is not None and wns >= 0)
+        # ``minor`` means the live loop is allowed to ATTEMPT an automatic repair;
+        # it is still negative slack and therefore cannot certify an A/B promotion.
+        # Treating minor as success collapses a strict timing-repair experiment into
+        # a cost tiebreak (the untreated arm already "succeeds"), which can demote a
+        # real closure action merely because arm B performed the necessary reflow.
+        timing_closed = tier == "clean" or (wns is not None and wns >= 0)
+        strict_signoff = (
+            r.get("orfs_status") in ("pass", "complete")
+            and r.get("drc_status") in ("clean", "clean_beol")
+            and r.get("lvs_status") == "clean"
+            and r.get("rcx_status") == "complete"
+        )
+        success = timing_closed and strict_signoff
+        judged_on = "timing+strict_signoff"
     elif synth:
         # synth_memory_relax fixes the SYNTH memcap abort: judge on whether the flow got
         # PAST synth, not full signoff (an FF-expanded design may carry downstream DRC/LVS
@@ -2497,6 +2978,37 @@ def _arm_metric(conn, project_path: str, *, timing: bool = False,
         success = r.get("lvs_status") == "clean"
     else:
         success = knowledge_db.is_success(r)
+        # A signoff arm that reads SUCCESS with no signoff check actually EXECUTED is
+        # not judgeable. On a deck-less platform (gf180 ships no drc/ and no lvs/ at
+        # all) run_drc/run_lvs honestly record 'skipped', the flow still completes six
+        # stages, and knowledge_db.is_success takes its strict orfs_status='pass' path
+        # -> BOTH arms read is_success=True no matter what the recipe did. The verdict
+        # then turns entirely on wall-clock, so a noise-level cost difference could
+        # promote a signoff recipe backed by ZERO signoff evidence (observed
+        # 2026-08-01: four gf180 pdn_die_floor trials, every arm is_success with
+        # outcome_score 1.0, separated only by 78 vs 79.5s). Marking the sample
+        # unverifiable makes both arms non-success, so judge v2 returns the honest
+        # never-succeeded inconclusive instead of a cost tiebreak.
+        #
+        # Same metric-granularity lesson as the timing/synth/DRC/LVS branches above,
+        # finally applied to the DEFAULT branch. Three deliberate narrowings:
+        #  * only when `success` is already True — a BACKEND-ABORT arm (orfs_status
+        #    'fail', null signoff) never reached signoff because the flow DIED, and
+        #    its honest whole-run False judgment keeps the legacy judged_on.
+        #  * only on an EXPLICIT 'skipped', never NULL. 'skipped' is a positive
+        #    statement by run_drc/run_lvs that the check was deliberately not run
+        #    because the platform has no deck. NULL merely means no signoff data was
+        #    recorded — which is the normal state of a ROUTE arm, whose success is
+        #    legitimately established by the flow getting past route, not by DRC/LVS
+        #    (treating NULL as unverifiable made route_relief unjudgeable).
+        #  * only when BOTH checks are skipped — a DRC-only platform (ihp-sg13g2,
+        #    no KLayout LVS deck) still carries real DRC evidence.
+        # failure-patterns.md #32c.
+        if (success
+                and r.get("drc_status") == "skipped"
+                and r.get("lvs_status") == "skipped"):
+            judged_on = "signoff:unverifiable"
+            success = False
     return {"is_success": bool(success), "judged_on": judged_on,
             "wall_s": r["total_elapsed_s"], "fix_iters": r["fix_iters_to_clean"],
             "outcome_score": r["outcome_score"],
@@ -2564,9 +3076,24 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         if not timing and not synth:
             ab_key = next(iter(pair.values()))[0].get("ab_key") or {}
             target = _symptom_target(conn, ab_key.get("symptom_id"))
-        samples = {arm: [_arm_metric(conn, e["project_path"], timing=timing,
-                                     synth=synth, target=target)
-                         for e in entries]
+        arm_check = pair["B"][0].get("check")
+
+        def _metric_for_arm(e: dict) -> dict | None:
+            metric = _arm_metric(conn, e["project_path"], timing=timing,
+                                 synth=synth, target=target)
+            if metric is not None and arm_check in ("route", "place"):
+                # ORFS pass alone is deliberately accepted by knowledge_db for
+                # legacy history, but it is insufficient for NEW backend A/B
+                # promotion.  Require the arm-local strict manifest so missing,
+                # skipped, or dirty signoff evidence cannot become a win.
+                metric = dict(metric)
+                metric["is_success"] = bool(
+                    metric.get("is_success")
+                    and _strict_signoff_manifest_clean(e["project_path"]))
+                metric["judged_on"] = "backend+strict_signoff"
+            return metric
+
+        samples = {arm: [_metric_for_arm(e) for e in entries]
                    for arm, entries in pair.items()}
         # If an arm produced NO judgeable run at all (incomplete clone/flow — see
         # _process_backend_ab_arm, bug #3), record NO verdict: a trial that never
@@ -2603,7 +3130,9 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         _planned_sv = pair["B"][0].get("recipe_status_version")
         if _planned_sv is not None:
             _cur_sv = _recipe_status_version(conn, pair["B"][0]["ab_key"])
-            if _cur_sv is not None and _cur_sv != _planned_sv:
+            if (_cur_sv is not None and _cur_sv != _planned_sv
+                    and not _lifecycle_move_is_same_ab_corpus(
+                        conn, pair["B"][0]["ab_key"])):
                 print(f"[loop] A/B trial CANCELLED (lifecycle moved: "
                       f"status_version {_planned_sv}->{_cur_sv}): {strat}")
                 for entries in pair.values():
@@ -2628,7 +3157,6 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         # when the arms' SPEC diverged (relaxed clock / enlarged die / an unrelated edit
         # arm A lacked) or arm B introduced a NEW DRC class arm A did not have. Neither
         # confound may promote OR demote — the trial is invalid, not decisive.
-        arm_check = pair["B"][0].get("check")
         veto = None
         if verdict in ("win", "loss"):
             veto = _arm_spec_mismatch(pair["A"][0]["project_path"],
@@ -2819,7 +3347,8 @@ def _safe_process(led: Ledger, entry: dict) -> None:
 
 
 def _run_parallel(led: Ledger, conn, prev_heur: dict | None, *,
-                  max_designs: int | None, max_workers: int) -> None:
+                  max_designs: int | None, max_workers: int,
+                  learn: bool = True) -> None:
     """Parallel campaign mode (engineer_loop run --workers N). Run pending NORMAL
     design flows CONCURRENTLY — each is an isolated ORFS subprocess with a private
     DB connection; the Ledger is lock-guarded, so this reuses ab_drain's proven
@@ -2840,6 +3369,8 @@ def _run_parallel(led: Ledger, conn, prev_heur: dict | None, *,
     if pending:
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
             list(ex.map(lambda e: _safe_process(led, e), pending))
+    if not learn:
+        return
     # Learn once over the batch results, then enqueue candidate recipes. This is
     # the Gate A step (learn() also enqueues; diff_and_enqueue is idempotent).
     heur = _learn()
@@ -2978,8 +3509,68 @@ def fmax_drain(ledger_path: Path, *, platform: str | None = None,
     return sum(1 for r in results if isinstance(r, (int, float)))
 
 
+def fmax_retry(ledger_path: Path, *, platform: str | None = None,
+               max_workers: int = 1, place_fast: bool = True) -> int:
+    """Re-search Fmax for designs whose FIRST search was blocked by a backend abort
+    that the repair loop has since fixed, and re-queue them to flow at the winner.
+
+    fmax-drain runs BEFORE any repair, so a design whose place stage aborts at the
+    template config (e.g. PPL-0024: more IO pins than the die perimeter holds) gets
+    `inconclusive` — then `run` repairs it (pin_perimeter_floor grows DIE_AREA in
+    config.mk) and it signs off at the seed period with NO Fmax (2026-09-29 AIC
+    cohort: RequestBlock1CH_BRIDGE / inputDMAfifo / hbm_controller). Eligible: a
+    normal, `clean` design, inconclusive search, config.mk edited after the search
+    (a repair landed), not yet retried. The old report is kept as
+    fmax_search.pre_repair.json; one retry per design. Returns the re-queued count."""
+    led = Ledger(ledger_path)
+    led.reclaim_orphans()
+    led.reroot_project_paths()
+    todo = []
+    for e in led.entries():
+        if e.get("kind", "normal") != "normal" or e.get("state") != "clean":
+            continue
+        if e.get("fmax_retried") or (platform and e.get("platform") != platform):
+            continue
+        proj = Path(e["project_path"])
+        rep, cfg = proj / "reports" / "fmax_search.json", proj / "constraints" / "config.mk"
+        try:
+            status = json.loads(rep.read_text()).get("status")
+        except (OSError, ValueError):
+            continue
+        if status != "inconclusive" or not cfg.exists():
+            continue
+        if cfg.stat().st_mtime <= rep.stat().st_mtime:
+            continue                       # no repair landed since -> retry is pointless
+        todo.append(e)
+
+    def _one(e: dict):
+        proj = Path(e["project_path"])
+        rep = proj / "reports" / "fmax_search.json"
+        os.replace(rep, rep.with_name("fmax_search.pre_repair.json"))
+        try:
+            return _fmax_one(e, place_fast=place_fast)
+        except Exception:
+            return None
+
+    if max_workers > 1 and len(todo) > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            results = list(ex.map(_one, todo))
+    else:
+        results = [_one(e) for e in todo]
+    n = 0
+    for e, r in zip(todo, results):
+        if isinstance(r, (int, float)):
+            led.add({"design": e["design"], "project_path": e["project_path"],
+                     "platform": e.get("platform", "sky130hd"), "fmax_retried": True})
+            n += 1
+        else:
+            led.set_state(e["design"], "clean", fmax_retried=True)
+    return n
+
+
 def run(ledger_path: Path, *, max_designs: int | None = None,
-        max_workers: int = 1) -> None:
+        max_workers: int = 1, learn: bool = True) -> None:
+    import knowledge_db
     led = Ledger(ledger_path)
     backend, read_only = _open_runtime_memory_backend()
     led.bind_memory(backend.snapshot(), read_only_eval=read_only)
@@ -3007,12 +3598,15 @@ def run(ledger_path: Path, *, max_designs: int | None = None,
     conn = knowledge_db.connect()
     knowledge_db.ensure_schema(conn)
     prev_heur = None
-    hp = KNOWLEDGE / "heuristics.json"
+    db_path = Path(os.environ.get("R2G_KNOWLEDGE_DB")
+                   or knowledge_db.DEFAULT_DB_PATH)
+    hp = Path(os.environ.get("R2G_HEURISTICS_PATH")
+              or (db_path.parent / "heuristics.json"))
     if hp.exists():
         prev_heur = json.loads(hp.read_text())
     if max_workers and max_workers > 1:
         _run_parallel(led, conn, prev_heur, max_designs=max_designs,
-                      max_workers=max_workers)
+                      max_workers=max_workers, learn=learn)
         conn.close()
         backend.close()
         return
@@ -3024,9 +3618,10 @@ def run(ledger_path: Path, *, max_designs: int | None = None,
         entry = pending[0]
         process_one(led, entry, conn)
         done += 1
-        heur = learn_cycle(led, conn, prev_heur=prev_heur)
-        judge_finished_trials(led, conn)
-        prev_heur = heur
+        if learn:
+            heur = learn_cycle(led, conn, prev_heur=prev_heur)
+            judge_finished_trials(led, conn)
+            prev_heur = heur
     conn.close()
     backend.close()
 
@@ -3040,10 +3635,20 @@ def main(argv=None) -> int:
     pr.add_argument("--workers", type=int, default=1,
                     help="run this many design flows concurrently (cap NUM_CORES so "
                          "workers*NUM_CORES <= host cores; see SKILL hard rules)")
+    pr.add_argument(
+        "--no-learn",
+        action="store_true",
+        help="use the frozen knowledge snapshot without learning or planning A/B trials",
+    )
     pa = sub.add_parser("add")
     pa.add_argument("--ledger", required=True, type=Path)
     pa.add_argument("--project", required=True)
     pa.add_argument("--platform", default="sky130hd")
+    pa.add_argument("--reuse-flow-returncode", type=int, default=None,
+                    help="reuse a prevalidated failed flow result instead of running a "
+                         "third baseline (training/replay callers only)")
+    pa.add_argument("--replay-evidence", default=None,
+                    help="path to the stable replay evidence authorizing flow reuse")
     ps = sub.add_parser("status")
     ps.add_argument("--ledger", required=True, type=Path)
     pd = sub.add_parser("ab-drain", help="fire A/B trials for pending candidates")
@@ -3065,6 +3670,13 @@ def main(argv=None) -> int:
                          "sequential; cap workers*NUM_CORES <= host cores)")
     pf.add_argument("--no-place-fast", action="store_true",
                     help="disable PLACE_FAST in the place probes (slower, more accurate)")
+    pr2 = sub.add_parser("fmax-retry",
+                         help="re-search Fmax for clean designs whose first search was "
+                              "blocked by a since-repaired backend abort, and re-queue them")
+    pr2.add_argument("--ledger", required=True, type=Path)
+    pr2.add_argument("--platform", default=None)
+    pr2.add_argument("--workers", type=int, default=1)
+    pr2.add_argument("--no-place-fast", action="store_true")
     pe = sub.add_parser("ab-enqueue",
                         help="force a (grandfathered) recipe into A/B candidate")
     pe.add_argument("--symptom", required=True)
@@ -3087,12 +3699,19 @@ def main(argv=None) -> int:
         ap.error(f"{args.cmd} addresses legacy recipe lifecycle and is unavailable "
                  f"for memory backend {backend_name!r}")
     if args.cmd == "run":
-        run(args.ledger, max_designs=args.max, max_workers=args.workers)
+        run(args.ledger, max_designs=args.max, max_workers=args.workers,
+            learn=not args.no_learn)
     elif args.cmd == "add":
         led = Ledger(args.ledger)
-        led.add({"design": Path(args.project).name,
+        entry = {"design": Path(args.project).name,
                  "project_path": str(Path(args.project).resolve()),
-                 "platform": args.platform})
+                 "platform": args.platform}
+        if args.reuse_flow_returncode is not None:
+            if not args.replay_evidence:
+                ap.error("--reuse-flow-returncode requires --replay-evidence")
+            entry["reuse_existing_flow_returncode"] = args.reuse_flow_returncode
+            entry["replay_evidence"] = str(Path(args.replay_evidence).resolve())
+        led.add(entry)
     elif args.cmd == "ab-drain":
         n = ab_drain(args.ledger, n_ab_designs=args.n_designs,
                      max_workers=args.workers)
@@ -3102,11 +3721,20 @@ def main(argv=None) -> int:
                        max_workers=args.workers, max_designs=args.max,
                        place_fast=not args.no_place_fast)
         print(f"fmax_drain characterized {n} design(s)")
+    elif args.cmd == "fmax-retry":
+        n = fmax_retry(args.ledger, platform=args.platform, max_workers=args.workers,
+                       place_fast=not args.no_place_fast)
+        print(f"fmax_retry re-queued {n} design(s)")
     elif args.cmd == "ab-enqueue":
         import knowledge_db
         import recipe_lifecycle
         conn = knowledge_db.connect()
         knowledge_db.ensure_schema(conn)
+        why = _enqueue_check_mismatch(conn, args.symptom, args.strategy)
+        if why:
+            conn.close()
+            print(f"ab-enqueue refused: {why}", file=sys.stderr)
+            return 2
         created = recipe_lifecycle.enqueue_candidate(
             conn, symptom_id=args.symptom, design_class=args.design_class,
             platform=args.platform, strategy=args.strategy)

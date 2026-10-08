@@ -152,6 +152,38 @@ def test_cleanup_variants_removes_dirs(tmp_path):
     assert not v.exists()
 
 
+def test_cleanup_variants_removes_orfs_scratch(tmp_path):
+    """The probe's ORFS results/logs/objects/reports leaked ~1 GB/probe when only the
+    project dir was removed (2026-09-30 AIC v2 on 203: 708 orphaned probe dirs)."""
+    import json
+    flow = tmp_path / "orfs" / "flow"
+    v = tmp_path / "design_cases" / "alu_fmax_p0045"
+    other = "alu_fmax_p0050"
+    for sub in ("results", "logs", "objects", "reports"):
+        (flow / sub / "sky130hd" / "alu" / v.name).mkdir(parents=True)
+        (flow / sub / "sky130hd" / "alu" / other).mkdir(parents=True)
+    run = v / "backend" / "RUN_x"
+    run.mkdir(parents=True)
+    (run / "run-meta.json").write_text(json.dumps(
+        {"orfs_results": str(flow / "results" / "sky130hd" / "alu" / v.name)}))
+    fs.cleanup_variants([v])
+    assert not v.exists()
+    for sub in ("results", "logs", "objects", "reports"):
+        assert not (flow / sub / "sky130hd" / "alu" / v.name).exists()
+        assert (flow / sub / "sky130hd" / "alu" / other).exists()   # never another variant's
+
+
+def test_cleanup_variants_ignores_foreign_orfs_path(tmp_path):
+    import json
+    v = tmp_path / "alu_fmax_p0045"
+    victim = tmp_path / "flow" / "results" / "sky130hd" / "alu" / "NOT_THIS_VARIANT"
+    victim.mkdir(parents=True)
+    (v / "backend" / "RUN_x").mkdir(parents=True)
+    (v / "backend" / "RUN_x" / "run-meta.json").write_text(json.dumps({"orfs_results": str(victim)}))
+    fs.cleanup_variants([v])
+    assert victim.exists()
+
+
 def test_record_verify_triple_appends_to_db(tmp_path, tmp_knowledge_dir, monkeypatch):
     import knowledge_db
     conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
@@ -201,6 +233,7 @@ def test_main_argparse_accepts_real_flags(tmp_path, monkeypatch):
     fake_kdb.infer_family = lambda *a, **kw: "alu"
     fake_kdb.load_families = lambda: {}
     fake_kdb.get_family_heuristics = lambda *a, **kw: None
+    fake_kdb.get_platform_heuristics = lambda *a, **kw: None
     fake_kdb.get_closing_period = lambda *a, **kw: None
     monkeypatch.setitem(_sys.modules, "knowledge_db", fake_kdb)
     import fmax_model as fm_mod
@@ -232,6 +265,7 @@ def test_main_no_clock_constraint_exits_cleanly(tmp_path, monkeypatch):
     fake_kdb.infer_family = lambda *a, **kw: "combo"
     fake_kdb.load_families = lambda: {}
     fake_kdb.get_family_heuristics = lambda *a, **kw: None
+    fake_kdb.get_platform_heuristics = lambda *a, **kw: None
     fake_kdb.get_closing_period = lambda *a, **kw: None
     monkeypatch.setitem(sys.modules, "knowledge_db", fake_kdb)
     import fmax_model as fm_mod
@@ -247,3 +281,28 @@ def test_main_no_clock_constraint_exits_cleanly(tmp_path, monkeypatch):
     assert rpt["status"] == "no_clock_constraint", (
         f"expected status='no_clock_constraint', got {rpt['status']!r}"
     )
+
+
+def test_record_period_relax_appends_and_cli(tmp_path):
+    import json, subprocess, sys
+    proj = tmp_path / "p"
+    (proj / "reports").mkdir(parents=True)
+    rep = proj / "reports" / "fmax_search.json"
+    rep.write_text(json.dumps({"status": "ok", "winner": {"period": 5.0}}))
+    assert fs.record_period_relax(proj, 5.0, 5.5, "period_relax") is True
+    r = subprocess.run([sys.executable, fs.__file__, "--record-relax", "5.5", "6.0",
+                        "check_timing_minor", str(proj)],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0 and "recorded" in r.stdout, r.stdout + r.stderr
+    steps = json.loads(rep.read_text())["relaxations"]
+    assert [(s["from"], s["to"], s["source"]) for s in steps] == [
+        (5.0, 5.5, "period_relax"), (5.5, 6.0, "check_timing_minor")]
+    assert not (proj / "reports" / "fmax_search.json.tmp").exists()
+
+
+def test_record_period_relax_noop_without_ok_search(tmp_path):
+    proj = tmp_path / "p"
+    (proj / "reports").mkdir(parents=True)
+    assert fs.record_period_relax(proj, 5.0, 5.5, "period_relax") is False
+    (proj / "reports" / "fmax_search.json").write_text('{"status": "inconclusive"}')
+    assert fs.record_period_relax(proj, 5.0, 5.5, "period_relax") is False

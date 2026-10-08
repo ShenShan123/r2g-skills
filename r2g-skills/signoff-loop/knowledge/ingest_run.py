@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -34,6 +35,12 @@ import knowledge_db
 import situation
 import symptom
 import tool_versions
+
+
+def _default_cli_db_path() -> Path:
+    """Resolve the no-flag CLI target exactly like knowledge_db.connect()."""
+    return Path(os.environ.get("R2G_KNOWLEDGE_DB")
+                or knowledge_db.DEFAULT_DB_PATH)
 
 
 _CONFIG_LINE_RE = re.compile(r"(?:export\s+)?(\w+)\s*=\s*(.*)")
@@ -322,18 +329,6 @@ def _load_bench_designs(path: Path | None = None) -> set[str]:
             if d.get("design_name")}
 
 
-# Size bands match suggest_config.recommend (tiny<100, small<5000, medium<50000).
-def ppa_cell_count(project: Path) -> int | None:
-    """Cell count of the project's newest flow: geometry.instance_count from
-    reports/ppa.json (authoritative, from 6_report.json), else stdcell_count."""
-    ppa = _read_json(project / "reports" / "ppa.json") or {}
-    geometry = ppa.get("geometry", {}) if isinstance(ppa, dict) else {}
-    if not isinstance(geometry, dict):
-        return None
-    count = _to_int(geometry.get("instance_count"))
-    return count if count is not None else _to_int(geometry.get("stdcell_count"))
-
-
 def prior_cell_count(conn: sqlite3.Connection, project: Path) -> int | None:
     """This project's most-recent PRIOR non-null runs.cell_count (pins the size band
     across an abort re-ingest — see the design_class note in ingest())."""
@@ -348,51 +343,17 @@ def project_design_class(project: Path, cfg: dict[str, str], *,
                          cell_count: int | None = None,
                          conn: sqlite3.Connection | None = None) -> str:
     """THE design_class derivation, shared by ingest and diagnose_signoff_fix
-    (R2G memory redesign A3). diagnose used to size the class from proj/synth/
-    synth.log, which run_orfs.sh projects never write -> every lookup keyed
-    '<type>/unknown' while ingest keyed '<type>/<band>' from ppa.json, so the
-    lifecycle gate read rows that never matched the stored ones."""
-    if cell_count is None:
-        cell_count = ppa_cell_count(project)
-    if cell_count is None and conn is not None:
-        cell_count = prior_cell_count(conn, project)
-    return f"{_design_type(project, cfg)}/{_size_class(cell_count)}"
-
-
-def _size_class(cell_count: int | None) -> str:
-    if not cell_count:
-        return "unknown"
-    if cell_count < 100:
-        return "tiny"
-    if cell_count < 5000:
-        return "small"
-    if cell_count < 50000:
-        return "medium"
-    return "large"
-
-
-# Keep keyword sets in sync with suggest_config.detect_design_type (the
-# canonical classifier; this is the ingest-side mirror for stored runs).
-_BUS_KW = ("crossbar", "arbiter", "interconnect", "wb_conmax", "axi_", "ahb_")
-_CRYPTO_KW = ("aes", "sha", "des_", "cipher", "encrypt", "sbox")
-
-
-def _design_type(project: Path, cfg: dict[str, str]) -> str:
-    blob = ""
-    rtl_dir = project / "rtl"
-    if rtl_dir.is_dir():
-        for f in sorted(rtl_dir.glob("*.v"))[:50]:
-            try:
-                blob += f.read_text(encoding="utf-8", errors="ignore").lower()
-            except OSError:
-                pass
-    if any(k in blob for k in _BUS_KW):
-        return "bus_heavy"
-    if any(k in blob for k in _CRYPTO_KW):
-        return "crypto"
-    if "sram" in blob or cfg.get("ADDITIONAL_LEFS"):
-        return "macro_heavy"
-    return "logic"
+    (R2G memory redesign A3): suggest_config.detect_design_class (PPA geometry,
+    else synthesis stats). When the project carries no size evidence, the given
+    cell_count, else this project's prior stored cell_count, keeps the band stable
+    instead of spawning a '<type>/unknown' lifecycle key."""
+    import suggest_config
+    dtype, _, size = suggest_config.detect_design_class(project, cfg).partition("/")
+    if size == "unknown":
+        if cell_count is None and conn is not None:
+            cell_count = prior_cell_count(conn, project)
+        size = suggest_config.size_class(cell_count)
+    return f"{dtype}/{size}"
 
 
 def _heuristics_generation() -> int | None:
@@ -694,8 +655,85 @@ def _orfs_fail_detail(run_dir: Path | None) -> tuple[str | None, str | None]:
     return (None, fallback)
 
 
+# A stage that died by a crash SIGNAL is the tool failing, not the design
+# (CORRECTIONS #15/#25). Two reproducible crashes in openroad v2.0-17598 — an OpenSTA
+# thread-race SIGSEGV at CTS and an ODB `dbTable<_dbITerm>` assertion (SIGABRT) in
+# TritonRoute — were recorded as orfs-fail-cts / orfs-fail-route, i.e. as the design
+# failing those stages; the STA one is load-dependent. The stage's exit code cannot
+# tell: run_orfs.sh records make's status (2), so the signal survives only as text in
+# flow.log. SIGKILL/SIGTERM are deliberately absent: they are delivered from outside
+# (our own stage timeout, an operator, the OOM killer) and keep their timeout meaning.
+_CRASH_SIGNALS = {4: "SIGILL", 6: "SIGABRT", 7: "SIGBUS", 8: "SIGFPE", 11: "SIGSEGV"}
+_CRASH_SIGNAL_RE = re.compile(
+    r"^Signal (\d+) received|Command terminated by signal (\d+)")
+_CRASH_TEXT_RE = {
+    "SIGSEGV": re.compile(r"Segmentation fault"),
+    "SIGABRT": re.compile(r"Assertion `.*' failed"),
+}
+_ORFS_STEP_RE = re.compile(r"^Running \S+, stage ")     # ORFS: one per step script
+
+
+def _stage_crash(run_dir: Path | None, stage: str | None) -> tuple[str, str] | None:
+    """(signal name, evidence line) when `stage` of this run died by a crash signal.
+
+    Reads only the failing step of flow.log: from the last ORFS "Running <script>,
+    stage <step>" line before run_orfs.sh's "ERROR: Stage '<stage>' failed" marker
+    to that marker (the last 500 lines when the marker is absent). A signal line
+    elsewhere in the log is never charged to this stage. A tool `[ERROR XXX-nnnn]`
+    before the crash means the step had already failed on its own (the crash is
+    teardown), so that stays the design's failure. None when not a crash.
+    """
+    if run_dir is None or not stage:
+        return None
+    try:
+        lines = (run_dir / "flow.log").read_text(errors="ignore").splitlines()
+    except OSError:
+        return None
+    marker = f"ERROR: Stage '{stage}' failed"
+    end = next((i for i in range(len(lines) - 1, -1, -1)
+                if lines[i].startswith(marker)), None)
+    if end is None:
+        segment = lines[-500:]
+    else:
+        start = next((i for i in range(end - 1, -1, -1)
+                      if _ORFS_STEP_RE.match(lines[i])), 0)
+        segment = lines[start:end]
+    first_error = next((i for i, ln in enumerate(segment) if _ORFS_ERRCODE_RE.search(ln)),
+                       len(segment))
+    for i, ln in enumerate(segment):
+        m = _CRASH_SIGNAL_RE.search(ln)
+        if m and int(m.group(1) or m.group(2)) in _CRASH_SIGNALS:
+            if first_error < i:
+                return None
+            return _CRASH_SIGNALS[int(m.group(1) or m.group(2))], ln.strip()[:300]
+    for name, rx in _CRASH_TEXT_RE.items():
+        for i, ln in enumerate(segment):
+            if rx.search(ln):
+                return None if first_error < i else (name, ln.strip()[:300])
+    return None
+
+
+def _project_tool_crash(conn: sqlite3.Connection, run_id: str, stage: str | None,
+                        run_dir: Path | None) -> None:
+    """The store projection of a 'tool_crash' run, shared by live ingest and
+    repair_run_status: one tool-crash-<stage>-<SIG> event, never an orfs-fail-*
+    design signature (honesty H3 keeps those on 'fail' runs only), and no
+    run_violations symptom. Idempotent."""
+    signal_name, evidence = _stage_crash(run_dir, stage) or ("", None)
+    conn.execute("DELETE FROM failure_events WHERE run_id = ? AND "
+                 "(signature LIKE 'orfs-fail-%' OR signature LIKE 'tool-crash-%')",
+                 (run_id,))
+    conn.execute(
+        "INSERT INTO failure_events (run_id, stage, signature, detail) "
+        "VALUES (?, ?, ?, ?)",
+        (run_id, stage, f"tool-crash-{stage}-{signal_name}", evidence),
+    )
+    conn.execute("DELETE FROM run_violations WHERE run_id = ?", (run_id,))
+
+
 def _derive_orfs_status(stages: list[dict[str, Any]],
-                        flow_scope: str = "full") -> tuple[str, str | None]:
+                        flow_scope: str = "full",
+                        run_dir: Path | None = None) -> tuple[str, str | None]:
     """Status against the run's DECLARED scope (rtl-acquire 2026-07-09).
 
     flow_scope='synth_only' (config.mk `export R2G_FLOW_SCOPE = synth_only`,
@@ -703,11 +741,16 @@ def _derive_orfs_status(stages: list[dict[str, Any]],
     a synth-only pass is a pass within its scope, never a misleading 'partial'
     that would enqueue signoff A/B work for a run that was never a signoff
     subject. Any other/absent value keeps the full six-stage requirement.
+
+    With `run_dir`, a failed stage that died by a crash signal (_stage_crash)
+    is 'tool_crash' rather than 'fail': a tool/environment failure, not a
+    verdict about the design.
     """
     if not stages:
         return ("unknown", None)
     saw_fail = False
     fail_stage = None
+    fail_status: Any = None
     last_stage_name = None
     stage_names_done = {s.get("stage") for s in stages
                         if _norm_stage_status(s.get("status")) == "pass"}
@@ -719,7 +762,13 @@ def _derive_orfs_status(stages: list[dict[str, Any]],
         if st == "fail" and not saw_fail:
             saw_fail = True
             fail_stage = s.get("stage")
+            fail_status = s.get("status")
     if saw_fail:
+        # 124/137 is our own stage timeout (timeout, then kill-after): a signal the
+        # tool received while being stopped is not a crash.
+        timed_out = not isinstance(fail_status, bool) and fail_status in (124, 137)
+        if not timed_out and _stage_crash(run_dir, fail_stage) is not None:
+            return ("tool_crash", fail_stage)
         return ("fail", fail_stage)
     if flow_scope == "synth_only":
         required = ["synth"]
@@ -767,7 +816,7 @@ def _furthest_stage_rank(stage_log: list[dict[str, Any]], orfs_status: str | Non
     # absent did not reach it). clean_beol is a real DRC result; 'complete' a real RCX.
     if drc_status not in (None, "unknown", "skipped"):
         rank = max(rank, _LADDER_RANK["drc"])
-    if lvs_status not in (None, "unknown", "skipped"):
+    if lvs_status not in (None, "unknown", "skipped", "error"):   # error = not executed
         rank = max(rank, _LADDER_RANK["lvs"])
     if rcx_status == "complete":
         rank = max(rank, _LADDER_RANK["rcx"])
@@ -1021,7 +1070,9 @@ def ingest(project: Path,
     flow_scope = (cfg.get("R2G_FLOW_SCOPE") or "").strip().lower()
     if flow_scope != "synth_only":
         flow_scope = "full"
-    orfs_status, fail_stage = _derive_orfs_status(stage_log, flow_scope)
+    orfs_status, fail_stage = _derive_orfs_status(
+        stage_log, flow_scope,
+        stage_log_path.parent if stage_log_path.parent.name.startswith("RUN_") else None)
     # RMD3-P1-01 (failure-patterns.md #58): a FROM_STAGE resume's local ledger
     # holds only the rerun stages, so the local classification reads 'partial'
     # while the def-graph FLOW gate resolves the SAME execution complete via
@@ -1066,8 +1117,9 @@ def ingest(project: Path,
     # recipe for that symptom ever promotes (2026-06-23 audit, bug #9 — proximate
     # trigger). Pin the band from this project's most-recent PRIOR non-null cell_count;
     # the stored runs.cell_count for THIS run stays honest (NULL on an abort).
-    class_cell_count = cell_count if cell_count is not None else prior_cell_count(conn, project)
-    design_class = project_design_class(project, cfg, cell_count=class_cell_count)
+    # Preserve the failed-run stabilization rule: an attempt with no current size
+    # evidence keeps the project's most recent known size (no new lifecycle key).
+    design_class = project_design_class(project, cfg, cell_count=cell_count, conn=conn)
     # Win 3 r2g-bench: flag held-out designs (by DESIGN_NAME or project basename).
     # Filtered ONLY at the learning read — failure_events/run_violations below are
     # still written for bench runs (honesty invariant H3).
@@ -1179,9 +1231,25 @@ def ingest(project: Path,
             (run_id, fail_stage, sig, err_line),
         )
     _ingest_fix_events(conn, project, design_name, design_family, platform)
-    _write_run_violations(conn, run_id, design_family, platform, drc, lvs, tcheck,
-                          _to_float(timing.get("setup_wns")),
-                          orfs_status=orfs_status, fail_stage=fail_stage)
+    if lvs.get("status") == "error":
+        # Signature keeps only a slug reason (older netgen errors carry prose).
+        reason = str(lvs.get("reason") or "error")
+        # LVS did not run to a verdict (e.g. powered_netlist_unavailable). A tool /
+        # environment event, like tool_crash: never an LVS design symptom (only
+        # status 'fail' becomes one below), and not a signed-off layout either.
+        conn.execute(
+            "INSERT INTO failure_events (run_id, stage, signature, detail) "
+            "VALUES (?, ?, ?, ?)",
+            (run_id, "lvs", "tool-error-lvs-" + (reason if re.fullmatch(r"[a-z0-9_]+", reason)
+                                                 else "error"),
+             " | ".join(str(x) for x in (lvs.get("reason"), lvs.get("detail")) if x) or None),
+        )
+    if orfs_status == "tool_crash":
+        _project_tool_crash(conn, run_id, fail_stage, stage_log_path.parent)
+    else:
+        _write_run_violations(conn, run_id, design_family, platform, drc, lvs, tcheck,
+                              _to_float(timing.get("setup_wns")),
+                              orfs_status=orfs_status, fail_stage=fail_stage)
     _record_lineage(conn, run_id, design_name, platform, cfg, orfs_status,
                     outcome_fields={
                         "drc_status": drc.get("status"),
@@ -1212,8 +1280,9 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("project", type=Path, nargs="?", default=None,
                    help="Path to design_cases/<project> directory (omit when using --backfill)")
-    p.add_argument("--db", type=Path, default=knowledge_db.DEFAULT_DB_PATH,
-                   help="SQLite database path (default: knowledge/knowledge.sqlite)")
+    p.add_argument("--db", type=Path, default=_default_cli_db_path(),
+                   help="SQLite database path (default: R2G_KNOWLEDGE_DB, then "
+                        "knowledge/knowledge.sqlite)")
     p.add_argument("--schema", type=Path, default=knowledge_db.DEFAULT_SCHEMA_PATH,
                    help="Schema SQL path")
     p.add_argument("--families", type=Path, default=knowledge_db.DEFAULT_FAMILIES_PATH,

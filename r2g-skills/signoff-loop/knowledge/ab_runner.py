@@ -26,6 +26,16 @@ from knowledge_db import now_local as _now  # invariant 32: the ONE stamp
 
 HEUR_PATH = os.path.join(os.path.dirname(__file__), "heuristics.json")
 
+
+def _heur_path() -> str:
+    """Resolve the same isolated heuristic store used by ingest and the loop.
+
+    A/B subject selection is part of the experiment state.  Reading the shipped
+    heuristics.json while R2G_KNOWLEDGE_DB/R2G_HEURISTICS_PATH points at a sandbox
+    silently mixes main-store evidence into an isolated campaign.
+    """
+    return os.environ.get("R2G_HEURISTICS_PATH") or HEUR_PATH
+
 # An A/B trial copies each subject to <name>_ab{A,B}_<strat8>_<r>. Those copies get
 # ingested (they carry the recipe's symptom), so without this guard plan_trial would
 # re-select an arm dir as a SUBJECT — copying it again into <...>_abA_..._abA_... and
@@ -154,21 +164,23 @@ def _arms_owned(conn, key: dict, arm_a_run_id, arm_b_run_id) -> bool:
 
 
 def _trial_subject(conn, arm_a_run_id, arm_b_run_id, fallback) -> str:
-    """The INDEPENDENT SUBJECT a trial exercised = the base design both arms cloned
-    from. Resolve an arm run_id -> runs.project_path, strip the `_ab[AB]_<strat8>_<r>`
-    arm suffix to the base, and key on it. Two decisive trials on the SAME base subject
-    are pseudo-replicates, not independent corroboration (P1-11, 2026-07-15). A run_id
-    that does not resolve (legacy NULL / pre-existence-check row) falls back to a
-    per-row key, so LEGACY verdicts are unchanged — each legacy row stays its own
-    'subject', exactly as the old raw-row count treated it."""
+    """Resolve the independent evidence unit exercised by a trial.
+
+    Prefer ``runs.design_family`` so multiple tops or aliases from one RTL family
+    remain one vote. Fall back to the base subject directory when family provenance
+    is absent. Repeated arm runs on either identity are pseudo-replicates, not new
+    corroboration (P1-11).
+    """
     for rid in (arm_b_run_id, arm_a_run_id):
         if not rid:
             continue
         try:
-            row = conn.execute("SELECT project_path FROM runs WHERE run_id=?",
+            row = conn.execute("SELECT project_path, design_family FROM runs WHERE run_id=?",
                                (rid,)).fetchone()
         except sqlite3.Error:
             row = None
+        if row and row[1]:
+            return f"family:{row[1]}"
         if row and row[0]:
             base = _ARM_DIR_RE.split(os.path.basename(str(row[0]).rstrip("/")))[0]
             return f"subj:{base}" if base else f"run:{rid}"
@@ -176,6 +188,7 @@ def _trial_subject(conn, arm_a_run_id, arm_b_run_id, fallback) -> str:
 
 N_DESIGNS_DEFAULT = 2     # min matched designs per trial (spec §5.4)
 AB_REPEATS_DEFAULT = 2    # Win 2: k repeats per arm for variance-aware promotion
+AB_MIN_INDEPENDENT_WINS_DEFAULT = 2
 AB_LCB_Z = 1.0            # z for the lower-confidence bound (mean − z·stderr)
 COST_FLOOR = 0.08         # success-tie cost tiebreak: min |Δwall| as a fraction of the
                           # combined mean before it can flip win/loss (2026-06-24 bug #4:
@@ -190,6 +203,15 @@ def ab_repeats() -> int:
         return max(1, int(os.environ.get("R2G_AB_REPEATS", AB_REPEATS_DEFAULT)))
     except (TypeError, ValueError):
         return AB_REPEATS_DEFAULT
+
+
+def ab_min_independent_wins() -> int:
+    """Minimum independent RTL-family wins required for automatic promotion."""
+    try:
+        return max(2, int(os.environ.get(
+            "R2G_AB_MIN_INDEPENDENT_WINS", AB_MIN_INDEPENDENT_WINS_DEFAULT)))
+    except (TypeError, ValueError):
+        return AB_MIN_INDEPENDENT_WINS_DEFAULT
 
 
 def lcb(samples: list[float], z: float = AB_LCB_Z) -> float:
@@ -293,7 +315,7 @@ def judge_repeated_ex(arm_a_samples: list[dict | None],
 def _evidence_designs(symptom_id: str) -> list[str]:
     """Designs the learner recorded as having EXHIBITED this symptom (pre-fix)."""
     try:
-        with open(HEUR_PATH) as fh:
+        with open(_heur_path()) as fh:
             heur = json.load(fh)
     except (OSError, ValueError):
         return []
@@ -301,7 +323,26 @@ def _evidence_designs(symptom_id: str) -> list[str]:
     return list(sym.get("evidence_designs") or [])
 
 
-def _resolve_evidence(conn, ev_names: list[str], want_platform: str | None) -> list[dict]:
+def _allowed_subject(path: str | None, allowed_project_paths: set[str] | None) -> bool:
+    """Return whether this historical path is executable in the current A/B round.
+
+    A knowledge store is long-lived, but the current ledger is the authority for
+    which project directories a new round may execute.  Passing an allowlist
+    therefore makes selection fail closed.  ``None`` preserves read-only legacy
+    callers; production planning always supplies a ledger-derived allowlist.
+    """
+    if not path:
+        return False
+    if allowed_project_paths is None:
+        return True
+    try:
+        return os.path.realpath(path) in allowed_project_paths
+    except OSError:
+        return False
+
+
+def _resolve_evidence(conn, ev_names: list[str], want_platform: str | None,
+                      allowed_project_paths: set[str] | None = None) -> list[dict]:
     """Map recipe evidence-design names -> on-disk re-runnable project dirs.
 
     fix_events/heuristics record the project-dir basename as the design name; the
@@ -328,6 +369,8 @@ def _resolve_evidence(conn, ev_names: list[str], want_platform: str | None) -> l
             continue
         if want_platform and plat != want_platform:
             continue
+        if not _allowed_subject(project_path, allowed_project_paths):
+            continue
         if not os.path.isdir(project_path):
             continue
         seen.add(project_path)
@@ -337,7 +380,8 @@ def _resolve_evidence(conn, ev_names: list[str], want_platform: str | None) -> l
     return out
 
 
-def _symptom_designs(conn, symptom_id: str, want_platform: str | None) -> list[dict]:
+def _symptom_designs(conn, symptom_id: str, want_platform: str | None,
+                     allowed_project_paths: set[str] | None = None) -> list[dict]:
     """Designs that DEMONSTRABLY exhibited this symptom, taken from the fix history.
 
     A successfully-fixed symptom (e.g. ``antenna_diode_repair`` clearing DRC to 0)
@@ -381,6 +425,8 @@ def _symptom_designs(conn, symptom_id: str, want_platform: str | None) -> list[d
             continue
         if want_platform and plat != want_platform:
             continue
+        if not _allowed_subject(project_path, allowed_project_paths):
+            continue
         if not os.path.isdir(project_path):
             continue
         seen.add(project_path)
@@ -391,7 +437,8 @@ def _symptom_designs(conn, symptom_id: str, want_platform: str | None) -> list[d
 
 
 def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
-               strategy: str, n_designs: int = N_DESIGNS_DEFAULT) -> dict | None:
+               strategy: str, n_designs: int = N_DESIGNS_DEFAULT,
+               allowed_project_paths: set[str] | None = None) -> dict | None:
     """Returns {designs, arm_a, arm_b, match_level} or None if no match."""
     def _q(extra_sql: str, params: tuple) -> list[dict]:
         cur = conn.execute(
@@ -409,7 +456,8 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
         # drain, candidate starved (2026-07-03).
         return [dict(zip(("design_name", "project_path", "cell_count"), x))
                 for x in cur.fetchall()
-                if not _is_arm_dir(x[1]) and x[1] and os.path.isdir(x[1])]
+                if not _is_arm_dir(x[1]) and x[1] and os.path.isdir(x[1])
+                and _allowed_subject(x[1], allowed_project_paths)]
 
     def _trial(designs, level):
         return {
@@ -420,6 +468,34 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
             "key": {"symptom_id": symptom_id, "design_class": design_class,
                     "platform": platform, "strategy": strategy},
         }
+
+    # This named physical scope spans timing severity labels, not arbitrary symptoms.
+    # Keep the original per-run labels intact; plan only measured eligible subjects.
+    import setup_scope
+    if dict(symptom_id=symptom_id, design_class=design_class,
+            platform=platform, strategy=strategy) == setup_scope.KEY:
+        rows = conn.execute(
+            "SELECT r.design_name,r.project_path,r.cell_count FROM runs r "
+            "JOIN run_violations v USING(run_id) JOIN symptoms s ON s.symptom_id=v.symptom_id "
+            "WHERE r.platform='sky130hd' AND r.abc_area=1 AND r.orfs_status='pass' "
+            "AND r.wns_ns>=-3.0 AND r.wns_ns<0 AND s.check_type='timing' "
+            "AND r.drc_status IN ('clean','clean_beol') AND r.lvs_status='clean' "
+            "ORDER BY r.cell_count,r.project_path").fetchall()
+        designs, seen = [], set()
+        for row in rows:
+            name, path, cells = row
+            if (name in seen or _is_arm_dir(path) or not path or not os.path.isdir(path)
+                    or not _allowed_subject(path, allowed_project_paths)):
+                continue
+            try:
+                with open(os.path.join(path, 'reports', 'route.json')) as f:
+                    if json.load(f).get('status') != 'clean':
+                        continue
+            except (OSError, ValueError):
+                continue
+            seen.add(name)
+            designs.append(dict(design_name=name, project_path=path, cell_count=cells))
+        return _trial(designs, 'measured_setup_scope') if len(designs) >= n_designs else None
 
     # Tier 1 — run_violations (POST-fix residual exhibitors of the symptom). NEVER pool
     # across platforms (2026-06-25): an A/B arm flows at the recipe's `platform`, so a
@@ -442,7 +518,8 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
     # (2026-06-22: without this, every successful nangate45 recipe — antenna chief
     # among them — was unreachable and stuck forever as a candidate.)
     for want_plat, level in ((platform, "fixhist_platform"),):   # same-platform only
-        designs = _symptom_designs(conn, symptom_id, want_plat)
+        designs = _symptom_designs(conn, symptom_id, want_plat,
+                                   allowed_project_paths)
         if len(designs) >= n_designs:
             return _trial(designs, level)
 
@@ -452,7 +529,8 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
     # (2026-06-16: this gap, on top of Gate A, was the second reason the A/B loop had
     # never fired; Tier 2 above now covers the repo-prefixed campaign dirs it misses.)
     for want_plat, level in ((platform, "evidence_platform"),):   # same-platform only
-        designs = _resolve_evidence(conn, _evidence_designs(symptom_id), want_plat)
+        designs = _resolve_evidence(conn, _evidence_designs(symptom_id), want_plat,
+                                    allowed_project_paths)
         if len(designs) >= n_designs:
             return _trial(designs, level)
     return None
@@ -671,21 +749,23 @@ def judge_recipe(conn, *, symptom_id: str, design_class: str, platform: str,
               f"run_ids not counted for {key['symptom_id'][:8]}/{key['design_class']}/"
               f"{key['platform']}/{key['strategy']}; state unchanged (legacy_promoted). "
               f"Re-validate via `engineer_loop ab-enqueue`.", file=sys.stderr)
-    if wins > losses:
+    min_wins = ab_min_independent_wins()
+    if wins > losses and wins >= min_wins:
         recipe_lifecycle.promote(conn, evidence=f"ab_corpus:{wins}w{losses}l", **key)
         return "promoted"
     if losses > wins:
         recipe_lifecycle.demote(conn, reason=f"ab_corpus:{wins}w{losses}l", **key)
         return "shadow"
-    if wins:
+    if wins or losses:
         # TIED decisive evidence (2026-07-16 agent-logic issue 2): the state must be
         # a pure function of the corpus, not of insertion order. Returning None here
         # let the FIRST decisive row's transition survive the tie (win-then-loss
         # stayed promoted, loss-then-win stayed shadow — opposite lifecycle states
         # from the SAME net corpus). A tie is unresolved evidence: back to
         # 'candidate' for re-validation, never an inherited transient promotion.
-        recipe_lifecycle.revalidate(
-            conn, reason=f"ab_corpus_tie:{wins}w{losses}l", **key)
+        reason = (f"ab_corpus_tie:{wins}w{losses}l" if wins == losses else
+                  f"ab_corpus_insufficient:{wins}w{losses}l:need{min_wins}")
+        recipe_lifecycle.revalidate(conn, reason=reason, **key)
         return "candidate"
     return None                                # no decisive evidence: unchanged
 

@@ -139,9 +139,17 @@ After ORFS completes, extract PPA and run the timing gate:
 5. The JSON includes `wns_tier` and `tns_tier` fields so the agent can explain which metric triggered the tier (e.g., "TNS escalated this from minor to moderate").
 6. Only proceed to signoff checks (step 6) after timing is resolved.
 
-### 5a. (Optional) Fmax search — find the fastest closing period
+### 5a. Fmax search — find the fastest closing period
 
-Before committing to a clock period, you can characterize the design's Fmax:
+Optional for a hand-built project, but **required for an rtl-acquire-promoted
+project to reach strict admission**. `signoff_gate.py` blocks any project stamped
+`promoted_from` with `task_provenance` (missing `qualified_constraint`) until
+`signoff_manifest.constraint.qualified` is true. `build_signoff_manifest.py` sets
+that only when a `reports/fmax_search.json` winner matches the stamped SDC period and
+final timing is `clean`. So run the search, stamp the winner into `constraint.sdc`, and
+re-run the flow before expecting a `pass`.
+
+Before committing to a clock period, characterize the design's Fmax:
 
     python3 scripts/reports/fmax_search.py <project-dir> [platform] [--verify]
 
@@ -321,13 +329,19 @@ queries (`observe.py trace`) and the full safety-invariant list.
 
 #### Platform Support Matrix
 
-| Platform | KLayout DRC | KLayout LVS | Magic DRC | Netgen LVS | RCX |
-|----------|-------------|-------------|-----------|------------|-----|
-| nangate45 | Yes | Yes | No | No | Yes |
-| sky130hd | Yes | Yes | Yes | Yes | Yes |
-| sky130hs | Yes¹ | Yes | Yes | Yes² | Yes |
-| gf180 | Yes | Yes | No | No | Yes |
-| ihp-sg13g2 | Yes | Yes | No | No | Yes |
+**This table is not prose — it is checked against `platform_capability.py` by
+`tests/test_support_matrix_matches_probe.py`.** A "Yes" must be backed by an executable
+deck resolution on that platform (the #32 lesson); edit the table only to match what the
+probe reports, and re-run that test.
+
+| Platform | Tier | KLayout DRC | KLayout LVS | Magic DRC | Netgen LVS | RCX |
+|----------|------|-------------|-------------|-----------|------------|-----|
+| nangate45 | strict_signoff_ready | Yes | Yes | No | No | Yes |
+| sky130hd | strict_signoff_ready | Yes | Yes | Yes | Yes | Yes |
+| sky130hs | strict_signoff_ready | Yes¹ | Yes | Yes | Yes² | Yes |
+| gf180 | installed³ | No | No | No | No | No |
+| ihp-sg13g2 | research_ready⁴ | Yes | No | No | No | Yes |
+| asap7 | unsupported⁵ | No | No | No | No | No |
 
 ¹ sky130hs has no ORFS-shipped DRC deck; `run_drc.sh` deliberately reuses the sibling
 `sky130hd.lydrc` (pure sky130A tech-layer rules, no hd-specific content) via
@@ -336,6 +350,23 @@ queries (`observe.py trace`) and the full safety-invariant list.
 eda-install's platform-rules step) — the stock file makes def2stream drop ALL DEF
 geometry, turning every Netgen LVS into a false top-pin mismatch; `run_netgen_lvs.sh`
 guards portless extractions as infra errors (failure-patterns.md #33).
+³ **gf180 signs off NOTHING in this ORFS checkout** (corrected 2026-08-01,
+failure-patterns.md #32 sub-section). It ships no `drc/` and no `lvs/` directory (only
+`KLayout/*.lyt` layer maps) and defines no `RCX_RULES`. `run_drc.sh` honestly records
+`status:"skipped", reason:"no_drc_deck_for_platform"` — and because the campaign
+clean-gate accepts `skipped` (`clean_states={"clean","clean_beol","skipped"}`), a gf180
+design reaches ledger `clean` on **zero DRC/LVS evidence**. def-graph is stricter
+(`signoff_gate.py`: `DRC_OK={"clean","clean_beol"}` — `skipped` is NOT accepted for DRC),
+so **every gf180 dataset build is gate-blocked with exit 7**: gf180 can never yield a
+corpus-eligible dataset. Unlike sky130hs there is no sibling deck to borrow — gf180mcu is
+a different process, not a sky130A variant. Use gf180 for flow / route / timing / Fmax
+work only, and do not promote a recipe on a gf180 "clean". (A `6_final.spef` IS produced,
+from `setRC.tcl` estimated RC rather than OpenRCX extraction, so RC labels do populate.)
+⁴ ihp-sg13g2 ships `lvs/sg13g2.lvs` + `run_lvs.py`, not a KLayout `.lylvs` deck, so the
+KLayout LVS path resolves nothing; DRC/antenna/RCX are all real.
+⁵ asap7 is refused by `run_orfs.sh` (exit 65) and probes `unsupported` regardless of what
+is installed — see CLAUDE.md "Toolchain". Override for experiments only via
+`R2G_ALLOW_UNSUPPORTED_PLATFORM=1`.
 
 ### 7. Treat Artifacts as Source of Truth
 
@@ -545,6 +576,9 @@ design_cases/<design-name>/
 11. Run timing gate: `scripts/reports/check_timing.py <project-dir>` — reads `reports/timing_check.json`:
     - `tier=clean`: proceed to step 12.
     - `tier=minor`: auto-fix clock period per `suggested_clock_period`, re-run step 9, then re-check.
+      In an Fmax-searched project, record the bump first
+      (`scripts/reports/fmax_search.py --record-relax <old> <new> check_timing_minor <project-dir>`)
+      or the signoff manifest cannot bind the new period to the search winner (failure-patterns P0-2b).
     - `tier=moderate/severe/unconstrained`: **stop, present options to user, wait for decision**.
     - Check `wns_tier` and `tns_tier` to explain which metric drove the tier.
 12. Run signoff checks (only after timing gate passes or user approves):
@@ -756,7 +790,13 @@ The `scripts/flow/run_orfs.sh` script:
 Resource control via environment variables:
 ```bash
 ORFS_TIMEOUT=7200    # Per-stage max runtime in seconds (default: 2 hours)
-ORFS_MAX_CPUS=4      # Limit CPU cores via taskset (default: all)
+NUM_CORES=4          # Per-flow thread budget: openroad -threads + OMP/MKL/OpenBLAS
+                     # pools (default: nproc, which honours a cpuset). On a shared
+                     # host give each worker a DISJOINT cpuset (taskset -c) too.
+ORFS_MAX_CPUS=4      # Alias for NUM_CORES when that is unset. A thread cap, NOT
+                     # CPU pinning (it used to pin every flow to cores 0..N-1).
+ORFS_CPU_SET=32-35   # Pin the flow to this explicit taskset CPU list; give each
+                     # concurrent worker a DISJOINT set.
 PLACE_FAST=1         # Disable GPL_TIMING_DRIVEN/ROUTABILITY_DRIVEN — use for
                      # BOOM-class designs (>1M nets) where the timing-repair
                      # loop in gpl spins for hours after Nesterov has already

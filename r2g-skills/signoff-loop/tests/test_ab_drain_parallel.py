@@ -81,11 +81,39 @@ def test_parallel_ab_drain_records_route_verdict(tmp_path, monkeypatch):
     conn.commit(); conn.close()
     learn_heuristics.learn(db, tmp_path / "heuristics.json")
 
+    def _measure_strict(entry):
+        reports = Path(entry["project_path"]) / "reports"
+        reports.mkdir(exist_ok=True)
+        manifest = {
+            "reports": {
+                "drc.json": {"present": True, "status": "clean",
+                             "drc_mode": "full", "total_violations": 0},
+                "lvs.json": {"present": True, "status": "clean"},
+                "route.json": {"present": True, "status": "clean",
+                               "total_violations": 0},
+                "rcx.json": {"present": True, "status": "complete"},
+                "timing_check.json": {"present": True, "tier": "clean",
+                                      "wns_ns": 0.1},
+            },
+            "platform_capability": {"strict_signoff_ready": True},
+            "confirming_run": {"consensus": True, "run_tag": "RUN_x"},
+        }
+        (reports / "signoff_manifest.json").write_text(json.dumps(manifest))
+        return 0
+
+    monkeypatch.setattr(engineer_loop, "_run_backend_signoff_measurement",
+                        _measure_strict)
+
     monkeypatch.setattr(engineer_loop, "_ingest",
                         lambda e: ingest_run.ingest(Path(e["project_path"]),
                                                     knowledge_db.connect(db)))
     # workers=4 -> the (2-design x 2-arm) trial runs its 4 arms concurrently.
-    engineer_loop.ab_drain(tmp_path / "ledger.jsonl", n_ab_designs=2, db_path=db,
+    led_path = tmp_path / "ledger.jsonl"
+    led = engineer_loop.Ledger(led_path)
+    for name in ("crypto_a", "crypto_b"):
+        led.add({"design": name, "project_path": str(tmp_path / "designs" / name),
+                 "platform": "sky130hd"})
+    engineer_loop.ab_drain(led_path, n_ab_designs=2, db_path=db,
                            max_workers=4)
     conn = knowledge_db.connect(db)
     trials = conn.execute(

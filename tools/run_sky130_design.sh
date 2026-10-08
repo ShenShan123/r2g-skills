@@ -98,6 +98,11 @@ if [[ "$TIER" == "minor" ]]; then
   SUG=$(jval "$DEST/reports/timing_check.json" suggested_clock_period)
   if [[ -n "$SUG" && "$SUG" != "None" ]]; then
     echo "minor timing -> bump clk_period to $SUG, re-run" >>"$LOG"
+    OLDP=$(sed -nE 's/.*set[[:space:]]+clk_period[[:space:]]+([0-9.]+).*/\1/p' "$DEST/constraints/constraint.sdc" | head -1)
+    # Fmax-mode projects: record the loosening so the signoff manifest can bind it
+    # to the search winner (no-op without an ok fmax_search.json).
+    [[ -n "$OLDP" ]] && python3 "$SKILL/scripts/reports/fmax_search.py" \
+      --record-relax "$OLDP" "$SUG" check_timing_minor "$DEST" >>"$LOG" 2>&1 || true
     sed -i -E "s/(set[[:space:]]+clk_period[[:space:]]+)[0-9.]+/\1${SUG}/" "$DEST/constraints/constraint.sdc" 2>>"$LOG" || true
     ORFS_TIMEOUT="${ORFS_TIMEOUT:-5400}" FROM_STAGE=floorplan bash "$SKILL/scripts/flow/run_orfs.sh" "$DEST" sky130hd >>"$LOG" 2>&1
     python3 "$SKILL/scripts/extract/extract_ppa.py" "$DEST" "$DEST/reports/ppa.json" >>"$LOG" 2>&1

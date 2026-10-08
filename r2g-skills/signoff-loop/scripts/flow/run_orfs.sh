@@ -7,7 +7,9 @@ set -euo pipefail
 # Results are collected back into <project-dir>/backend/
 # Optional flow_variant (default: derived from project dir) isolates ORFS work directories.
 # Set ORFS_TIMEOUT (seconds) to limit runtime (default: 7200 = 2 hours).
-# Set ORFS_MAX_CPUS to limit CPU cores (default: all available).
+# Set ORFS_MAX_CPUS=N to cap the flow at N threads (NUM_CORES, when that is unset).
+# It is a thread cap, not a cpuset. Set ORFS_CPU_SET to pin the flow to an explicit
+# taskset-compatible CPU list; concurrent workers need DISJOINT sets.
 # Set R2G_ORFS_WORK_HOME to override the writable ORFS output root.  It defaults
 # to <project-dir>/.orfs-work so a production run never requires write access to
 # the shared ORFS checkout under /opt.
@@ -103,30 +105,42 @@ _r2g_new_backend_dir() {  # base -> echoes "<dir>\t<RUN_TAG>" for a freshly-CREA
   done
   return 1
 }
-_r2g_workspace_lockfile() {  # platform design variant -> echoes the lockfile path
-  # Keyed on the SHARED ORFS workspace identity ($FLOW_DIR/.../<platform>/<design>/<variant>).
-  local key h
-  key="$1/$2/$3"
-  h="$(printf '%s' "$key" | md5sum 2>/dev/null | awk '{print $1}')"
-  [[ -z "$h" ]] && h="$(printf '%s' "$key" | tr -c 'A-Za-z0-9' '_')"
-  printf '%s/r2g_ws_%s.lock' "${R2G_LOCK_DIR:-/tmp}" "$h"
-}
-_r2g_acquire_workspace_lock() {  # platform design variant -> holds an fd-scoped lock; 1 on contention
-  command -v flock >/dev/null 2>&1 || { echo "run_orfs: flock unavailable — skipping workspace lock" >&2; return 0; }
-  local lf; lf="$(_r2g_workspace_lockfile "$1" "$2" "$3")"
-  exec {R2G_WS_LOCK_FD}>"$lf" || { echo "run_orfs: ERROR cannot open workspace lockfile $lf" >&2; return 1; }
-  if ! flock -n "$R2G_WS_LOCK_FD"; then
-    echo "run_orfs: ERROR another run holds the ORFS workspace (platform=$1 design=$2 variant=$3)." >&2
-    echo "  Never run two configs with the same DESIGN_NAME+FLOW_VARIANT concurrently" >&2
-    echo "  (CLAUDE.md Hard Rules) — they race clean_all vs build. Lockfile: $lf" >&2
-    return 1
-  fi
-  return 0
-}
+# The workspace lock helpers are shared with the signoff checkers, which restage
+# into the same workspace (_restage_for_signoff.sh).
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_workspace_lock.sh"
 
 # Test seam: allow sourcing helpers without executing the flow.
 [[ "${R2G_SOURCE_ONLY:-0}" == "1" ]] && return 0 2>/dev/null
 # --- end Tier-0 journal hooks ---
+
+# ORFS_MAX_CPUS used to be `taskset -c 0-(N-1)`: the SAME cores 0..N-1 for every
+# flow, so N concurrent flows contended for N cores (15 flows at ORFS_MAX_CPUS=4
+# drove loadavg past 700; CORRECTIONS #17). It is now a thread cap: it becomes
+# NUM_CORES, which sizes openroad's -threads and, through _env.sh, the OpenMP/MKL
+# pools. An explicit NUM_CORES wins. Set before _env.sh so the pools follow it.
+if [[ -n "${ORFS_MAX_CPUS:-}" ]]; then
+  if [[ ! "$ORFS_MAX_CPUS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ERROR: ORFS_MAX_CPUS='$ORFS_MAX_CPUS' is not a positive integer" >&2
+    exit 2
+  fi
+  export NUM_CORES="${NUM_CORES:-$ORFS_MAX_CPUS}"
+fi
+# An explicit ORFS_CPU_SET with no count sizes the budget from the set. Measured
+# here, not left to _env.sh: _env.sh runs before taskset applies, so its nproc
+# would be the host's, and GNU nproc (ORFS's own default) honours the exported
+# OMP_NUM_THREADS over the affinity mask.
+if [[ -n "${ORFS_CPU_SET:-}" ]]; then
+  if [[ ! "$ORFS_CPU_SET" =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]]; then
+    echo "ERROR: ORFS_CPU_SET must be a taskset CPU list, got '$ORFS_CPU_SET'" >&2
+    exit 64
+  fi
+  if [[ -z "${NUM_CORES:-}" ]]; then
+    NUM_CORES="$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT taskset -c "$ORFS_CPU_SET" nproc)" \
+      || { echo "ERROR: ORFS_CPU_SET='$ORFS_CPU_SET' is not usable here" >&2; exit 64; }
+    export NUM_CORES
+  fi
+fi
 
 # Auto-detect ORFS + tools (honors ORFS_ROOT / *_EXE env overrides)
 # shellcheck source=/dev/null
@@ -199,14 +213,6 @@ DESIGN_NAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NAME[[:space:]]*=' 
 DESIGN_NICKNAME=$(grep -E '^[[:space:]]*export[[:space:]]+DESIGN_NICKNAME[[:space:]]*=' "$CONFIG_MK" | head -1 | sed 's/.*=\s*//' | tr -d ' ' || true)
 DESIGN_NICKNAME="${DESIGN_NICKNAME:-$DESIGN_NAME}"
 
-# Serialize the shared ORFS workspace BEFORE any write/EDA (config copy, clean_all,
-# stage builds). Contention = the DESIGN_NAME+FLOW_VARIANT hard-rule violation: fail
-# fast with a clear message rather than corrupt both runs (full-pipeline Issue 9).
-# The lock is fd-scoped — released automatically when this script exits.
-if [[ "${R2G_SKIP_WORKSPACE_LOCK:-0}" != "1" ]]; then
-  _r2g_acquire_workspace_lock "$PLATFORM" "$DESIGN_NICKNAME" "$FLOW_VARIANT" || exit 1
-fi
-
 ORFS_DESIGN_DIR="$PROJECT_DIR/.orfs-design/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
 mkdir -p "$ORFS_DESIGN_DIR"
 
@@ -218,9 +224,48 @@ export DESIGN_HOME="${R2G_ORFS_DESIGN_HOME:-$FLOW_DIR/designs}"
 export WORK_HOME="${R2G_ORFS_WORK_HOME:-$PROJECT_DIR/.orfs-work}"
 mkdir -p "$WORK_HOME"
 
+# Serialize the shared ORFS workspace BEFORE any write/EDA (config copy, clean_all,
+# stage builds); keyed on WORK_HOME, so it is taken as soon as WORK_HOME is fixed.
+# Contention = the DESIGN_NAME+FLOW_VARIANT hard-rule violation: fail fast with a
+# clear message rather than corrupt both runs (full-pipeline Issue 9).
+# The lock is fd-scoped — released automatically when this script exits.
+if [[ "${R2G_SKIP_WORKSPACE_LOCK:-0}" != "1" ]]; then
+  _r2g_acquire_workspace_lock "$PLATFORM" "$DESIGN_NICKNAME" "$FLOW_VARIANT" || exit 1
+fi
+
 # Repoint any dead stage-hook path (skill-relocation staleness; #39) before copy so
 # the durable source AND this run's working copy are both corrected.
 _heal_hook_paths "$CONFIG_MK"
+
+# The input files config.mk names must actually EXIST. Presence of the KEY is not presence of the
+# INPUTS: when the repo was renamed agent-r2g -> r2g-skills, all 848 config.mk files
+# kept absolute VERILOG_FILES/SDC_FILE paths under the dead root. The key was there, so
+# this check passed, ORFS launched, and make died with "No rule to make target
+# '<dead>/rtl/foo.v'" -- which the loop ingested as 24 honest-looking `fail`/synth runs
+# with orfs-fail-synth events. Infrastructure absence became a DESIGN symptom in the
+# learner (failure-patterns #57 RENAME-P0-03). Exit 66 == R2G_INPUTS_MISSING, the same
+# infra code engineer_loop maps to 'project_inputs_missing' (never a design diagnosis,
+# never ingested). Checked on the project's config.mk BEFORE anything is written into
+# the shared ORFS tree: a read-only or foreign checkout must not turn exit 66 into a
+# generic mkdir failure (exit 1).
+_missing_inputs=()
+while IFS= read -r _tok; do
+  [[ -e "$_tok" ]] || _missing_inputs+=("$_tok")
+done < <(sed -n 's/^[[:space:]]*export[[:space:]]\+\(VERILOG_FILES\|SDC_FILE\|VERILOG_INCLUDE_DIRS\)[[:space:]]*=[[:space:]]*//p' \
+           "$CONFIG_MK" | tr ' ' '\n' | sed 's/\\$//' | grep '^/' || true)
+if (( ${#_missing_inputs[@]} > 0 )); then
+  echo "ERROR: config.mk references ${#_missing_inputs[@]} input file(s) that do not exist:" >&2
+  printf '         %s\n' "${_missing_inputs[@]:0:5}" >&2
+  echo "       This is INFRASTRUCTURE absence (a moved/renamed corpus, or RTL never" >&2
+  echo "       vendored), NOT a design failure -- refusing to run so it cannot be" >&2
+  echo "       ingested as a synth abort. Repair with:" >&2
+  echo "         python3 tools/reroot_project_paths.py --apply   # moved/renamed repo" >&2
+  echo "         python3 tools/setup_rtl_designs.py --force      # regenerate config.mk" >&2
+  exit 66
+fi
+
+ORFS_DESIGN_DIR="$FLOW_DIR/designs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
+mkdir -p "$ORFS_DESIGN_DIR"
 
 # Copy config.mk and constraint.sdc
 cp "$CONFIG_MK" "$ORFS_DESIGN_DIR/config.mk"
@@ -289,31 +334,6 @@ if grep -q 'VERILOG_FILES' "$ORFS_DESIGN_DIR/config.mk"; then
   echo "config.mk has VERILOG_FILES entry"
 else
   echo "WARNING: config.mk missing VERILOG_FILES" >&2
-fi
-
-# ...and that those files actually EXIST. Presence of the KEY is not presence of the
-# INPUTS: when the repo was renamed agent-r2g -> r2g-skills, all 848 config.mk files
-# kept absolute VERILOG_FILES/SDC_FILE paths under the dead root. The key was there, so
-# this check passed, ORFS launched, and make died with "No rule to make target
-# '<dead>/rtl/foo.v'" -- which the loop ingested as 24 honest-looking `fail`/synth runs
-# with orfs-fail-synth events. Infrastructure absence became a DESIGN symptom in the
-# learner (failure-patterns #57 RENAME-P0-03). Exit 66 == R2G_INPUTS_MISSING, the same
-# infra code engineer_loop maps to 'project_inputs_missing' (never a design diagnosis,
-# never ingested).
-_missing_inputs=()
-while IFS= read -r _tok; do
-  [[ -e "$_tok" ]] || _missing_inputs+=("$_tok")
-done < <(sed -n 's/^[[:space:]]*export[[:space:]]\+\(VERILOG_FILES\|SDC_FILE\|VERILOG_INCLUDE_DIRS\)[[:space:]]*=[[:space:]]*//p' \
-           "$ORFS_DESIGN_DIR/config.mk" | tr ' ' '\n' | sed 's/\\$//' | grep '^/' || true)
-if (( ${#_missing_inputs[@]} > 0 )); then
-  echo "ERROR: config.mk references ${#_missing_inputs[@]} input file(s) that do not exist:" >&2
-  printf '         %s\n' "${_missing_inputs[@]:0:5}" >&2
-  echo "       This is INFRASTRUCTURE absence (a moved/renamed corpus, or RTL never" >&2
-  echo "       vendored), NOT a design failure -- refusing to run so it cannot be" >&2
-  echo "       ingested as a synth abort. Repair with:" >&2
-  echo "         python3 tools/reroot_project_paths.py --apply   # moved/renamed repo" >&2
-  echo "         python3 tools/setup_rtl_designs.py --force      # regenerate config.mk" >&2
-  exit 66
 fi
 
 # Create this run's unique backend dir + collision-resistant RUN_TAG (full-pipeline
@@ -431,12 +451,16 @@ if [[ "${ROUTE_FAST:-0}" == "1" ]]; then
   fi
 fi
 
-# Apply CPU core limit if specified
-if [[ -n "${ORFS_MAX_CPUS:-}" ]]; then
-  # Build a CPU list 0-(N-1)
-  CPU_LIST="0-$((ORFS_MAX_CPUS - 1))"
+# Pin to an explicit CPU set only when one is given. A multi-worker campaign must
+# not map every worker's four-core allocation to host CPUs 0-3, so ORFS_MAX_CPUS
+# alone never pins (it is the NUM_CORES thread cap applied before _env.sh).
+if [[ -n "${ORFS_CPU_SET:-}" ]]; then        # validated before _env.sh
+  CPU_LIST="$ORFS_CPU_SET"
   MAKE_CMD="taskset -c $CPU_LIST $MAKE_CMD"
-  echo "Limiting to $ORFS_MAX_CPUS CPU cores ($CPU_LIST)"
+  echo "Pinning ORFS to explicit CPU set ($CPU_LIST)"
+fi
+if [[ -n "${NUM_CORES:-}" ]]; then
+  echo "Thread cap: NUM_CORES=$NUM_CORES (OMP/MKL/OpenBLAS pools follow)"
 fi
 
 echo "Timeout: ${ORFS_TIMEOUT}s"
@@ -541,8 +565,19 @@ run_stage() {
   # hours behind one design. Dropping `setsid` lets timeout become the new group's leader and
   # group-kill the whole tree. (Empirically: `setsid timeout` leaves orphans; plain `timeout`
   # reaps them — test_run_orfs_timeout_reaping.py.)
+  # drv_route_margin (failure-patterns "finish-stage max-slew/max-cap"): the route-only
+  # margins reach ORFS's repair_design as SLEW_MARGIN/CAP_MARGIN for THIS stage alone,
+  # so the placement-stage repair passes are untouched.
+  local _stage_env="" _knob _val
+  if [[ "$stage" == "route" ]]; then
+    for _knob in SLEW CAP; do
+      _val=$(grep -E "^[[:space:]]*export[[:space:]]+R2G_ROUTE_${_knob}_MARGIN[[:space:]]*=" "$CONFIG_MK" | tail -1 | sed 's/.*=\s*//' | tr -d ' ' || true)
+      [[ "$_val" =~ ^[0-9]+([.][0-9]+)?$ ]] && _stage_env+="${_knob}_MARGIN=$_val "
+    done
+    [[ -n "$_stage_env" ]] && echo "Route-stage repair_design margins: $_stage_env"
+  fi
   timeout --signal=TERM --kill-after=60 "$ORFS_TIMEOUT" \
-    bash -c "$MAKE_CMD $stage" 2>&1 | tee -a "$BACKEND_DIR/flow.log"
+    bash -c "$_stage_env$MAKE_CMD $stage" 2>&1 | tee -a "$BACKEND_DIR/flow.log"
   STAGE_STATUS=${PIPESTATUS[0]}
   set -e -o pipefail
 

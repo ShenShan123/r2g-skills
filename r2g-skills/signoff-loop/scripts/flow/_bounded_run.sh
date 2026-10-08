@@ -40,6 +40,13 @@ r2g_bounded_cleanup() {
   fi
 }
 
+_r2g_is_own_group() {  # true if $1 is this shell's own session or process group
+  local own_pgid own_sid
+  own_pgid="$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')"
+  own_sid="$(ps -o sid= -p $$ 2>/dev/null | tr -d ' ')"
+  [[ "$1" == "$own_pgid" || "$1" == "$own_sid" ]]
+}
+
 r2g_bounded_run() {
   local timeout_s="$1" grace_s="$2" log="$3"
   shift 3
@@ -55,6 +62,12 @@ r2g_bounded_run() {
   # the PID returned by `$!`; bind to that deterministic identity directly.
   pgid="$pid"
   _R2G_BOUNDED_SID="$pgid"
+  if _r2g_is_own_group "$pgid"; then
+    echo "ERROR: r2g_bounded_run: checker group $pgid is our own session/group; refusing to supervise it" >&2
+    _R2G_BOUNDED_SID=""
+    wait "$pid" 2>/dev/null
+    return $?
+  fi
 
   # LIM-HO-01 telemetry: peak resident-set of the WHOLE checker session, sampled
   # on the existing 1s supervision tick (one `ps` per second — noise next to a

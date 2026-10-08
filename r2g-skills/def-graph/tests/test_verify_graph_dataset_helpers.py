@@ -295,3 +295,121 @@ def test_irdrop_legacy_csv_without_has_irdrop_derives_floor():
     assert vgd.irdrop_label_ok(below)[0]
     above_bad = _ir_df([[0.10, 0.10, 0.123]], with_flag=False)  # >=0.05 but wrong label
     assert not vgd.irdrop_label_ok(above_bad)[0]
+
+
+def test_inout_net_counts_match_the_extractor(tmp_path):
+    """INOUT/FEEDTHRU count as driver AND sink, on ports and on cell pins.
+
+    Regression (E12-FP 2026-09-23): the ext.net check counted only INPUT/OUTPUT,
+    so it expected 1 driver / 0 sinks on I2C_SDAT (INOUT port -> buf_4/X) where
+    the extractor correctly wrote 2/1 (nodes_net.py counts INOUT as both). A
+    correct dataset was rejected. Verifier and extractor must share one convention.
+    """
+    lib = tmp_path / "c.lib"
+    lib.write_text("""
+library (c) {
+  cell (buf_4) {
+    area : 1;
+    pin (A) {
+      direction : input;
+      capacitance : 1.0;
+    }
+    pin (X) {
+      direction : output;
+    }
+  }
+  cell (pad) {
+    area : 1;
+    pin (PAD) {
+      direction : inout;
+      capacitance : 1.0;
+    }
+  }
+}
+""")
+    d = tmp_path / "t.def"
+    d.write_text("""
+DESIGN t ;
+UNITS DISTANCE MICRONS 1000 ;
+COMPONENTS 2 ;
+ - _243_ buf_4 + PLACED ( 0 0 ) N ;
+ - p1 pad + PLACED ( 10 10 ) N ;
+END COMPONENTS
+PINS 1 ;
+ - I2C_SDAT + NET I2C_SDAT + DIRECTION INOUT + USE SIGNAL
+  + PLACED ( 100 200 ) N ;
+END PINS
+NETS 2 ;
+ - I2C_SDAT ( PIN I2C_SDAT ) ( _243_ X ) + USE SIGNAL ;
+ - n2 ( p1 PAD ) ( _243_ A ) + USE SIGNAL ;
+END NETS
+END DESIGN
+""")
+    cells = vgd.read_liberty_truth([str(lib)])
+    t = vgd.read_def_truth(str(d))
+
+    def counts(net):
+        drv = snk = 0
+        for inst, pin in t["nets"][net]:
+            if inst == "PIN":
+                a, b = vgd.net_conn_roles(t["pins"][pin]["dir"], port=True)
+            else:
+                a, b = vgd.net_conn_roles(
+                    vgd.lib_pin_truth(cells, t["comps"][inst]["master"], pin)[0],
+                    port=False)
+            drv += a
+            snk += b
+        return drv, snk
+
+    assert counts("I2C_SDAT") == (2, 1)
+    assert counts("n2") == (1, 2)
+    # the chip-side inversion for plain ports is unchanged
+    assert vgd.net_conn_roles("INPUT", port=True) == (1, 0)
+    assert vgd.net_conn_roles("OUTPUT", port=True) == (0, 1)
+    assert vgd.net_conn_roles("FEEDTHRU", port=True) == (1, 1)
+    assert vgd.net_conn_roles("", port=False) == (0, 0)
+
+
+def test_pin_centers_agree_with_the_extractor_on_multi_shape_pins(tmp_path):
+    """The verifier's pin center must follow the extractor's contract.
+
+    b917894 moved techlib.lef to OpenDB getAvgXY semantics (the mean of the pin's
+    shape centers) but left this independent parse on the overall bbox center, so
+    every net touching a multi-shape pin failed `ext.net hpwl` (81/201 nets on the
+    sky130hd apb_gpio canary, 2026-09-23). Two shapes of different width tell the
+    semantics apart: mean of centers (1.0, 0.5) vs bbox center (1.5, 0.5).
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "extract"))
+    from techlib import lef as techlef
+
+    lef = tmp_path / "c.lef"
+    lef.write_text("MACRO INV\n  SIZE 3 BY 2 ;\n  PIN A\n    PORT\n"
+                   "      LAYER li1 ;\n        RECT 0 0 1 1 ;\n        RECT 0 0 3 1 ;\n"
+                   "    END\n  END A\n  PIN Y\n    PORT\n      LAYER li1 ;\n"
+                   "        POLYGON 0 0 2 0 2 2 0 2 ;\n    END\n  END Y\nEND INV\n")
+    got = vgd._lef_pin_geometry([str(lef)])["INV"]["pins"]
+    assert got["A"] == pytest.approx((1.0, 0.5))
+    assert got["Y"] == pytest.approx((1.0, 1.0))
+    ext = techlef.macro_pin_geometry([str(lef)])["INV"]["pins"]
+    assert ext["A"] == pytest.approx(got["A"]) and ext["Y"] == pytest.approx(got["Y"])
+
+
+def test_polygon_pin_center_follows_opendb_boxes(tmp_path):
+    """A POLYGON pin is the boxes OpenDB decomposes it into, not one bbox.
+
+    Real gf180mcu 9t addf_1 CI (L-shape): OpenDB boxes [11.91 1.77 12.17 2.115] and
+    [3.89 2.115 12.55 2.345], so getAvgXY is (10.13, 2.08625); the polygon's bbox
+    center (8.22, 2.0575) is what both the verifier and techlib reported before
+    2026-09-23, on 1,628 of 3,344 gf180 pin positions.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "extract"))
+    from techlib import lef as techlef
+
+    poly = ("3.89 2.115 7.975 2.115 11.91 2.115 11.91 1.77 12.11 1.77 12.17 1.77 "
+            "12.17 2.115 12.55 2.115 12.55 2.345 12.11 2.345 7.975 2.345 3.89 2.345")
+    lef = tmp_path / "gf.lef"
+    lef.write_text("MACRO ADDF\n  SIZE 20 BY 5 ;\n  PIN CI\n    PORT\n      LAYER Metal1 ;\n"
+                   f"        POLYGON {poly} ;\n    END\n  END CI\nEND ADDF\n")
+    got = vgd._lef_pin_geometry([str(lef)])["ADDF"]["pins"]["CI"]
+    assert got == pytest.approx((10.13, 2.08625))
+    assert techlef.macro_pin_geometry([str(lef)])["ADDF"]["pins"]["CI"] == pytest.approx(got)

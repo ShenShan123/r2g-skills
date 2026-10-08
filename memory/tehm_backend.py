@@ -430,7 +430,6 @@ class TehmMemoryBackend:
             conn, lifecycle_statuses=self.runtime_statuses()).get(rule_id)
         if rule is None:
             return None
-        rule = {**rule, "hole_witnesses": _hole_witnesses(conn, rule_id)}
         status_row = conn.execute(
             "SELECT status FROM tehm_rule_status WHERE rule_id=?", (rule_id,)).fetchone()
         lifecycle_status = status_row[0] if status_row else None
@@ -440,7 +439,20 @@ class TehmMemoryBackend:
             "applicability_status", "UNRESOLVED")
         if applicability != "APPLICABLE":
             return None
+        # F1 (Phase R amendment R-A3/R-A4): an UNPROMOTED rule is trialled only when its own source
+        # outcomes are net positive. "Any positive source" admitted rules whose evidence was as often
+        # harmful as helpful (rule_9007ebbc: 1 positive, 1 harmful, 30 neutral), and as a trial it went
+        # ahead of the catalogue. Promoted rules are unaffected; the store is not changed.
+        if not _trial_admissible(conn, rule_id, lifecycle_status):
+            return None
         binding = bind_rule(rule, context)
+        # F2: witnesses are computed AFTER binding, so a numeric hole is filled only from verified
+        # (PASS/PARTIAL) source transitions consistent with THIS situation: the rule's holed
+        # situation slots (situation.violation_class = $H1, situation.util_band = $H0, ...) take the
+        # current situation's values, and only witnesses with the same values vote.
+        bound = dict(binding.substitutions) if binding else {}
+        bound.update(_situation_holes(rule, context.situation))
+        rule = {**rule, "hole_witnesses": _hole_witnesses(conn, rule_id, bound=bound)}
         action = instantiate_rewrite(rule, binding, context)
         transfer = transfer_obligations(rule, context)
         target_ref = "query_state_" + hashlib.sha1(
@@ -721,18 +733,61 @@ class TehmMemoryBackend:
             self._conn = None
 
 
-def _hole_witnesses(conn, rule_id: str) -> dict[str, list]:
-    """{hole: [value per source transition]} from the rule's crystallisation-time
-    witnesses (tehm_rule_sources). Every source of a PASS rule is a verified fix in
-    the rule's situation; D-A1 instantiates a numeric hole from their median."""
+def _hole_witnesses(conn, rule_id: str, bound: dict | None = None) -> dict[str, list]:
+    """{hole: [value per source transition]} from the rule's crystallisation-time witnesses
+    (tehm_rule_sources); D-A1 instantiates a numeric hole from their median.
+
+    F2 (Phase R amendment R-A4, failure-patterns "memory step blocks the catalogue"): only a
+    verified fix is a witness. A source transition counts only if its outcome is PASS/PARTIAL,
+    and, when ``bound`` (the current binding) gives a categorical hole a value, only if the
+    transition's value for that hole is the same (e.g. the same violation class). Before this,
+    every source transition voted, including NEUTRAL/REGRESSION ones and other classes
+    (rule_d3dcee0e mixed an li.3 and an m3.2 delta into one median)."""
+    verified = {r[0] for r in conn.execute(
+        "SELECT transition_id FROM tehm_transitions WHERE outcome IN ('PASS','PARTIAL')")}
+    categorical = {h: str(v) for h, v in (bound or {}).items()
+                   if v is not None and _num(v) is None}
     out: dict[str, list] = {}
     for (raw,) in conn.execute(
             "SELECT source_substitution_json FROM tehm_rule_sources WHERE rule_id=?",
             (rule_id,)):
-        for subs in (tehm_db.read_json(raw) or {}).values():
-            for hole, value in (subs or {}).items():
+        for transition_id, subs in (tehm_db.read_json(raw) or {}).items():
+            if transition_id not in verified:
+                continue
+            subs = subs or {}
+            if any(h in subs and str(subs[h]) != v for h, v in categorical.items()):
+                continue
+            for hole, value in subs.items():
                 out.setdefault(hole, []).append(value)
     return out
+
+
+def _trial_admissible(conn, rule_id: str, lifecycle_status: str | None) -> bool:
+    """F1: a promoted rule always; an unpromoted one only if its observed source outcomes are net
+    positive (more PASS/PARTIAL than FAIL/REGRESSION). Unobserved candidates stay admissible."""
+    if lifecycle_status == "promoted":
+        return True
+    profile = _source_outcome_profile(conn, rule_id, own_only=True)
+    return not profile["observed"] or profile["positive"] > profile["harmful"]
+
+
+def _situation_holes(rule: dict, situation: dict | None) -> dict:
+    """{hole: current value} for every ``situation.<key>`` slot of the rule that is a hole."""
+    from tehm.ids import is_hole
+    out = {}
+    for slot, hole in (rule.get("before_pattern") or {}).items():
+        if slot.startswith("situation.") and isinstance(hole, str) and is_hole(hole):
+            value = (situation or {}).get(slot[len("situation."):])
+            if value is not None:
+                out[hole] = str(value)
+    return out
+
+
+def _num(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _v4_value_tolerated(rule: dict) -> bool:
@@ -752,14 +807,19 @@ def is_repair_rule(rule: dict) -> bool:
     return (rule.get("after_pattern") or {}).get("verification.verdict") == "PASS"
 
 
-def _source_outcome_profile(conn, rule_id: str) -> dict:
+def _source_outcome_profile(conn, rule_id: str, *, own_only: bool = False) -> dict:
+    """Outcomes of the rule's source episodes. ``own_only`` keeps only the rule's OWN applications
+    (the transitions its source substitutions were recorded for), not every step of those episodes:
+    an episode's other steps include the very failure the rule went on to repair (rule_1955d380's
+    two FAILs precede its two PASSes), which is not evidence against the rule (R-A5 finding)."""
     rows = conn.execute(
-        """SELECT t.outcome
+        """SELECT t.transition_id, t.outcome, rs.source_substitution_json
            FROM tehm_rule_sources rs
            JOIN tehm_episode_steps es ON es.episode_id=rs.episode_id
            JOIN tehm_transitions t ON t.transition_id=es.transition_id
            WHERE rs.rule_id=?""", (rule_id,)).fetchall()
-    outcomes = [r["outcome"] for r in rows]
+    outcomes = [r["outcome"] for r in rows
+                if not own_only or r["transition_id"] in (tehm_db.read_json(r["source_substitution_json"]) or {})]
     return {"observed": bool(outcomes),
             "positive": sum(o in {"PASS", "PARTIAL"} for o in outcomes),
             "harmful": sum(o in {"FAIL", "REGRESSION"} for o in outcomes),

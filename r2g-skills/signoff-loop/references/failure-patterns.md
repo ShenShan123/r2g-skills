@@ -156,6 +156,18 @@ strategy_ids: [route_relief]
   the two apart by whether GPL routability converges < 1.0 at a lower util: timeout-victim (clears)
   vs layer-limited (honest residual).
 
+### Sub-variant: global-route congestion abort survives one `route_relief` step → ladder (2026-10-05)
+
+**Symptom.** GRT-0116 on a 74–89 % die. `route_relief` lowers `CORE_UTILIZATION` by 8 (79 → 71), the rerun aborts again with GRT-0116, and `fix_signoff` printed `run_orfs failed (rc=2); aborting this check`. Since `route_relief` was then excluded, it could never take a second step.
+
+**Fix.**
+- `_route_strategies` steps ×0.8 for a global-route abort (no detailed-route result: `total_violations` is null), e.g. 79 → 63 → 50 → 40. It keeps −8 for a route that completed with violations; that one-shot step is excluded after its try, so a rolled-back step is never retried. Only the abort ladder is `repeatable`: a still-congested rerun keeps its config, so each repeat is a new, lower utilisation.
+- `fix_signoff` treats a still-congested rerun (rc ≠ 0, not a 124 timeout) as non-improving: it re-extracts `route.json`, logs `rerun_failed_still_congested` (ingested as inconclusive), and continues.
+- The ladder is bounded by the floor, `MAX_ITERS` and the two-non-improving stop. A timeout keeps its one jump to the floor.
+- **`route_layer_relief` rung** (amendment R-A1): `ROUTING_LAYER_ADJUSTMENT = 0.10`, rerun from route, one try. This is the lever `run_orfs.sh`'s own GRT-0116 hint names; ORFS documents that low values reduce global-route failure. It comes **first** on a sparse die (utilisation ≤ 20, e.g. the sky130hs variants), where the utilisation ladder only jumps to the floor without effect (chacha_core u16: 16 → 8, still GRT-0116). On a dense die it comes after the utilisation ladder. Detailed routing and DRC still decide.
+
+Test: `tests/test_baseline_repairs.py`.
+
 ### Sub-variant: a SUCCESSFUL recipe is unreachable by the A/B planner (2026-06-22, loop-closure bug)
 
 The route_relief story above worked because a route-congestion abort leaves a **residual** —
@@ -238,6 +250,16 @@ class of recipe — one that **fully clears** its symptom — silently broke the
   divergence (density floor too low → raise `PLACE_DENSITY_LB_ADDON`). They share the `place`
   stage but have opposite fixes; conflating both into `unseen_crash` blinds the learner to a
   recoverable class. (Mirrors the `route_congestion_residual` re-label.)
+
+### Sub-variant: FLW-0024 on an ALREADY auto-sized die → live utilisation relief (2026-10-05)
+
+**Symptom.** `[ERROR FLW-0024] Place density exceeds 1.0` on a config that already has `CORE_UTILIZATION = N`, e.g. the 74–89 % sky130hd variants. The live loop escalated `place_density_residual` after ONE flow.
+
+**Root cause.** The live recovery `_resize_to_core_util` only converts a fixed `DIE_AREA`, and is a deliberate no-op when `CORE_UTILIZATION` is already set. The A/B arm path already lowered an existing utilisation (`_lower_core_util`, ×0.6, floor 10); the live path did not.
+
+**Fix.** `process_one` now applies `_lower_core_util` live, at most `_PLACE_RELIEF_MAX = 2` times (89 → 53 → 32), recorded as `core_util_relief`. `_resized` is passed through unchanged, so a design that now places keeps its route and DRC recoveries. `PLACE_DENSITY_LB_ADDON` is untouched (hard rule). Test: `tests/test_baseline_repairs.py`.
+
+**Why it matters.** This is the no-memory baseline's capability. Before the fix, 5 of 13 Phase H sky130hd tasks and 5 of 9 Phase F sky130hd tasks stopped here without any attempt (Phase S, 2026-10-05).
 
 ## Place_gp Stuck on Timing-Driven Iteration (>1M-net BOOM-class designs)
 
@@ -395,7 +417,7 @@ Large designs (swerv, bp_multi_top, tinyRocket) can take hours for PnR. The proc
 
 **Action:**
 - Increase timeout: `ORFS_TIMEOUT=14400 scripts/flow/run_orfs.sh ...` (4 hours)
-- Limit CPU usage: `ORFS_MAX_CPUS=4 scripts/flow/run_orfs.sh ...` (prevent thermal/resource issues)
+- Limit CPU usage: `NUM_CORES=4 scripts/flow/run_orfs.sh ...` (a thread cap; `ORFS_MAX_CPUS` is an alias). For concurrent flows also give each one a disjoint cpuset: a shared `taskset -c 0-3` makes them contend for the same cores
 - For faster convergence, add to config.mk:
   - `export SKIP_LAST_GASP = 1` (skip last-gasp optimization)
   - `export SKIP_CTS_REPAIR_TIMING = 1` (skip CTS timing repair)
@@ -800,6 +822,41 @@ The setup-time floor above only protects projects materialized by `mk_sky130_pro
   - Insufficient spacing → increase `DIE_AREA`/`CORE_AREA`
   - Metal width violations → may indicate congestion, try lower utilization
 - **Tool:** `scripts/flow/run_drc.sh` → `scripts/extract/extract_drc.py` for detailed category breakdown
+
+### Memory step blocks the catalogue's repair (2026-10-06, Phase R amendments R-A3/R-A4)
+
+**Symptom.** Against the repaired baseline, 4 sky130hs li.3 tasks the no-memory loop accepts were lost by memory arms (sha256_core u9, u11, u18). Nothing went wrong with the catalogue: its `cell_pad_relief` ladder was simply never offered.
+
+**Root cause** (smoke test R-A3 Part 1 reconstructed every plan):
+
+1. **Precedence:** TEHM strategies are prepended to the plan (`diagnose_signoff_fix.py`, "TEHM consultation ... prepended"), including UNVALIDATED trial candidates and compositions: 1–4 of them ahead of `cell_pad_relief_2`.
+2. **Shared budget:** their regressions and no-improvements counted toward `fix_one`'s non-improvement stop (u9: three memory regressions, then "3 non-improving past base 3; stopping").
+3. **No fallback:** a memory step whose rerun failed aborted the check without rollback. The failed edit stayed, and the next pass added the rule's delta again (u11: utilisation 11 → 26 → 41).
+4. **Weak trial admission:** a rule became a candidate with ANY positive source (`rule_9007ebbc`: 1 positive, 1 harmful, 30 neutral).
+5. **Broken witness invariant:** numeric holes were filled from the median of ALL source transitions, including NEUTRAL/REGRESSION ones and other situations (`rule_d3dcee0e` mixed an li.3 and an m3.2 delta), with deltas of both signs.
+
+**Fix.**
+- **Containment** (`fix_signoff.sh`; acts only on `tehm_*` strategies; catalogue-only sessions are unchanged): a failed memory step is rolled back, including a failed rerun, and never consumes the catalogue's budget. After `R2G_MEMORY_FAIL_BUDGET` (2) failures, memory is suspended for the rest of the fix session.
+- **F1** (`tehm_backend._trial_admissible`): an unpromoted rule is trialled only if its source outcomes are net positive. Applied at runtime; stores unchanged.
+  - Count only the rule's OWN applications (`_source_outcome_profile(own_only=True)`), not every step of its source episodes. Those steps include the failure the rule then repaired. The first version made this mistake and blocked 19 of 24 sky130hs rules (R-A6).
+- **F2** (`_hole_witnesses`, `_situation_holes`): only PASS/PARTIAL source transitions whose holed situation slots match the current situation vote.
+- **F3** (`instantiate._coherent_median`): mixed-sign witness deltas leave the knob unresolved, so the action is refused.
+
+Tests: `tests/test_baseline_repairs.py` (containment), `memory/tests/test_memory_harm_fixes.py` (F1–F3).
+
+**Why it surfaced only now.** On the old toolchain the catalogue had no working li.3 repair, so a memory trial that went first cost nothing. Once the baseline could fix the task, memory's untested trials took that repair away.
+
+### Local-interconnect spacing DRC (sky130 `li.3`, `licon.*`, `mcon.*`) → `cell_pad_relief` (2026-10-05)
+
+**Symptom.** sky130hs variants at 8–19 % utilisation end with 2–12 `li.3` violations after the flow. `density_relief` lowers utilisation further, reduces the count at best, and reaches its floor (Phase S: 4 of 5 Phase H and 5 of 8 Phase F sky130hs tasks).
+
+**Root cause.** Local-interconnect spacing is violated inside and between abutting cells, i.e. by placement, not by routing congestion. Lowering utilisation on an already sparse die is the wrong lever.
+
+**Fix.** `diagnose_signoff_fix` offers `cell_pad_relief_2` → `cell_pad_relief_4` (`CELL_PAD_IN_SITES_GLOBAL_PLACEMENT` and `..._DETAIL_PLACEMENT`, rerun from floorplan; one strategy id per rung, so a rejected and rolled-back rung stays excluded and the ladder advances instead of retrying it, a defect found in Phase R S2) whenever a local-interconnect class is present. It comes first when that class dominates, and after `density_relief` when a routing class such as `m3.2` dominates. Metal-only DRC never gets it. Test: `tests/test_baseline_repairs.py`.
+
+**Apply-time plan (R-A2).** `fix_signoff` passed `--exclude` to `--next` but not to `--apply`. After a rolled-back rung the apply-time plan offered a different rung, and the chosen one failed as `not in current plan` (sha256_core u8 on v3). This affects every rung ladder (`cell_pad_relief_*`, `drv_route_margin_*`). Both calls now carry the same exclusions. Test: `tests/test_baseline_repairs.py::test_real_diagnose_*`.
+
+**Scope note.** Cell padding is the generic ORFS lever for placement-induced spacing. The memory system's learned li.3 fix (RAISING utilisation) is deliberately NOT built into the baseline: it is learned knowledge, and is measured as memory's contribution.
 
 ### KLayout DRC Stuck on `or` (FreePDK45.lydrc, nangate45)
 
@@ -1344,6 +1401,199 @@ strategy_ids: [netgen_diode_normalize, buffer_port_feedthroughs]
    re-enabling parasitics. NOTE: when Magic still produces no SPICE, `run_netgen_lvs.sh` writes
    `{"status":"error",...}` and the driver should record an honest `lvs_incomplete`/`lvs_error`
    residual — never the ambiguous `lvs_none`.
+
+### sky130hd Netgen LVS: `netgen_property` on EVERY design when the PDK ships the transistor SPICE (2026-09-30)
+
+**Symptom:** on a host whose open_pdks install has `libs.ref/sky130_fd_sc_hd/spice/sky130_fd_sc_hd.spice`,
+every sky130hd design fails Netgen LVS with class `netgen_property`. The errors are all inside **standard
+cells**:
+- MOS devices become placeholder subcircuits with `proxy` pins;
+- `diode_2` area 0.4347 vs 4.347e11;
+- `conb_1` resistor `l` 0.045 vs 0.5;
+- "Top level cell failed pin matching".
+
+Historically (the CDL-only host), sky130hd LVS was clean in 543 runs and this class never occurred.
+
+**Root cause:** `run_netgen_lvs.sh` preferred the open_pdks **transistor SPICE** over any CDL, and used a CDL
+only as a fallback. `normalize_sky130_lvs_spice.py` is written for the **CDL** representation: `M` devices
+with short model names, and `short` tie proxies. The SPICE library uses `X` devices with full model names,
+unit-less diode area and conb `l=0.5`, so none of the library transforms fired
+(`library_mos_model_qualified: 0`). sky130hs was unaffected: its PDK SPICE already uses the CDL-style `M`
+form.
+
+**Fix:**
+- **Library precedence:** ORFS platform CDL (matches the platform GDS) → PDK `libs.ref/.../cdl` → transistor
+  SPICE.
+- **Two normaliser gaps found once the CDL was in use:**
+  - map the CDL's `special_nfet_01v8` to `sky130_fd_pr__nfet_01v8`, mirroring the existing layout-side
+    mapping (256 unmatched devices otherwise);
+  - extend the `conb_1` two-terminal `short` → poly-resistor transform from hs to **hd**, with the extracted hd
+    geometry `w=0.48 l=0.045`.
+
+**Revalidated** (Magic 8.3.682, Netgen 1.5.323):
+- `eth_demux` sky130hd: **Circuits match uniquely** (was `netgen_property`).
+- `des_area` sky130hs: still clean.
+
+**Residual (open):** `des_area` sky130hd still fails on one cell, `sky130_fd_sc_hd__a21oi_2`.
+- Magic extracts its NMOS A1–A2 path as **two series stacks with separate internal nodes**: 8 devices and 11
+  nets after merging.
+- The CDL has one stack with `m=2` and a shared node: 6 devices and 10 nets.
+- The two are logically equivalent but topologically different, because this flow compares transistor-level
+  cell internals extracted from GDS.
+- **Options, which are a methodology decision:** compare standard cells as black boxes (gate-level LVS), or a
+  reviewed per-cell equivalence. The skill expects Magic 8.3.411 (receipt `magic_required`); 8.3.682 is
+  installed here.
+
+#### Residual resolved: CDL topology override (2026-10-04)
+
+**Scope found:** not one cell. A cell-level sweep of all 437 `sky130_fd_sc_hd` cells (each extracted alone from
+the ORFS platform GDS with the flow's Magic options, compared by Netgen with the flow's compat setup):
+
+| Result vs CDL / vs open_pdks transistor SPICE | Cells |
+|---|---|
+| match / match | 412 |
+| **mismatch / match** | **10**: `a2111oi_2`, `a211oi_4`, `a21boi_2`, `a21oi_2`, `a31o_4`, `dlrtp_1`, `ha_4`, `o2111a_4`, `o211a_4`, `o211ai_4` |
+| mismatch / mismatch | 5: `dfbbp_1`, `xor3_4`, `probe_p_8`, `probec_p_8`, `lpflow_lsbuf_lh_isowell_4` (not overridden; open) |
+| no devices in the CDL (fill, tap, `diode_2`) | 10 (not checked) |
+
+- In 109 sky130hd LVS runs (R2G memory Phase H), **all 98 failures** flattened at least one of the 10 cells and
+  **none of the 11 passes** did. The failure is a property of the reference, not of the designs.
+- The open_pdks transistor SPICE describes these cells with the layout's split stacks (same internal node
+  names as Magic's extraction). The standalone extraction equals the in-design extraction, so the mismatch
+  is context-independent.
+- **Not the Magic version:** the PDK SPICE agrees with Magic 8.3.682's extraction.
+
+**Fix:** `scripts/flow/apply_sky130_cell_overrides.py`, called by `run_netgen_lvs.sh` after library
+normalisation.
+- For the cells listed in `scripts/flow/sky130_cdl_topology_overrides.json` (with the sweep's provenance),
+  the normalised CDL definition is replaced by the open_pdks SPICE definition, normalised with the flow's
+  layout-side normaliser.
+- Every other definition stays byte-identical. A listed cell missing from either netlist keeps its CDL
+  definition (fails closed).
+- The receipt `lvs/cell_overrides.json` (per-cell before/after digests) is referenced in
+  `netgen_lvs_result.json`.
+- Regression test: `tests/test_sky130_cell_overrides.py`.
+
+**Methodology note:** for these 10 cells the reference is the vendor's transistor-level SPICE, which is itself
+derived from the cell layout. Their internals are therefore checked against the vendor netlist, not an
+independent schematic. Every other cell, and all inter-cell connectivity, is checked as before.
+
+**Revalidated** (Magic 8.3.682, Netgen 1.5.323; the LVS step only, on copies of existing layouts, same GDS and
+powered netlist bytes):
+- `riscv_core` sky130hd (uses `a21oi_2`, `a21boi_2`, `a2111oi_2`): **Circuits match uniquely**, 24,553/24,553
+  devices and 26,392/26,392 nets, 0 flattened cells (was `netgen_topology`).
+- `eth_demux` sky130hd (uses none of them): still clean.
+- Single-cell checks: all 10 overridden cells match; controls `a21oi_1`/`a21oi_4` still match; `xor3_4` (not
+  overridden) still mismatches.
+
+### Fix that worsens its own target recorded as `no_change` (learner blind to harm) (2026-10-01)
+
+**Symptom:** a repair raises the very count it targets, for example sky130hs `li.3` density_relief 4→6. `fix_signoff.sh`
+labels it `no_improvement`, ingest maps it to `no_change`, and nothing is rolled back.
+- The committed store held 56 `fix_events` with `after > before` labelled `no_change`: 39 drc, 16 timing and 1
+  orfs_stage. On sky130hs `li.3` the average was 7.5 → 10.9 violations.
+- Auto-demotion (`ab_runner.auto_demote_on_regression`) only counts `regression`, so a harmful recipe was never
+  demoted and the next design repeated it. This is one root cause in the R2G memory diagnosis
+  (`memory/evaluation/r2g_memory_mechanism_diagnosis_20261001.md`).
+
+**Fix:**
+- `fix_signoff.sh` appends `<check>_target_regression:<before>-><after>` to the iteration's regression signals.
+  It then takes the existing global-regression path: verdict `regression`, transactional rollback of config,
+  reports and run pointer.
+- `ingest_run._normalize_verdict` and `backfill_fix_events._verdict` map `no_change` with `after > before` to
+  `regression`, which covers every other fix_log writer.
+- An equal count stays `no_improvement` → `no_change`.
+- **Not done:** historical rows are not rewritten in the tracked store.
+- **Tests:** `tests/test_target_count_regression.py`.
+
+### TEHM consultation never ran from diagnose (off-by-one memory path) (2026-10-01)
+
+**Symptom:** under `R2G_MEMORY_BACKEND=tehm`, every `fix_signoff.sh` iteration logged
+`WARNING: TEHM consultation skipped (fail-closed): No module named 'runtime_router'`, and only catalogue
+strategies were tried. Found by the R2G memory Phase D2 smoke run (sha256_core u75, sky130hd).
+
+**Root cause:** `diagnose_signoff_fix.py` lives in `scripts/reports/`, one level deeper than
+`knowledge/`. It used `Path(__file__).parents[3] / "memory"` (= `r2g-skills/memory`, which does not
+exist) instead of `parents[4]`. In-process tests stubbed `runtime_router` in `sys.modules`, so they
+never exercised the import.
+
+**Fix:** use `parents[4]`. `tests/test_memory_gates.py::test_diagnose_subprocess_reaches_the_real_tehm_router`
+runs diagnose as a subprocess against the real router; it fails on the old path.
+
+### Lifecycle gate keyed on a design_class no stored row carries (2026-10-01)
+
+**Symptom:** on `run_orfs.sh` projects, `diagnose_signoff_fix` always keyed `recipe_status` lookups as
+`<type>/unknown`. The rows ingest stores are keyed `<type>/<band>` (for example `logic/small`), so the
+lifecycle gate never matched a stored row and never blocked anything.
+
+**Root cause:** two derivations. Diagnose sized the class from `proj/synth/synth.log` (Yosys stats), which
+`run_orfs.sh` never writes. Ingest sized it from `reports/ppa.json` `geometry.instance_count`, pinned to
+the project's prior count on an abort.
+
+**Fix (R2G memory redesign A3):** `ingest_run.project_design_class` is the one derivation, and both call
+it. Diagnose opens the store read-only for the prior-count fallback.
+
+**Expected consequence:** under the legacy backend the gate now really gates. A shadow/candidate row for
+the matching class can STOP a strategy that would have worked (des_area `m3.2` / density_relief). That
+scoping problem is why the TEHM backend scopes by situation instead (redesign B3/B5). Tests:
+`tests/test_design_class_shared.py`.
+
+### TEHM memory strategies bypassed `--exclude` and every safety gate (2026-10-01)
+
+**Symptom:** under `R2G_MEMORY_BACKEND=tehm`, a memory rule's strategy could be re-applied on every iteration
+of one fix session. Any edit the rule carried reached `config.mk` unchecked, including empty edits, unfilled
+holes, or a `PLACE_DENSITY_LB_ADDON` below the 0.10 hard floor.
+
+**Root cause:** `diagnose_signoff_fix` prepended `runtime_router.signoff_strategies` output AFTER
+`build_plan` had applied `--exclude`. No knob policy existed for memory edits. The router also proposed
+rules crystallised from FAIL episodes.
+
+**Fix (R2G memory redesign B4/B5):**
+- The router rejects empty edits, unfilled knobs and unbound holes, and proposes PASS rules only
+  (`tehm_backend.is_repair_rule`).
+- `diagnose._gate_memory_strategies` applies the session exclusion and the already-in-effect check, then
+  enforces the ONE hard knob policy `knowledge/knob_policy.py`: an edit outside it is dropped, never clamped.
+- `diagnose._apply_vetoes` drops catalogue and memory strategies that the verified evidence vetoes in the
+  current situation. Every drop is logged with its reason.
+
+Tests: `tests/test_memory_gates.py`.
+
+### Test suite migrated the TRACKED knowledge.sqlite in place (2026-10-01)
+
+**Symptom:** after the knowledge schema gained additive columns (situation signature, redesign A2), one
+full `pytest` run left `knowledge/knowledge.sqlite` modified. The new columns and the `situations` table
+had been added to the shipped binary. No rows changed.
+
+**Root cause:** `conftest.py` isolated the journal (`R2G_JOURNAL_DB`) but not the knowledge store. Tests
+that reach a no-argument `knowledge_db.connect()` (directly, or through a `diagnose_signoff_fix` /
+`fix_signoff.sh` subprocess) opened the shipped store, and its `ensure_schema` ran the additive migration.
+While the schema was static the migration was a no-op, so the leak stayed invisible.
+
+**Fix:** an autouse fixture points `R2G_KNOWLEDGE_DB` at a per-session copy of the shipped store, copied
+with `shutil.copyfile` (content only, so a read-only source does not make a read-only copy). Reads see
+identical content; nothing can rewrite the tracked binary.
+
+**Verification:** run the full suite with `knowledge.sqlite` and `heuristics.json` set `chmod 444`. The
+result must match the baseline exactly, and the hashes must be unchanged.
+
+**Related fix:** `knowledge_sync.export_bundle` exports a not-yet-migrated store's pending additive
+columns as NULL, the column-level twin of its missing-table branch. A bundle therefore depends on content,
+not on whether a newer schema has opened the store.
+
+### Route dead-fix gate never fired (check_type mismatch) (2026-10-01)
+
+**Symptom:** a `route_relief` that kept failing on the same design was re-tried in every session. The per-design
+dead-fix gate (`R2G_FIX_DEAD_AFTER`) never blocked it.
+
+**Root cause:** `fix_signoff.sh` stores route iterations as `check_type='orfs_stage'` with the route symptom
+(`_log_iter` remaps them). `diagnose_signoff_fix._annotate_live_gates`, however, queried
+`fix_events WHERE check_type='route'`. The store had 0 `route` rows against 358 `orfs_stage` rows, so the gate
+always read zero.
+
+**Fix:** for `--check route`, the dead-gate query uses `check_type='orfs_stage'` and the stored route symptom id,
+so place-stage failures don't count. This change is scoped to the dead gate only: route still does not consult
+`recipe_status`. Routing the lifecycle through it would flip `route_relief` to STOP wherever it is shadow, which is
+a separate decision. Tests: `tests/test_negative_evidence_gates.py::test_route_dead_gate_reads_orfs_stage_rows`.
 
 ### LVS CDL_FILE Override by Platform Config
 
@@ -2196,6 +2446,16 @@ The SDC `clk_port_name` doesn't match the actual RTL clock port. OpenROAD silent
 - Re-run synthesis and backend
 - Prevention: add a pre-flight check in `run_orfs.sh` that warns if SDC clock port is not found in RTL
 
+#### Setup-time cause: clock detected from a submodule (2026-10-02)
+
+`tools/setup_rtl_designs.py:detect_clock_port` collected `posedge`/`negedge` signals from **all** RTL
+files. For freecores `i2c_master_top` it returned the byte controller's `clk` (a submodule port) instead
+of the top's `wb_clk_i`. Every variant then ran unconstrained (`timing_tier: unconstrained`), and a
+DRC/LVS-clean layout could never count as physically clean. Seen in R2G memory Phase H (amendment H-A3).
+**Fix:** edge-triggered candidates are restricted to the top module's input ports
+(`_top_input_ports`); regression test `tests/test_setup_clock_port.py`. Projects generated before the
+fix keep the wrong SDC; regenerate them (`--force`) or correct `clk_port_name`.
+
 ### Setup Timing Violations (Tiered WNS + TNS Response)
 
 <!-- r2g-lesson:
@@ -2257,6 +2517,55 @@ strategy_ids: [period_relax, utilization_reduce, backend_aware_synth_retune]
 - **Severe:** Always escalate to user immediately. Do not attempt auto-tuning.
 - **Large TNS with small WNS:** Indicates widespread shallow violations. Increasing clock period is usually effective (all paths get more margin). This is noted in the options.
 - **Large WNS with small TNS:** Indicates one deep critical path. Clock period increase alone may not help — RTL restructuring may be needed.
+
+### Finish-stage max-slew / max-capacitance violations (2026-10-04, `drv_route_margin`)
+
+**Symptom.** Setup and hold met, DRC/LVS clean, but `ppa.json` `summary.timing.max_slew_violations` /
+`max_cap_violations` > 0. These come from OpenROAD's finish-stage `report_check_types -max_slew -max_cap`
+(`finish__timing__drv__max_slew/cap`). Typically one or two driver pins a few percent over the Liberty
+limit, e.g. slew 1.61 against 1.48. Before this entry nothing looked at them: `check_timing.py`'s tier is
+WNS/TNS only, so these designs were "clean". Under acceptance check A8
+(`memory/evaluation/r2g_acceptance_checklist_v1_20261004.md`) they are not. 23 of the 59 physically closed Phase H
+attempts failed A8; for 22 it was the only failed check.
+
+**Root cause.** ORFS's `repair_design` passes (floorplan, resize, global route) fix to the Liberty limit
+under estimated parasitics. Detailed-route parasitics push a few near-limit nets over it, and no pass runs
+after detailed routing.
+
+**What does NOT work.** `SLEW_MARGIN` / `CAP_MARGIN` in `config.mk` applies the over-fix to EVERY
+`repair_design` pass. On 74–89 %-utilization sky130hd variants, the resize stage upsized ~900 instances
+(aes_core u89: 939 against 1 before) and global routing failed with GRT-0116 congestion.
+
+**Fix.** Apply the margin to the global-route-stage `repair_design` only. That pass uses routing
+parasitics and touches only nets already near their limit:
+- `check_timing.py` writes `drv` {max_slew_violations, max_cap_violations, total, status} beside the tier;
+- `engineer_loop._signoff_status` reports timing `drv` when the tier is clean but `drv.status == fail`,
+  so the loop gives it the existing timing repair turn;
+- `fix_signoff` timing badness = negative-WNS ps + DRV violators, so a step that trades DRV for a setup
+  miss is rejected and rolled back;
+- `diagnose_signoff_fix` offers `drv_route_margin_10` → `_20` → `_40` (one strategy id per step, so a
+  rolled-back step is not retried). Requires clean routing. Edits `R2G_ROUTE_SLEW_MARGIN` /
+  `R2G_ROUTE_CAP_MARGIN`, `rerun_from: route`;
+- `run_orfs.sh` exports those knobs as `SLEW_MARGIN` / `CAP_MARGIN` for the route stage's make call
+  alone. Placement-stage repair is untouched.
+
+**Validation (2026-10-04).** Phase H final layouts, resumed from route on copies with the pinned TEHM
+toolchain (OpenROAD 26Q2-1846). A zero-margin control reproduced every original exactly (same counts,
+byte-identical WNS), so each change is the margin's.
+
+| Design (sky130hd) | Original slew/cap, setup WNS | Margin 10 % | Margin 20 % |
+|---|---|---|---|
+| picorv32 u89 | 2 / 1, +3.859 ns | **0 / 0**, +3.863 | **0 / 0**, +3.847 |
+| riscv_core u79 | 2 / 1, +0.061 ns | **0 / 0**, +0.033 | 0 / 0 but **−0.0047** (setup miss) |
+| chacha_core u79 | 2 / 1, +0.089 ns | 2 / 1 (no net within 10 %) | **0 / 0**, +0.091 |
+| aes_core u89 | 6 / 2, +0.312 ns | **0 / 0**, +0.330 | **0 / 0**, +0.838 |
+
+Under the ladder every design ends at 0 / 0 with setup met (10 % for three, 20 % for chacha_core).
+Hold stayed positive everywhere. Global route inserted about a dozen buffers (picorv32 at 20 %: 12
+buffers, 5 resizes). Hence the ascending ladder: the smallest margin that clears costs the least slack.
+
+**Not a catalogue recipe gated on A/B.** It is a deterministic repair validated above, offered to every
+arm, so the no-memory baseline can reach acceptance too.
 
 ### Severe IR-Drop (>10% VDD)
 
@@ -4223,6 +4532,24 @@ about to overwrite" self-heal is added for one variable, the defect class is *th
 that didn't recall* — patch the loop, not the variable; and every pinned path must also
 be autodetectable, or the pin file is a single point of silent environmental collapse.
 
+### 29b. A host-wide env script overrode pinned tools — every synth failed on `stat -hierarchy` (2026-09-28)
+
+`_env.sh` documents "caller env > env files > ORFS env.sh > /opt/openroad_tools_env.sh >
+autodetect", but it *sourced* the two third-party scripts, and both `export` tool vars
+unconditionally. On the 203 host `/opt/openroad_tools_env.sh` sets
+`YOSYS_EXE=/opt/pdk_klayout_openroad/oss-cad-suite/bin/yosys` (0.51), so an exported or
+`env.local.sh`-pinned ORFS yosys 0.64 was silently replaced; ORFS `synth.tcl` calls
+`stat -hierarchy`, which 0.51 rejects ("Unknown option"), and all 8 designs of the Fmax pilot
+failed synth in 4 s — `fmax_search` then reported every design `inconclusive`
+(`place_probe_inconclusive`), which reads like a timing result, not an environment fault.
+**Fix:** `_env.sh` snapshots every already-set tool var (`OPENROAD_EXE YOSYS_EXE KLAYOUT_CMD
+MAGIC_EXE NETGEN_EXE STA_EXE IVERILOG_EXE VVP_EXE VERILATOR_EXE PDK_ROOT`) before sourcing
+the third-party scripts and restores them after, so orders 1–3 really outrank 4–5; unpinned
+vars still take the third-party value. Test:
+`eda-install/tests/test_bootstrap.py::test_env_sh_pinned_tools_survive_third_party_env_scripts`
+(fails on the old `_env.sh`). **Lesson:** an `inconclusive` Fmax search on *every* design of a
+batch is an environment alarm — check the probe's `1_2_yosys.log` before reading it as timing.
+
 ### 31. Crash-orphaned transient ledger states stranded designs FOREVER — round could end "ALL_DONE" with non-terminal designs (2026-07-09)
 
 Found by the sky130hs /r2g-debug tick's Step-0 gate after a host reboot: the ledger held
@@ -4299,6 +4626,119 @@ deck WARNs and keeps the loud no_count_report path (never a silent skip).
 that platform, and an exit-0 "not supported" echo from a vendor flow is a *phantom
 symptom generator* — classify infra absence apart from design failure before the
 fixer spends iterations.
+
+#### 32b. The #32 lesson was never applied to the OTHER rows — gf180 promised DRC+LVS+RCX it has none of (2026-08-01)
+
+Opening a gf180 round found the Platform Support Matrix still claiming
+`gf180 | KLayout DRC=Yes | KLayout LVS=Yes | RCX=Yes`. This ORFS checkout ships gf180
+with **no `drc/` directory, no `lvs/` directory** (only `KLayout/*.lyt` layer maps) and
+no `RCX_RULES` — `platform_capability.py` reports `tier=installed`, with
+`drc_deck/lvs/antenna/rcx` all MISS. The `ihp-sg13g2` row overclaimed KLayout LVS the
+same way (it ships `lvs/sg13g2.lvs` + `run_lvs.py`, not a `.lylvs` deck → tier
+`research_ready`). The probe had been telling the truth since RMD-P0-03; only the prose
+was wrong, and nothing compared the two.
+
+Unlike sky130hs there is **no sibling deck to borrow** — gf180mcu is a different process,
+not a sky130A variant. So the honest remedy is to correct the claim, not to wire a deck.
+
+Two consequences, both live and in opposite directions:
+
+- **The campaign over-credits gf180.** The clean-gate accepts a skipped check
+  (`clean_states={"clean","clean_beol","skipped"}`, `engineer_loop.py:1361`), and
+  `run_drc.sh` honestly records `status:"skipped", reason:"no_drc_deck_for_platform"` —
+  so a gf180 design reaches ledger `clean` on **zero DRC/LVS evidence**, and in aggregate
+  stats it is indistinguishable from a real sky130hd clean. **Never promote a recipe on a
+  gf180 "clean"** — there is no DRC/LVS symptom for the A/B judge to have cleared.
+- **def-graph correctly refuses it.** `signoff_gate.py` is stricter than the clean-gate:
+  `DRC_OK={"clean","clean_beol"}` — `skipped` is accepted only for LVS. So every gf180
+  dataset build is gate-blocked with exit 7, and **gf180 can never yield a corpus-eligible
+  dataset**. That asymmetry is deliberate (a campaign asks "did the flow do all it could";
+  a dataset asks "is this layout trustworthy training data") but it was undocumented, so a
+  gf180 "dataset round" looked plannable when it is impossible by construction.
+
+**Fix:** the matrix now carries a `Tier` column and truthful gf180/ihp/asap7 rows, and —
+because prose cannot be trusted to stay true — the invariant is now **executable**:
+`tests/test_support_matrix_matches_probe.py` parses the table out of `SKILL.md` and
+asserts every probed column and the tier against `probe_platform`. It also guards its own
+skip path (an all-skipped run must not read as a green matrix — probing the *ambient*
+env instead of the `_env.sh`-resolved one silently skipped all six rows on the first
+draft, which looked identical to a pass).
+
+**Verified same round:** the def-graph b–f pipeline itself is *correct* on gf180 —
+`cordic_gf180` built all five hetero views with 7/7 label sets, and
+`verify_graph_dataset.py` passed 290/291 checks, the single failure being the signoff
+gate correctly rejecting the deliberate `R2G_SIGNOFF_GATE=warn` override. The gf180
+parser hazards found in the vendored four-stage builder (#60 D8 gzipped Liberty, D10
+POLYGON pin geometry) were already handled in the shared `techlib/` parser
+(`liberty.py` gzip opener, `lef.py` `_POLY_RE`): gates show 49 distinct `cell_type_id`
+with 0.31% UNKNOWN (a gz parse failure collapses to 100%), and `hpwl_um==0` on only 0.4%
+of nets (a POLYGON miss collapses every pin to the cell origin). That is the
+"fix a parse bug ONCE in techlib" rule paying off.
+
+#### 32c. …and the A/B judge scored those evidence-free "cleans" as signoff SUCCESSES (2026-08-01)
+
+The bounded gf180 wave predicted by #32b immediately produced the deeper bug. Four
+`pdn_die_floor` trials came back `inconclusive / success_tie_cost_within_noise`, judge v2,
+`provenance_complete=1`, arms genuinely distinct (4 run_ids) — but every sample read:
+
+```
+judged_on: "signoff",  is_success: true,  outcome_score: 1.0
+```
+
+on a platform where **DRC and LVS never ran**. `_arm_metric`'s default branch falls through
+to `knowledge_db.is_success(r)`, which takes its strict `orfs_status='pass'` path — and a
+gf180 flow does complete six stages. So BOTH arms read success no matter what the recipe
+did, and the verdict reduced to wall-clock: **78s vs 79.5s**. The trials only tied by luck.
+Had one arm been noise-faster, judge v2 would have returned a decisive `win` and promoted a
+signoff recipe backed by **zero signoff evidence** — into the tracked, shipped knowledge
+store. `check_db_integrity` flagged only a soft `K3 ... possible identical-arms stall`; the
+arms were not identical, so that lead points at the wrong thing.
+
+Note this invalidates the reassuring argument that a deck-less platform is self-protecting
+because it "generates no DRC/LVS symptoms": `pdn_die_floor` is a signoff-class strategy that
+was enqueued, planned, run and judged all the way to a verdict.
+
+**Fix:** `_arm_metric` now treats a signoff arm that would read SUCCESS with **no signoff
+check executed** as `judged_on="signoff:unverifiable"`, `is_success=False`. Both arms
+non-success ⇒ judge v2 returns the honest never-succeeded inconclusive instead of a cost
+tiebreak, and no promotion can rest on it. Same metric-granularity lesson `_arm_metric`
+already applied to its timing / synth / DRC / LVS branches — "the generic `is_success` ties
+both arms whenever an UNRELATED residual keeps the run non-clean" — finally applied to the
+DEFAULT branch, for the case where *nothing* ran.
+
+Three narrowings, each one found by a test the first draft broke — the guard is far
+narrower than the obvious "no signoff data ⇒ unjudgeable":
+
+1. **Only when `success` is already True.** A BACKEND-ABORT arm (`orfs_status='fail'`, null
+   signoff) never reached signoff because the flow *died*; its honest whole-run `False`
+   keeps the legacy `judged_on`. (`test_judge_v2_symptom_target::test_no_target_falls_back_to_is_success`.)
+2. **Only on an EXPLICIT `'skipped'`, never NULL.** `'skipped'` is a positive statement by
+   `run_drc`/`run_lvs` that the check was deliberately not run for want of a deck; NULL
+   merely means no signoff data was recorded — the normal state of a **ROUTE** arm, whose
+   success is legitimately established by getting past route, not by DRC/LVS. Treating NULL
+   as unverifiable made `route_relief` unjudgeable
+   (`test_route_ab_loop`, `test_ab_drain_parallel`). Real gf180 rows are explicit
+   `pass|skipped|skipped`, so the narrow form still catches the bug exactly.
+3. **Only when BOTH checks are skipped.** A DRC-only platform (ihp-sg13g2, no KLayout LVS
+   deck) keeps real DRC evidence and stays judgeable.
+
+Test: `tests/test_ab_signoff_unverifiable.py` (6 cases incl. all three narrowings; verified
+RED without the guard, where the arm reads `judged_on='signoff', is_success=True`).
+
+**Lesson (generalizing #32's):** a support-matrix "Yes" must be backed by an executable deck
+— *and* every success metric must be backed by a check that actually EXECUTED. "The tool
+reported no failure" and "the tool ran and found nothing" are different facts, and a
+fail-open success metric silently converts the first into the second.
+
+**Known-latent, not fixed:** `platform_capability._resolve` substitutes only
+`$(PLATFORM_DIR)`/`$(PLATFORM)` and returns None on any residual make var, so gf180's
+`TECH_LEF = .../gf180mcu_$(METAL_OPTION)_$(KVALUE)K_$(TRACK_OPTION)_tech.lef` is
+unresolvable and the antenna probe reports `tech/SC LEF unreadable or unresolvable` — a
+misleading reason, since `techlib/resolve.py` resolves those paths fine via `make` (which
+is why the b–f build worked). gf180 is the only supported platform with a composed
+multi-var LEF path, and it has no DRC deck to detect antenna violations with, so there is
+no live consequence today; fix by delegating to the techlib resolver if a composed-path
+platform ever gains a deck.
 
 ### 33. sky130hs def2stream DROPPED all DEF geometry — GDS with labels only ⇒ portless magic extraction ⇒ 100% false Netgen LVS "top pin mismatch" (2026-07-09)
 
@@ -4941,6 +5381,115 @@ sha256s, the SDC digest + stamped period, the Fmax winner, the confirming run + 
 and a `strict_clean` verdict whose `strict_missing`/`constraint.missing` ENUMERATE what blocks
 (H3: the absent final-timing confirmation is named, never just the matching proxy/SDC periods).
 Test: `test_build_signoff_manifest.py`.
+
+### P0-2b — a timing-repaired Fmax run read as unqualified (2026-09-27)
+The manifest demanded `stamped SDC period == fmax_search winner` (rtol 1e-3). The winner is a
+placement proxy; when the confirming full flow missed timing, the repair path loosened the SDC
+(`check_timing` minor bump → `suggested_clock_period`, or `diagnose_signoff_fix` `period_relax`)
+and the design then closed clean — yet `constraint.qualified=false`, so every such design counted
+as a strict failure in Fmax-mode campaigns (success rate silently under-reported). **Guard:** each
+loosening is appended to `reports/fmax_search.json["relaxations"]` as `{from,to,source,ts}`
+(`fmax_search.record_period_relax` / `fmax_search.py --record-relax OLD NEW SOURCE <proj>`, called
+by `diagnose_signoff_fix.py` on any CLOCK_PERIOD increase and by `tools/run_sky130_design.sh` on
+the minor bump). `fmax_model.resolve_confirmed_period` qualifies the stamped period ONLY through
+an unbroken chain from the winner, every step strictly looser; a gap, a tightening, or an
+unrecorded hand edit still disqualifies with a named reason. The manifest records
+`period_source` (`search_winner`|`relaxed_chain`), `confirmed_period`, and `relax_ratio`
+(confirmed/winner) — report Fmax from `confirmed_period`, and the proxy's optimism from
+`relax_ratio`. An operator/agent who hand-applies a minor bump must record it the same way.
+Tests: `test_build_signoff_manifest.py` (chain cases), `test_fmax_search.py`,
+`test_diagnose_signoff_fix.py::test_apply_period_relax_records_fmax_relaxation_chain`.
+
+### P0-2c — Fmax-mode gaps found by the 161-design AIC cohort (2026-09-29)
+Three ways a design lost (or under-reported) its Fmax, none a design fault:
+(1) **Search before repair:** `fmax-drain` probes the template config, so a place
+abort (PPL-0024) made the search `inconclusive`; `run` then grew DIE_AREA and the
+design signed off at the seed period with no winner → `constraint.qualified=false`
+(RequestBlock1CH_BRIDGE, inputDMAfifo, hbm_controller). **Guard:** `engineer_loop
+fmax-retry` (re-search once after a config-editing repair, re-queue).
+(2) **Minor miss never relaxed:** `_timing_plan` offered `period_relax` only for
+moderate/severe, so shake128 (WNS −0.17 ns at the winner) burned
+`utilization_reduce` (an area change) and stopped at minor. **Guard:** Fmax-mode
+projects (ok `fmax_search.json`) get `period_relax` on minor too; fixed-period tasks
+unchanged. (3) **Static model on unknown families:** see orfs-playbook "Model
+selection" — platform-pooled fallback. (4) **One relax, then area changes:** a relax
+re-runs from synth, and the noisy re-placement can land worse (chacha20: WNS −0.17 ns at
+the 3.67 ns winner, relax to 3.89 ns, violators 40 → 101); `period_relax` was then
+excluded as "tried", so the loop spent its remaining iterations on non-clock strategies
+and stopped at minor. **Guard:** in Fmax mode `period_relax` stays available after use
+(`repeatable`), each repeat computed from the CURRENT period/WNS (no-improvement does not
+roll back) and bounded by `FMAX_RELAX_CAP` (1.20) × the search winner; the FIRST relax is
+unchanged, and fixed-period tasks never repeat it. Tests: `test_loop_fmax_drain.py::test_fmax_retry_*`,
+`test_diagnose_timing.py::test_fmax_mode_minor_*`/`test_fixed_period_minor_*`,
+`test_fmax_model.py::test_select_model_platform_fallback`,
+`test_diagnose_timing.py::test_fmax_mode_period_relax_*`.
+(5) **An untested learner candidate vetoed a validated transfer:** at a tighter Fmax clock
+pcie_7x / matmul (right-edge m3.2, exactly the pin_side_rebalance mechanism) were classed
+`bus_heavy/*`, whose only exact `recipe_status` row was a `learner_diff` candidate with
+zero `ab_trials`; "exact row always wins" let that no-verdict row veto the PROMOTED
+wildcard, so the loop stopped with no strategy (and tt_um_example / qmap fell back to an
+area-changing density_relief). **Guard:** for the approved geometric scope transfer only
+(`_PLATFORM_GEOMETRIC_SCOPE_TRANSFER` + proven edge geometry), an exact row that is a
+learner auto-enqueued candidate with no A/B trial no longer vetoes a promoted wildcard
+(match level `platform_geometric_over_untested_candidate`); shadow / parked / demoted /
+A/B-judged rows still win, and every other strategy keeps the strict exact rule. Test:
+`test_repair_policy_regressions.py::test_untested_learner_candidate_does_not_veto_promoted_pin_transfer`.
+
+### P0-2d — Fmax probes leaked their ORFS scratch and filled the disk (2026-09-28/30)
+`fmax_search.cleanup_variants` removed each probe's project dir but not what ORFS wrote
+under `flow/{results,logs,objects,reports}/<platform>/<design>/<variant>` (~1 GB per
+probe on mid-size sky130hd designs). A 161-design Fmax campaign runs ~800 probes: on
+203 (shared 879 G root fs) it reached 100% on 2026-09-28 (3 designs corrupted, other
+users affected) and 88 G of orphaned probe dirs again on 2026-09-30. **Guard:**
+`cleanup_variants` now also deletes the variant's ORFS scratch, located via its
+`run-meta.json` `orfs_results` and only when that path's basename is the variant
+itself. Batch operators should still gate dispatch on free space. Tests:
+`test_fmax_search.py::test_cleanup_variants_removes_orfs_scratch`,
+`test_cleanup_variants_ignores_foreign_orfs_path`.
+
+### P0-2e — Netgen `top_pin_mismatch` had no repair at all (2026-10-01)
+`extract_lvs` reports Netgen failures as status `mismatch` (class `top_pin_mismatch` when
+"Top level cell failed pin matching"), but `_lvs_plan` only acted on `fail`/`failed`, so
+every such residual stopped with no strategy — 8 of the AIC Fmax cohort's residuals, all
+with port-to-port `assign`s or shared tie-offs. The fix (`buffer_port_feedthroughs.tcl`
+as `POST_GLOBAL_PLACE_TCL`, "sky130 LVS" cause 5) existed only as operator guidance.
+**Recipe:** `lvs_port_feedthrough_buffer` (wire the hook, re-run from place, recheck LVS)
+for `mismatch`/`fail` with class `top_pin_mismatch` (or the Netgen phrase when the class is
+absent) and no hook wired; never for other classes (e.g. a geometry-proven pin-vs-PDN
+short). New recipe → `requires_ab_promotion`: validated by A/B on designs OUTSIDE the
+cohort before live use. Tests: `test_diagnose_signoff_fix.py::test_*feedthrough*`.
+
+**A/B result (2026-10-01, sky130hd, 5 non-cohort designs, k=2), keyed on the LVS symptom
+`a0d6b4c6ae5c8c4c` = sha1(lvs, top_pin_mismatch, {}):** win on darkcache, wb_arbiter_2,
+spirom_axi, core_soc (arm A mismatch ×2 → arm B LVS clean ×2, 1 fix iter) → promoted
+`ab_corpus:4w0l` under class `*`; **inconclusive** on fft_freq_pipe — the hook inserted 0
+buffers: its residual is whole output buses (`Fr[*]`/`Fi[*]`) with "no matching pin", i.e.
+constant/shared tie-off outputs, NOT port feedthroughs. The recipe correctly logs
+`recipe_no_effect` there; that sub-class still has no repair.
+Live use of the `*` row goes through `_MECHANISM_SCOPE_TRANSFER` (diagnosis otherwise reads
+only the exact design class); exact-class evidence still wins.
+Harness gotchas found getting there: (1) a new catalog strategy must also be listed in
+`engineer_loop._KNOWN_APPLY_STRATEGIES`, else `ab-drain` parks it `nondivergent_unknown_strategy`
+and judges 0 trials (test `test_feedthrough_buffer_has_an_ab_application_path`); (2) the first
+run was enqueued under the run's TIMING symptom (`timing|clean`) — promoted on a key no LVS
+plan ever reads; `ab-enqueue` now refuses a symptom whose check differs from the strategy's
+(test `test_ab_enqueue_refuses_lvs_recipe_under_timing_symptom`); (3) the independent-subject
+vote keys on `runs.design_family`, which ingest infers from the project-dir PREFIX — batch dirs
+named `<tag>_<hash>_<design>` collapse every design into family `<tag>` (one vote; read
+`ab_corpus_insufficient:1w0l` despite 3 wins). Name A/B projects by design, or add explicit
+`families.json` mappings before ingest.
+
+**Cohort application (AIC v2.2, 9 cohort residuals with this symptom, frozen recipe):** first
+pass exposed two fixer bugs that hid every win — (a) `fix_signoff --check both` graded DRC
+BEFORE the LVS phase, so the place-rerun left drc.json bound to the old layout and the
+manifest refused the design ("reports name 2 different runs" / `drc: status=None`); now the
+DRC (then LVS) verdict is re-graded when the newest GDS post-dates drc.json; (b) `apply_edits`
+REPLACED the auto block, so the timing fix that followed (`CORE_UTILIZATION`) dropped the
+`POST_GLOBAL_PLACE_TCL` hook and LVS regressed — edits now stack (same key overrides). With
+both fixed: LVS clean 8/9 (lumi_rx_ready: `recipe_no_effect`, not a feedthrough case) and
+3/3 designs with an Fmax winner reach strict signoff (apb2per, axicb_slv_switch,
+axi_ram_wr_rd_if). Tests: `test_apply_edits_stacks_on_accepted_fixes`,
+`test_fix_signoff_stale_baseline.py::test_lvs_phase_reflow_regrades_drc_on_new_layout`.
 
 ### P0-3 — green ENV with strict signoff impossible
 `check_env.sh` passed while nangate45 had no LVS deck and `ANTENNA_X1` carried
@@ -5757,3 +6306,205 @@ Two independent rejections of good RTL, both in `discover_download_candidates.py
   live beside synthesizable RTL. `unguarded_testbench_marker()` now strips guarded regions
   (nesting-aware, so an inner conditional does not close an outer guard early) and judges what a
   synthesis frontend would actually elaborate. An unguarded `$display` still rejects.
+
+## Vendored R2G2.0 Four-Stage Ingestion (2026-08-01 — failure-patterns #60)
+
+The `Dataset_R2G2.0(B).zip` drop was manually verified — but on **one sample, on one platform**
+(`bp_multi_top/v01`, nangate45). Ingesting it into `def-graph` surfaced eleven defects, eight of which
+are invisible on nangate45 and fire on sky130hd/sky130hs (this repo's defaults). Full delta record
+and re-vendoring procedure: `def-graph/scripts/r2g2/R2G2_UPSTREAM.md`. Regressions:
+`def-graph/tests/test_r2g2_stage_dataset.py`.
+
+**The general lesson: "manually verified" is scoped to the corpus it was verified on.** A
+single-platform verification cannot see a technology-dependent parser, a technology-dependent
+constant, or a quoting dialect. Re-verify an ingested pipeline on *your* default platform before
+trusting its provenance.
+
+### D1 — LEF/DEF `FN`/`FS` pin transforms swapped (silent-value, ~half of all pins)
+
+`02_extract_features.transform_pin` mapped `FN → (x, h−y)` and `FS → (w−x, y)`; LEF/DEF define
+`FN` = MY (changes x) and `FS` = MX (changes y). `FW`/`FE` in the same table were consistent with the
+*correct* `FN`/`FS`, so it was a transcription slip, not a rival convention.
+
+Standard-cell rows alternate `N`/`FS`, so this misplaced roughly half of all pins, and propagated
+into `pin_x/y_um`, normalized/boundary distances, per-net HPWL, `congestion_pin_density` and both
+RUDY features. Measured against OpenDB's own placed pin locations (`aes_core`, sky130hd, 401 pins):
+upstream scored **0/190 on FS** and 211/211 on N; the corrected table scores 190/190 and 211/211.
+
+This is the *third* appearance of this exact swap in this repo — RTL2Graph shipped it too (fixed
+2026-07-14 in `techlib/lef.py:apply_orient`, validated on cordic sky130hs). **Guard:** a
+parametrized test pins all eight orientations AND asserts the vendored copy equals
+`techlib.lef.apply_orient`, so the two can never drift apart again.
+
+### D2 — quote-intolerant Liberty regexes (silent-value, whole-platform)
+
+`01`/`02`'s Liberty parsers matched `cell\s*\(\s*([^)]+?)\s*\)`, `direction\s*:\s*([A-Za-z_]+)` and
+`clock\s*:\s*true`. nangate45 writes `cell (AND2_X1)` / `direction : input;`. sky130, gf180 and ihp
+write `cell ("sky130_fd_sc_hd__a2111o_1")` / `direction : "input";` / `clock : "true"`, and then:
+
+- every master name kept literal `"` quotes → never matched the DEF or Yosys spelling → **every gate
+  fell back to `cell_type_id=UNKNOWN`**;
+- **every pin direction was empty** → `pin_type_id`/`pin_role_id`/`is_driver_pin`/`is_sink_pin`
+  collapsed, `num_drivers`/`num_sinks` went to 0, and `project_gate_graph` emitted **zero** gate→gate
+  edges;
+- `cell_area_um2`, `cell_leakage_power`, `pin_cap_fF`, `max_transition`, `max_capacitance`, `v_nom`
+  and the clock flag were all lost.
+
+Measured on `sky130_fd_sc_hd__tt_025C_1v80.lib`: **1771/1771 pins had an empty direction before the
+fix, 0/1771 after**. Same defect family as the 2026-07 "Quoted-unit liberty defects (sky130)" entry
+below — the earlier one hit units and pin attributes, this one hits the *cell name itself*.
+**Guard:** a quoted-vs-unquoted fixture pair that must parse identically.
+
+### D3 — a nangate45 constant documented as "technology-derived"
+
+`15 FastRoute tracks × 0.14 µm Metal3 pitch = 2.1 µm` was hardcoded in four places (`02`, `03`, `04`,
+and the validator, which asserted literal `2.1`/`4200 DBU`). 0.14 µm is nangate45's Metal3 pitch;
+sky130hd's third routing layer pitch is 0.46 µm, so the correct grid is **6.9 µm — a 3.3× error in
+GCell edge length**, shifting every congestion input feature, the congestion label's grid indexing
+and the `gate|congestion_geom|gate` neighbourhood. The validator's literal check meant a *correct*
+non-nangate45 build failed the contract check.
+
+Now `resolve_congestion_grid_um(cfg)`, defaulting to 2.1 µm so nangate45 stays bit-identical;
+`make_sample_config.py` fills the pitch from the platform tech LEF. **The invariant the validator
+enforces is now the real one** — one fixed grid, identical across features, labels and the Gate-Gate
+relation, with the DBU step consistent with `dbu_per_um`.
+
+### D4 — one optional label's dependency blocked four mandatory ones
+
+`03_extract_labels.py` imported SciPy at module scope, but SciPy is used only by the IR-drop KCL
+solve. Without SciPy the whole label stage refused to start — wirelength, congestion, timing and RC
+went down with it, *even under `--skip-irdrop`*. Now imported lazily inside `solve_vdd_network` with
+an actionable HINT, restoring this skill's contract that a missing input degrades one column, never
+the stage.
+
+### D5 — one of four node tables had no alignment check
+
+`04_assemble_heterograph` ran `require_same_keys` for `nodes_gate.csv`, `nodes_net.csv` and
+`nodes_pin.csv`, then took `io_keys = sorted(io_index)` straight from the unchecked
+`nodes_iopin.csv`. The IO-pin node set was whatever the feature CSV said rather than what the base
+graph said. Added the symmetric check against `base.io_pin_names`.
+
+### D6 — a constant dressed as an alarm
+
+`01.main` always passes empty name-reference maps (stage 01 must not read a DEF), so every gate
+landed in `unmatched_gate_names` and `unmatched_gate_name_count` **always equalled the total gate
+count**. A reader checking that field for trouble would have found "trouble" on every clean run.
+Now gated on `name_reference_enabled` so "no reference supplied" is distinguishable from "reference
+supplied and did not match".
+
+### D7 — exact float equality between two differently-computed copies of one constant
+
+`04` compared the feature-side and label-side congestion grid with exact float set equality. `02`
+records `tracks × pitch`; `03` round-trips through integer DBU (`round(grid*dbu)/dbu`). They agree
+bit-for-bit only when `tracks × pitch` lands on a representable DBU multiple — nangate45
+(`15×0.14 → 2.1`) and sky130hd (`15×0.46 → 6.9`) do; **sky130hs (`15×0.48 → 7.199999999999999` vs
+`7.2`) does not**. A *correct* sky130hs build therefore aborted at stage 04.
+
+This is the purest form of the single-platform-verification problem in this ingestion: the defect is
+in arithmetic, not in any technology-specific parsing, and it stayed invisible purely because the
+verified platform's pitch happened to be in the lucky set. It only surfaced once D3 made the grid
+follow the platform — i.e. **fixing one defect is what exposed the next one**, which is the argument
+for re-running a full real build after an ingestion rather than trusting a green unit suite.
+
+Now `math.isclose(rel_tol=1e-9)` per axis plus an explicit "all label rows agree" check; a genuinely
+different grid and mixed label grids are still rejected, and the validator still re-checks the
+integer DBU step exactly. **General rule: never compare two independently-derived copies of the same
+physical constant with `==`.** Compare the integer form, or compare with a tolerance.
+
+### D8 — gzipped Liberty read as text, and the guard that could not see it
+
+`01`/`02` read Liberty with `path.read_text()` and globbed `*.lib` only. gf180 ships **only**
+compressed Liberty (30 `.lib.gz`, 0 `.lib`) and ORFS `LIB_FILES` points straight at one, so gzip
+bytes were decoded as UTF-8-with-replacement: **zero cells, zero directions, and no exception.**
+
+The failure mode is the worst kind this skill guards against — fully populated, entirely wrong, and
+green. Every gate lands on `cell_type_id=UNKNOWN`, area/leakage/pin-cap are 0, every pin direction is
+empty (collapsing `is_driver_pin`/`is_sink_pin`/`num_drivers`/`num_sinks`), and `project_gate_graph`
+emits **no gate→gate edges at all**. Yosys reads the `.gz` fine, so only the Python side was blind.
+
+**The guard was the real defect.** `missing_liberty_cells` only fires for masters it *found* but could
+not encode, so "found nothing" passes it vacuously — a validity check that is structurally incapable
+of firing on total failure. Fixed on three levels: transparent `.gz` decompression
+(`read_liberty_text`), `*.lib` + `*.lib.gz` discovery (`glob_liberty`, also in `build_encode_map.py`),
+and **fail-closed on an empty parse** in `01`, `02` and the encode-map generator.
+
+Verified: `gf180mcu_fd_sc_mcu9t5v0__ff_n40C_5v50.lib.gz` → 229 masters, `v_nom=5.5`,
+`cap_scale_ff=1000`, 0/848 pins with an empty direction.
+
+**General rule: a "some of X is bad" check does not cover "X is empty".** Whenever a validator
+iterates a collection to find violations, add the separate assertion that the collection is non-empty
+— otherwise total failure is indistinguishable from perfect success.
+
+### D9 — "the platform lib directory" is not "the library"
+
+`01.resolve_yosys_hierarchy_libs` scanned the primary Liberty's own directory whenever
+`yosys_hierarchy_lib_dir` was unset; `02` only ever scanned when it *was* set. Two problems in one:
+the stages could see **different cell sets for the same design**, and the scan itself is only valid
+where `lib/` means "one library plus its macros".
+
+| Platform | what `lib/` actually holds |
+| --- | --- |
+| nangate45 | 1 std-cell lib + 22 fakeram macro libs — scan is correct |
+| sky130hd | std-cell lib + `sky130_dummy_io.lib` |
+| sky130hs | the same library at **two temperature corners** |
+| gf180 | **30 files = two different cell libraries (7t and 9t) × every PVT corner** |
+
+Scanning mixes physical libraries and makes pin cap / area / leakage depend on glob order. Now
+opt-in and symmetric across 01/02 (`yosys_hierarchy_lib_dir`, or `yosys_hierarchy_lib_scan: true`
+for upstream's behaviour); ORFS's `ADDITIONAL_LIBS` is the correct source for macro Liberty.
+
+**Two lessons.** First, a directory is not a manifest — resolve inputs from the tool that owns them
+(ORFS `LIB_FILES`/`ADDITIONAL_LIBS`), not from what happens to sit next to them. Second, **fixing D8
+is what exposed D9**: making `.lib.gz` discoverable made the bad scan reach 30 files, and the D8
+fail-closed guard then caught it loudly ("encode_map missing 229 Liberty cells, e.g.
+`GF180MCU_FD_SC_MCU7T5V0__ADDF_1`") instead of silently mapping 7t cells to `UNKNOWN`. A guard added
+in one round paid for itself in the next.
+
+### D10/D11 — the two defects only a *fourth* technology could show
+
+Verifying on gf180 produced 13 all-NaN columns at cts/route that nangate45, sky130hd and sky130hs
+did not have. Two independent causes, both invisible on the first three platforms:
+
+- **D10: LEF pin geometry read from `RECT` only.** gf180 std cells use `POLYGON` for essentially
+  every signal pin (2135 POLYGON vs 1294 RECT in the 9t SC LEF). No geometry ⇒ every pin falls back
+  to the cell origin ⇒ `pin_position_valid=0` everywhere ⇒ and because `stage_net_geometry` demands
+  geometry on *every* endpoint, **every net's HPWL and bbox went NaN as well**. The tell was that
+  `pin_x_um` was populated while `pin_x_normalized` and `distance_to_die_*` were not — the raw
+  coordinate has an origin fallback, the derived fields are gated on validity. Fixed by storing a
+  polygon's bbox as one rectangle so the existing centroid rule covers both: gf180 pin geometry
+  0 → 229/229 macros, 1294 pins; nangate45 and sky130hd unchanged.
+- **D11: well-tap detection was the literal substring `"TAP"`.** gf180's taps are `__filltie` /
+  `__endcap` — 324 placed instances, none matching — so `nearest_tap_distance_um` was NaN for every
+  IO pin. Now platform-aware via `techlib.profile.tap_patterns`, which this skill already carried
+  (`_PLATFORM_TAP_EXTRA` exists precisely because of gf180).
+
+**The lesson is about verification breadth, not about LEF.** Three technologies agreed on 642
+statistic columns and both checkers said PASS; the fourth disagreed on 13. A cross-platform *diff of
+the all-NaN column set* is the cheap detector — a column that is NaN on one platform and finite on
+the others is a defect, not a property of the design. Neither checker can see this alone, because
+NaN-with-valid=0 is a legal state; only the comparison makes it suspicious.
+
+### Ingestion-side defects in our own glue (found by running it)
+
+- **`run_stage_dataset.sh` resolved sibling scripts one directory too high** (`scripts/flow/..` is
+  `scripts`, not the skill root), so every step died on `scripts/scripts/...`. Guard: a test that
+  evaluates the runner's *own* `SKILL_DIR`/`R2G2_DIR`/`ADAPT_DIR` assignments and stats the targets.
+- **`-endpoint_path_count` caps paths PER ENDPOINT, not in total.** `emit_timing_reports.py` passed
+  the same large number to it and to `-group_path_count`, so the whole budget went on re-walking a
+  few endpoints. Measured on cordic/nangate45: **10,005 setup paths covering only 19 of the design's
+  107 endpoints** (1 distinct startpoint!). Because the node label is the endpoint's worst slack,
+  that capped `pin_setup_slack` at 19/4639 pins and left `io_pin` slack completely empty — the
+  `pin|timing_path|io_pin` relation did not exist at all. Now `-endpoint_path_count 1` (one worst
+  path per endpoint) with a large `-group_path_count`: 107/107 endpoints — exactly the design's
+  56 sequential cells + 51 output ports — and coverage went pin_setup 19→61, io_pin setup/hold 0→51.
+  The manifest now records `distinct_max_endpoints`/`distinct_min_endpoints`, because **the endpoint
+  count, not the path count, is the real coverage number.** A big path count next to a tiny endpoint
+  count is the alarm.
+- **`report_checks` returns `""`, it does not return the report.** `puts $fh [report_checks …]`
+  writes an empty file while the report goes to stdout. `emit_timing_reports.py` fences each report
+  with markers on stdout and splits the capture.
+- **OpenSTA renamed `-max_paths`/`-group_count` to `-endpoint_path_count`/`-group_path_count`.** The
+  adapter probes `help report_checks` instead of hardcoding either spelling.
+- **PDNSim in stock OpenROAD (26Q1) has no SPICE export** — only `-voltage_file`/`-error_file`/
+  `-em_outfile`. R2G2.0's `ir_drop_mV` label needs `VDD_extracted.sp`, so on this toolchain the
+  column is honestly NaN with `irdrop_valid=0`; it is *unavailable*, not skipped by preference.

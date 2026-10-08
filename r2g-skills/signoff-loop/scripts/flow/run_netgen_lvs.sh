@@ -189,34 +189,101 @@ fi
 # `write_verilog -include_pwr_gnd` and compare against that. Validated 2026-06-11
 # (RV32I memory_controller: 729 vs 729 nets, "Circuits match uniquely"). See
 # references/failure-patterns.md "sky130 LVS".
+#
+# The Liberty must be loaded first. Without it, openroad v2.0-17598's write_verilog
+# corrupts the heap on some designs ("free(): unaligned chunk detected in tcache 2",
+# then Signal 6/11), with or without -include_pwr_gnd; with it the same ODB writes
+# cleanly (E9H iwls05_spi, 2026-09-23). ORFS itself writes 6_final.v with Liberty
+# loaded, which is why the flow never hit this. Use the flow's own processed libs
+# (objects/lib), else the platform's typical-corner library.
+#
+# NEVER fall back to the unpowered netlist: comparing against it manufactures an
+# implicit-power mismatch (132 vs 626 nets, VPWR fanout 248 vs 1) that would be
+# recorded as a DESIGN failure. No powered netlist = LVS not executed (status
+# "error", reason powered_netlist_unavailable), never "mismatch".
 LVS_DIR="$PROJECT_DIR/lvs"
 mkdir -p "$LVS_DIR"
 # Derived schematic normalization receipts must never be reused across LVS runs.
 rm -f "$LVS_DIR/powered_hierarchical.v" "$LVS_DIR/power_connectivity.json"
+#
+# The Liberty must be loaded first. Without it, openroad v2.0-17598's write_verilog
+# corrupts the heap on some designs ("free(): unaligned chunk detected in tcache 2",
+# then Signal 6/11), with or without -include_pwr_gnd; with it the same ODB writes
+# cleanly (E9H iwls05_spi, 2026-09-23). ORFS itself writes 6_final.v with Liberty
+# loaded, which is why the flow never hit this. Use the flow's own processed libs
+# (objects/lib), else the platform's typical-corner library.
+#
+# NEVER fall back to the unpowered netlist: comparing against it manufactures an
+# implicit-power mismatch (132 vs 626 nets, VPWR fanout 248 vs 1) that would be
+# recorded as a DESIGN failure. If write_verilog fails, the SPICE-signature powered
+# netlist below is tried; if that fails too, LVS is not executed (status "error",
+# reason powered_netlist_unavailable), never "mismatch".
+case "$PLATFORM" in
+  sky130hd) SC_LIB_NAME="sky130_fd_sc_hd" ;;
+  sky130hs) SC_LIB_NAME="sky130_fd_sc_hs" ;;
+esac
+_powered_netlist_unavailable() {  # $1 = detail
+  echo "ERROR: powered-netlist generation failed; not comparing against the unpowered $VERILOG_NETLIST" >&2
+  echo "       (that yields a spurious implicit-power mismatch). LVS NOT EXECUTED: $1" >&2
+  python3 - "$LVS_DIR/netgen_lvs_result.json" "$1" "$DESIGN_NAME" "$PLATFORM" \
+    "${LVS_RUN_TAG:-}" "$GDS_FILE" "${LVS_GDS_SHA:-}" "$LVS_DIR/write_powered_verilog.log" <<'PYEOF'
+import json, sys
+out, detail, design, platform, run_tag, gds, sha, log = sys.argv[1:9]
+json.dump({"tool": "netgen", "design": design, "platform": platform,
+           "status": "error", "reason": "powered_netlist_unavailable",
+           "detail": detail, "log_file": log, "run_tag": run_tag,
+           "gds_path": gds, "gds_sha256": sha}, open(out, "w"), indent=2)
+PYEOF
+  # Keep the backend run's copy in step, so no stale verdict survives there.
+  if [[ -n "${R2G_BACKEND_RUN:-}" && -d "$R2G_BACKEND_RUN" ]]; then
+    mkdir -p "$R2G_BACKEND_RUN/lvs"
+    cp "$LVS_DIR/netgen_lvs_result.json" "$R2G_BACKEND_RUN/lvs/" 2>/dev/null || true
+  fi
+  exit 1
+}
+_PWR_FAIL=""
 ODB_FILE=$(find "$RESULTS_DIR" -name "6_final.odb" 2>/dev/null | head -1)
-if [[ -n "$ODB_FILE" && -n "${OPENROAD_EXE:-}" ]]; then
-  POWERED_NETLIST="$LVS_DIR/powered.v"
-  cat > "$LVS_DIR/write_powered_verilog.tcl" << ORTCL
-read_db "$ODB_FILE"
-write_verilog -include_pwr_gnd "$POWERED_NETLIST"
-exit
-ORTCL
+[[ -n "$ODB_FILE" ]] || _PWR_FAIL="no 6_final.odb in $RESULTS_DIR"
+[[ -n "$_PWR_FAIL" || -n "${OPENROAD_EXE:-}" ]] || _PWR_FAIL="OPENROAD_EXE not resolved"
+LVS_LIBS=()
+for _lib_dir in "${ORFS_OBJECTS_DIR:-/nonexistent}/lib" "${R2G_BACKEND_RUN:-/nonexistent}/objects/lib"; do
+  for _lib in "$_lib_dir"/*.lib; do [[ -f "$_lib" ]] && LVS_LIBS+=("$_lib"); done
+  (( ${#LVS_LIBS[@]} )) && break
+done
+if (( ${#LVS_LIBS[@]} == 0 )); then
+  for _lib in "$FLOW_DIR/platforms/$PLATFORM/lib/${SC_LIB_NAME}__tt_025C_1v80.lib"; do
+    [[ -f "$_lib" ]] && LVS_LIBS+=("$_lib")
+  done
+fi
+[[ -n "$_PWR_FAIL" ]] || (( ${#LVS_LIBS[@]} )) || _PWR_FAIL="no Liberty found for $PLATFORM (write_verilog needs it)"
+POWERED_NETLIST="$LVS_DIR/powered.v"
+rm -f "$POWERED_NETLIST"
+if [[ -z "$_PWR_FAIL" ]]; then
+  {
+    for _lib in "${LVS_LIBS[@]}"; do printf 'read_liberty "%s"\n' "$_lib"; done
+    printf 'read_db "%s"\n' "$ODB_FILE"
+    printf 'write_verilog -include_pwr_gnd "%s"\n' "$POWERED_NETLIST"
+    printf 'exit\n'
+  } > "$LVS_DIR/write_powered_verilog.tcl"
   # Bounded (2026-07-04 M3: a large ODB hangs write_verilog indefinitely, and
   # inside an `if` set -e never fires). r2g_bounded_run (RMD2-P0-01) also reaps
-  # any session survivor before returning.
-  # A healthy write_verilog finishes in seconds.  Some OpenROAD builds abort
-  # and leave a pipe/session survivor; waiting the historical fixed 900s before
-  # the deterministic SPICE-signature fallback made a recoverable crash dominate
-  # strict-signoff runtime.  Keep this probe independently bounded.
-  POWERED_VERILOG_TIMEOUT="${POWERED_VERILOG_TIMEOUT:-120}"
-  if r2g_bounded_run "$POWERED_VERILOG_TIMEOUT" 10 "$LVS_DIR/write_powered_verilog.log" \
-       "$OPENROAD_EXE" -no_init -exit "$LVS_DIR/write_powered_verilog.tcl" \
-     && [[ -s "$POWERED_NETLIST" ]] && grep -q 'VPWR' "$POWERED_NETLIST"; then
-    echo "Using power-aware netlist from ODB: $POWERED_NETLIST"
-    VERILOG_NETLIST="$POWERED_NETLIST"
-  else
-    echo "WARNING: powered-netlist generation failed; falling back to $VERILOG_NETLIST (LVS may show implicit-power-pin mismatch)" >&2
+  # any session survivor before returning. A healthy write_verilog finishes in
+  # seconds; a crash falls through to the SPICE-signature netlist, so keep the
+  # probe short rather than the historical fixed 900s.
+  _PWR_RC=0
+  r2g_bounded_run "${R2G_POWERED_NETLIST_TIMEOUT:-${POWERED_VERILOG_TIMEOUT:-120}}" 10 "$LVS_DIR/write_powered_verilog.log" \
+    "$OPENROAD_EXE" -no_init -exit "$LVS_DIR/write_powered_verilog.tcl" || _PWR_RC=$?
+  if [[ $_PWR_RC -ne 0 || ! -s "$POWERED_NETLIST" ]] || ! grep -q 'VPWR' "$POWERED_NETLIST" \
+     || grep -qE '^Signal [0-9]+ received|^(free|malloc|realloc)\(\): |corrupted (size|double-linked)|double free or corruption' \
+          "$LVS_DIR/write_powered_verilog.log"; then
+    _PWR_FAIL="openroad write_verilog exit=$_PWR_RC (see $LVS_DIR/write_powered_verilog.log)"
   fi
+fi
+if [[ -z "$_PWR_FAIL" ]]; then
+  echo "Using power-aware netlist from ODB: $POWERED_NETLIST"
+  VERILOG_NETLIST="$POWERED_NETLIST"
+else
+  echo "WARNING: ODB powered netlist unavailable ($_PWR_FAIL); trying the SPICE-signature powered netlist" >&2
 fi
 
 echo "Running Netgen LVS for design: $DESIGN_NAME"
@@ -235,10 +302,6 @@ mkdir -p "$LVS_DIR"
 # spurious mismatch even when device counts match. See references/failure-patterns.md
 # "sky130 LVS" (2026-06-11). Production fix: load the cell library into the schematic
 # circuit so both sides expand to transistors.
-case "$PLATFORM" in
-  sky130hd) SC_LIB_NAME="sky130_fd_sc_hd" ;;
-  sky130hs) SC_LIB_NAME="sky130_fd_sc_hs" ;;
-esac
 # Library precedence (failure-patterns.md "sky130hd Netgen LVS netgen_property on every design"):
 # the CDL is the representation normalize_sky130_lvs_spice.py is written for (M devices, short
 # model names, `short` tie proxies), and the ORFS platform CDL matches the platform GDS the layout
@@ -289,12 +352,11 @@ if [[ -n "$SC_SPICE_SOURCE" ]] && ! grep -q '\.VPWR[[:space:]]*(' "$VERILOG_NETL
        --receipt "$LVS_DIR/powered_from_spice.json"; then
     echo "Using SPICE-signature powered netlist: $POWERED_FALLBACK"
     VERILOG_NETLIST="$POWERED_FALLBACK"
-  elif [[ "${R2G_STRICT_SIGNOFF:-0}" == "1" ]]; then
-    echo "ERROR: unable to construct an explicit powered schematic for strict LVS" >&2
-    exit 1
   else
-    echo "WARNING: powered schematic fallback failed; implicit supply nets may mismatch" >&2
+    _powered_netlist_unavailable "${_PWR_FAIL:-no ODB powered netlist}; SPICE-signature powered netlist failed"
   fi
+elif [[ -n "$_PWR_FAIL" ]] && ! grep -q '\.VPWR[[:space:]]*(' "$VERILOG_NETLIST"; then
+  _powered_netlist_unavailable "$_PWR_FAIL; no standard-cell SPICE for the SPICE-signature powered netlist"
 fi
 
 # ORFS can retain non-flattened RTL-generated child modules.  Explicit power

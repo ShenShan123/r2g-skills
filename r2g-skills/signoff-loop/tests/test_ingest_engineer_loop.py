@@ -7,6 +7,12 @@ import journal_db
 import knowledge_db
 
 
+def test_cli_default_db_honors_environment(tmp_path, monkeypatch):
+    target = tmp_path / "isolated.sqlite"
+    monkeypatch.setenv("R2G_KNOWLEDGE_DB", str(target))
+    assert ingest_run._default_cli_db_path() == target
+
+
 def _mk_project(tmp_path: Path, name="aes_unit1", cells=1200) -> Path:
     p = tmp_path / name
     (p / "constraints").mkdir(parents=True)
@@ -36,6 +42,30 @@ def test_design_class_stamped_structurally(tmp_path):
                        (rid,)).fetchone()
     # RTL contains 'cipher'/'sbox' -> crypto; 1200 cells -> small
     assert row[0] == "crypto/small"
+
+
+def test_ingest_and_live_classifier_share_external_verilog_closure(tmp_path):
+    """A promoted project may reference RTL outside project/rtl. Ingest and live
+    diagnosis must still derive the identical lifecycle design class."""
+    ext = tmp_path / "source" / "sha_core.v"
+    ext.parent.mkdir()
+    ext.write_text("module sha_core(); // sha cipher datapath\nendmodule\n")
+    p = tmp_path / "project"
+    (p / "constraints").mkdir(parents=True)
+    (p / "reports").mkdir()
+    (p / "constraints" / "config.mk").write_text(
+        f"export DESIGN_NAME = sha_core\nexport PLATFORM = sky130hd\n"
+        f"export VERILOG_FILES = {ext}\n")
+    (p / "reports" / "ppa.json").write_text(json.dumps(
+        {"summary": {}, "geometry": {"instance_count": 7000}}))
+    conn = _conn(tmp_path)
+    rid = ingest_run.ingest(p, conn)
+    stored = conn.execute(
+        "SELECT design_class FROM runs WHERE run_id=?", (rid,)).fetchone()[0]
+    cfg = ingest_run._parse_config_mk(p / "constraints" / "config.mk")
+    import suggest_config
+    live = suggest_config.detect_design_class(p, cfg)
+    assert stored == live == "crypto/medium"
 
 
 def test_first_attempt_clean_true_then_false_for_repeat(tmp_path):

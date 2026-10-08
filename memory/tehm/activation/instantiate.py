@@ -113,7 +113,7 @@ def _multi_knob_edits(knobs: list, after: dict, substitutions: dict, cfg: dict,
         if _number(delta) is not None and current is not None:
             edits[knob] = "%g" % (current + _number(delta))
             continue
-        med_delta = _median(witnesses.get(delta_slot)) if is_hole(delta_slot) else None
+        med_delta = _coherent_median(witnesses.get(delta_slot)) if is_hole(delta_slot) else None
         if med_delta is not None and current is not None:
             edits[knob] = "%g" % (current + med_delta)
             selected.append(knob)
@@ -155,6 +155,19 @@ def _number(value):
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _coherent_median(values) -> float | None:
+    """F3 (Phase R amendment R-A4): the median witness DELTA, only when every witness moves the
+    knob in the same direction. Deltas of both signs (rule_9007ebbc: -8 ... +22) mean the
+    evidence does not say which way to move; the knob stays unresolved and the action is
+    refused instead of guessed."""
+    nums = [_number(v) for v in (values or [])]
+    if not nums or any(n is None for n in nums):
+        return None
+    if any(n > 0 for n in nums) and any(n < 0 for n in nums):
+        return None
+    return _median(nums)
 
 
 def _median(values) -> float | None:

@@ -44,6 +44,9 @@ VECTOR_VERSION = 1
 # Values are the ingested ones observed in runs/run_violations; anything outside
 # good/bad (skipped/unknown/''/None) carries NO signal and never drives a veto.
 LVS_GOOD, LVS_BAD = {"clean"}, {"fail", "crash", "mismatch", "incomplete", "stale"}
+# LVS did not run to a verdict (e.g. powered_netlist_unavailable). No signal about
+# the layout, so it vetoes like a MISSING check, never like a regression.
+LVS_NOT_EXECUTED = {"error"}
 DRC_GOOD, DRC_BAD = {"clean", "clean_beol"}, {"fail", "failed", "stuck"}
 TIER_RANK = {"clean": 0, "minor": 1, "moderate": 2, "severe": 3, "unconstrained": 3}
 # ppa.json vocabulary (extract_ppa): complete|partial|fail. The runs table
@@ -298,7 +301,7 @@ def compare(pre: dict, post: dict, target: str) -> dict:
     if _measured(a, "status") and a["status"] in LVS_GOOD:
         if _measured(b, "status") and b["status"] in LVS_BAD:
             regressions.append(f"lvs_regression:{a['status']}->{b['status']}")
-        elif not _measured(b, "status"):
+        elif not _measured(b, "status") or b["status"] in LVS_NOT_EXECUTED:
             unknowns.append("lvs:unmeasured_post")
     if (_measured(a, "mismatch_count") and _measured(b, "mismatch_count")
             and b["mismatch_count"] > a["mismatch_count"]):
@@ -351,7 +354,7 @@ def compare_status_rows(a: dict, b: dict) -> str | None:
         vetoes.append("orfs_regression:pass->fail")
     if a.get("lvs") in LVS_GOOD and b.get("lvs") in LVS_BAD:
         vetoes.append(f"lvs_regression:{a['lvs']}->{b['lvs']}")
-    elif a.get("lvs") in LVS_GOOD and not b.get("lvs"):
+    elif a.get("lvs") in LVS_GOOD and (not b.get("lvs") or b["lvs"] in LVS_NOT_EXECUTED):
         vetoes.append("check_missing:lvs")
     if a.get("drc") in DRC_GOOD and b.get("drc") in DRC_BAD:
         vetoes.append(f"drc_regression:{a['drc']}->{b['drc']}")

@@ -42,7 +42,15 @@ PROBE_TIMEOUT_S = 60
 # it too (the "declare capability only after a canary passes" rule of CAP-FE-01).
 _CANARY = {
     "slang": ["-p", "plugin -i slang"],
+    # VHDL: expand_candidates converts through `yosys -m ghdl`, so loading the
+    # module that way is the canary (`help ghdl` alone exits 0 without it).
+    "ghdl": ["-m", "ghdl", "-p", "help ghdl"],
 }
+
+# Probed like a frontend, but run as a conversion step before ORFS
+# (expand_candidates.run_ghdl). ORFS has no SYNTH_HDL_FRONTEND=ghdl, so
+# select_frontend must never hand it to the config writer.
+_CONVERSION_ONLY = frozenset({"ghdl"})
 
 _cache: dict[str, bool] = {}
 _record: dict[str, dict] = {}
@@ -120,6 +128,9 @@ def select_frontend(requested: str | None, *, needs_sv: bool) -> tuple[str | Non
     want = (requested or "").strip().lower() or ("slang" if needs_sv else "")
     if not want:
         return None, {"frontend": None, "available": True, "detail": "default yosys frontend"}
+    if want in _CONVERSION_ONLY:
+        return None, {"frontend": want, "available": True,
+                      "detail": "conversion step before ORFS, not a SYNTH_HDL_FRONTEND"}
     rec = probe(want)
     return (want if rec["available"] else None), rec
 

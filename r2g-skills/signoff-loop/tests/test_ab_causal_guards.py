@@ -349,15 +349,19 @@ def test_tied_corpus_is_order_independent(tmp_path):
 
 
 def test_tie_neutralizes_transient_promotion(tmp_path):
-    """One decisive win promotes; the tie-ing loss must take the promotion BACK."""
+    """Two-family promotion is withdrawn when later evidence makes a tie."""
     conn = _conn(tmp_path)
     recipe_lifecycle.enqueue_candidate(conn, **_TIE_KEY)
     _record(conn, "win", "s1")
+    assert recipe_lifecycle.get_status(conn, **_TIE_KEY) == "candidate"
+    _record(conn, "win", "s2")
     assert recipe_lifecycle.get_status(conn, **_TIE_KEY) == "promoted"
-    _record(conn, "loss", "s2")
+    _record(conn, "loss", "s3")
+    assert recipe_lifecycle.get_status(conn, **_TIE_KEY) == "promoted"
+    _record(conn, "loss", "s4")
     assert recipe_lifecycle.get_status(conn, **_TIE_KEY) == "candidate"
     # and a later decisive win re-resolves the tie forward
-    _record(conn, "win", "s3")
+    _record(conn, "win", "s5")
     assert recipe_lifecycle.get_status(conn, **_TIE_KEY) == "promoted"
 
 

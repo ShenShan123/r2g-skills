@@ -345,6 +345,33 @@ corpus); other platforms are **forward-learned** (the model accumulates as
 verified runs land for those platforms), so early Fmax predictions on non-nangate
 platforms lean more heavily on conservative defaults.
 
+**Model selection (2026-09-29):** family model when that family has ≥ 8 samples,
+else the **platform-pooled** model (`heuristics.json["platforms"][p]`, learned from
+the platform's successful runs with period ≤ 10 ns — the model is
+`max(ns_floor, pct·period)`, so long-period runs would turn their multi-ns erosion
+into a floor at 2 ns; the pre-cohort sky130hd pool gave d_pl_fin ns_p90 = 0.43 ns)
+when it has ≥ 20, else the static cold-start defaults. Harvested corpora map mostly to no known family, so before the pooled
+fallback every sky130hd search ran on the static model: in the 161-design AIC
+cohort the post-route setup slack at the stamped period was median +0.19 ns
+(p90 +0.45 ns) — place→finish erosion at short periods is actually ≈ 0 or negative
+(post-route repair_timing recovers slack; p90 +0.009 ns vs the static 0.10 ns
+floor). `provenance` in `fmax_search.json` records which tier was used
+(`learned(…)`, `learned-platform(…)`, `default-static…`).
+
+**Timing miss after the search (Fmax mode):** a project with an ok
+`fmax_search.json` owns its clock, so `diagnose_signoff_fix` offers `period_relax`
+for a **minor** post-route miss too (fixed-period tasks still never relax on minor),
+and the loosening is recorded as a relaxation chain the signoff manifest verifies
+(failure-patterns P0-2b).
+
+**Search blocked by a backend abort:** `fmax-drain` runs before any repair, so a
+design that aborts at place under the template config (e.g. PPL-0024, too many IO
+pins for the die) is `inconclusive`; `run` then repairs it (e.g. DIE_AREA growth)
+and signs off at the seed period with no Fmax. `engineer_loop fmax-retry --ledger L`
+re-searches such designs (clean, inconclusive, config.mk edited after the search,
+once per design; old report kept as `fmax_search.pre_repair.json`) and re-queues
+them — follow it with `run`.
+
 ### Honest-label taxonomy
 
 The result (`reports/fmax_search.json`) labels its Fmax with how trustworthy it

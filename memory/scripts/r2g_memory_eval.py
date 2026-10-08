@@ -232,6 +232,19 @@ def final_verdict(proj, env, log):
     sdc = (proj / 'constraints/constraint.sdc').read_text(errors='replace')
     m = re.search(r'set\s+clk_period\s+([0-9.]+)', sdc)
     rec['final_clk_period'] = float(m[1]) if m else None
+    # acceptance checklist v1 (r2g_acceptance_checklist_v1_20261004.md): the outcome every report uses from
+    # here on; the task clock is the source project's (A9). Per-check results stay on the record.
+    if final:
+        design, variant = proj.name.split('__')[:2]
+        src = (CASES / ('%s__%s__%s' % (design, CFG['platform'], variant)) / 'constraints/constraint.sdc')
+        ms = re.search(r'set\s+clk_period\s+([0-9.]+)', src.read_text(errors='replace')) if src.exists() else None
+        run(['python3', SKILL / 'scripts/reports/acceptance_check.py', proj]
+            + (['--expected-clock-period', ms[1]] if ms else []), env, log, 300)
+        acc = jload(proj / 'reports/acceptance.json')
+        rec['acceptance'] = {'accepted': bool(acc.get('accepted')), 'failed': acc.get('failed'),
+                             'unknown': acc.get('unknown'),
+                             'checks': {k: c.get('result') for k, c in (acc.get('checks') or {}).items()}}
+    rec['accepted'] = bool((rec.get('acceptance') or {}).get('accepted'))
     rec['backend_runs'] = len([d for d in (proj / 'backend').glob('RUN_*') if d.is_dir()])
     rec['final_config'] = (proj / 'constraints/config.mk').read_text()
     return rec
@@ -405,6 +418,17 @@ D2_ARMS = ('M', 'C')       # M: evolving memory (write-back); C: frozen copy of 
 F_ARMS = ('N', 'N2', 'M', 'Mp', 'G')  # Phase F: memoryless, determinism repeat, memory, memory + unblockers;
 # Phase G: G = Mp + component pool + composition
 H_ARMS = ('NL', 'SL')  # Phase H stage 2: no memory + LLM; simplified memory (frozen store SL-<lane>) + LLM
+S_ARMS = ('NB',)  # Phase S: no memory on the frozen merged toolchain (r2g-toolchain-freeze-v1); stage 1 here,
+                  # the LLM stage only under its own gate (pre-LLM snapshot kept, as for Phase H)
+# Retakes on the frozen toolchain (card r2g_phaseR_contract): the earlier memory arms re-run unchanged, each from a
+# private copy of its frozen store. code -> store directory under EVAL ({lane} = hd|hs).
+R_ARMS = {'RS': 'sandbox-f/tehm/SL-{lane}',                              # Phase H memory (SL)
+          'RMp': 'sandbox-f/tehm/Mp-{lane}',                             # Phase F M+
+          'RG': 'sandbox-f/tehm/G-{lane}',                               # Phase G G
+          'RP': 'evaluation-h-ablation/no_llm_evidence-{lane}',          # Phase I P (pool only)
+          'RL': 'evaluation-h-ablation/no_component_trial_evidence-{lane}',  # Phase I L (LLM-derived rules only)
+          'RJ': 'evaluation-i/stores/IJ-{lane}'}                          # Phase I J (neither)
+RERUN_ARMS = S_ARMS + tuple(R_ARMS)   # judged on acceptance; private stores; pre-LLM snapshot kept
 LAYOUT_BINARIES = ('*.odb', '*.gds', '*.gds.gz', '*.def', '*.spef', '*.v', '*.lef')  # never read by any analysis
 D2_ORDER_SEED = '20261001'  # preregistered task-order seed (card D-A2 / D2 section)
 D2_PATHS = ('r2g-skills', 'memory', 'tools', 'CLAUDE.md')
@@ -493,7 +517,7 @@ def d2_setup(args):
 
 
 def d2_env(arm):
-    if arm in ('N', 'N2', 'NL'):                            # memoryless arms (Phase F N/N2, Phase H NL)
+    if arm in ('N', 'N2', 'NL', 'NB'):                      # memoryless arms (Phase F N/N2, Phase H NL, Phase S NB)
         return base_env('none')
     store = SB / 'tehm' / ('%s-%s' % (arm, CFG['lane']))
     env = base_env('tehm')
@@ -502,6 +526,34 @@ def d2_env(arm):
     env.update(TEHM_DB=str(store / 'tehm.sqlite'), TEHM_ARTIFACTS_ROOT=str(store / 'artifacts'),
                R2G_MEMORY_READ_ONLY_EVAL='0' if arm == 'M' and not CFG.get('frozen') else '1')  # D2: only M writes
     return env
+
+
+def rerun_env(arm, proj):
+    """Env for a Phase S / R arm: memoryless, or TEHM on a private copy of the arm's frozen store (read-only)."""
+    if arm in S_ARMS:
+        return d2_env(arm)
+    src = EVAL / R_ARMS[arm].format(lane=CFG['lane'])
+    dst = proj / '.tehm-store'
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst)
+    env = base_env('tehm')
+    env.update(TEHM_DB=str(dst / 'tehm.sqlite'), TEHM_ARTIFACTS_ROOT=str(dst / 'artifacts'),
+               R2G_MEMORY_READ_ONLY_EVAL='1')
+    return env
+
+
+def task_store_env(env, proj):
+    """Phase S (S-A1): a private copy of the pinned knowledge store per task. The merged r2g opens the shipped
+    store read-only (upstream 9b3b24b), so ingest needs its own copy; a fresh copy per task also gives every task the
+    identical starting knowledge (Phase H shared one mutable sandbox store across all tasks and arms)."""
+    kdir = proj / '.r2g-knowledge'
+    kdir.mkdir(exist_ok=True)
+    for name, digest in TRACKED.items():
+        shutil.copy2(SKILL / 'knowledge' / name, kdir / name)
+        assert sha(kdir / name) == digest, '%s is not the pinned store' % name
+    return {**env, 'R2G_KNOWLEDGE_DB': str(kdir / 'knowledge.sqlite'),
+            'R2G_HEURISTICS_PATH': str(kdir / 'heuristics.json'), 'R2G_LEGACY_KNOWLEDGE_DIR': str(kdir)}
 
 
 def d2_order(tasks):
@@ -625,9 +677,17 @@ def d2_stream(args):
             rec.update(pre)
         else:
             proj = arm_project(d, v, args.arm)
+            if args.arm in RERUN_ARMS:
+                env = task_store_env(rerun_env(args.arm, proj), proj)
+                if args.arm in R_ARMS:
+                    src = EVAL / R_ARMS[args.arm].format(lane=CFG['lane'])
+                    rec['memory_store'] = {'source': str(src), 'sha256': {n: sha(src / n) for n in
+                                           ('tehm.sqlite', 'tehm.sqlite-wal') if (src / n).exists()}}
             rec.update(run_engineer(proj, args.arm, env=env))
-            rec['closed_by'] = 'memory_or_catalogue' if rec.get('physical_clean') else None
-            if args.arm in H_ARMS and not rec.get('physical_clean'):
+            # Phase S / R judge acceptance (checklist v1); earlier phases physical closure
+            done = rec.get('accepted') if args.arm in RERUN_ARMS else rec.get('physical_clean')
+            rec['closed_by'] = 'memory_or_catalogue' if done else None
+            if args.arm in H_ARMS + RERUN_ARMS and not done:
                 h_snapshot(proj)
         calls0, tokens0 = budget['calls'], budget['tokens']
         if not rec.get('physical_clean') and key and proj is not None:
@@ -651,7 +711,7 @@ def d2_stream(args):
                                   and str(r.get('fix_session_id', '')).startswith('memfix_')])  # B6 hook rows
         rec['total_wall_s'] = round(time.time() - t0)
         (out / ('%02d__%s__%s.json' % (n, d, v))).write_text(json.dumps(rec, indent=1, sort_keys=True) + '\n')
-        if args.arm in H_ARMS:
+        if args.arm in H_ARMS + RERUN_ARMS:
             h_prune(proj)                                  # disk: layout binaries only, after the record is written
         print(json.dumps({k: rec.get(k) for k in ('order', 'design', 'variant', 'arm', 'physical_clean', 'closed_by',
                                                   'llm_calls', 'backend_runs', 'total_wall_s')}), flush=True)
@@ -1550,7 +1610,7 @@ def main():
     ds.add_argument('--refresh', default='', help='tag: refresh code + stores in place, superseded parts kept (D-A5)')
     ds.add_argument('--code-only', action='store_true', help='with --refresh: replace only the code trees (Phase G)')
     st = sub.add_parser('d2-stream', help='Phase D2: one (arm, lane) stream, sequential, preregistered order')
-    st.add_argument('--arm', choices=D2_ARMS + F_ARMS + H_ARMS, required=True)
+    st.add_argument('--arm', choices=D2_ARMS + F_ARMS + H_ARMS + RERUN_ARMS, required=True)
     st.add_argument('--rep', type=int, choices=(1, 2), default=1, help='Phase H: repeat index (2 = LLM part only)')
     st.add_argument('--round', type=int, choices=(3, 4, 5, 6, 7, 8), required=True)
     st.add_argument('--tasks', default='', help='frozen design/variant list (comma-separated)')

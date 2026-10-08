@@ -4,6 +4,47 @@ Notable changes to the `r2g-skills` collection. Earlier history lives in the
 git log (the commit messages are the long-term record — see CLAUDE.md "When
 You Fix a Bug").
 
+## 2026-10-08 — v6 fix mechanisms synchronized
+
+**What this is.** This release brings the published scripts up to the r2g/TEHM code of experiment freeze
+`r2g-toolchain-freeze-v6` (`7fe19adf7a4ae479c9ea06cdfd673b99ab108c29`).
+- **Synced:** every file under `r2g-skills/`, `tools/` and `memory/` (excluding `memory/evaluation/` and
+  `memory/docs/`) now matches that commit exactly: 142 added, 112 updated, 0 deleted.
+- **Not added:** research documents, private acceptance data and experiment outputs.
+- **Previous snapshot:** `b0286dfa` is kept in history as a **pre-fix snapshot**. It lacks the fixes below
+  and must not be used for memory-enabled runs.
+
+**Now included:**
+- **Memory containment** (`fix_signoff.sh`):
+  - a failed memory step is rolled back (config, reports and run pointer);
+  - it never consumes the catalogue's non-improvement budget;
+  - memory is suspended for the fix session after 2 failed steps.
+- **Memory content fixes** (`memory/tehm_backend.py`, `memory/tehm/activation/instantiate.py`):
+  - **F1:** trial admission counts only a rule's own verified applications;
+  - **F2:** numeric values come only from verified witnesses in a matching situation;
+  - **F3:** evidence of mixed sign leaves a value unresolved.
+- **Baseline repair ladders** (`diagnose_signoff_fix.py`): live FLW-0024 utilisation relief, the
+  `route_relief` ladder with `route_layer_relief`, `cell_pad_relief`, and the finish-stage `drv_route_margin`
+  slew/cap repair, with apply-time exclusions.
+- **Regression tests:** `test_baseline_repairs.py`, `test_drv_route_margin.py`, `test_acceptance_check.py`,
+  `memory/tests/test_memory_harm_fixes.py`.
+- **Failure-pattern entry:** "Memory step blocks the catalogue's repair".
+- **Unchanged:** the acceptance checker (`acceptance_check.py`), identical to `b0286dfa`.
+
+**Validation (independent worktree):** every suite passes, with the same counts as the v6 freeze:
+- signoff-loop + memory: 1470 passed, 4 skipped;
+- def-graph: 350 passed;
+- eda-install: 165 passed;
+- rtl-acquire: 251 passed;
+- rtl-expander: 138 passed;
+- tools: 64 passed.
+
+**Not included, still pending:**
+- a shared total budget across memory and catalogue actions;
+- the store-rebuild (write-path) admission fix needed for online memory growth.
+
+These are not claimed to be complete.
+
 ## 2026-07-26 — pilot + held-out remediation round 3 (failure-patterns #58)
 
 The 2026-07-24/25 fixed pilot and the 2026-07-26 held-out campaign (commit

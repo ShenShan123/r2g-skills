@@ -440,3 +440,6 @@ def test_colliding_header_basenames_are_reported_not_silently_merged(tmp_path):
         cdir, tmp_path / "proj" / "rtl")
     assert len(vendored) == 1
     assert any("collision" in u for u in unresolved)
+    # Two HEADERS clashing is a header-closure problem (header_closure_unresolved),
+    # never the vendored-source alias status (re-review R1, 2026-09-23).
+    assert not any("include_alias_conflict" in u for u in unresolved)

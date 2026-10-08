@@ -255,6 +255,22 @@ def lib_pin_truth(cells, master, pin_name):
     return ("", None)
 
 
+def net_conn_roles(direction: str, *, port: bool) -> tuple[int, int]:
+    """(drivers, sinks) one net connection contributes, by the extractor's convention.
+
+    A DEF PIN direction is the port's direction from the chip's side, so an INPUT
+    port drives the net and an OUTPUT port sinks it; a cell pin is the reverse.
+    INOUT/FEEDTHRU count as both, as `nodes_net.py` does (pinned by
+    test_inout_and_feedthru_pins_classify_as_11). Dropping them flagged correct
+    bidirectional nets as mismatched (E12-FP 2026-09-23: I2C_SDAT, 23176fbd8d2b).
+    """
+    if direction in ("INOUT", "FEEDTHRU"):
+        return 1, 1
+    if port:
+        return int(direction == "INPUT"), int(direction == "OUTPUT")
+    return int(direction == "OUTPUT"), int(direction == "INPUT")
+
+
 def read_lef_truth(tech_lef, extra_lefs=()):
     """(routing_layers {name:(pitch, dir)}, block_masters set) — independent parse."""
     layers = {}
@@ -523,21 +539,55 @@ def _v_apply_orient(px, py, orient, w, h):
     }.get(o, (px, py))
 
 
+def _polygon_boxes(xs, ys):
+    """(x1, y1, x2, y2) boxes of a rectilinear polygon, the way OpenDB stores it:
+    horizontal slabs at every vertex y, merged upward while the x-span repeats.
+    Independent of techlib.lef.polygon_rects on purpose (firewall principle)."""
+    ring = list(zip(xs, ys))
+    if ring[0] == ring[-1]:
+        ring.pop()
+    edges = []
+    for i, (x, y) in enumerate(ring):
+        nx, ny = ring[(i + 1) % len(ring)]
+        if x == nx and y != ny:
+            edges.append((x, min(y, ny), max(y, ny)))
+    yl = sorted(set(ys))
+    done, live = [], {}
+    for k in range(len(yl) - 1):
+        y = (yl[k] + yl[k + 1]) / 2.0
+        xs_in = sorted(e[0] for e in edges if e[1] < y < e[2])
+        now = {}
+        for j in range(0, len(xs_in) - 1, 2):
+            span = (xs_in[j], xs_in[j + 1])
+            now[span] = live.pop(span) if span in live else yl[k]
+        for span, y0 in live.items():
+            done.append((span[0], y0, span[1], yl[k]))
+        live = now
+    for span, y0 in live.items():
+        done.append((span[0], y0, span[1], yl[-1]))
+    return done
+
+
 def _lef_pin_geometry(lef_paths):
     """``{MASTER_UPPER: {"w","h","pins":{PIN_UPPER:(cx,cy)}}}`` — an INDEPENDENT
-    parse of MACRO SIZE + per-PIN RECT/POLYGON bbox centers (um), used to
-    reproduce the extractor's pin-center HPWL. Separate code from techlib.lef so
-    a shared parse bug can't hide (the verifier's firewall principle)."""
+    parse of MACRO SIZE + per-PIN centers (um), used to reproduce the extractor's
+    pin-center HPWL. Separate code from techlib.lef so a shared parse bug can't
+    hide (the verifier's firewall principle). A pin center is OpenDB's getAvgXY:
+    the MEAN of its boxes' centers, where a RECT is one box and a POLYGON is the
+    boxes OpenDB decomposes it into (_polygon_boxes). Checked against getAvgXY on
+    a real sky130hd 6_final.odb (9,999/9,999 pins) and every gf180 9t master
+    (3,344/3,344). The old overall-bbox center missed every multi-box pin."""
     geom = {}
     for lef in lef_paths:
         if not lef or not os.path.isfile(lef):
             continue
         cur = pin = None
-        xs, ys = [], []
+        centers = []
 
         def flush():
-            if cur is not None and pin is not None and xs:
-                geom[cur]["pins"][pin] = ((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
+            if cur is not None and pin is not None and centers:
+                geom[cur]["pins"][pin] = (sum(c[0] for c in centers) / len(centers),
+                                          sum(c[1] for c in centers) / len(centers))
 
         for line in open(lef, errors="ignore"):
             s = line.strip()
@@ -547,7 +597,7 @@ def _lef_pin_geometry(lef_paths):
             if tok[0] == "MACRO" and len(tok) >= 2:
                 flush(); cur = tok[1].lstrip("\\").upper()
                 geom[cur] = {"w": 0.0, "h": 0.0, "pins": {}}
-                pin, xs, ys = None, [], []
+                pin, centers = None, []
             elif cur is None:
                 continue
             elif tok[0] == "SIZE":
@@ -557,24 +607,26 @@ def _lef_pin_geometry(lef_paths):
                 except (ValueError, IndexError):
                     pass
             elif tok[0] == "PIN" and len(tok) >= 2:
-                flush(); pin = tok[1].lstrip("\\").upper(); xs, ys = [], []
+                flush(); pin = tok[1].lstrip("\\").upper(); centers = []
             elif pin is not None and tok[0] == "RECT":
                 nums = [float(x) for x in tok[1:] if _isfloat(x)]
                 if len(nums) >= 4:
                     x1, y1, x2, y2 = nums[-4:]
-                    xs += [x1, x2]; ys += [y1, y2]
+                    centers.append(((x1 + x2) / 2.0, (y1 + y2) / 2.0))
             elif pin is not None and tok[0] == "POLYGON":
                 nums = [float(x) for x in tok[1:] if _isfloat(x)]
                 if len(nums) % 2:      # odd -> leading MASK id
                     nums = nums[1:]
-                for k in range(0, len(nums) - 1, 2):
-                    xs.append(nums[k]); ys.append(nums[k + 1])
+                pxs, pys = nums[0::2], nums[1::2]
+                if pxs and len(pxs) == len(pys):
+                    centers += [((a + b) / 2.0, (c + d) / 2.0)
+                                for a, c, b, d in _polygon_boxes(pxs, pys)]
             elif tok[0] == "END" and len(tok) >= 2:
                 key = tok[1].lstrip("\\").upper()
                 if pin is not None and key == pin:
-                    flush(); pin, xs, ys = None, [], []
+                    flush(); pin, centers = None, []
                 elif key == cur:
-                    flush(); cur, pin, xs, ys = None, None, [], []
+                    flush(); cur, pin, centers = None, None, []
     return geom
 
 
@@ -972,9 +1024,9 @@ def extended_checks(case, design, feat, labs, views, b):
         is_macro = 0
         for i, p in conns:
             if i == "PIN":
-                d = dt["pins"].get(p, {}).get("dir", "")
-                drv += d == "INPUT"
-                snk += d == "OUTPUT"
+                d_drv, d_snk = net_conn_roles(dt["pins"].get(p, {}).get("dir", ""), port=True)
+                drv += d_drv
+                snk += d_snk
                 if dt["pins"].get(p, {}).get("x") is not None:
                     pts.append((dt["pins"][p]["x"] / dt["dbu"], dt["pins"][p]["y"] / dt["dbu"]))
                 continue
@@ -984,9 +1036,9 @@ def extended_checks(case, design, feat, labs, views, b):
             master = comp["master"]
             if master.upper() in blocks:
                 is_macro = 1
-            d = lib_pin_truth(lib, master, p)[0]
-            drv += d == "OUTPUT"
-            snk += d == "INPUT"
+            d_drv, d_snk = net_conn_roles(lib_pin_truth(lib, master, p)[0], port=False)
+            drv += d_drv
+            snk += d_snk
             if comp["x"] is not None:
                 pts.append(_v_pin_abs(pin_geom, comp["x"] / dt["dbu"], comp["y"] / dt["dbu"],
                                       comp.get("orient"), master, p))
@@ -1022,11 +1074,12 @@ def extended_checks(case, design, feat, labs, views, b):
         drv = 0
         for i, p in conns:
             if i == "PIN":
-                drv += dt["pins"].get(p, {}).get("dir", "") == "INPUT"
+                drv += net_conn_roles(dt["pins"].get(p, {}).get("dir", ""), port=True)[0]
             else:
                 comp = dt["comps"].get(i)
                 if comp:
-                    drv += lib_pin_truth(lib, comp["master"], p)[0] == "OUTPUT"
+                    drv += net_conn_roles(lib_pin_truth(lib, comp["master"], p)[0],
+                                          port=False)[0]
         chk_zero += 1
         if drv != 0:
             bad_zero += 1

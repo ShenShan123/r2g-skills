@@ -10,6 +10,14 @@ Execute a staged, artifact-first corpus-expansion workflow for discovered RTL:
 deterministic scripts and policy files; treat the workspace ledgers and
 manifests as the source of truth.
 
+For Internet-scale acquisition, use the embedded
+`vendor/rtl-expander/` engine. It owns safe repository discovery, immutable
+revision acquisition, top/closure recovery, corpus certification, family
+deduplication, and scheduler statistics. R2G consumes only a `CERTIFIED`
+rtl-expander snapshot through
+`scripts/acquire/import_expander_snapshot.py`; never read its live frontier,
+queues, mutable manifests, or partially completed rounds directly.
+
 Positioned **upstream** of the other r2g-skills: it feeds a stream of screened,
 synthesized, graph-converted designs. It **never runs place/route or signoff**
 — hand a promising design to `signoff-loop` for that.
@@ -24,6 +32,64 @@ OWNS (the heart — genuinely net-new for r2g):
   quality scoring, publish eligibility gating, the merged corpus manifest.
 - **repair/** — deterministic frontend repair (include dirs, stubs, memory
   limits, template materialization) + the JSON failure casebook (journal-side).
+
+The embedded expander is an acquisition engine, not a fifth R2G sub-skill.
+After its certified snapshot is imported, the existing rtl-acquire expansion,
+repair, graph, publish, and signoff handoff contracts remain authoritative.
+
+## rtl-expander snapshot handoff
+
+```bash
+python3 scripts/run_expansion_round.py \
+  --expander-corpus-root /path/to/rtl_corpus \
+  --expander-view public_export_allowed \
+  --priorities high medium
+```
+
+The importer fails closed unless the snapshot is certified and all release,
+manifest, source-path, source-byte, commit, and public-license bindings verify.
+It emits a digest-bound bridge manifest, which `expand_candidates.py` verifies
+again immediately before synthesis.
+
+For a bounded formal Experiment-1 batch, use the complete two-level handoff:
+
+```bash
+python3 scripts/run_expansion_round.py \
+  --expander-corpus-root /path/to/rtl_corpus \
+  --expander-view public_export_allowed \
+  --expander-formal-target 25 \
+  --expander-min-mapped-cells 100 \
+  --expander-max-mapped-cells-exclusive 100000 \
+  --expander-max-per-repository 4 \
+  --expander-defer-high-resource \
+  --run-retry
+```
+
+This mode preserves the certified broad corpus, runs the ordinary R2G
+Sky130HD qualification path, rejects incomplete compile collateral, and writes
+a deterministic selection balanced across repository, Expander functional
+ontology, and mapped-cell stratum. It fails closed when the requested target
+cannot be filled. `resource_tier=high` candidates are retained in
+`rtl_expander_cost_deferred.csv`; measured candidates at or above the cell
+ceiling are retained in `rtl_expander_large_design_track.csv`. Neither class
+is deleted or mislabeled as an RTL correctness failure.
+
+Formal artifacts are:
+
+- `workspace/candidates/rtl_expander_qualified_selected.csv`
+- `workspace/manifests/rtl_expander_qualified_selection.json`
+- `workspace/candidates/rtl_expander_large_design_track.csv`
+- `workspace/candidates/rtl_expander_cost_deferred.csv`
+
+The selection manifest binds the candidate CSV, certified bridge,
+qualification index, policy, output digest, exclusion reasons, and selected
+repository/function/size distributions.
+
+For formal Cold/Warm acquisition comparisons, Cold uses a fresh corpus root.
+Warm also uses a fresh corpus root, then imports only a frozen scheduler-memory
+artifact with `vendor/rtl-expander/scripts/scheduler_memory.py`. Never reuse a
+prior corpus root: that would leak candidates, query cursors, and provider state
+in addition to the intended aggregate scheduling evidence.
 
 BORROWS (converged onto sibling sub-skills — never reimplement these here):
 - **env/toolchain** — the shared byte-identical `scripts/flow/_env.sh` +
@@ -72,7 +138,9 @@ Knobs specific to this skill:
   concurrent flows × cores ≈ machine cores)
 - `R2G_GRAPH_PYTHON` — torch venv for graph conversion + scale reports; when
   unset those stages **SKIP with a HINT** and designs record `graph_skipped`
-  (never `success`)
+  (never `success`); when set but unable to start, `expand_candidates.py` refuses
+  the round (exit 2) and the scale report fails the round, both naming the
+  interpreter
 - `R2G_KNOWLEDGE_DB` — override the knowledge DB (tests only; default is the
   committed signoff-loop store)
 - `R2G_ACQUIRE_ENABLE_LLM=1` — opt-in for the LLM patch path (default OFF)
@@ -100,7 +168,7 @@ retry after a fix).
 `scripts/execute/expand_candidates.py` per candidate: sanitize RTL (encoding,
 helper modules, iscas89 dff) → write `synth_projects/<design>/` → synth via
 **run_orfs.sh** (`ORFS_STAGES=synth`, FLOW_VARIANT = the unique candidate id)
-→ sv2v/vhd2vl fallback + LEC-lite when needed → dedup by rtl/netlist
+→ GHDL (`yosys -m ghdl`, then `-fsynopsys`) / vhd2vl / sv2v fallback + LEC-lite when needed → dedup by rtl/netlist
 signature → convert via **def-graph netlist_graph.py** → `cell_stats.json`
 (liberty-driven seq/comb split) → **ingest into knowledge.sqlite** (every
 flow, pass or fail).

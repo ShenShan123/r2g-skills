@@ -35,6 +35,22 @@ def worse_tier(a: str, b: str) -> str:
     return a if TIER_ORDER.get(a, 0) >= TIER_ORDER.get(b, 0) else b
 
 
+def drv_summary(timing: dict) -> dict:
+    """Post-route design-rule limits from ppa.json (OpenROAD finish-stage
+    report_check_types): max-slew and max-capacitance violator counts. Reported beside,
+    never folded into, the setup tier; status 'fail' means a Liberty limit is exceeded
+    (acceptance check A8), 'unknown' means the counts are missing."""
+    def _n(key):
+        v = timing.get(key)
+        return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+    slew, cap = _n('max_slew_violations'), _n('max_cap_violations')
+    if slew is None or cap is None:
+        return {'max_slew_violations': slew, 'max_cap_violations': cap, 'total': None,
+                'status': 'unknown'}
+    return {'max_slew_violations': slew, 'max_cap_violations': cap, 'total': slew + cap,
+            'status': 'clean' if slew + cap == 0 else 'fail'}
+
+
 def classify_wns(wns: float, moderate_thr: float, severe_thr: float) -> str:
     """Classify WNS into a tier."""
     if wns > 1e+30:
@@ -325,11 +341,13 @@ def main():
     violation_count = timing.get('setup_violation_count', 'N/A')
     hold_wns = timing.get('hold_wns')
     hold_tns = timing.get('hold_tns')
+    drv = drv_summary(timing)
 
     # Handle missing WNS
     if wns is None or not isinstance(wns, (int, float)):
         result = {
             'tier': 'unknown', 'wns': None, 'tns': None,
+            'drv': drv,
             'wns_tier': 'unknown', 'tns_tier': 'unknown',
             'message': 'No setup_wns found in ppa.json. Timing data may be missing.',
             'options': [
@@ -382,6 +400,7 @@ def main():
         'utilization': utilization,
         'hold_wns': hold_wns,
         'hold_tns': hold_tns,
+        'drv': drv,
         'thresholds': {
             'wns_moderate': wns_moderate,
             'wns_severe': wns_severe,
@@ -510,6 +529,9 @@ def main():
         hold_tns_val = f', hold_tns={hold_tns:.4f}ns' if isinstance(hold_tns, (int, float)) else ''
         print(f'  Note: Hold violations present (hold_wns={hold_wns:.4f}ns{hold_tns_val}) — '
               f'not blocking, but worth reviewing.')
+    if drv['status'] == 'fail':
+        print(f"  Note: design-rule limits exceeded (max_slew={drv['max_slew_violations']}, "
+              f"max_cap={drv['max_cap_violations']}) — timing repair (drv) required for acceptance.")
     sys.exit(0)
 
 

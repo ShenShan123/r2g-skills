@@ -150,3 +150,50 @@ def test_fmax_drain_production_cli_no_conftest_path(tmp_path):
     assert r.returncode == 0, r.stderr
     assert "characterized 1 design(s)" in r.stdout, (r.stdout, r.stderr)
     assert "set clk_period 2.5" in (p / "constraints" / "constraint.sdc").read_text()
+
+
+def _clean_inconclusive(tmp_path, name, *, repaired: bool):
+    import time
+    p = _mk_design(tmp_path, name, clk=10.0)
+    (p / "reports").mkdir()
+    rep = p / "reports" / "fmax_search.json"
+    rep.write_text(json.dumps({"status": "inconclusive", "reason": "place_probe_inconclusive"}))
+    cfg = p / "constraints" / "config.mk"
+    cfg.write_text("export DESIGN_NAME = x\n")
+    old = time.time() - 100
+    os.utime(rep, (old, old))
+    os.utime(cfg, (old + (50 if repaired else -50),) * 2)   # repair landed after the search?
+    return p
+
+
+def test_fmax_retry_requeues_repaired_inconclusive_design(tmp_path, monkeypatch):
+    """2026-09-29 AIC cohort: a place abort (PPL-0024) made the pre-repair search
+    inconclusive; after the loop grew DIE_AREA the design signed off with no Fmax."""
+    p = _clean_inconclusive(tmp_path, "d0", repaired=True)
+    monkeypatch.setenv("R2G_LOOP_FMAX", str(_stub_fmax(tmp_path, "ok", 3.0)))
+    L = tmp_path / "l.jsonl"
+    led = engineer_loop.Ledger(L)
+    led.add({"design": "d0", "project_path": str(p), "platform": "sky130hd"})
+    led.set_state("d0", "clean")
+    assert engineer_loop.fmax_retry(L) == 1
+    led2 = engineer_loop.Ledger(L)
+    assert led2.state("d0") == "pending" and led2.get("d0")["fmax_retried"] is True
+    assert "set clk_period 3" in (p / "constraints" / "constraint.sdc").read_text()
+    assert (p / "reports" / "fmax_search.pre_repair.json").exists()
+    assert engineer_loop.fmax_retry(L) == 0            # pending now; never a second retry
+
+
+def test_fmax_retry_skips_unrepaired_and_marks_failed_retry(tmp_path, monkeypatch):
+    p0 = _clean_inconclusive(tmp_path, "norepair", repaired=False)
+    p1 = _clean_inconclusive(tmp_path, "stillbad", repaired=True)
+    monkeypatch.setenv("R2G_LOOP_FMAX", str(_stub_fmax(tmp_path, "inconclusive")))
+    L = tmp_path / "l.jsonl"
+    led = engineer_loop.Ledger(L)
+    for n, p in (("norepair", p0), ("stillbad", p1)):
+        led.add({"design": n, "project_path": str(p), "platform": "sky130hd"})
+        led.set_state(n, "clean")
+    assert engineer_loop.fmax_retry(L) == 0
+    led2 = engineer_loop.Ledger(L)
+    assert "fmax_retried" not in led2.get("norepair")          # no repair -> untouched
+    assert led2.state("stillbad") == "clean" and led2.get("stillbad")["fmax_retried"] is True
+    assert "set clk_period 10" in (p1 / "constraints" / "constraint.sdc").read_text()

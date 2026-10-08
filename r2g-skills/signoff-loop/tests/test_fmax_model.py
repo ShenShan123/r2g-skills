@@ -154,3 +154,18 @@ def test_search_loop_place_null_slack_is_inconclusive_not_crash():
                          model=None)
     assert res["status"] == "inconclusive"
     assert res.get("reason") == "place_no_slack"
+
+
+def test_select_model_platform_fallback():
+    """2026-09-29 AIC cohort: harvested designs map to no family with n>=8, so the
+    search ran default-static and left ~0.19 ns median slack unused; a pooled
+    platform model is the fallback, still outranked by an adequate family model."""
+    sd = lambda n, v: {"slack_deterioration": {"d_fp_pl": {"ns_p90": v, "pct_p90": 0.1},
+                                               "d_pl_fin": {"ns_p90": v / 10, "pct_p90": 0.01},
+                                               "n": n}}
+    model, prov = fm.select_model(sd(3, 0.3), platform_entry=sd(345, 1.0))
+    assert prov.startswith("learned-platform(n=345") and model["d_pl_fin"] == (0.1, 0.01)
+    model, prov = fm.select_model(sd(9, 0.3), platform_entry=sd(345, 1.0))
+    assert prov.startswith("learned(n=9") and model["d_pl_fin"] == (0.03, 0.01)
+    assert fm.select_model(None, platform_entry=sd(5, 1.0)) == (None, "default-static")
+    assert fm.select_model(None, platform_entry=None) == (None, "default-static")

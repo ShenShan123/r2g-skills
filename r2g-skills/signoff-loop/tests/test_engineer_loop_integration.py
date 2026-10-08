@@ -79,12 +79,12 @@ def test_full_turn_runs_arms_and_promotes_winner(tmp_path, monkeypatch):
     prev = {"generation": 0, "recipes": {}}
     for entry in list(led.pending()):
         engineer_loop.process_one(led, entry, conn)
-    engineer_loop.learn_cycle(led, conn, prev_heur=prev, n_ab_designs=1)
+    engineer_loop.learn_cycle(led, conn, prev_heur=prev, n_ab_designs=2)
 
     # The fix episodes produced a learned recipe -> candidate -> arm entries.
-    # Win 2: 2 arms × R2G_AB_REPEATS (default k=2) = 4 entries for one design.
+    # Two independent subjects × 2 arms × R2G_AB_REPEATS (default k=2).
     arms = [e for e in led.entries() if e["kind"] == "ab_arm"]
-    assert len(arms) == 4 and {a["arm"] for a in arms} == {"A", "B"}
+    assert len(arms) == 8 and {a["arm"] for a in arms} == {"A", "B"}
 
     # Execute the arms (resume semantics: they are just pending entries).
     for entry in list(led.pending()):
@@ -92,10 +92,11 @@ def test_full_turn_runs_arms_and_promotes_winner(tmp_path, monkeypatch):
     engineer_loop.judge_finished_trials(led, conn)
 
     key = arms[0]["ab_key"]
-    row = conn.execute("SELECT verdict FROM ab_trials WHERE strategy=?",
-                       (key["strategy"],)).fetchone()
-    assert row is not None and row[0] in ("win", "loss", "inconclusive")
-    if row[0] == "win":          # fake arm B clears -> expected path
+    rows = conn.execute("SELECT verdict FROM ab_trials WHERE strategy=?",
+                        (key["strategy"],)).fetchall()
+    assert len(rows) == 2
+    assert all(row[0] in ("win", "loss", "inconclusive") for row in rows)
+    if all(row[0] == "win" for row in rows):
         assert recipe_lifecycle.get_status(conn, **key) == "promoted"
 
     # Arm A (exclude) exits 2 -> at least one catalog_exhausted escalation.
