@@ -544,6 +544,35 @@ if [[ -f "$NETGEN_LOG" ]]; then
   fi
 fi
 
+# A "match" that Netgen reached by flattening a subcell it could not pair is
+# not a match. It prints the fact and then matches anyway:
+#
+#   Flattening unmatched subcell gf180mcu_..._inv_4 in circuit <top> (1)(1 instance)
+#
+# Found by a negative control: swapping ONE instance from inv_2 to inv_4 leaves
+# the two sides genuinely disagreeing (powered.v names inv_4, the extraction
+# names inv_2), but the layout has no inv_4 subcircuit, so Netgen flattens the
+# orphan and the remaining topology agrees -- inv_2 and inv_4 differ only in
+# width, and width is compared only between devices that paired. The verdict
+# came back "Circuits match uniquely".
+#
+# Zero false positives on the evidence available: 5 clean gf180 designs (93 to
+# 3,025 cells), the negative control that WAS caught, and a clean sky130hd run
+# all report 0 such lines; only the missed control reports 1.
+_LVS_FLATTENED=0
+for _f in "$NETGEN_LOG" "$NETGEN_REPORT"; do
+  [[ -f "$_f" ]] || continue
+  _n=$(grep -c "Flattening unmatched subcell" "$_f" 2>/dev/null || echo 0)
+  (( _n > _LVS_FLATTENED )) && _LVS_FLATTENED=$_n
+done
+if [[ "$MATCH_STATUS" == "match" && "$_LVS_FLATTENED" -gt 0 ]]; then
+  echo "WARNING: Netgen matched only after flattening $_LVS_FLATTENED unmatched subcell(s);" >&2
+  echo "         a cell present on one side and absent on the other is a real difference." >&2
+  grep -h "Flattening unmatched subcell" "$NETGEN_LOG" "$NETGEN_REPORT" 2>/dev/null | sed 's/^/         /' >&2
+  LVS_RESULT="mismatch"
+  MATCH_STATUS="flattened_unmatched_subcell"
+fi
+
 # Also check the report file
 if [[ -f "$NETGEN_REPORT" ]] && [[ "$MATCH_STATUS" == "unknown" ]]; then
   if grep -qi "Circuits match\|PASS" "$NETGEN_REPORT" 2>/dev/null; then

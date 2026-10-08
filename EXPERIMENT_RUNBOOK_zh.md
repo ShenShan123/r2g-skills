@@ -737,9 +737,34 @@ Netgen 把网表侧那个找不到对应的实例展平，而 `inv_2` 和 `inv_4
 （各 1 对 PMOS/NMOS，只有 W 不同），展平后晶体管数和连接都不变。
 W 的比较只在**配对上的**器件之间进行，这里走的是另一条路径。
 
-→ **边界**：连接错误和拓扑改变能检出；单个实例替换成同拓扑、仅尺寸不同的变体检不出。
-对 r2g 的用途影响有限（换驱动强度是 resizer 做的，它同时更新 DEF 和 ODB，
-不会产生版图与网表不一致），但**不能宣称「LVS 全面可用」**。
+**这个盲区已补上（2026-10-08）**，而且证据就在 Netgen 自己的报告里，只是解析从没读过：
+
+```
+Flattening unmatched subcell gf180mcu_fd_sc_mcu9t5v0__inv_4
+  in circuit corescore_emitter_uart (1)(1 instance)
+```
+
+Netgen 明确声明了它展平了一个无法配对的子单元，然后仍判 `Circuits match uniquely`。
+判别力检验（这才决定能不能用作判据）：
+
+| 运行 | `Flattening unmatched` 行数 |
+|---|---|
+| 5 份干净 gf180 设计（93–3,025 单元） | 0 |
+| 已检出的负对照（改接输入） | 0 |
+| sky130hd 干净运行 | 0 |
+| **漏检的负对照（换驱动强度）** | **1** |
+
+零误报、精确命中。`run_netgen_lvs.sh` 现在在「匹配 + 存在展平未配对子单元」时判
+`mismatch`，状态 `flattened_unmatched_subcell`，并把那几行原文打到 stderr。
+重跑验证：换驱动强度 `status=mismatch`（原先 clean）、改接输入仍 `mismatch`、
+干净设计仍 `clean`。
+
+→ **补后的边界**：连接错误、拓扑改变、单实例尺寸变体都能检出。
+仍存在一个**二阶风险**：报告里有 42 处 `**Mismatch**`，全是同一对
+（`SUB | VPW` ×21、`w_n86_453# | VNW` ×21），Netgen 用
+`Cell pin lists ... altered to match` 自动对齐了。这个对齐在物理上是对的
+（确实是同一节点，gf180 的单元不像 sky130 那样把井做成 `VPB`/`VNB` 显式引脚），
+但若将来出现**真正的**井连接错误，这个自动对齐可能掩盖它。尚未构造对照验证。
 
 **顺带一条测试纪律**：第一轮负对照里两个 `sed` 用了 2 空格缩进而 DEF 实际是 4 空格，
 破坏根本没发生，却给出了 `Circuits match uniquely`。
