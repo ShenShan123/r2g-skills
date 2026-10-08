@@ -85,6 +85,14 @@ case "$PLATFORM" in
     # than a glob, so a missing PDK stays a clear error instead of a wrong tech.
     MAGIC_TECH="$PDK_ROOT/gf180mcuC/libs.tech/magic/gf180mcuC.tech"
     NETGEN_SETUP="$PDK_ROOT/gf180mcuC/libs.tech/netgen/gf180mcuC_setup.tcl"
+    # ORFS's gf180 LEF declares only VDD and VSS, while the PDK's cells carry
+    # VNW and VPW well pins as well (write_cdl says so outright: "Terminal VNW
+    # ... not found in LEF"). Built from ORFS's LEF the netlist fills those with
+    # _unconnected_N, and the comparison then sees 332 schematic nets against
+    # 120 extracted. Reading the PDK's own std-cell LEF restores the pins; the
+    # ties themselves are stated below, because ORFS's PDN never routed wells
+    # it did not know existed.
+    _pdk_sc_lef="$PDK_ROOT/gf180mcuC/libs.ref/gf180mcu_fd_sc_mcu${TRACK_OPTION:-9t}${POWER_OPTION:-5v0}/lef/gf180mcu_fd_sc_mcu${TRACK_OPTION:-9t}${POWER_OPTION:-5v0}.lef"
     ;;
   *)
     echo "WARNING: Netgen LVS not supported for platform $PLATFORM" >&2
@@ -233,6 +241,16 @@ ODB_FILE=$(find "$RESULTS_DIR" -name "6_final.odb" 2>/dev/null | head -1)
 # information that this script refuses to work around. R2G_LVS_DEF_NETLIST=0
 # disables the fallback.
 DEF_FILE=""
+# gf180 must come from the DEF even when an ODB exists: ORFS built that ODB
+# with its own LEF, which declares no VNW/VPW, so the well pins are absent from
+# the database itself and no global connection can reach them. Rebuilding from
+# LEF + DEF with the PDK's std-cell LEF is what puts them back. Every other
+# platform keeps preferring the ODB -- two independent serializations are one
+# degree better than deriving layout and netlist from the same DEF.
+if [[ -n "${_pdk_sc_lef:-}" && -f "${_pdk_sc_lef:-}" && -n "$ODB_FILE" ]]; then
+  echo "gf180: ignoring 6_final.odb (built without well pins); rebuilding from LEF + DEF"
+  ODB_FILE=""
+fi
 if [[ -z "$ODB_FILE" && "${R2G_LVS_DEF_NETLIST:-auto}" != "0" ]]; then
   DEF_FILE=$(find "$RESULTS_DIR" -name "6_final.def" 2>/dev/null | head -1)
   [[ -n "$DEF_FILE" ]] && echo "No 6_final.odb; rebuilding the database from LEF + $DEF_FILE"
@@ -273,15 +291,51 @@ rm -f "$POWERED_NETLIST"
     # first version of this matched only `=` and produced a tcl with no
     # read_lef at all, which openroad answered with ORD-0005 "No technology
     # has been read."
+    # gf180's paths carry more than $(PLATFORM_DIR): its TECH_LEF is
+    # lef/gf180mcu_$(METAL_OPTION)_$(KVALUE)K_$(TRACK_OPTION)_tech.lef, so
+    # expanding only PLATFORM_DIR left a filename that does not exist, the
+    # read_lef was silently skipped, and the DEF then failed with ODB-0421
+    # (units mismatch) plus "unknown site" -- both symptoms of a missing tech
+    # LEF rather than of anything wrong with the DEF. Substitute each option
+    # the platform config defines for itself.
     _r2g_lef() {
-      grep -E "^[[:space:]]*(override[[:space:]]+)?export[[:space:]]+$1[[:space:]]*[?:]?=" \
-        "$_pdir/config.mk" 2>/dev/null | head -1 | sed 's/^[^=]*=[[:space:]]*//' \
-        | sed "s|\$(PLATFORM_DIR)|$_pdir|g"
+      local _raw
+      _raw=$(grep -E "^[[:space:]]*(override[[:space:]]+)?export[[:space:]]+$1[[:space:]]*[?:]?=" \
+        "$_pdir/config.mk" 2>/dev/null | head -1 | sed 's/^[^=]*=[[:space:]]*//')
+      [[ -n "$_raw" ]] || return 0
+      local _v _val
+      for _v in METAL_OPTION KVALUE TRACK_OPTION POWER_OPTION CORNER PLATFORM; do
+        _val="${!_v:-}"
+        if [[ -z "$_val" ]]; then
+          _val=$(grep -E "^[[:space:]]*export[[:space:]]+$_v[[:space:]]*[?:]?=" \
+            "$_pdir/config.mk" 2>/dev/null | head -1 | sed 's/^[^=]*=[[:space:]]*//' | tr -d ' ')
+        fi
+        [[ -n "$_val" ]] && _raw="${_raw//\$($_v)/$_val}"
+      done
+      printf '%s\n' "${_raw//\$(PLATFORM_DIR)/$_pdir}"
     }
-    for _lef in $(_r2g_lef TECH_LEF) $(_r2g_lef SC_LEF) $(_r2g_lef ADDITIONAL_LEFS); do
+    # The tech LEF always comes from the platform; only the std-cell LEF is
+    # substituted for gf180, and the substitution is decided per source rather
+    # than by comparing expanded strings (both expand through $(PLATFORM_DIR),
+    # and an earlier version matched the tech LEF too, leaving openroad with no
+    # technology at all).
+    _sc_src="$(_r2g_lef SC_LEF)"
+    if [[ -n "${_pdk_sc_lef:-}" && -f "${_pdk_sc_lef:-}" ]]; then
+      _sc_src="$_pdk_sc_lef"
+    fi
+    for _lef in $(_r2g_lef TECH_LEF) "$_sc_src" $(_r2g_lef ADDITIONAL_LEFS); do
       [[ -n "$_lef" && -f "$_lef" ]] && printf 'read_lef "%s"\n' "$_lef"
     done
     printf 'read_def "%s"\n' "$DEF_FILE"
+  fi
+  if [[ -n "${_pdk_sc_lef:-}" && -f "${_pdk_sc_lef:-}" ]]; then
+    # In gf180's digital cells the n-well goes to power and the p-well to
+    # ground. That is the tie the silicon has; ORFS's PDN simply never emitted
+    # it because its LEF declared no well pins. Verified on corescore_emitter_uart:
+    # `_unconnected_108 _unconnected_109` becomes `VDD VSS`.
+    printf 'add_global_connection -net VDD -pin_pattern {^VNW$} -power\n'
+    printf 'add_global_connection -net VSS -pin_pattern {^VPW$} -ground\n'
+    printf 'global_connect\n'
   fi
   printf 'write_verilog -include_pwr_gnd "%s"\n' "$POWERED_NETLIST"
   printf 'exit\n'
