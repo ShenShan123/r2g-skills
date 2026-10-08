@@ -590,6 +590,74 @@ PDN_TCL ?= $(PLATFORM_DIR)/openROAD/pdn/pdn_grid_strategy_$(TRACK_OPTION)_6M.cfg
 而我们用 `METAL_OPTION=5LM_1TM`。那个 cfg 实际只用到 Metal1/Metal4/Metal5，5 层够用，
 所以**不是失败原因**；但换成 4LM 配置时 PDN 策略不会跟着变，是潜在问题。
 
+## 六之六之四、gf180 的 DRC 修好了：824 → 0，两个单参数（2026-10-08）
+
+两类违例占了 100%，各由 ORFS 平台配置里的**一个参数**造成，都不是流程代码缺陷。
+
+### 修复效果（跨 32 倍规模验证）
+
+| 设计 | 单元 | 修复前 | 修复后 | 剩余 |
+|---|---|---|---|---|
+| corescore_emitter_uart | 93 | 824 | **0** | — |
+| wbarbiter | 111 | 1,264 | **0** | — |
+| rom_divide | 521 | 3,759 | **0** | — |
+| avg_n_per_clk | 1,108 | 11,241 | **1** | CO.6a（修复前已有 4） |
+| rotate_mapper | 3,025 | 28,174 | **14** | CO.6a（修复前就是 14，一字不差） |
+
+→ 剩余的 `CO.6a` 是 contact 层 0.005 µm 的边对间距，**修复前后数量完全相同**，
+两个修复没有引入新问题也没碰到它。
+
+### 修复一：去掉 PDN 的 `-split_cuts`（消掉 82%）
+
+```
+原文  add_pdn_connect -grid {block} -layers {Metal1 Metal4} -max_columns {5} \
+                      -ongrid {Metal2 Metal3 Metal4} -split_cuts {Metal3 0.128}
+改为  去掉 -split_cuts {Metal3 0.128}，其余不动
+```
+
+**诊断链**（规则是 `via2.edges.without_length(0.26.um)`，逐条边检查）：
+
+```
+Via2   241 个合规 0.26×0.26 + 84 个 0.772×1.028
+Via3     6 个合规          + 84 个 同尺寸同坐标
+84 × 4 条边 = 336  ← 正好等于 V2.1 和 V3.1 各自的 336 条
+0.772 = 2×0.26 + 0.252  → 两列切割合并成一片
+x 只有 12 个取值，相邻差 44.8 = Metal4 条带节距 → 是 PDN 的 via 柱，不是信号布线
+```
+
+`-max_columns {5}` **不用改**：变体 b（改成 1）无额外收益，保留 5 列对电源载流更有利。
+
+### 修复二：tapcell `-distance 100 → 30`（消掉 18%）
+
+```
+gf180      tapcell -distance 100
+规则       DF.14_MV: 到最近衬底 tap 的最大距离 15 µm（MV 5V 器件；LV 是 20）
+sky130hd   tapcell -distance 14   ← 与它自己的规则匹配
+```
+
+`-distance` 是 tap **列**的间距，最坏点在半程，所以 30 µm 间距正好满足 15 µm 的规则。
+实测 30 / 24 / 20 三档都归零，**取 30**——tap 最少、面积开销最小。
+
+### 为什么 ORFS 自己从未发现这两类
+
+它对 gf180 的签核门槛和 asap7 一样，只用布线器内部检查
+（我们跑的 5 份 `route_drc` 全是 0），官方 KLayout deck 从未接进它的流程。
+→ 这也是为什么 gf180 的 DRC 虽然 deck 最权威，却需要我们先修配置才能用。
+
+### 怎么把覆盖传进流程
+
+平台的 `PDN_TCL` 和 `TAPCELL_TCL` 都是 `?=` 默认值，设计 config 的 export 能覆盖它们。
+容器只挂载 work 树（为 `/work`）和 package，而 `config.mk` 本身就在 `/work`，
+所以把 cfg 复制到 work 目录即可，不需要新挂载。
+`orfs_baseline.py` 的 `write_config` 已支持 `R2G_PDN_CFG` 和 `R2G_TAPCELL_TCL`。
+
+**这里踩了今天第 N 次同类错误**：第一轮 A/B 我用了 `R2G_EXTRA_CFG` /
+`R2G_EXTRA_MOUNT` 两个**凭空想的变量名**，驱动不认，于是三次运行跑的是同一配置，
+给出三个相同的 824。**幸好脚本里打印了 `config.mk` 的 `PDN_TCL` 行作为自检**，
+否则我会得出"两个修法都无效"的错误结论。
+同类前科：`R2G_LVS_EXTRA_LEF`（Netgen 用了旧 LEF）、`R2G_KEEP_SCRATCH`（日志被回收）。
+→ **纪律：传一个参数之前先 grep 确认它被读取；传之后打印一个证据证明它到达了目的地。**
+
 ## 六之六之三、gf180 的周期标定：24 份不够，但够定一个起点（2026-10-08）
 
 按六之三的方法（读 `6_finish.rpt` 的 `period_min`）对 24 份设计做了标定。
