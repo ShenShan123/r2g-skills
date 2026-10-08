@@ -1251,6 +1251,50 @@ gf180 的全量跑会第一次带上这个修复。
 45nm 工艺比 130nm 快，即使周期压到 2/5，达标率反而高 12 个百分点。
 → 论文里按规模区间给周期时，**区间表必须按平台分别标定**，不能共用一张表。
 
+### nangate45 的 LVS deck 通过负控验证（2026-10-08）
+
+45 的签核前 46 份读出 `LVS clean 46 / 失配 0`。**全 clean 也是一个什么都不查的 deck
+会给的答案**，所以和 gf180 一样做负控：同一版图、同一 deck，只在图纸侧删一个器件。
+
+```
+clean 臂    6_final.gds + 完整 concat CDL（142 个器件行）  → Netlists match   lvsdb 292,942 字节
+broken 臂   同一个 6_final.gds + 删 1 个器件（141 行）     → MISMATCH 检出    lvsdb 292,858 字节
+```
+
+GDS 两臂字节相同（md5 `81094dc7f100`），CDL 的 md5 已变（`a648e8283ec8` → `1fa960f7e8ee`）,
+所以差异只能来自那一个器件。**deck 有检出能力,46/46 clean 是真实结论。**
+
+配置要点（踩过才知道）：
+- **netlist 侧来自 `6_final.odb` 的 `write_cdl`,不是 `6_final.v`。** 改 Verilog 影响不到比对,
+  只会触发 RMD-P0-01 守卫。
+- deck 是 PDK 自带的 `platforms/nangate45/lvs/FreePDK45.lylvs`（`rule_sha256`
+  记在 `lvs_provenance.json` 里），不是 r2g 的 asset。
+- 手跑 klayout 要自己 `export KLAYOUT_CMD`，ORFS 的 Makefile 平时替你设。
+
+### 顺带验到的一条诚实性：守卫拒绝给判决,而不是报 clean
+
+第一次负控我换掉了 `6_final.v`，LVS 引擎照常跑完并打印 `CONGRATULATIONS! Netlists match.`，
+但 `lvs_result.json` 写的是：
+
+```json
+{"status": "failed", "reason": "layout_changed_under_signoff",
+ "note": "physical artifacts changed while make lvs ran; verdict does not describe the frozen backend layout (RMD-P0-01)"}
+```
+
+**版图在签核底下被改动时,r2g 不把引擎那句 match 当结论,而是拒绝判决。**
+这正是签核该有的行为——引擎说的是「这两个netlist一致」，而签核要回答的是
+「这个判决描述的是不是那个冻结的版图」，两者不是同一个问题。
+
+### 这一轮里我犯的两个路径错误
+
+| 错误 | 症状 | 真因 |
+|---|---|---|
+| `cp runs/*/6_final.gds $W/` | deck 报 `Can't find a schematic counterpart for the top cell lcd_timing` | 通配匹到 2,200 份同名文件，互相覆盖，最后拿了别的设计的版图去配 forwarding_unit 的 CDL |
+| 正则 `^\s+[A-Z]` 找实例行 | 「没匹配到实例行」 | 从 grep 输出推断前导空格，再次犯了「不要从 grep 输出推断格式」——改成打印 `repr` 后一次就对 |
+
+两次都表现为「工具坏了」，实际都是我的路径/格式假设错。**第一个尤其值得记:
+一个报错信息里出现了不属于本设计的名字(`lcd_timing`),那是在提示输入拿错了,不是工具有毛病。**
+
 ## 七、漏斗怎么读才诚实
 
 **三层归因，按死在哪个阶段分，不按失败类名分。**
