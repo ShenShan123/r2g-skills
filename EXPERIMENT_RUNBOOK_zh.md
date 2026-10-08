@@ -1295,6 +1295,42 @@ GDS 两臂字节相同（md5 `81094dc7f100`），CDL 的 md5 已变（`a648e8283
 两次都表现为「工具坏了」，实际都是我的路径/格式假设错。**第一个尤其值得记:
 一个报错信息里出现了不属于本设计的名字(`lcd_timing`),那是在提示输入拿错了,不是工具有毛病。**
 
+### `lvs_failed` 是检查器没判完,不是设计失配（2026-10-08，45 签核前 75 份）
+
+前 75 份里出现 3 个 `lvs_failed`（约 4%）。读日志后，**三个都不是比对出失配**：
+
+| 设计 | 日志里的真因 | run_lvs.sh 打印的措辞 |
+|---|---|---|
+| `C00019__tt_um_clash_mac` | `Pin count mismatch between circuit definition and circuit call: 5 expected, got 4`（deck 第 31 行，CDL 解析阶段抛异常） | `LVS FAILED — netlist mismatch detected` ← **措辞错**，解析失败说成检出失配 |
+| `C00062__Stage_IF` | klayout 的 Ruby 解释器栈回溯（`libruby` / `libklayout_rba` 崩溃） | `LVS completed — check logs for detailed results` ← **措辞错**，崩溃说成 completed |
+| `C00100__tp_mem` | 无法确定——**原始日志被我自己的探针覆盖了**（见下） | — |
+
+→ **`lvs_status` 的分类是对的**（`lvs_failed` 与 `mismatch` 分开记，所以漏斗不会把
+检查器故障算成设计缺陷），**但日志的人类可读措辞是错的**，照它判断会得出相反结论。
+`signoff45.py` 第 110-126 行的判决顺序（先认"拒绝判决"的情形，再认 match/mismatch）
+正是防这个，所以机器判决没被污染——这是「先分类拒绝、后分类结论」这个设计救了一次。
+
+待修：`run_lvs.sh` 在 klayout 非零退出或抛 RuntimeError 时，不应打印
+`LVS FAILED — netlist mismatch detected` 或 `LVS completed`，应打印
+「检查器未能判决」并写进 `lvs_result.json` 的 `reason`（现在 reason 为空，所以
+`signoff45.py` 只能落到通用的 `lvs_failed`，损失了可分类性）。
+
+### 我的诊断探针覆盖了它要读的证据
+
+`signoff45.py` 第 107 行把 LVS 日志写进 **`run_dir/lvs_signoff.log`**，也就是语料的运行目录。
+我为了查 `C00100` 的失败原因，用 `S.one()` 重跑了一遍它，**于是探针的日志覆盖了原始签核的日志**——
+那个文件正是失败原因的唯一留存（签核的工作目录在第 132 行判完即 `rmtree`）。
+
+```
+污染前   lvs_signoff.log  含原始失败原因
+污染后   lvs_signoff.log  208 字节，内容是我探针自己的路径错误
+损坏范围 1 个文件（result.json 完好：探针调的是 one() 而非 one_and_record()，不写它）
+```
+
+**规则：读失败证据之前不要在同一个目录上重跑。** 任何探针都要用独立的
+`--runs` 副本，或者至少先把 `lvs_signoff.log` 拷出来。这次能挽回是因为另外两份
+`lvs_failed` 的日志还完好——换成只有一个实例就彻底查不了了。
+
 ## 七、漏斗怎么读才诚实
 
 **三层归因，按死在哪个阶段分，不按失败类名分。**
