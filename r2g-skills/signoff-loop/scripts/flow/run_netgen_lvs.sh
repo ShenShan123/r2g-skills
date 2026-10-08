@@ -329,7 +329,8 @@ rm -rf "$EXT_SCRATCH"; mkdir -p "$EXT_SCRATCH"
 rm -f "$EXTRACTED_SPICE" "$LVS_DIR/netgen_lvs.log" \
   "$LVS_DIR/netgen_lvs.rpt" "$LVS_DIR/netgen_lvs_result.json" \
   "$LVS_DIR/extracted.raw.spice" "$LVS_DIR/layout_normalization.json" \
-  "$LVS_DIR/library_normalization.json" "$LVS_DIR/standard_cells.normalized.spice"
+  "$LVS_DIR/library_normalization.json" "$LVS_DIR/standard_cells.normalized.spice" \
+  "$LVS_DIR/cell_overrides.json"
 
 # Connectivity-only extraction. LVS compares topology (devices + nets), never
 # parasitics, so capacitance/coupling/resistance extraction is pure waste here --
@@ -438,6 +439,18 @@ if [[ -n "$SC_SPICE" ]]; then
   NORMALIZED_SC_SPICE="$LVS_DIR/standard_cells.normalized.spice"
   python3 "$SKY130_NORMALIZER" library "$SC_SPICE" "$NORMALIZED_SC_SPICE" \
     --receipt "$LVS_DIR/library_normalization.json"
+  # CDL topology override (failure-patterns.md "sky130 LVS", CDL topology override): for the
+  # few cells whose CDL describes shared-node m=2 stacks where the layout has split stacks,
+  # use the open_pdks transistor-level SPICE definition (it matches the layout). Fails closed
+  # per cell; the receipt lists every replaced and every kept definition.
+  _PDK_SC_TRANSISTOR_SPICE="$PDK_ROOT/sky130A/libs.ref/$SC_LIB_NAME/spice/$SC_LIB_NAME.spice"
+  if [[ -f "$_PDK_SC_TRANSISTOR_SPICE" ]]; then
+    python3 "$(dirname "${BASH_SOURCE[0]}")/apply_sky130_cell_overrides.py" \
+      "$NORMALIZED_SC_SPICE" "$_PDK_SC_TRANSISTOR_SPICE" "$SC_LIB_NAME" \
+      --receipt "$LVS_DIR/cell_overrides.json"
+  else
+    echo "NOTE: no open_pdks SPICE for $SC_LIB_NAME; CDL topology overrides not applied" >&2
+  fi
   SC_SPICE="$NORMALIZED_SC_SPICE"
   NETGEN_COMPAT_SETUP="$(dirname "${BASH_SOURCE[0]}")/sky130_netgen_compat.tcl"
   NETGEN_EFFECTIVE_SETUP="$NETGEN_COMPAT_SETUP"
@@ -596,6 +609,8 @@ cat > "$LVS_DIR/netgen_lvs_result.json" << JSON_EOF
   "netgen_compat_setup_sha256": "$([[ -n "$NETGEN_COMPAT_SETUP" ]] && sha256sum "$NETGEN_COMPAT_SETUP" | cut -d' ' -f1 || true)",
   "power_connectivity_receipt": "$POWER_CONNECTIVITY_RECEIPT",
   "power_connectivity_receipt_sha256": "$(sha256sum "$POWER_CONNECTIVITY_RECEIPT" 2>/dev/null | cut -d' ' -f1 || true)",
+  "cell_override_receipt": "$([[ -f "$LVS_DIR/cell_overrides.json" ]] && echo "$LVS_DIR/cell_overrides.json" || true)",
+  "cell_override_receipt_sha256": "$(sha256sum "$LVS_DIR/cell_overrides.json" 2>/dev/null | cut -d' ' -f1 || true)",
   "magic_executable": "$MAGIC_EXE",
   "magic_version": "$MAGIC_VERSION",
   "magic_required": "$MAGIC_REQUIRED",
@@ -623,6 +638,7 @@ if [[ -n "$TARGET_RUN" && -d "$TARGET_RUN" ]]; then
   cp "$LVS_DIR"/netgen_lvs* "$TARGET_RUN/lvs/" 2>/dev/null || true
   cp "$LVS_DIR"/*normalization.json "$TARGET_RUN/lvs/" 2>/dev/null || true
   cp "$LVS_DIR"/power_connectivity.json "$TARGET_RUN/lvs/" 2>/dev/null || true
+  cp "$LVS_DIR"/cell_overrides.json "$TARGET_RUN/lvs/" 2>/dev/null || true
 fi
 
 echo ""

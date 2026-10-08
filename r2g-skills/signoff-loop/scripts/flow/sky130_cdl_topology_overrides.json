@@ -1,0 +1,28 @@
+{
+  "schema": "r2g.sky130_cdl_topology_overrides.v1",
+  "purpose": "Standard cells whose CDL describes a transistor topology that differs from the cell layout (shared-node m=2 series stacks vs the layout's split stacks). For these cells only, LVS uses the open_pdks transistor-level SPICE definition, which matches the layout. See references/failure-patterns.md, 'sky130 LVS', CDL topology override.",
+  "provenance": {
+    "method": "cell-level sweep: every cell extracted alone from the ORFS platform GDS with the flow's Magic options, compared by Netgen (flow compat setup) against the library-normalised ORFS platform CDL and against the layout-normalised open_pdks SPICE",
+    "date": "2026-10-04",
+    "cdl_source": "flow/platforms/sky130hd/cdl/sky130hd.cdl",
+    "cdl_source_sha256": "ae02cdc40c81943bbc3f4a16a6760e01afd12764a94e7836b7e168edf40ae29c",
+    "magic_version": "8.3.682",
+    "netgen_version": "1.5.323",
+    "cells_swept": 437,
+    "result": "412 match both references; 10 mismatch the CDL and match the PDK SPICE (listed here); 5 mismatch both (not overridden: dfbbp_1, xor3_4, probe_p_8, probec_p_8, lpflow_lsbuf_lh_isowell_4); 10 have no devices in the CDL (fill, tap, diode_2: not checked)"
+  },
+  "libraries": {
+    "sky130_fd_sc_hd": [
+      "sky130_fd_sc_hd__a2111oi_2",
+      "sky130_fd_sc_hd__a211oi_4",
+      "sky130_fd_sc_hd__a21boi_2",
+      "sky130_fd_sc_hd__a21oi_2",
+      "sky130_fd_sc_hd__a31o_4",
+      "sky130_fd_sc_hd__dlrtp_1",
+      "sky130_fd_sc_hd__ha_4",
+      "sky130_fd_sc_hd__o2111a_4",
+      "sky130_fd_sc_hd__o211a_4",
+      "sky130_fd_sc_hd__o211ai_4"
+    ]
+  }
+}
