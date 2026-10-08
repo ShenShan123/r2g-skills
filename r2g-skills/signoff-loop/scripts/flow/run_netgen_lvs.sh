@@ -299,11 +299,14 @@ rm -f "$POWERED_NETLIST"
     # LEF rather than of anything wrong with the DEF. Substitute each option
     # the platform config defines for itself.
     _r2g_lef() {
-      local _raw
+      # plain variables, not `local`: this function is defined inside the
+      # { ... } group command that writes the tcl, where bash rejects `local`
+      # at runtime and `bash -n` does not catch it. The repo test
+      # test_no_local_inside_the_tcl_group_command exists for exactly this, and
+      # it caught this very regression.
       _raw=$(grep -E "^[[:space:]]*(override[[:space:]]+)?export[[:space:]]+$1[[:space:]]*[?:]?=" \
         "$_pdir/config.mk" 2>/dev/null | head -1 | sed 's/^[^=]*=[[:space:]]*//')
       [[ -n "$_raw" ]] || return 0
-      local _v _val
       for _v in METAL_OPTION KVALUE TRACK_OPTION POWER_OPTION CORNER PLATFORM; do
         _val="${!_v:-}"
         if [[ -z "$_val" ]]; then

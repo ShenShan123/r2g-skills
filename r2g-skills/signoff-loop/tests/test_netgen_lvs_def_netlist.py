@@ -75,8 +75,13 @@ def test_the_fallback_reads_liberty_then_lef_then_def(src):
     # Order the generated tcl by the printf/`for` lines that emit it, not by
     # where the strings happen to appear in the file -- the comments mention
     # read_lef too, and keying on that made this test read its own prose.
-    block = src[src.index('} > "$LVS_DIR/write_powered_verilog.tcl"') - 2500:
-                src.index('} > "$LVS_DIR/write_powered_verilog.tcl"')]
+    # Bound the block by its own delimiters, not by a character count: the
+    # 2,500-char window this used broke the moment the gf180 well handling and
+    # its comments were added, failing on a script whose read_liberty was still
+    # first. A structural bound cannot drift that way.
+    end = src.index('} > "$LVS_DIR/write_powered_verilog.tcl"')
+    start = src.rindex('POWERED_NETLIST="$LVS_DIR/powered.v"', 0, end)
+    block = src[start:end]
     emit = [l.strip() for l in block.splitlines()
             if re.search(r"printf '(read_liberty|read_lef|read_def|write_verilog)", l)
             or "read_liberty" in l and "for _lib" in l]
