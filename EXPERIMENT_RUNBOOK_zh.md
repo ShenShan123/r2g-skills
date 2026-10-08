@@ -604,6 +604,135 @@ liberty 解析在日志里是秒级。→ **真正影响速度的是设计规模
 跑 20/35/50/65/80 五档，同样需要定向分配 + 重复 + 事先声明判据。
 
 
+## 六之八、gf180 实测：流程和 DRC 可用，LVS 卡在 LEF 缺井引脚（2026-10-08）
+
+### 结果速览
+
+| 项 | 状态 |
+|---|---|
+| 流程 | ✅ 5/5 pass（93–3,025 单元，80–240 秒），产物齐全含 `6_final.gds`/`.odb` |
+| PDK | ✅ `conda install -c litex-hub open_pdks.gf180mcuc`（144 MB），208 和 216 都已装 |
+| 官方 DRC | ✅ 跑通：53 个规则表拼成 7,884 行 deck，1,281 条规则，33.6 秒 |
+| 官方 KLayout LVS | ⚠️ 跑通但判 `Netlists don't match`，根因见下 |
+| Magic+Netgen LVS | ⚠️ 同一根因 |
+
+PDK 的签核材料比 ORFS 平台目录齐得多：DRC 191 个文件、LVS 291 个文件，都带官方
+`run_drc.py` / `run_lvs.py`。ORFS 的 `platforms/gf180/` 只有 RCX 规则，没有 DRC/LVS deck。
+
+### 怎么驱动官方 deck（两个坑）
+
+**DRC 必须自己拼装。** `main.drc` 只是 409 行的前导，真正的规则在 `rule_decks/*.drc`，
+由 `run_drc.py` 的 `generate_drc_run_template` 拼成一个文件。照它的逻辑复现：
+
+```
+main.drc + 所有 rule_decks/*.drc（排除 antenna|density|main|layers_def|tail）+ tail.drc
+并把 layers_def.drc 复制到运行目录（main.drc 按相对名加载它）
+```
+
+绕开 `run_drc.py` 是必要的：它 `import docopt` 和 `klayout.db`，而 conda 的 eda 环境
+没有 python、容器的 python 没有 pip、216 的系统 python 也没有 pip。
+deck 本身是纯 KLayout 脚本，`klayout -b -r` 直接跑即可（和 `run_drc.sh` 驱动
+sky130hd 的 deck 同一个做法）。
+
+**`FEOL`/`BEOL` 默认是 false，而且不传不会报错。** `bool_check?(obj)` 只认
+`obj.to_s.downcase == 'true'`，所以必须显式 `-rd feol=true -rd beol=true -rd conn_drc=true`。
+不传的话：**退出码 0、无任何报错、报告文件正常生成，但一条规则都没执行，违例数 0**。
+→ 这是个会骗人的陷阱，和本文档反复强调的「fail-soft 不是 pass」同一类。
+验收标志：日志里必须出现 `Running all FEOL rules` / `Running all BEOL rules`，
+且 lyrdb 的 `<category>` 数应在千级（实测 1,281）。
+
+**LVS 不用拼装**：`gf180mcu.lvs` 用 `%include rule_decks/...`，KLayout 自己处理。
+它的输入是 `$input`(GDS)、`$schematic`(参考网表)、`$topcell`、`$report`、
+`$target_netlist`，加 `$lvs_sub`(衬底名，默认 `gf180mcu_gnd`)、
+`$schematic_simplify`、`$purge_nets`、`$top_lvl_pins`、`$run_mode`(flat/deep)。
+
+### DRC 的 820 条违例是真问题，不是 asap7 那种下限
+
+规模标度实验（5 份设计，93 到 3,025 单元）：
+
+| 设计 | 单元 | 违例 | 违例/单元 |
+|---|---|---|---|
+| corescore_emitter_uart | 93 | 820 | 8.8 |
+| wbarbiter | 111 | 1,264 | 11.4 |
+| rom_divide | 521 | 3,759 | 7.2 |
+| avg_n_per_clk | 1,108 | 11,241 | 10.1 |
+| rotate_mapper | 3,025 | 28,174 | 9.3 |
+
+**严格线性，每单元约 9 条。** 对比 asap7 的每份 8–25 条、与规模无关——那是来自单元库和
+tech LEF 的固定下限，流程动不了；这里是流程产出的几何，流程可控。
+
+只有 4 种规则触发，在所有规模下分布一致：
+
+| 规则 | 含义 | 占比 | 性质 |
+|---|---|---|---|
+| V2.1 / V3.1 | via2 / via3 尺寸必须恰好 0.26 µm | 约 82%，两者数量**始终完全相等** | 布线器画的 via 尺寸与 deck 要求不符 → ORFS gf180 tech LEF 的 VIA 定义问题 |
+| DF.13_MV / DF.14_MV | 衬底接触(tap)到 NCOMP 的最大距离 15 µm（MV 5V 器件；LV 是 20 µm） | 约 18% | tap cell 放得不够密 → tapcell 间距要按 MV 的 15 µm 设，不是 LV 的 20 µm |
+
+**ORFS 自己从未发现这两类**：它对 gf180 的门槛和 asap7 一样只用布线器内部检查，
+我们跑的 5 份 `route_drc` 全是 0。
+
+### LVS 卡住的根因：ORFS 的 gf180 LEF 缺 VNW/VPW 引脚
+
+三条路（Magic+Netgen、KLayout LVS）都倒在同一处，证据链：
+
+```
+① write_cdl 的警告（决定性）
+   [WARNING ODB-0286] Terminal VNW of CDL master ..._xor3_2 not found in LEF
+   [WARNING ODB-0286] Terminal VPW of CDL master ..._xor3_2 not found in LEF
+   → PDK 的 spice 里单元有 6 个端口（信号 + VDD + VNW + VPW + VSS）
+     ORFS 的 LEF 只声明了 4 个（信号 + VDD + VSS）
+
+② 于是生成的 CDL 把井端口填成假网络
+   X_077_ cnt[1] _001_ VDD _unconnected_0 _unconnected_1 VSS ..._clkinv_2
+                            ↑ 这两个就是 VNW / VPW
+
+③ Magic 提取侧则如实给出井/衬底端口
+   .subckt ..._dlyb_2 I VDD VSS Z SUB w_n86_453#
+   而 Verilog 侧（write_verilog 也读同一份 LEF）只有 I VDD VSS ZN
+   → Netgen: 器件数一致 106 vs 106，线网数 120 vs 332
+```
+
+对比 **sky130 为什么能工作**：sky130 的单元把井/衬底做成显式引脚 `VPB`/`VNB`，
+liberty 和 LEF 都声明了，所以两侧都有、能对上
+（`.subckt sky130_fd_sc_hd__fa_1 VNB VPB VGND VPWR B COUT A CIN SUM`）。
+
+**这不是我们脚本的缺陷，是 ORFS 的 gf180 平台 LEF 与 PDK 单元定义不一致。**
+修复方向（未验证，按代价排序）：
+1. 给 ORFS 的 `gf180mcu_*_sc.lef` 补 VNW/VPW 的 PIN 定义（从 PDK 的 GDS/spice 取几何）；
+2. 或在 LVS 前用 `lvs_sub` + Netgen 的 `property`/`ignore` 把井端口并到 VDD/VSS；
+3. 或接受井端口缺失，只比对器件级连接（会削弱 LVS 的检出能力，不推荐）。
+
+另有两个 KLayout LVS 侧的参数问题，和上面的根因独立：
+- `run_mode=flat` 会把版图压成晶体管级（0 subckt / 1,430 器件），
+  而 CDL 侧是单元级（1 subckt / 174 实例）——两边抽象层次不同，必然不匹配。要用 `deep`。
+- 顶层端口名提取成数字（`1 5 8 9 15 …`）而不是信号名，因为 GDS 里没有端口标签。
+  需要 `top_lvl_pins` 配合 GDS 的 text 标签，或从 DEF 补端口名。
+
+### 顺带修掉的一个真缺陷
+
+`run_netgen_lvs.sh` 的网表守卫硬编码了 sky130 的 `VPWR`：
+
+```
+if [[ … ]] || ! grep -q 'VPWR' "$POWERED_NETLIST" …
+```
+
+gf180 的单元把电源轨叫 `VDD`/`VSS`，于是一个**正确的 46 KB 网表**（515 个 `.VDD` 连接）
+被判成「生成失败」。已参数化为 `PWR_PIN`（sky130→VPWR，gf180→VDD）。
+这个缺陷会影响任何非 sky130 平台。同时补了平台分支（magic tech / netgen setup /
+spice 路径）和 `SC_LIB_TT`（gf180 的典型角是 `__tt_025C_5v00.lib.gz`，
+不是 sky130 的 `__tt_025C_1v80.lib`，而且是 gzip 的）。
+
+### 顺带澄清：45 的 12 worker × 8 核为什么只跑出负载 33
+
+不是配置问题。12 个容器所处阶段实测：yosys 4 个、floorplan 1 个、place_gp 2 个、
+place_dp 1 个、cts 2 个、grt 2 个、**route 1 个**。
+**只有详细布线会真正吃满 8 核**，其余阶段基本单线程。
+所以 `workers × cores` 是峰值配置，只在多数设计同时进入详细布线时才满载——
+sky130hd 主线同样如此，负载在 20–80 之间摆动。
+→ 不要据此加 worker（详细布线高峰会超订），更不要降 `cores-per-design`
+（线程数可能改变布线结果，见六之二）。
+
+
 ## 七、漏斗怎么读才诚实
 
 **三层归因，按死在哪个阶段分，不按失败类名分。**

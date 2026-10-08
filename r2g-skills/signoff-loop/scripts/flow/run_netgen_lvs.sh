@@ -77,9 +77,18 @@ case "$PLATFORM" in
     MAGIC_TECH="$PDK_ROOT/sky130A/libs.tech/magic/sky130A.tech"
     NETGEN_SETUP="$PDK_ROOT/sky130A/libs.tech/netgen/sky130A_setup.tcl"
     ;;
+  gf180)
+    # gf180mcu ships the same tree shape as sky130A (open_pdks.gf180mcuc), so
+    # the whole Magic-extract + Netgen-compare path is reused unchanged; only
+    # these paths and the cell-library names below differ. The C variant is what
+    # open_pdks packages; a future A/B variant would need its own branch rather
+    # than a glob, so a missing PDK stays a clear error instead of a wrong tech.
+    MAGIC_TECH="$PDK_ROOT/gf180mcuC/libs.tech/magic/gf180mcuC.tech"
+    NETGEN_SETUP="$PDK_ROOT/gf180mcuC/libs.tech/netgen/gf180mcuC_setup.tcl"
+    ;;
   *)
     echo "WARNING: Netgen LVS not supported for platform $PLATFORM" >&2
-    echo "Supported platforms: sky130hd, sky130hs" >&2
+    echo "Supported platforms: sky130hd, sky130hs, gf180" >&2
     LVS_DIR="$PROJECT_DIR/lvs"
     mkdir -p "$LVS_DIR"
     echo '{"tool": "netgen", "status": "skipped", "reason": "Netgen LVS not supported for platform '"$PLATFORM"'"}' > "$LVS_DIR/netgen_lvs_result.json"
@@ -178,8 +187,24 @@ fi
 LVS_DIR="$PROJECT_DIR/lvs"
 mkdir -p "$LVS_DIR"
 case "$PLATFORM" in
-  sky130hd) SC_LIB_NAME="sky130_fd_sc_hd" ;;
-  sky130hs) SC_LIB_NAME="sky130_fd_sc_hs" ;;
+  sky130hd) SC_LIB_NAME="sky130_fd_sc_hd"; SC_LIB_TT="__tt_025C_1v80.lib"
+            PWR_PIN="VPWR" ;;
+  sky130hs) SC_LIB_NAME="sky130_fd_sc_hs"; SC_LIB_TT="__tt_025C_1v80.lib"
+            PWR_PIN="VPWR" ;;
+  gf180)
+    # The cell library depends on the track and power options the flow was
+    # configured with, and gf180's typical corner is 5 V at 25 C and gzipped --
+    # hardcoding sky130's 1v80 name would silently find nothing and report
+    # "no Liberty found" on a platform that has it.
+    _trk="${TRACK_OPTION:-9t}"; _pwr="${POWER_OPTION:-5v0}"
+    SC_LIB_NAME="gf180mcu_fd_sc_mcu${_trk}${_pwr}"
+    SC_LIB_TT="__tt_025C_5v00.lib.gz"
+    # gf180's cells name their rails VDD/VSS, not sky130's VPWR/VGND. The
+    # post-write_verilog sanity check greps for this pin to prove the netlist
+    # really came out power-aware; with sky130's name hardcoded it rejected a
+    # perfectly good 46 KB netlist carrying 515 .VDD connections.
+    PWR_PIN="VDD"
+    ;;
 esac
 _powered_netlist_unavailable() {  # $1 = detail
   echo "ERROR: powered-netlist generation failed; not comparing against the unpowered $VERILOG_NETLIST" >&2
@@ -222,7 +247,7 @@ for _lib_dir in "$FLOW_DIR/objects/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT/lib" \
   (( ${#LVS_LIBS[@]} )) && break
 done
 if (( ${#LVS_LIBS[@]} == 0 )); then
-  for _lib in "$FLOW_DIR/platforms/$PLATFORM/lib/${SC_LIB_NAME}__tt_025C_1v80.lib"; do
+  for _lib in "$FLOW_DIR/platforms/$PLATFORM/lib/${SC_LIB_NAME}${SC_LIB_TT:-__tt_025C_1v80.lib}"; do
     [[ -f "$_lib" ]] && LVS_LIBS+=("$_lib")
   done
 fi
@@ -267,7 +292,8 @@ rm -f "$POWERED_NETLIST"
 _PWR_RC=0
 r2g_bounded_run "${R2G_POWERED_NETLIST_TIMEOUT:-900}" 30 "$LVS_DIR/write_powered_verilog.log" \
   "$OPENROAD_EXE" -no_init -exit "$LVS_DIR/write_powered_verilog.tcl" || _PWR_RC=$?
-if [[ $_PWR_RC -ne 0 || ! -s "$POWERED_NETLIST" ]] || ! grep -q 'VPWR' "$POWERED_NETLIST" \
+if [[ $_PWR_RC -ne 0 || ! -s "$POWERED_NETLIST" ]] \
+   || ! grep -q "${PWR_PIN:-VPWR}" "$POWERED_NETLIST" \
    || grep -qE '^Signal [0-9]+ received|^(free|malloc|realloc)\(\): |corrupted (size|double-linked)|double free or corruption' \
         "$LVS_DIR/write_powered_verilog.log"; then
   _powered_netlist_unavailable "openroad write_verilog exit=$_PWR_RC (see $LVS_DIR/write_powered_verilog.log)"
@@ -291,7 +317,11 @@ mkdir -p "$LVS_DIR"
 # spurious mismatch even when device counts match. See references/failure-patterns.md
 # "sky130 LVS" (2026-06-11). Production fix: load the cell library into the schematic
 # circuit so both sides expand to transistors.
-SC_SPICE="$PDK_ROOT/sky130A/libs.ref/$SC_LIB_NAME/spice/$SC_LIB_NAME.spice"
+case "$PLATFORM" in
+  gf180) _pdk_dir="gf180mcuC" ;;
+  *)     _pdk_dir="sky130A" ;;
+esac
+SC_SPICE="$PDK_ROOT/$_pdk_dir/libs.ref/$SC_LIB_NAME/spice/$SC_LIB_NAME.spice"
 if [[ ! -f "$SC_SPICE" ]]; then
   echo "WARNING: std-cell SPICE not found at $SC_SPICE — schematic cells will be hollow" >&2
   SC_SPICE=""
