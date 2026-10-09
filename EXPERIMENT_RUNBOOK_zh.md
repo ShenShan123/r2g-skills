@@ -1534,6 +1534,34 @@ campaign 已完成、以及进程被有意替换，都被监控读成故障。�
 **前置条件**：本轮签核（修版 deck、`--force` 全量 2,213 份）跑完。现在动
 `signoff45.py` 等于让 24 小时的运行重来。
 
+### 45 签核收尾清单（本轮跑完后按序做）
+
+本轮签核：`signoff45.py --workers 24 --timeout 7200 --force`，
+2026-10-09 02:46 重启，用挂载覆盖的 deck
+（`$D/drcfix/FreePDK45_tiled.lydrc`，04:50 原子换成分节分块版 sha `965425b4`，
+未中断；逐条补丁版留在 `FreePDK45_perrule.lydrc.bak` 以便复核）。
+
+1. **补跑超时的那批**（预计约 28 份，换 deck 前判的）。先按
+   `drc_status == "timeout"` 列出，再用同一驱动 `--force` 只跑这些，约 6 分钟。
+   换 deck 后判出的不必重跑：两个 deck 的输出已证等价（257s vs 263s，19 条违例
+   逐条一致，天线逐层相同）。
+2. **核对等价性**：对 `stock_deck_verdicts.json`（378 份 stock 判决）逐份比对，
+   排除原本超时的。截至 234 份时是 155 一致 / 0 不一致。**不一致必须查清再往下走。**
+3. **漏斗分析**：`python3 funnel.py $D/n45_full`（注意默认参数是 sky130hd 的
+   `full_out`，不传参会答错平台）。前端失败集合与 sky130hd 的比对已做完
+   —— 182 份逐份相同，差集为零，见前面那节。
+4. **飞书第十二节**：`cd /home/yangao/cpipc/feishu_api && python3 replace_doc.py
+   /home/yangao/cpipc/feishu/r2g_sky130hd_2026-10-07.txt TXyndtLNWoHbPGxqLdmc3vzMnvf`
+   —— **必须前台跑**（nohup 和后台都被杀过），约 3 分钟。
+5. **签核脚本合并**（方案见前面那节），用三平台全量数据做逐份验证。
+6. **启动 gf180 全流程**：`chain180.sh`，10 ns、12 workers × 8 核。
+7. **把 deck 修复同步到实际跑的地方**：仓库里的 `FreePDK45.lydrc` 已是分节分块版
+   （`eb189b0`），但 216 上是靠 `R2G_DRC_DECK_OVERRIDE` 挂载生效的；
+   `tools/install_nangate45_drc.sh` 装的才是长期路径，换机器时记得跑它。
+
+**待办（本轮不处理）**：`run_lvs.sh` 在 klayout 抛异常时打印
+`LVS FAILED — netlist mismatch detected`，措辞与事实相反（见前面那节）。
+
 ## 七、漏斗怎么读才诚实
 
 **三层归因，按死在哪个阶段分，不按失败类名分。**
