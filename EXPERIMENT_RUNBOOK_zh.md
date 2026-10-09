@@ -1484,6 +1484,56 @@ campaign 已完成、以及进程被有意替换，都被监控读成故障。�
 结果把执行这个循环的 shell 自己也列了进去 —— 今天第三次。
 `pgrep -x` 加上对具体路径前缀的匹配才可靠。
 
+### 待办：合并三平台的签核脚本（本轮签核结束后做，约 2026-10-10）
+
+现状是两套脚本服务三个平台：`signoff_pass.py`（sky130hd + gf180，`--platform`
+参数化）和 `signoff45.py`（nangate45，`PLAT` 硬编码）。
+
+**合并的理由不是「代码重复」，而是分叉已经生产出两笔实际损失：**
+
+| # | 损失 | 代价 |
+|---|---|---|
+| ① | `signoff45.py` 缺了 `signoff_pass.py` 一直有的产物保留 | 130 存了 2,156 个 lyrdb，45 存了 **0** 个；CONTACT.3 这个根因在整个 campaign 里不可见，而 `run_drc.sh` 每次超时都在日志里写着 `DRC STUCK on FreePDK45.lydrc:131` |
+| ② | 字段名分歧 | 签核耗时在 45 叫 `signoff_seconds`、在 130 叫 `drc_seconds`，**没有跨平台统一键**；我误用 `seconds`（流程耗时）连续给出三个错误成本估算 |
+
+落盘键的实际分歧：
+
+```
+                  130 + 180                 45
+违例数            drc_violations_signoff    drc_violations_signoff    同
+耗时              drc_seconds               signoff_seconds           不同
+检查器标记        drc_checker               signoff_checker           不同
+内部变量          out["violations"]         out["drc_violations"]     不同
+```
+
+**合并时必须保留的平台差异（都是实测出来的，不能一把抹平）：**
+
+- **nangate45** 走冻结版图 LVS 回退：`make lvs` 在只保留尾部产物（`6_final.*` +
+  `5_route.odb`）的运行上解不开阶段链，会一路回退到综合输入然后
+  `No rule to make target`。回退逻辑在 `run_lvs.sh` 第 265 行起，由 make 自身的
+  失败触发而非预测。
+- **sky130hd** 的 KLayout LVS 需要 r2g 的斜杠与短路电阻 CDL 修正（`run_lvs.sh`
+  只对 `sky130*` 施加）。
+- **gf180** 走 Netgen + Magic：它的 setup 有 11 条填充单元的 `ignore class`，
+  而 KLayout deck 一条都没有（在填充过的数字版图上只能配对 21% 的器件）。
+- **DRC deck 覆盖**：45 现在用打了补丁的 `FreePDK45.lydrc`（CONTACT.3 分块化），
+  通过 `R2G_DRC_DECK_OVERRIDE` 挂载。合并后这个开关要保留 —— 等价性这个说法
+  只有在未打补丁的 deck 仍然跑得起来时才可复核。
+
+**验证方法（与今天证 deck 等价性同构）：合并前后的判决必须逐份一致。**
+本轮签核结束时三平台数据齐全，共约 6,600 份判决。做法：
+
+1. 合并前把三平台的 `{drc_status, 违例数, lvs_status}` 全量快照
+   （45 的已在 `stock_deck_verdicts.json`，130/180 照做）。
+2. 用合并后的脚本在**每个平台各抽 60 份**重跑（含 clean / violations /
+   timeout / lvs_failed / mismatch 各类都要有代表，否则是空测试 —— 今天那个
+   `0 == 0` 就是这么来的）。
+3. 判决与快照逐份比对：类别、违例数、LVS 状态三者全等才算通过。
+4. 统一字段名后，**旧键要继续写出**一轮，否则已有的分析脚本会静默读到 `None`。
+
+**前置条件**：本轮签核（修版 deck、`--force` 全量 2,213 份）跑完。现在动
+`signoff45.py` 等于让 24 小时的运行重来。
+
 ## 七、漏斗怎么读才诚实
 
 **三层归因，按死在哪个阶段分，不按失败类名分。**
