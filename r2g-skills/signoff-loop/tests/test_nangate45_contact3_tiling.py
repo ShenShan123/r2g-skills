@@ -73,8 +73,36 @@ def test_tiled_contact3_matches_untiled(tmp_path: pathlib.Path) -> None:
     # silently making both arms identical.
     patched = BUNDLED.read_text(encoding="utf-8")
     assert "tiles(200.um)" in patched, "补丁不在 deck 里"
-    stock = patched.replace("tiles(200.um)\ntile_borders(2.um)\n" + RULE
-                            + "\ndeep", RULE)
+    # Strip the section-scoped tiling: the two switches the patch inserted
+    # around the geometric checks, plus the comment block explaining them.
+    lines = patched.splitlines()
+    keep = [l for l in lines
+            if not l.startswith("# R2G: tile the geometric checks")
+            and l.strip() not in ("tiles(200.um)", "tile_borders(2.um)")]
+    # the comment block runs until the tiles() line, so drop its remainder too
+    out, in_block = [], False
+    for l in lines:
+        s = l.strip()
+        if l.startswith("# R2G: tile the geometric checks"):
+            in_block = True
+            continue
+        if in_block:
+            if s in ("tiles(200.um)", "tile_borders(2.um)") or s.startswith("#"):
+                continue
+            in_block = False
+        if s in ("tiles(200.um)", "tile_borders(2.um)"):
+            continue
+        out.append(l)
+    # and the `deep` the patch added before the antenna section
+    for i, l in enumerate(out):
+        if l.strip() == "deep" and i + 1 < len(out) \
+                and out[i + 1].strip() == "# Antenna checks":
+            del out[i]
+            break
+    else:
+        raise AssertionError("找不到天线段前的 deep，剥离不完整")
+    stock = "\n".join(out) + "\n"
+    assert "tiles(200.um)" not in stock, "剥离后仍有 tiles，两臂会是同一个 deck"
     assert stock != patched, "剥离补丁后内容没变，两臂会是同一个 deck"
     stock_deck = tmp_path / "stock.lydrc"
     stock_deck.write_text(stock, encoding="utf-8")

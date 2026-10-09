@@ -99,6 +99,29 @@ end
 ####################
 # TODO(rovinski) Via enclosure rules (METALx.3, METALx.4) do not appear to correctly identify violations
 
+# R2G: tile the geometric checks. Several unions below are over layers
+# that blanket the die -- well = nwell.or(pwell), implant =
+# nplus.or(pplus), and CONTACT.3's active.or(poly.or(metal1)). Under
+# `deep` each degenerates to die-sized polygons, the hierarchy collapses
+# (flat and hierarchical counts become equal) and the run stalls: 938s
+# reaching 21 of 132 rules on a 6,563-cell design, which also hid 19 real
+# antenna violations behind the 111 rules it never reached.
+#
+# Everything from here to the antenna section is a local geometric test
+# (and/or/not/space/width/enclosing/separation), so per-tile evaluation
+# with a border is exact. `deep` resumes before the antenna checks, which
+# trace nets across the die via connect/antenna_check -- tiling those
+# would make them WRONG, not merely slower. Both switches sit OUTSIDE the
+# `if FEOL` / `if ANTENNA` blocks: inside, disabling a section would drop
+# the mode switch with it and leave the antenna checks tiled.
+#
+# Equivalence measured two ways: against the unpatched deck on
+# tests/fixtures/nangate45_contact3.gds (identical categories and
+# geometry, including a contact half over metal1), and against a per-rule
+# tiling of CONTACT.3 alone on a routed design -- 257s vs 263s, both 480
+# steps, 19 violations with antennas matching per layer.
+tiles(200.um)
+tile_borders(2.um)
 # FEOL checks
 if FEOL
 info("FEOL checks")
@@ -144,21 +167,7 @@ nplus.and(pplus).output("IMPLANT.5", "IMPLANT.5 : Nimplant and pimplant must not
 # Contact
 cont.width(65.nm).output("CONTACT.1", "CONTACT.1 : Minimum/Maximum width of contact : 65nm")
 cont.space(75.nm, euclidian).output("CONTACT.2", "CONTACT.2 : Minimum spacing of contact : 75nm")
-# R2G: CONTACT.3 unions active+poly+metal1 and subtracts it from the
-# contacts. metal1 covers the die after routing, so under `deep` that union
-# becomes die-sized and the hierarchical engine falls back to flat --
-# measured 938s reaching 21 of 132 rules before the bound, against 257s for
-# all 133 with the tiling below. The rule is local (a contact against the
-# metal overlapping it), so per-tile evaluation with a border is exact.
-# Equivalence measured against the unpatched deck on
-# tests/fixtures/nangate45_contact3.gds -- identical categories and
-# geometry, including a contact half over metal1 -- and cross-checked
-# against an independent not_inside-based rewrite on a routed design.
-# `deep` resumes on the next line so no other rule's mode changes.
-tiles(200.um)
-tile_borders(2.um)
 cont.not(active.or(poly.or(metal1))).output("CONTACT.3", "CONTACT.3 : contact must be inside active or poly or metal1")
-deep
 active.enclosing(cont, 5.nm, euclidian).output("CONTACT.4", "CONTACT.4 : Minimum enclosure of active around contact : 5nm")
 poly.enclosing(cont, 5.nm, euclidian).output("CONTACT.5", "CONTACT.5 : Minimum enclosure of poly around contact : 5nm")
 cont.separation(poly, 35.nm, euclidian).output("CONTACT.6", "CONTACT.6 : Minimum spacing of contact and poly : 35nm")
@@ -347,6 +356,7 @@ all_drawing = [ :well, :active, :vtg, :vth, :pplus, :nplus, :poly, :thkox, :cont
 #end
 end # OFFGRID
 
+deep
 # Antenna checks
 
 if ANTENNA
