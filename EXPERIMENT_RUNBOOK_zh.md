@@ -1310,6 +1310,21 @@ GDS 两臂字节相同（md5 `81094dc7f100`），CDL 的 md5 已变（`a648e8283
 `signoff45.py` 第 110-126 行的判决顺序（先认"拒绝判决"的情形，再认 match/mismatch）
 正是防这个，所以机器判决没被污染——这是「先分类拒绝、后分类结论」这个设计救了一次。
 
+**而工具早就把答案写在日志里了。** 验证超时上限时顺手看到 `run_drc.sh` 的输出：
+
+```
+ERROR: DRC timed out after 2400s
+DRC STUCK on FreePDK45.lydrc:131 after 2400s — see references/failure-patterns.md
+```
+
+**`run_drc.sh` 一直在报卡在哪一行，而那一行正是 CONTACT.3。** 这个信息在每一次超时里
+都产生过，但 `signoff45.py` 不保存 DRC 日志，所以 437 份超时设计各自都带着指向真因的
+线索，我们一条也看不到 —— 我因此绕道去「边跑边采样日志」才定位到同一行。
+
+→ **诊断信息的价值取决于它是否被保留。** 一个会写出根因的工具，配上一个丢弃它输出的
+驱动，等于没有诊断。补产物保留（上一节）比我那番采样工作重要得多，因为它让下一个
+同类问题在第一次就能被看见，而不是靠人再去复现一遍。
+
 待修：`run_lvs.sh` 在 klayout 非零退出或抛 RuntimeError 时，不应打印
 `LVS FAILED — netlist mismatch detected` 或 `LVS completed`，应打印
 「检查器未能判决」并写进 `lvs_result.json` 的 `reason`（现在 reason 为空，所以
