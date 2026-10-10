@@ -32,6 +32,68 @@ D = Path("/proj/workarea/yangao")
 R2G = D / "r2g" / "signoff-loop"
 
 
+# gf180's foundry DRC is not an ORFS .lydrc. It is ~30 PDK rule tables that
+# assemble into one main.drc with its own switch interface, so run_drc.sh finds
+# no deck (platforms/gf180 carries no drc/ dir and no KLAYOUT_DRC_FILE) and its
+# `-rd in_gds=` / `-rd report_file=` call would not fit the deck either -- gf180
+# wants input=/topcell=/report= plus the option switches below. Run the PDK deck
+# directly, with the invocation measured on the 8 curve designs, the deep/tiling
+# mode comparison and the 35,583-cell curve anchor, and normalise the output so
+# the verdict parsing in one() stays platform-agnostic.
+# The deck is assembled from the PDK rule tables by
+# tools/assemble_gf180_drc_deck.sh (density.drc deliberately excluded --
+# see that script). It is NOT a hand-made directory.
+GF180_DECK = D / "gf180_deck_signoff"
+GF180_SWITCHES = ("metal_top=9K", "mim_option=B", "metal_level=5LM",
+                  "feol=true", "beol=true", "conn_drc=true",
+                  # flat, not deep or tiling: deep never reached the rules in
+                  # 2h (no hierarchy to share -- 1.82x MORE polygons than flat),
+                  # and tiling is 4.3x faster but breaks M3.2b's whole-shape
+                  # `not_interacting` predicate, inventing 6 false violations at
+                  # 500um tiles and 97 at 250um where flat reports none.
+                  "run_mode=flat", "offgrid=false", "thr=4")
+
+
+def _drc_gf180(proj: Path, top: str, timeout: int) -> str:
+    """Run the gf180 PDK deck; return a log carrying a normalised verdict line."""
+    gds = proj / "backend" / "RUN_1" / "results" / "6_final.gds"
+    out = proj / "drc"
+    out.mkdir(parents=True, exist_ok=True)
+    rd = " ".join(f"-rd {sw}" for sw in GF180_SWITCHES)
+    r = subprocess.run(
+        ["podman", "run", "--rm",
+         # The read-only mounts ARE the frozen-layout guard on this path:
+         # run_drc.sh's digest check (RMD-P0-01) does not run here, and a deck
+         # or GDS the container cannot write cannot change under signoff.
+         "-v", f"{GF180_DECK}:/deck:ro,Z",
+         "-v", f"{gds.parent}:/src:ro,Z",
+         "-v", f"{out}:/out:Z",
+         IMAGE, "bash", "-lc",
+         # The INNER timeout is load-bearing. With only the outer podman
+         # killed, the container kept KLayout alive: a 7200s bound took 11,232s
+         # of wall clock to actually stop (measured on the deep-mode run).
+         # Killing inside the container lets podman exit at once.
+         f"cd /deck && timeout --kill-after=60 {timeout} "
+         f"klayout -b -r main.drc -rd input=/src/{gds.name} "
+         f"-rd topcell={top} -rd report=/out/6_drc.lyrdb {rd}"],
+        capture_output=True, text=True, timeout=timeout + 900)
+    log = (r.stdout or "") + (r.stderr or "")
+    if r.returncode in (124, 137):
+        # the same wording run_drc.sh:303 prints, so one() classifies it alike
+        return log + f"\nERROR: DRC timed out after {timeout}s\n"
+    lyrdb = out / "6_drc.lyrdb"
+    if r.returncode != 0 or not lyrdb.is_file():
+        return log
+    # KLayout writes the report database at the END, so a present file means
+    # the run completed. Count <item>: that is one violation. run_drc.sh:311
+    # counts <value> instead, and on gf180 the two agree exactly (checked on
+    # 11 / 43,394 / 346,797-violation databases), so this number is comparable
+    # with the other platforms' -- but <item> stays correct if a future item
+    # ever carries more than one value.
+    n = lyrdb.read_text(errors="replace").count("<item>")
+    return log + f"\nDRC completed: {n} violations\n"
+
+
 def one(run_dir: Path, projroot: Path, timeout: int,
         platform: str = "sky130hd") -> dict:
     out = {"design": run_dir.name, "drc_status": "skipped",
@@ -97,31 +159,78 @@ def one(run_dir: Path, projroot: Path, timeout: int,
         shutil.rmtree(w, ignore_errors=True)
 
     variant = run_dir.name
+    r = None
     try:
-        r = subprocess.run(
-            ["podman", "run", "--rm",
-             "-v", f"{R2G}:/r2g:ro,Z", "-v", f"{projroot}:{projroot}:Z",
-             "-e", "NUM_CORES=4", IMAGE, "bash", "-lc",
-             # run_drc.sh's find over the ORFS logs dir aborts under `set -e`
-             # when the dir is absent, so create the tree it restages into.
-             f"mkdir -p $ORFS_ROOT/flow/logs/{platform}/{top}/{variant} "
-             f"$ORFS_ROOT/flow/reports/{platform}/{top}/{variant} "
-             f"$ORFS_ROOT/flow/objects/{platform}/{top}/{variant}; "
-             f"bash /r2g/scripts/flow/run_drc.sh '{proj}' {platform}"],
-            capture_output=True, text=True, timeout=timeout)
+        if platform == "gf180":
+            log = _drc_gf180(proj, top, timeout)
+        else:
+            log = None
+            r = subprocess.run(
+                ["podman", "run", "--rm",
+                 "-v", f"{R2G}:/r2g:ro,Z", "-v", f"{projroot}:{projroot}:Z",
+                 # run_drc.sh:200 reads DRC_TIMEOUT and defaults it to 7200, and
+                 # this script never passed it. Raising only the subprocess bound
+                 # below changes NOTHING: the inner r2g_bounded_run still kills
+                 # KLayout at 7200s and the design is recorded drc_failed rather
+                 # than running longer. Both layers move together, and the outer
+                 # one gets headroom so the INNER bound fires first -- that path
+                 # writes a log and a verdict; the outer one kills blind.
+                 "-e", f"DRC_TIMEOUT={timeout}",
+                 "-e", "NUM_CORES=4", IMAGE, "bash", "-lc",
+                 # run_drc.sh's find over the ORFS logs dir aborts under `set -e`
+                 # when the dir is absent, so create the tree it restages into.
+                 f"mkdir -p $ORFS_ROOT/flow/logs/{platform}/{top}/{variant} "
+                 f"$ORFS_ROOT/flow/reports/{platform}/{top}/{variant} "
+                 f"$ORFS_ROOT/flow/objects/{platform}/{top}/{variant}; "
+                 f"bash /r2g/scripts/flow/run_drc.sh '{proj}' {platform}"],
+                capture_output=True, text=True, timeout=timeout + 900)
     except subprocess.TimeoutExpired:
         out.update(drc_status="timeout", seconds=round(time.time() - t0, 1))
+        # proj is removed per design, so without this the log of a timed-out
+        # design is the only copy and it goes with it -- which is what made
+        # nangate45's timeout categories unknowable. The designs that still
+        # time out at a raised bound are exactly the ones that need the
+        # "too big" vs "stuck" classification, so keep their evidence.
+        for _d in proj.rglob("6_drc.log"):
+            try:
+                (run_dir / "drc_signoff.log").write_text(
+                    _d.read_text(errors="replace")[-200000:])
+            except OSError:
+                pass
+            break
+        for _lyrdb in proj.rglob("6_drc.lyrdb"):
+            try:
+                shutil.copy2(_lyrdb, run_dir / "6_drc.lyrdb")
+            except OSError:
+                pass
+            break
         shutil.rmtree(proj, ignore_errors=True)
         return out
 
-    log = (r.stdout or "") + (r.stderr or "")
+    if log is None:
+        log = (r.stdout or "") + (r.stderr or "")
     (run_dir / "drc_signoff.log").write_text(log[-20000:])
     m = re.search(r"DRC completed:\s*(\d+)\s*violations", log)
     if m:
         out["violations"] = int(m.group(1))
         out["drc_status"] = "clean" if out["violations"] == 0 else "violations"
-    elif "no_drc_deck_for_platform" in log:
+    elif ("no_drc_deck_for_platform" in log
+          or "no KLayout DRC deck found" in log):
+        # run_drc.sh writes the machine-readable reason into drc_result.json but
+        # prints a DIFFERENT sentence to stderr, which is all this script sees,
+        # so the old single-string test never matched and an unsupported
+        # platform was reported as a checker failure. Latent until gf180 --
+        # every other platform here ships a deck.
         out["drc_status"] = "no_deck"
+    elif "DRC timed out after" in log:
+        # run_drc.sh:303 on DRC_STATUS==124. Now that the inner bound fires
+        # before the subprocess bound, a timeout RETURNS normally instead of
+        # raising TimeoutExpired, so without this branch every timed-out
+        # design would silently move from the `timeout` bucket into
+        # `drc_failed` -- the funnel would show the bound change as a wave of
+        # checker failures. run_drc.sh deliberately derives no violation
+        # count from a killed run, so there is nothing else to salvage.
+        out["drc_status"] = "timeout"
     else:
         out.update(drc_status="drc_failed", message=log[-300:])
     for lyrdb in proj.rglob("6_drc.lyrdb"):

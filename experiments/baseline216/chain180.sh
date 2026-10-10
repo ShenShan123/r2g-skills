@@ -16,6 +16,11 @@
 #   R2G_PDN_CFG               drops -split_cuts {Metal3 0.128}, which made the
 #                             PDN via stacks merge into 0.772 x 1.028 rectangles
 #                             and violate V2.1/V3.1 -- 82% of all violations
+#   signoff --workers 48    each klayout uses ~1 core and 2.2G whatever
+#     NUM_CORES says, so 12 left the machine 85% idle. nangate45 measured
+#     2.27x throughput going 24 -> 56 with per-design time at 1.03x; 48
+#     here because gf180's cells are larger. The FLOW stays at 12 x 8 = 96,
+#     where the cores are genuinely used.
 #   R2G_TAPCELL_TCL           tapcell -distance 100 -> 30; DF.13/14_MV cap the
 #                             distance to the nearest tap at 15 um for 5 V
 #                             devices, and -distance is the column pitch
@@ -62,14 +67,14 @@ python3 "$D/backfill.py" --runs "$D/gf180_full/runs" >> "$L" 2>&1 || say "backfi
 say "DRC signoff"
 python3 "$D/signoff_pass.py" --runs "$D/gf180_full/runs" \
   --projroot "$D/gf180_signoff_proj" --out "$D/gf180_full/signoff.json" \
-  --platform gf180 --workers 12 --timeout 7200 \
+  --platform gf180 --workers 48 --timeout 21600 \
   >> "$D/gf180_signoff.log" 2>&1 || say "DRC 签核非零退出"
 say "DRC signoff done"
 
 say "LVS signoff"
 python3 "$D/lvs130.py" --runs "$D/gf180_full/runs" \
   --projroot "$D/gf180_lvs_proj" --out "$D/gf180_full/netgen_lvs.json" \
-  --platform gf180 --workers 12 --timeout 5400 \
+  --platform gf180 --workers 48 --timeout 5400 \
   >> "$D/gf180_lvs.log" 2>&1 || say "LVS 签核非零退出"
 say "LVS signoff done"
 
