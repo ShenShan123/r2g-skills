@@ -1898,6 +1898,37 @@ def _reset_arm_config_baseline(dst: Path, *, source: Path | None = None,
     return _config_sha(dst)
 
 
+def _ab_control_intervened(arm_a_samples: list[dict | None]) -> str | None:
+    """Veto a decisive verdict whose CONTROL arm performed repair work.
+
+    Arm A is launched with `--max-iters 0` (see _run_fix): it runs the fresh
+    check and applies no recipe, so it is a measurement-only baseline. A sample
+    reporting a truthy `fix_iters` is positive evidence that the control
+    repaired something, and a win/loss measured against a TREATED control is
+    not a statement about the recipe -- it is a comparison of two treatments.
+
+    Measured on the shipped store (2026-10-12): 9 of 444 trials have a control
+    arm reporting fix_iters>=1, 8 of them `antenna_diode_repair` -- the same
+    strategy that holds 53 `resolved` fix trajectories and 0 promotions.
+
+    Deliberately keyed on the PRESENCE of iterations, never their absence. An
+    absent `fix_iters` is ambiguous: a config-edit strategy lands its change in
+    config.mk before the flow and never enters the fix loop, so it legitimately
+    reports no iterations. `density_relief` shows BOTH shapes across its 122
+    trials (15 with iterations, 106 without), which is why "arm B reported no
+    iterations" cannot stand in for "arm B did not intervene". The honest
+    contrast check needs a per-arm applied-change digest, which the trial
+    ledger does not yet carry; until it does, this veto covers only the half
+    that is decidable from the evidence on hand.
+
+    Returns a veto reason string, or None when the control stayed a control.
+    """
+    for s in arm_a_samples or ():
+        if s and s.get("fix_iters"):
+            return "control_intervened"
+    return None
+
+
 def _ab_coverage_gap(conn, key: dict) -> bool:
     """True if an A/B trial for this candidate cannot produce a decisive verdict and so
     must NOT be planned (2026-06-24 audit, bugs #1/#2). Two cases: (1) the strategy
@@ -2898,6 +2929,10 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         # confound may promote OR demote — the trial is invalid, not decisive.
         veto = None
         if verdict in ("win", "loss"):
+            # Control contamination first: if arm A repaired anything it was
+            # never a control, so every downstream comparison is moot.
+            veto = _ab_control_intervened(samples["A"])
+        if verdict in ("win", "loss") and not veto:
             veto = _arm_spec_mismatch(pair["A"][0]["project_path"],
                                       pair["B"][0]["project_path"], arm_check)
             # Full-config causal isolation (2026-07-16 issue 3): any knob delta in

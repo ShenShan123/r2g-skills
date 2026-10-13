@@ -117,8 +117,16 @@ def cross_platform(runs_root):
     return res
 
 
-def verify(expected, db_path):
-    """Re-check a post-ingest knowledge.sqlite against the frozen expectations."""
+def verify(expected, db_path, since="2026-10-01"):
+    """Re-check a post-ingest knowledge.sqlite against the frozen expectations.
+
+    Counts the DELTA since `since`, not table totals: the shipped store already
+    holds 4,047 pre-campaign runs (69 of them gf180), so a total-vs-campaign
+    comparison fails on arithmetic rather than on a bridge defect.
+
+    DRC classes live in run_violations.drc_categories_json as
+    {cls: {"count": n}} -- there is no violation_class column.
+    """
     import sqlite3
     conn = sqlite3.connect(db_path)
     q = lambda s, *a: conn.execute(s, a).fetchall()
@@ -131,24 +139,38 @@ def verify(expected, db_path):
             bad.append(name)
 
     for plat, exp in expected["per_platform"].items():
-        n = q("select count(*) from runs where platform=?", plat)[0][0]
+        n = q("select count(*) from runs where platform=? and ingested_at>?",
+              plat, since)[0][0]
         check(f"{plat}: runs ingested", n, exp["designs"])
-        nf = q("select count(*) from runs where platform=? and orfs_status='fail'", plat)[0][0]
-        check(f"{plat}: fail runs", nf, exp["flow"].get("fail", 0) or
-              sum(v for k, v in exp["flow"].items() if k != "pass"))
-        # the 7x trap: violations must be the ITEM count, never the value count
-        for cls, cnt in sorted(exp["drc_class"].items(), key=lambda x: -x[1])[:3]:
-            got = q("select count(*) from run_violations rv join runs r on r.run_id=rv.run_id "
-                    "where r.platform=? and rv.violation_class=?", plat, cls)[0][0]
-            check(f"{plat}: run_violations {cls}", got, cnt)
+        nf = q("select count(*) from runs where platform=? and ingested_at>? "
+               "and orfs_status='fail'", plat, since)[0][0]
+        check(f"{plat}: fail runs", nf, exp["flow"].get("fail", 0))
+
+        # the 7x trap: per-class counts must be the lyrdb ITEM counts
+        per = collections.Counter()
+        for (cj,) in q("select rv.drc_categories_json from run_violations rv "
+                       "join runs r using(run_id) where r.platform=? and r.ingested_at>?",
+                       plat, since):
+            for cls, d in (json.loads(cj or "{}") or {}).items():
+                per[cls] += (d or {}).get("count") or 0
+        for cls, cnt in sorted(exp["drc_class"].items(), key=lambda x: -x[1])[:4]:
+            check(f"{plat}: DRC {cls} violations", per.get(cls, 0), cnt)
+        check(f"{plat}: DRC class count", len(per), len(exp["drc_class"]))
 
     # the relabel: a fictional class must not exist
     n = q("select count(*) from failure_events where signature like '%no_log_harvested%'")[0][0]
     check("no_log_harvested must not survive the bridge", n, 0)
+    xp = expected["cross_platform"]["gf180_no_log_harvested_is_synth_error"]
+    n = q("select count(*) from failure_events fe join runs r using(run_id) "
+          "where r.platform='gf180' and r.ingested_at>? and fe.signature like "
+          "'orfs-fail-synth%'", since)[0][0]
+    check("gf180 relabelled synth failures carry orfs-fail-synth",
+          n >= xp["all_three"], True)
 
-    # CLAUDE.md honesty invariant H1
+    # CLAUDE.md honesty invariant H1, over the whole store
     a = q("select count(*) from runs where orfs_status='fail'")[0][0]
-    b = q("select count(distinct run_id) from failure_events where signature like 'orfs-fail-%'")[0][0]
+    b = q("select count(distinct run_id) from failure_events "
+          "where signature like 'orfs-fail-%'")[0][0]
     check("every fail run carries an orfs-fail-% event", b, a)
 
     print("\n" + ("ALL RECONCILIATION CHECKS GREEN." if not bad
@@ -164,6 +186,8 @@ def main():
     ap.add_argument("--out", default=None, help="measure: write JSON here")
     ap.add_argument("--expected", default=None, help="verify: the JSON from measure")
     ap.add_argument("--db", default=None, help="verify: knowledge.sqlite to check")
+    ap.add_argument("--since", default="2026-10-01",
+                    help="verify: count only runs ingested after this stamp")
     a = ap.parse_args()
 
     if a.mode == "measure":
@@ -193,7 +217,7 @@ def main():
 
     if not (a.expected and a.db):
         ap.error("verify needs --expected and --db")
-    return verify(json.load(open(a.expected)), a.db)
+    return verify(json.load(open(a.expected)), a.db, a.since)
 
 
 if __name__ == "__main__":
