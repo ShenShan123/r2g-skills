@@ -1851,6 +1851,123 @@ detected`），待修。
 **不急于动手**：现在 gf180 全量在跑（2,497 份，约 33 小时），三平台语料齐全之后
 再做，那时每个设计都有签核过的版图可以生成图像，而不是边跑边改。
 
+### 学习环接上了：桥 + A/B 闸门 + Tier 0 —— 2026-10-12
+
+十月这轮 7,491 次运行（三平台 × 2,497）此前**一次都没进学习环**（知识库最后 ingest
+是 2026-09-12）。原因不是漏了一步，而是有**两套并行流水线**：手搓的
+`chain45/chain7/chain180 → orfs_baseline.py → signoff_pass.py → lvs130.py → result.json`
+在跑，带学习环的 `engineer_loop → reports/*.json → knowledge.sqlite` 在睡。
+
+桥（`experiments/baseline216/bridge_result_json.py`）把前者投影成后者要的项目形状。
+**7,491 份 ingest，0 失败，1.6 分钟**（单进程共享连接，比 CLI 逐个起进程快 160 倍）；
+知识库 4,047 → 10,803 runs；五个诚实闸门 + 23 项对账全绿。
+
+桥拒绝原样照抄的四件事，全部实测而非推理：
+
+| 陷阱 | 实测 | 不处理的后果 |
+|---|---|---|
+| `<value>` ≠ 违例数 | nangate45 `item 6652 / value 46546 = 7.00×`；gf180 1.02×、sky130hd 1.00× | 三平台只有一个会错，**最难发现** |
+| `<category>` 引号不一致 | `'METAL1.5'` vs `METAL3_ANTENNA` | 9 个天线类报成 1 类（我犯过） |
+| gf180 `no_log_harvested` 54 份 | 和另两平台 `synth_error` **交集 54/54/54** | 凭空多一个假失败类，藏掉 54 个真综合失败 |
+| `setup_wns` 取 `wns` 还是 `worst_slack` | `wns` 是违例量（达标时 0.0） | 每个达标设计被记成零余量 |
+
+另两个由对账抓出来的桥缺口：gf180 有 15 份 DRC 超时但 lyrdb 里有 1,078 条真违例
+（KLayout 在被杀前 4 秒写完数据库），现在带 `violations_are_lower_bound` 落账；
+sky130hd 97 份失败驱动没记阶段（96 份 timeout），阶段从最新的 ORFS 分阶段日志名
+**恢复**（不是编造），否则这 97 个真实后端失败会 ingest 成 `unknown`。
+
+**A/B 为什么一直晋升不了修复型策略。** 实测 444 次试验：
+
+```
+antenna_diode_repair   94 次，两臂指标 94/94 完全相同   -> 0 晋升（却有 53 份 resolved）
+pdn_die_floor          46 次，46/46 相同                -> 0 晋升
+density_relief        122 次，62 相同 / 60 不同          -> 15 条晋升
+```
+
+永远晋升不了的，恰好是两臂从不分化的那些。根因在**受试挑选**：`ab_runner.plan_trial`
+的 Tier 1 查 `run_violations` 的全部历史，而 runs/run_violations 是不可变历史，所以一个
+设计**旧的**违例 run 在后来被修好之后仍然匹配；Tier 2 更是按定义如此 —— 它自己的注释写着
+「a recipe that SUCCEEDS clears the symptom, so Tier 1 is empty for exactly the recipes
+worth promoting」，于是 2026-06-22 加了从**修复历史**挑受试。**那是把「找不到受试」换成了
+「找到了但没有对比」**，两边都卡住。
+
+三个提交合起来解决：
+
+- `c060ca6` 对照臂污染否决。arm A 用 `--max-iters 0` 启动，报了 `fix_iters` 就说明它动了手，
+  对着被治疗过的对照臂得出的 win/loss 是两种治疗的比较。**只按「有」判，不按「无」判** ——
+  配置型策略在流程前改 config、不进修复循环，`density_relief` 122 次里 15 有 / 106 无，
+  所以「没报迭代」不等于「没介入」。范围限定为签核臂：synth/place/route 臂走
+  `_apply_recipe_strategy`，`--max-iters 0` 管不到它们。
+- `c897ab5` 每臂 applied 摘要（整份 config.mk 归一化 knob 集合的 sha256）+ 无对比否决。
+  **全部策略都走 `config_edits`，`antenna_diode_repair` 也是**
+  （`SKIP_ANTENNA_REPAIR=1` + `MAX_REPAIR_ANTENNAS_ITER_DRT=10`），所以 config 指纹就完整
+  捕获介入，不需要版图摘要。否决要求**配置相同且结果也相同** —— 只看配置会误杀
+  synth 后端中止臂（arm A 内存上限崩、arm B 过了，对比活在 config 之外）。
+- `63574f6` Tier 0：症状必须在该设计**最新一次** ingest 的 run 上、项目仍能跑流程、
+  signoff 没被别的检查卡住。`_is_flowable` 是另一半 —— `os.path.isdir` 不是可跑性判定，
+  收割后的 run 的 `SDC_FILE` 指向 `/work/constraint.sdc`（产出它的那次流程的容器路径），
+  目录在但跑不动，就是 2026-07-03 幽灵受试换层皮。
+
+实测：121 条待验证 recipe 里 **69 条**现在能拿到当前携带者受试，`antenna_diode_repair`
+26/29，只剩 14 条落回 `fixhist_platform`。受试按单元数升序，60～3,213 单元。
+
+**已修复的受试仍然能通过 Tier 1 被选到，这是刻意的** —— 分工是「Tier 0 提供可判决的受试，
+`_ab_no_contrast` 标记不可判决的试验」，不是「planner 把已修复的受试藏起来」。藏起来等于
+把这个失败类重新变成不可见。
+
+**一个刻意的 fail-closed 会拦住第一次 drain**：`_allowed_subject` 的注释写着
+「the current ledger is the authority for which project directories a new round may
+execute」，账本空的时候任何受试都不允许执行。所以 `ab-drain` 之前必须先
+`engineer_loop add` 把受试放进账本。
+
+**A/B 必须在 216 的容器里跑，不是 208。** 216 宿主机没有 openroad（只在
+`r2g-orfs:26Q3` 镜像里，这一轮 7,491 次流程都是这么跑的），我一度因此把受试手工打包
+搬到 208 —— 那是错的：Tier 0 的受试是用 216 的库和路径算出来的，改了 `project_path`
+跑的就不是规划的那个试验。全量 drain 的规模是 121 条 × 2 臂 × 2 设计 × k=2 ≈ 968 次
+flow，所以第一次要用**范围受限的库副本**（其余 park）把成本压到 8 次。
+
+### nangate45 的 198 份 LVS「失败」里 194 份不是失败
+
+日志里 LVS 跑完了、提取了器件、打印 `LVS completed`，但 `make: No rule to make target
+...sv` 意味着参考 CDL 从未生成，**它根本没做比对**，驱动把「没找到判决」记成 `lvs_failed`。
+全量 198 份 **0 份**有 KLayout 崩溃签名（我先前判断是 SIGSEGV，错）。桥按真相落成
+`incomplete` / `no_reference_netlist`（未验证的 LVS 正确地不算成功），只有 4 份真报
+`Pin count mismatch` 的落成 `fail` / `cdl_pin_count`。
+
+根因**没闭环**，但排除了三个假设并量化到一个风险因子：
+
+- 不是缺语料包挂载。`signoff45.py:67` 确实没挂（`orfs_baseline.py:392` 挂了），但挂上之后
+  `make lvs` 会**从 RTL 重建**，GDS/SPEF 摘要变了，RMD-P0-01 正确拒绝
+  （`error_layout_changed_under_signoff`）。实测验证过。
+- 不是冻结路径坏了。一份 clean 的设计走**完全相同**的路径（`No rule to make target` →
+  `LVS path: frozen layout`）并返回 `CONGRATULATIONS! Netlists match.`，1,977 份都是这么来的。
+- 不是用到 deck implicit 清单外的单元。全部 2,216 份都只用清单内单元（134 vs 主库 135，
+  只差 `TAPCELL_X1`）。
+
+量化到的：实例名含 `][`（双层方括号）的设计失败率 **30.7%**，不含的 **1.7%** —— **18 倍**。
+典型形状 `\bp_inst.History_Table[0][0]$_SDFFCE_PN1P_`、`\mem[0][0]$_DFFE_PP_`，正是
+CLAUDE.md 点名的 hierarchical-net / double-bus-register 那一类。但**不是充分条件**
+（352 份含双括号的照样 clean），还有第二个共因没找到。
+
+sky130hd 完全没这个问题：它的 LVS 走 netgen 从 LEF/DEF 抽取（`lvs_netlist_source: lef_def`），
+根本不碰 CDL。
+
+### gf180 的 DRC 实际上限是 7200s，不是 21600s
+
+`chain180.sh:70` 传的是 `--timeout 21600`，argparse 实测解析正确，`gf180_signoff.log` 里
+只有一次调用，deck 里没有内置上限 —— 但 180 条超时全部落在 **7208 / 7266 / 7262s**，
+而且报错字符串和实际上限用同一个变量、它打印 7200。最可能是 `chain180.sh` 在 bash 正在
+执行它的时候被改过（文件 mtime 10-10 09:01，而流程从 10-09 21:12 跑到 10-11 18:25）；
+就地编辑正在运行的 bash 脚本是未定义行为。**这条没闭环。**
+
+所以**三个平台的 DRC 都跑在同一个 2 小时上限下**，之前「gf180 给了 3 倍时间悬崖反而最低」
+的结论是错的。正确的结论更干净：gf180 的悬崖（2.37 万单元）比 sky130hd（11.1 万）低 5 倍，
+纯粹是 deck 成本差异 —— gf180 是 691 条规则语句 + `run_mode=flat` + 全套 ANT.* +
+`conn_drc=true`，sky130hd 的 deck **0 条天线、0 条 latchup、0 条 connect**。
+
+而且这改了「要不要用 6 小时重跑超时」的答案：**gf180 从来没真正试过 6 小时**，它的 171 份
+超时里 127 份在 10 万单元以下，6 小时是未经验证但有希望的回收，不是「已经给过还是不行」。
+
 ## 七、漏斗怎么读才诚实
 
 **三层归因，按死在哪个阶段分，不按失败类名分。**
