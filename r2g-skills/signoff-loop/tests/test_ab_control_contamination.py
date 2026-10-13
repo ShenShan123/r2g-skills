@@ -43,6 +43,21 @@ def test_empty_and_crashed_arms_are_not_contamination():
     assert el._ab_control_intervened([None]) is None
 
 
+def test_backend_abort_arms_are_exempt():
+    """synth/place/route arms go through _process_backend_ab_arm and apply their
+    recipe via _apply_recipe_strategy -- they never enter the fix loop, so
+    `--max-iters 0` does not govern them and fix_iters is a property of the
+    ingested run (an earlier in-loop fix on that project), not of this arm's
+    action. Applying the veto there vetoed a legitimate synth win whose arms
+    differ in the stage log, which is how this scope was found."""
+    treated = [{"is_success": True, "fix_iters": 1}]
+    for check in el.BACKEND_ABORT_ARM_CHECKS:
+        assert el._ab_control_intervened(treated, check) is None
+    # a signoff arm with the same sample IS vetoed
+    for check in ("drc", "lvs", "both", "timing", None):
+        assert el._ab_control_intervened(treated, check) == "control_intervened"
+
+
 def test_absent_iters_never_implies_no_intervention():
     """The asymmetry this veto rests on, pinned so it cannot be 'tidied' into
     a symmetric check: absence must stay non-vetoing even when the arm clearly

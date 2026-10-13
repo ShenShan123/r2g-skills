@@ -1898,14 +1898,117 @@ def _reset_arm_config_baseline(dst: Path, *, source: Path | None = None,
     return _config_sha(dst)
 
 
-def _ab_control_intervened(arm_a_samples: list[dict | None]) -> str | None:
+_ARM_KNOB_RE = re.compile(r"(?:export\s+)?([A-Za-z_]\w*)\s*[:+?]?=\s*(.*)$")
+
+
+def _arm_knob_digest(project_path: str | os.PathLike) -> tuple[str, int] | None:
+    """(sha256[:12], knob_count) over an arm's FULL normalized config.mk knob set.
+
+    This is the "what did this arm actually apply" fingerprint. Every strategy in
+    the catalog applies through `config_edits` -- including antenna_diode_repair,
+    whose edits are {SKIP_ANTENNA_REPAIR: 1, MAX_REPAIR_ANTENNAS_ITER_DRT: 10}
+    (diagnose_signoff_fix._antenna_strategies) -- so a config fingerprint captures
+    the intervention in full and no layout digest is needed.
+
+    The WHOLE knob set is digested, not just the marked auto-block, so the few
+    strategies that write BARE exports instead (pin_perimeter_floor and the
+    place/synth relief that goes through _apply_recipe_strategy) are covered too.
+    Both arms are reset to the same baseline at plan time
+    (_reset_arm_config_baseline), so with an identical baseline any digest
+    difference is the arms' own edits; a baseline that is NOT identical is
+    contamination, which `_arm_baseline_divergence` already vetoes on its own.
+
+    Comments and blank lines are dropped and knobs are sorted, so formatting or
+    edit order cannot manufacture a difference.
+    """
+    cfg = Path(project_path) / "constraints" / "config.mk"
+    if not cfg.is_file():
+        return None
+    knobs: dict[str, str] = {}
+    for ln in cfg.read_text(encoding="utf-8", errors="ignore").splitlines():
+        t = ln.strip()
+        if not t or t.startswith("#"):
+            continue
+        m = _ARM_KNOB_RE.match(t)
+        if not m:
+            continue
+        knobs[m.group(1)] = m.group(2).strip()
+    canon = "\n".join(f"{k}={knobs[k]}" for k in sorted(knobs))
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:12], len(knobs)
+
+
+def _ab_no_contrast(a_path: str, b_path: str,
+                    arm_a_samples: list[dict | None] | None = None,
+                    arm_b_samples: list[dict | None] | None = None) -> str | None:
+    """Veto a decisive verdict whose two arms ended on the SAME configuration.
+
+    An A/B trial is a comparison; if both arms ran byte-identical knobs there was
+    no intervention to measure and the verdict describes flow jitter. The dominant
+    shape is a subject drawn from fix history: ab_runner.plan_trial's Tier 2
+    (`fixhist_platform`) resolves subjects straight out of fix_trajectories
+    because "a recipe that SUCCEEDS clears the symptom, so Tier 1 is empty for
+    exactly the recipes worth promoting" -- but a fix-history subject is already
+    repaired, so arm B's fresh check reads clean, the fixer applies nothing, and
+    both arms merely re-grade the same layout. antenna_diode_repair sits at
+    94 trials / 0 promotions that way, 88 of them `fixhist_platform`, with the two
+    arms' judgeable metrics identical in all 94.
+
+    Identical knobs alone are NOT enough to call a trial void: contrast can live
+    outside config.mk. A synth backend-abort pair is the counter-example -- arm A
+    memcap-aborts at synth and arm B clears it, so the arms manifestly differ even
+    where the recorded configs do not (the recovery knob is written by
+    _apply_recipe_strategy at arm execution, and a flows-free replay may not show
+    it). So the veto needs BOTH halves: the configs match AND the arms' judgeable
+    results match. That conjunction also removes the reason outcome_score could
+    not be used on its own -- it is a coarse stage-ladder reward that two
+    genuinely different clean arms share, so here it only corroborates an already
+    identical configuration.
+
+    Complements `_arm_baseline_divergence`, which compares the region OUTSIDE the
+    fix auto-block for contamination; this compares the full knob set for absence
+    of any difference at all. Same semantics as the other vetoes: force
+    `inconclusive`, never promote and never demote -- the trial is void, not
+    decisive. A missing config.mk on either side returns None (unknown is not
+    evidence of sameness).
+    """
+    a, b = _arm_knob_digest(a_path), _arm_knob_digest(b_path)
+    if a is None or b is None or a[0] != b[0]:
+        return None
+    if arm_a_samples is None or arm_b_samples is None:
+        return f"no_contrast:knobs_identical:{a[1]}"
+    sa = [x for x in arm_a_samples if x]
+    sb = [x for x in arm_b_samples if x]
+    if not sa or not sb:
+        return None
+    fields = ("is_success", "fix_iters", "outcome_score", "judged_on")
+    key = lambda ss: sorted(tuple(x.get(f) for f in fields) for x in ss)
+    if key(sa) != key(sb):
+        return None                  # the arms diverged somewhere config cannot see
+    return f"no_contrast:knobs_and_results_identical:{a[1]}"
+
+
+BACKEND_ABORT_ARM_CHECKS = ("synth", "place", "route")
+
+
+def _ab_control_intervened(arm_a_samples: list[dict | None],
+                           arm_check: str | None = None) -> str | None:
     """Veto a decisive verdict whose CONTROL arm performed repair work.
 
-    Arm A is launched with `--max-iters 0` (see _run_fix): it runs the fresh
-    check and applies no recipe, so it is a measurement-only baseline. A sample
-    reporting a truthy `fix_iters` is positive evidence that the control
-    repaired something, and a win/loss measured against a TREATED control is
-    not a statement about the recipe -- it is a comparison of two treatments.
+    SIGNOFF arms only. A signoff arm A is launched with `--max-iters 0` (see
+    _run_fix): it runs the fresh check and applies no recipe, so it is a
+    measurement-only baseline, and a sample reporting a truthy `fix_iters` is
+    positive evidence that the control repaired something. A win or loss measured
+    against a TREATED control is not a statement about the recipe -- it is a
+    comparison of two treatments.
+
+    BACKEND-ABORT arms (synth/place/route, routed through
+    _process_backend_ab_arm) are exempt: they apply their recipe via
+    _apply_recipe_strategy and never enter the fix loop at all, so `--max-iters 0`
+    does not govern them and `fix_iters` is a property of the ingested run --
+    an earlier in-loop fix on that project -- rather than of this arm's action.
+    Applying the veto there vetoed a legitimate synth win whose arms differ in
+    the stage log (arm A memcap-aborts, arm B clears), which is how this scope
+    was found.
 
     Measured on the shipped store (2026-10-12): 9 of 444 trials have a control
     arm reporting fix_iters>=1, 8 of them `antenna_diode_repair` -- the same
@@ -1923,6 +2026,8 @@ def _ab_control_intervened(arm_a_samples: list[dict | None]) -> str | None:
 
     Returns a veto reason string, or None when the control stayed a control.
     """
+    if arm_check in BACKEND_ABORT_ARM_CHECKS:
+        return None
     for s in arm_a_samples or ():
         if s and s.get("fix_iters"):
             return "control_intervened"
@@ -2931,7 +3036,18 @@ def judge_finished_trials(led: Ledger, conn) -> None:
         if verdict in ("win", "loss"):
             # Control contamination first: if arm A repaired anything it was
             # never a control, so every downstream comparison is moot.
-            veto = _ab_control_intervened(samples["A"])
+            # The ledger entry may carry no `check` (it is derived, not stored),
+            # so resolve it the way the planner does before scoping the veto --
+            # an unresolved check would read as a signoff arm and veto a
+            # legitimate backend-abort win.
+            _check_eff = arm_check or _symptom_check(
+                conn, (pair["B"][0].get("ab_key") or {}).get("symptom_id"), strat)
+            veto = _ab_control_intervened(samples["A"], _check_eff)
+        if verdict in ("win", "loss") and not veto:
+            # No intervention to measure -> the verdict describes flow jitter.
+            veto = _ab_no_contrast(pair["A"][0]["project_path"],
+                                   pair["B"][0]["project_path"],
+                                   samples["A"], samples["B"])
         if verdict in ("win", "loss") and not veto:
             veto = _arm_spec_mismatch(pair["A"][0]["project_path"],
                                       pair["B"][0]["project_path"], arm_check)
@@ -2973,6 +3089,14 @@ def judge_finished_trials(led: Ledger, conn) -> None:
                      "repeats": {"A": len(samples["A"]), "B": len(samples["B"])},
                      "arm_a_run_ids": a_run_ids, "arm_b_run_ids": b_run_ids,
                      "provenance_complete": provenance_complete,
+                     # "what did each arm actually apply" -- the full normalized
+                     # config.mk knob fingerprint. Equal digests mean the trial
+                     # had no intervention to measure (see _ab_no_contrast); a
+                     # recorded pair makes that auditable for every future trial
+                     # instead of only for the ones whose arm dirs still exist.
+                     "arm_knob_digest": {
+                         "A": (_arm_knob_digest(pair["A"][0]["project_path"]) or (None, None))[0],
+                         "B": (_arm_knob_digest(pair["B"][0]["project_path"]) or (None, None))[0]},
                      "tool_versions": _tool_versions_map(),
                      "judge_version": 2, "reason": reason,
                      "veto": veto,
