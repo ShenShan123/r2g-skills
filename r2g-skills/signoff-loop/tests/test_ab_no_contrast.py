@@ -109,3 +109,27 @@ def test_digest_counts_knobs(tmp_path):
     a = _arm(tmp_path, "armA", BASE)
     digest, n = el._arm_knob_digest(a)
     assert n == 3 and len(digest) == 12
+
+
+def test_arm_local_paths_do_not_manufacture_contrast(tmp_path):
+    """The arm dir name is unique per arm AND per repeat -- _localize_arm_sdc
+    repoints SDC_FILE at the arm's own constraint.sdc, and VERILOG_FILES follows
+    the copytree. Hashing those raw made every digest unique and this veto dead
+    code: on eight real arm dirs the two repeats of the SAME control arm, both
+    with an empty fix block, hashed differently (f9e6972d2df5 vs d0c5670df51d).
+    Pinned so the normalization cannot be dropped as redundant."""
+    a = _arm(tmp_path, "d_abA_r0", BASE)
+    b = _arm(tmp_path, "d_abA_r1", BASE)
+    da, db = el._arm_knob_digest(a), el._arm_knob_digest(b)
+    assert da[0] == db[0], "two repeats of one arm must hash the same"
+    v = el._ab_no_contrast(a, b, SAME, SAME)
+    assert v and v.startswith("no_contrast")
+
+
+def test_normalization_does_not_hide_a_real_recipe(tmp_path):
+    """Same check in the other direction: the paths are normalized, the RECIPE
+    is not. Arm B carrying the antenna knobs must still read as contrast."""
+    a = _arm(tmp_path, "d_abA_r0", BASE)
+    b = _arm(tmp_path, "d_abB_r0", BASE + BLOCK)
+    assert el._arm_knob_digest(a)[0] != el._arm_knob_digest(b)[0]
+    assert el._ab_no_contrast(a, b, SAME, SAME) is None

@@ -1919,7 +1919,14 @@ def _arm_knob_digest(project_path: str | os.PathLike) -> tuple[str, int] | None:
     contamination, which `_arm_baseline_divergence` already vetoes on its own.
 
     Comments and blank lines are dropped and knobs are sorted, so formatting or
-    edit order cannot manufacture a difference.
+    edit order cannot manufacture a difference. The arm's OWN directory path is
+    normalized out of every value, because the arm dir name is unique per arm and
+    per repeat: `_localize_arm_sdc` repoints SDC_FILE at the arm's own
+    constraint.sdc, and VERILOG_FILES/VERILOG_INCLUDE_DIRS follow the copytree.
+    Hashing those raw made every digest unique and _ab_no_contrast dead code --
+    found by reading the digests of eight real arm dirs, where the two repeats of
+    the SAME control arm, both with an empty fix block, hashed differently
+    (f9e6972d2df5 vs d0c5670df51d).
     """
     cfg = Path(project_path) / "constraints" / "config.mk"
     if not cfg.is_file():
@@ -1933,7 +1940,10 @@ def _arm_knob_digest(project_path: str | os.PathLike) -> tuple[str, int] | None:
         if not m:
             continue
         knobs[m.group(1)] = m.group(2).strip()
-    canon = "\n".join(f"{k}={knobs[k]}" for k in sorted(knobs))
+    _root = str(Path(project_path)).rstrip("/")
+    canon = "\n".join(
+        f"{k}={knobs[k].replace(_root, '<ARM>') if _root else knobs[k]}"
+        for k in sorted(knobs))
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:12], len(knobs)
 
 
