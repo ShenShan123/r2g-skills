@@ -436,6 +436,49 @@ def _symptom_designs(conn, symptom_id: str, want_platform: str | None,
     return out
 
 
+_FLOWABLE_KNOB_RE = re.compile(
+    r"(?m)^\s*(?:override\s+)?export\s+(VERILOG_FILES|SDC_FILE)\s*=\s*(.*)$")
+
+
+def _is_flowable(project_path: str, *, strict: bool = False) -> bool:
+    """True when an A/B arm could actually RUN the flow on this subject.
+
+    `os.path.isdir` is not the test. An arm materializes the subject and flows it,
+    so the subject's config.mk must still resolve: every VERILOG_FILES entry
+    present, and SDC_FILE -- if set -- pointing at a file that exists. A harvested
+    corpus run fails the second half on its own, because its config.mk names
+    `/work/constraint.sdc`, the CONTAINER path of the flow that produced it.
+
+    Without this, Tier 0/1 would hand plan_arms subjects that abort on their first
+    stage, which is the 2026-07-03 ghost-subject failure (`place_arm_incomplete`
+    every drain, candidate starved) wearing different clothes: back then the dirs
+    were gone, here they exist but cannot flow.
+
+    `strict` splits the two callers, following this module's "unknown is not
+    evidence" convention. Tier 0 selects FOR judgeability and demands positive
+    proof (strict=True): no config.mk, no subject. Tier 1 only needs to exclude
+    subjects it can prove are broken, so a project with no config.mk at all
+    passes -- that is an unreadable project, not a stale one, and treating it as
+    broken would retire the pre-existing tiers by accident.
+    """
+    cfg = os.path.join(project_path or "", "constraints", "config.mk")
+    if not os.path.isfile(cfg):
+        return not strict
+
+    try:
+        txt = open(cfg, encoding="utf-8", errors="ignore").read()
+    except OSError:
+        return False
+    knobs = {k: v.strip() for k, v in _FLOWABLE_KNOB_RE.findall(txt)}
+    srcs = knobs.get("VERILOG_FILES", "").split()
+    if not srcs or not all(os.path.isfile(x) for x in srcs):
+        return False
+    sdc = knobs.get("SDC_FILE", "")
+    if sdc and not os.path.isfile(sdc):
+        return False
+    return True
+
+
 def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
                strategy: str, n_designs: int = N_DESIGNS_DEFAULT,
                allowed_project_paths: set[str] | None = None) -> dict | None:
@@ -454,10 +497,16 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
         # wiped `<design>__sky130hd` clones ahead of real dirs) and plan_arms
         # ledger'd arms that could never flow -> place_arm_incomplete every
         # drain, candidate starved (2026-07-03).
+        # _is_flowable in EVERY tier, not just Tier 0: an arm materializes the
+        # subject and flows it, so a subject that cannot flow aborts on its first
+        # stage no matter which tier offered it. A repaired subject, by contrast,
+        # legitimately stays reachable here -- engineer_loop._ab_no_contrast is
+        # what declares the resulting tie void, rather than this filter hiding it.
         return [dict(zip(("design_name", "project_path", "cell_count"), x))
                 for x in cur.fetchall()
                 if not _is_arm_dir(x[1]) and x[1] and os.path.isdir(x[1])
-                and _allowed_subject(x[1], allowed_project_paths)]
+                and _allowed_subject(x[1], allowed_project_paths)
+                and _is_flowable(x[1])]
 
     def _trial(designs, level):
         return {
@@ -496,6 +545,49 @@ def plan_trial(conn, *, symptom_id: str, design_class: str, platform: str,
             seen.add(name)
             designs.append(dict(design_name=name, project_path=path, cell_count=cells))
         return _trial(designs, 'measured_setup_scope') if len(designs) >= n_designs else None
+
+    # Tier 0 — CURRENT exhibitors on a FLOWABLE project (2026-10-12). The tier
+    # that makes a repair recipe judgeable at all.
+    #
+    # Tier 1 below asks `run_violations` for the symptom over ALL history, and
+    # Tier 2 resolves out of fix history. Both can only offer a subject that is
+    # already repaired -- Tier 1 because runs/run_violations are immutable
+    # history, so a design's OLD violating run still matches after a later run
+    # cleared it, and Tier 2 by construction ("a recipe that SUCCEEDS clears the
+    # symptom"). A repaired subject makes arm A a treated arm and arm B's forced
+    # recipe a no-op, so both arms re-grade the same layout and the trial ties.
+    # Measured: antenna_diode_repair holds 94 trials / 0 promotions, 88 of them
+    # `fixhist_platform`, with both arms' judgeable metrics identical in all 94 --
+    # while carrying 53 `resolved` fix trajectories. engineer_loop's
+    # _ab_no_contrast now NAMES that state; this tier is how a trial avoids it.
+    #
+    # So: the symptom must sit on the design's LATEST ingested run, and the
+    # project must still be able to flow. Signoff must also not be blocked on a
+    # DIFFERENT check -- an LVS that produced no verdict leaves `is_success`
+    # unable to speak for the DRC symptom under test.
+    for extra, params, level in (
+            ("AND r.design_class=? AND r.platform=?", (design_class, platform),
+             "current_exhibitor"),
+            ("AND r.platform=?", (platform,), "current_exhibitor_pooled_class")):
+        cur = conn.execute(
+            "SELECT r.design_name, r.project_path, r.cell_count "
+            "FROM run_violations v JOIN runs r USING(run_id) "
+            "WHERE v.symptom_id=? "
+            "  AND r.run_id = (SELECT r2.run_id FROM runs r2 "
+            "                  WHERE r2.project_path = r.project_path "
+            "                  ORDER BY r2.ingested_at DESC, r2.run_id DESC "
+            "                  LIMIT 1) "
+            "  AND (r.lvs_status IS NULL OR r.lvs_status IN ('clean','skipped')) "
+            f"{extra} "
+            "GROUP BY r.design_name ORDER BY MIN(r.cell_count)",
+            (symptom_id, *params))
+        designs = [dict(zip(("design_name", "project_path", "cell_count"), x))
+                   for x in cur.fetchall()
+                   if not _is_arm_dir(x[1]) and x[1] and os.path.isdir(x[1])
+                   and _allowed_subject(x[1], allowed_project_paths)
+                   and _is_flowable(x[1], strict=True)]
+        if len(designs) >= n_designs:
+            return _trial(designs, level)
 
     # Tier 1 — run_violations (POST-fix residual exhibitors of the symptom). NEVER pool
     # across platforms (2026-06-25): an A/B arm flows at the recipe's `platform`, so a

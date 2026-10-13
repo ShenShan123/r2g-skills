@@ -197,7 +197,9 @@ def _stage_from_logs(run_dir):
 
 def project_for(run_dir, j, out_root, platform):
     name = f"{platform}__{os.path.basename(run_dir)}"
-    proj = os.path.join(out_root, name)
+    # absolute: SDC_FILE below and every A/B arm copytree consume this path from
+    # a different working directory than the one the bridge ran in.
+    proj = os.path.abspath(os.path.join(out_root, name))
     for sub in ("constraints", "reports", os.path.join("backend", "RUN_1")):
         os.makedirs(os.path.join(proj, sub), exist_ok=True)
 
@@ -207,6 +209,20 @@ def project_for(run_dir, j, out_root, platform):
     sdc = os.path.join(run_dir, "constraint.sdc")
     if os.path.isfile(sdc):
         shutil.copy2(sdc, os.path.join(proj, "constraints", "constraint.sdc"))
+        # The harvested config.mk points SDC_FILE at `/work/constraint.sdc` -- the
+        # CONTAINER path of the flow run that produced it, long gone. Every other
+        # path in it (VERILOG_FILES, VERILOG_INCLUDE_DIRS) is an absolute host
+        # path that still resolves, so rewriting this one line is the whole
+        # difference between a project that can re-flow and one that cannot --
+        # which is what an A/B arm needs of a subject. signoff45.py:124 does the
+        # same rewrite for its own project copies.
+        cfg_out = os.path.join(proj, "constraints", "config.mk")
+        if os.path.isfile(cfg_out):
+            txt = open(cfg_out, errors="ignore").read()
+            txt = re.sub(r"(?m)^(\s*(?:override\s+)?export\s+SDC_FILE\s*=).*$",
+                         lambda m: f"{m.group(1)} {proj}/constraints/constraint.sdc",
+                         txt)
+            open(cfg_out, "w").write(txt)
 
     W = lambda n, o: json.dump(o, open(os.path.join(proj, "reports", n), "w"),
                                indent=1, sort_keys=True)
