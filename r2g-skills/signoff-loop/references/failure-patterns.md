@@ -2645,6 +2645,71 @@ e.g. NO `nangate45` recipe ever promotes while sky130hd does. The coarse "ab_tri
 check passes, so the loop looks live while being inert for a whole platform/recipe class. Found
 by the 2026-06-23 audit; see `docs/superpowers/plans/r2g-loop-closure-audit-2026-06-23.md`.
 
+**Pattern 0 — the SUBJECT is already repaired, so no arm can intervene (2026-10-12).**
+The deepest version of Pattern 1: the arms do identical work not because of what the
+copytree carried, but because the design handed to them has nothing left to fix.
+`ab_runner.plan_trial`'s Tier 1 queries `run_violations` over ALL history, and
+runs/run_violations are immutable history — so a design's OLD violating run still matches
+after a later run cleared it. Tier 2 (`fixhist_platform`) is worse by construction; its own
+comment states the trap: *"a recipe that SUCCEEDS clears the symptom, so Tier 1 is empty for
+exactly the recipes worth promoting"*, which is why 2026-06-22 made it resolve subjects out of
+fix history. That traded **"unreachable"** for **"reachable but contrast-free"**, and both
+leave the recipe stuck as a candidate forever.
+
+Measured on the shipped store (444 trials):
+
+| strategy | trials | arms identical | promoted | fix_trajectories `resolved` |
+| --- | --- | --- | --- | --- |
+| `antenna_diode_repair` | 94 | **94** | **0** | 53 |
+| `pdn_die_floor` | 46 | **46** | **0** | 116 |
+| `density_relief` | 122 | 62 | 15 | 85 |
+
+The strategies that never promote are exactly the ones whose arms never diverge. 88 of the 94
+antenna trials were `fixhist_platform`.
+
+Fixes (all three are needed; each alone is insufficient):
+
+1. **Tier 0 — a CURRENT exhibitor on a FLOWABLE project** (`ab_runner.plan_trial`). The symptom
+   must sit on the design's LATEST ingested run, not anywhere in its history. `_is_flowable` is
+   the other half: `os.path.isdir` is not a flowability test, because a harvested corpus run's
+   `config.mk` names `/work/constraint.sdc` — the CONTAINER path of the flow that produced it —
+   so the dir exists but the arm aborts on its first stage. That is the 2026-07-03 ghost-subject
+   failure in different clothes. Strict for Tier 0 (which selects FOR judgeability and so needs
+   positive proof); lenient elsewhere, where only *provable* breakage may exclude a subject.
+2. **`_ab_no_contrast`** (`engineer_loop`) — veto a decisive verdict when the arms' config
+   digests match AND their judgeable results match. Both halves are required: config alone
+   vetoes a legitimate synth backend-abort pair (arm A memcap-aborts, arm B clears it, and the
+   recovery knob is written at arm execution so a replay need not show it), and results alone
+   cannot work because `outcome_score` is a coarse stage-ladder reward two different clean arms
+   share. A `fix_iters` of 0/None cannot stand in for "did not intervene" either —
+   `density_relief` shows both shapes across its 122 trials (15 with iterations, 106 without)
+   because a config-edit strategy lands its change before the flow and never enters the fix loop.
+3. **`_ab_control_intervened`** — veto when the control reports `fix_iters>=1`. SIGNOFF arms
+   only: synth/place/route arms route through `_process_backend_ab_arm` and apply via
+   `_apply_recipe_strategy`, never entering the fix loop, so `--max-iters 0` does not govern them
+   and their `fix_iters` is a property of the ingested run. Keyed on the PRESENCE of iterations,
+   never their absence.
+
+**The digest must normalize the arm's own path out, or the veto is dead code.** `SDC_FILE` is
+repointed per arm by `_localize_arm_sdc` and `VERILOG_FILES` follows the copytree, so the arm dir
+name — unique per arm AND per repeat — leaks into the values. Unit tests missed this (their
+fixtures keep the RTL outside the project dir); it showed up on the first live drain, where two
+repeats of the SAME control arm, both with an empty fix block, hashed differently. After
+normalizing, eight real arm dirs read correctly: both control repeats `5de1afc2a793`, both
+treatment repeats `9132152cab93` carrying `SKIP_ANTENNA_REPAIR=1` +
+`MAX_REPAIR_ANTENNAS_ITER_DRT=10`, while a second design whose fresh flow had nothing to fix
+hashed identically across all four of its arms.
+
+**A repaired subject stays reachable through Tier 1 deliberately.** The division of labour is
+"Tier 0 supplies a judgeable subject, `_ab_no_contrast` names an unjudgeable trial" — filtering
+repaired subjects out of the planner would turn this failure class invisible again.
+
+**A first `ab-drain` on a fresh ledger finds no subjects, by design.** `_allowed_subject` fails
+closed: *"the current ledger is the authority for which project directories a new round may
+execute"*. Add the subjects (`engineer_loop add`) before draining. And scope the first drain —
+`plan_arms_for_candidates` plans for EVERY pending candidate, so 121 candidates x 2 arms x
+2 designs x k=2 is ~968 flows; park the rest in a throwaway DB copy to spend 8 instead.
+
 **Pattern 1 — A/B arms do byte-identical work (the dominant cause).** `plan_arms_for_candidates`
 copytrees each arm dir; if it does NOT exclude `reports/`, a *signoff* arm (whose subject is a
 previously-FIXED clean project) inherits a clean `reports/drc.json`. `process_one` then reads
