@@ -175,11 +175,22 @@ def _trial_subject(conn, arm_a_run_id, arm_b_run_id, fallback) -> str:
         if not rid:
             continue
         try:
-            row = conn.execute("SELECT project_path, design_family FROM runs WHERE run_id=?",
+            row = conn.execute("SELECT project_path, design_family, platform "
+                               "FROM runs WHERE run_id=?",
                                (rid,)).fetchone()
         except sqlite3.Error:
             row = None
-        if row and row[1]:
+        # A family equal to the run's own PLATFORM is not a family. infer_family
+        # takes the project dir's leading token, so any ingest path that names
+        # projects `<platform>__...` collapses its entire corpus into one family
+        # per platform -- and then every trial on that platform is the SAME
+        # subject, wins can never exceed 1, and nothing can clear
+        # ab_min_independent_wins()=2. The 2026-10-12 campaign bridge did exactly
+        # that: two genuine wins on two unrelated repos both resolved to
+        # `family:nangate45` and netted 1w, one short of the gate. Fall through to
+        # the per-project subject key, which is still a conservative (never
+        # OVER-counting) identity.
+        if row and row[1] and (not row[2] or str(row[1]).lower() != str(row[2]).lower()):
             return f"family:{row[1]}"
         if row and row[0]:
             base = _ARM_DIR_RE.split(os.path.basename(str(row[0]).rstrip("/")))[0]

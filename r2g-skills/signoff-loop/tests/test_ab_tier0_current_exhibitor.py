@@ -154,3 +154,35 @@ def test_cheapest_subject_first(tmp_path):
     _add(c, "r2", "small", _proj(tmp_path, "small"), sid="S", cells=90)
     t = _plan(c, n=2)
     assert [d["design_name"] for d in t["designs"]] == ["small", "big"]
+
+
+# ── independent-subject identity ────────────────────────────────────────────
+def _subj_db(rows):
+    c = sqlite3.connect(":memory:")
+    c.execute("CREATE TABLE runs (run_id TEXT, project_path TEXT, "
+              "design_family TEXT, platform TEXT)")
+    c.executemany("INSERT INTO runs VALUES (?,?,?,?)", rows)
+    return c
+
+
+def test_family_equal_to_platform_is_not_a_family():
+    """infer_family takes the project dir's leading token, so an ingest path that
+    names projects `<platform>__...` collapses its whole corpus into one family
+    per platform -- then every trial on that platform is the SAME subject, wins
+    can never exceed 1, and nothing clears ab_min_independent_wins()=2. The
+    campaign bridge did exactly that: two genuine wins on two unrelated repos
+    both resolved to `family:nangate45` and netted 1w."""
+    c = _subj_db([("rA", "/p/nangate45__C1__topA", "nangate45", "nangate45"),
+                  ("rB", "/p/nangate45__C2__topB", "nangate45", "nangate45")])
+    a = ab_runner._trial_subject(c, "rA", "rA", "t1")
+    b = ab_runner._trial_subject(c, "rB", "rB", "t2")
+    assert a != b, "two unrelated repos must not collapse to one subject"
+    assert not a.startswith("family:")
+
+
+def test_a_real_family_still_collapses_its_tops():
+    """The P1-11 intent is preserved: two tops from ONE RTL repo stay one vote."""
+    c = _subj_db([("rA", "/p/wb2axip__C1__axi2axilite", "wb2axip", "nangate45"),
+                  ("rB", "/p/wb2axip__C2__axilxbar", "wb2axip", "nangate45")])
+    assert (ab_runner._trial_subject(c, "rA", "rA", "t1")
+            == ab_runner._trial_subject(c, "rB", "rB", "t2") == "family:wb2axip")

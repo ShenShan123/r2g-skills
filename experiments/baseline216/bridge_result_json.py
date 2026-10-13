@@ -195,8 +195,45 @@ def _stage_from_logs(run_dir):
     return os.path.basename(newest)[:-4]          # strip '.log'; '.tmp' handled by canon_stage
 
 
+_RUNDIR_ID_RE = re.compile(r"^C\d+$")
+_RUNDIR_PERIOD_RE = re.compile(r"^p[\d.]+$")
+
+
+def _project_name(run_dir, platform):
+    """Lead with the SOURCE-REPO token, because that is how the family is inferred.
+
+    knowledge_db.infer_family takes `name.split("_", 1)[0].lower()` of the PROJECT-DIR
+    basename -- deliberately, since the dir carries the source-repo prefix that
+    config.mk's DESIGN_NAME drops (`wb2axip_axi2axilite` -> `wb2axip`). Naming these
+    `{platform}__{rundir}` therefore gave all 7,491 campaign runs
+    `design_family = <platform>`, i.e. three families for the whole corpus.
+
+    That is not cosmetic. ab_runner._trial_subject collapses a recipe's decisive
+    corpus to INDEPENDENT SUBJECTS by `design_family` (P1-11: multiple tops from one
+    RTL family are one vote, not N), and promotion needs
+    ab_min_independent_wins() = 2. With every run in one family per platform, every
+    A/B trial on a platform is the SAME subject, wins can never exceed 1, and NO
+    recipe can ever promote from this corpus. Measured: two genuine wins on two
+    unrelated repos (jpeg-hardware-decoder, sync-fifo-rtl-to-gdsii) both resolved to
+    `family:nangate45` and netted 1w, one short of the gate.
+
+    A harvested run dir is `C<id>__<top>__<repo>__<platform>__p<period>`, so the repo
+    is recoverable; fall back to the raw dir name when it does not parse.
+    """
+    base = os.path.basename(run_dir)
+    # Fields are `__`-separated but each may contain single underscores
+    # (`Histogram_Generator`), so locate them by POSITION, not by a character
+    # class -- a `[^_]*?` field pattern silently fails on every underscored top
+    # name, which is how the first attempt at this still produced <platform>.
+    f = base.split("__")
+    if (len(f) >= 5 and _RUNDIR_ID_RE.match(f[0])
+            and _RUNDIR_PERIOD_RE.match(f[-1])):
+        return f"{f[-3]}__{platform}__{base}"
+    return f"{platform}__{base}"
+
+
 def project_for(run_dir, j, out_root, platform):
-    name = f"{platform}__{os.path.basename(run_dir)}"
+    name = _project_name(run_dir, platform)
     # absolute: SDC_FILE below and every A/B arm copytree consume this path from
     # a different working directory than the one the bridge ran in.
     proj = os.path.abspath(os.path.join(out_root, name))
