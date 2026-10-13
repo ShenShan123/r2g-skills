@@ -2700,6 +2700,17 @@ treatment repeats `9132152cab93` carrying `SKIP_ANTENNA_REPAIR=1` +
 `MAX_REPAIR_ANTENNAS_ITER_DRT=10`, while a second design whose fresh flow had nothing to fix
 hashed identically across all four of its arms.
 
+**A green unit suite is NOT evidence for a change in this area — run a real drain.**
+Every one of the three defects below passed the unit suite and only appeared on a live
+`ab-drain`, and each had the same shape: the loop keeps running and silently stops deciding
+anything. Budget one scoped drain (8 flows) as part of the change, not as a follow-up.
+
+| defect | why the unit suite could not see it |
+| --- | --- |
+| the knob digest was polluted by the arm's own path, so `_ab_no_contrast` was dead code | the fixtures keep the RTL *outside* the project dir, so no knob value contained the arm path |
+| `design_family` was the PLATFORM, collapsing the whole corpus to 3 subjects, so nothing could clear `min_independent_wins=2` | the fixtures write `design_family` directly instead of letting `infer_family` derive it from the project dir name |
+| a first drain finds no subjects at all | the unit tests call `plan_trial` with `allowed_project_paths=None`, which disables the ledger allowlist |
+
 **A repaired subject stays reachable through Tier 1 deliberately.** The division of labour is
 "Tier 0 supplies a judgeable subject, `_ab_no_contrast` names an unjudgeable trial" — filtering
 repaired subjects out of the planner would turn this failure class invisible again.
