@@ -129,10 +129,16 @@ _LVS_LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT"
 if [[ ! -d "$_LVS_LOGS_DIR" ]]; then
   _LVS_LOGS_DIR="$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME"
 fi
-_REPORT_JSON=$(find "$_LVS_LOGS_DIR" -name "6_report.json" 2>/dev/null | head -1)
+# `|| true` is load-bearing under `set -euo pipefail`: find exits 1 on a missing
+# directory, pipefail propagates that through the pipe, and the assignment then
+# aborts the whole script -- so the fallback below never ran and LVS died silently
+# right after printing its rules line. That happens on every design restaged from
+# a harvest, where ORFS's own logs/ dir was never created. run_drc.sh:273 already
+# carries this guard; run_lvs.sh was the half of the pair that did not.
+_REPORT_JSON=$(find "$_LVS_LOGS_DIR" -name "6_report.json" 2>/dev/null | head -1 || true)
 # Fallback: check the project backend directory
 if [[ -z "$_REPORT_JSON" ]]; then
-  _REPORT_JSON=$(find "$PROJECT_DIR/backend" -name "6_report.json" 2>/dev/null | sort | tail -1)
+  _REPORT_JSON=$(find "$PROJECT_DIR/backend" -name "6_report.json" 2>/dev/null | sort | tail -1 || true)
 fi
 _CELL_COUNT=0
 if [[ -n "$_REPORT_JSON" ]]; then
@@ -366,10 +372,16 @@ LVS_RUN_LOG="/tmp/lvs_run_$$.log"
 LVS_STATUS=0
 for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
   set +e +o pipefail
-  if [[ "$_LVS_FROZEN_MODE" == "1" ]]; then
+  # `_LVS_FROZEN` is set by the fallback further down, so a retry after a frozen
+  # crash re-enters the frozen path here instead of re-running the `make lvs`
+  # that already proved it cannot resolve the chain. Without this the retry
+  # spends its attempts on make and never re-runs the checker that crashed.
+  if [[ "$_LVS_FROZEN_MODE" == "1" || "$_LVS_FROZEN" == "1" ]]; then
     if _r2g_lvs_frozen_available; then
+      if [[ "$_LVS_FROZEN" != "1" ]]; then
+        echo "LVS path: frozen layout (forced by R2G_LVS_FROZEN=1)"
+      fi
       _LVS_FROZEN=1
-      echo "LVS path: frozen layout (forced by R2G_LVS_FROZEN=1)"
       _r2g_lvs_frozen_bounded
     else
       echo "ERROR: R2G_LVS_FROZEN=1 but the frozen inputs are incomplete" >&2
@@ -384,27 +396,6 @@ for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
   # Output goes straight to the log (no pipe reader can outlive the checker) —
   # surface the tail so operators still see this attempt's outcome.
   tail -n 25 "$LVS_RUN_LOG" 2>/dev/null || true
-
-  # A timeout/external-kill will just recur — do not spend retries on it.
-  if [[ $LVS_STATUS -eq 124 || $LVS_STATUS -eq 137 ]]; then
-    echo "ERROR: LVS timed out after ${LVS_TIMEOUT}s (exit code $LVS_STATUS)" >&2
-    break
-  fi
-
-  # Crash signature in the ORFS 6_lvs.log or the run log -> retry for a survivor.
-  # Besides the sort_circuit SIGSEGV heisenbug ("Signal number"), also retry the KLayout
-  # INTERNAL lvsdb-writer crash that fires AFTER a successful compare ('net2id.end ()' /
-  # 'Internal error ... Executable::cleanup'); it emits a spurious "Netlists don't match"
-  # and was misread as a hard lvs=fail on an actually-matching design (2026-06-28 PicoRV32).
-  if grep -qaE "Signal number|net2id\.end|dbLayoutVsSchematicWriter|Internal error.*Executable::cleanup" \
-        "$LOGS_DIR/6_lvs.log" "$LVS_RUN_LOG" 2>/dev/null; then
-    if [[ $_attempt -lt $LVS_CRASH_RETRIES ]]; then
-      echo "LVS crashed (KLayout comparer/lvsdb-writer heisenbug); retry $_attempt/$LVS_CRASH_RETRIES ..." >&2
-      continue
-    fi
-    echo "ERROR: LVS still crashing after $LVS_CRASH_RETRIES attempts (KLayout 0.30.7 comparer bug, no newer build on host)" >&2
-    break
-  fi
 
   # make could not resolve the stage chain -> it ran no recipe, so nothing was
   # rebuilt and the frozen artifacts are still the flow's own. Grade those
@@ -429,6 +420,33 @@ for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
         echo "  no CDL masters for platform $PLATFORM" >&2
       fi
     fi
+  fi
+
+  # The timeout and crash checks come AFTER the frozen fallback on purpose. The
+  # fallback below runs KLayout itself, so a check placed above it inspects only
+  # `make`'s own exit -- and since every design restaged from a harvest takes the
+  # fallback (its RTL is not mounted, so make cannot resolve the stage chain), a
+  # SIGSEGV inside the frozen run used to reach the unconditional `break` with no
+  # retry at all. The retry was dead on the one path the corpus actually uses.
+  # A timeout/external-kill will just recur — do not spend retries on it.
+  if [[ $LVS_STATUS -eq 124 || $LVS_STATUS -eq 137 ]]; then
+    echo "ERROR: LVS timed out after ${LVS_TIMEOUT}s (exit code $LVS_STATUS)" >&2
+    break
+  fi
+
+  # Crash signature in the ORFS 6_lvs.log or the run log -> retry for a survivor.
+  # Besides the sort_circuit SIGSEGV heisenbug ("Signal number"), also retry the KLayout
+  # INTERNAL lvsdb-writer crash that fires AFTER a successful compare ('net2id.end ()' /
+  # 'Internal error ... Executable::cleanup'); it emits a spurious "Netlists don't match"
+  # and was misread as a hard lvs=fail on an actually-matching design (2026-06-28 PicoRV32).
+  if grep -qaE "Signal number|net2id\.end|dbLayoutVsSchematicWriter|Internal error.*Executable::cleanup" \
+        "$LOGS_DIR/6_lvs.log" "$LVS_RUN_LOG" 2>/dev/null; then
+    if [[ $_attempt -lt $LVS_CRASH_RETRIES ]]; then
+      echo "LVS crashed (KLayout comparer/lvsdb-writer heisenbug); retry $_attempt/$LVS_CRASH_RETRIES ..." >&2
+      continue
+    fi
+    echo "ERROR: LVS still crashing after $LVS_CRASH_RETRIES attempts (KLayout 0.30.7 comparer bug, no newer build on host)" >&2
+    break
   fi
 
   # No crash this attempt -> the verdict (clean or fail) is trustworthy. Stop.
