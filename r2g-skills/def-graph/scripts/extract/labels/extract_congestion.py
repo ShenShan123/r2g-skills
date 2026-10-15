@@ -452,6 +452,28 @@ def main():
     util_dense = densify_util(grid_util, gridxcnt, gridycnt)
     gauss_dense = gaussian_filter_2d(util_dense, gridxcnt, gridycnt, sigma=1.0)
 
+    # Keep the grid. Up to here the image representation has already been built
+    # -- demand per GCell, divided by capacity, Gaussian-smoothed -- and the next
+    # loop averages it over each cell's bbox and discards it. Writing it out adds
+    # a file, not a second extraction, so the demand arithmetic stays
+    # single-sourced. Opt-in while a campaign is running (R2G_EMIT_GRID=0 off);
+    # it only ADDS files and never touches cell_congestion.csv.
+    if os.environ.get("R2G_EMIT_GRID", "1") not in ("0", "", "no"):
+        try:
+            import grid_export
+            _gdir = os.path.dirname(output_csv)
+            _n = grid_export.write_grid_csv(
+                os.path.join(_gdir, grid_export.GRID_CSV_NAME),
+                util_dense, gauss_dense, gridxcnt, gridycnt)
+            grid_export.write_grid_sidecar(
+                os.path.join(_gdir, grid_export.GRID_JSON_NAME),
+                design=design_name, gridxcnt=gridxcnt, gridycnt=gridycnt,
+                grid_step_x=grid_step_x, grid_step_y=grid_step_y,
+                db_units=db_units, die=die, cap_h=cap_h, cap_v=cap_v, nonzero=_n)
+            print(f"Wrote GCell grid: {_n} non-zero of {gridxcnt}x{gridycnt}")
+        except Exception as exc:                     # never fail the LABEL on it
+            print(f"WARNING: GCell grid export skipped: {exc}")
+
     print("Mapping congestion to cells...")
     with open(output_csv, "w", newline="") as f:
         writer = csv.writer(f)
