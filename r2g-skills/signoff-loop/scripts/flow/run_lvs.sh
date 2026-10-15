@@ -144,6 +144,23 @@ _CELL_COUNT=0
 if [[ -n "$_REPORT_JSON" ]]; then
   _CELL_COUNT=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(int(d.get('finish__design__instance__count',0)))" "$_REPORT_JSON" 2>/dev/null || echo 0)
 fi
+# Fall back to the DEF's own COMPONENTS header. A design restaged from a harvest
+# has no 6_report.json anywhere -- ORFS wrote it under its logs/ tree, which a
+# restage does not reproduce -- so the count read 0 and BOTH consumers silently
+# took their smallest setting: a flat 5400s timeout (instead of up to 28800s)
+# and 4 crash retries on a design big enough to warrant 1. A 282K-cell layout
+# then SIGTERM'd mid-extraction and was recorded as a timeout, which looks like
+# a property of the design rather than of a missing file. The DEF is the one
+# artifact a frozen layout always has, and COMPONENTS is the exact same number.
+if [[ "$_CELL_COUNT" -le 0 ]] 2>/dev/null; then
+  _CELL_DEF=$(find "$PROJECT_DIR/backend" -name "6_final.def" 2>/dev/null | sort | tail -1 || true)
+  [[ -n "$_CELL_DEF" ]] || _CELL_DEF="$RESULTS_DIR/6_final.def"
+  if [[ -f "$_CELL_DEF" ]]; then
+    _CELL_COUNT=$(sed -n 's/^COMPONENTS \([0-9]\+\).*/\1/p' "$_CELL_DEF" 2>/dev/null | head -1 || true)
+    [[ -n "$_CELL_COUNT" ]] || _CELL_COUNT=0
+    echo "Cell count from DEF COMPONENTS: $_CELL_COUNT (no 6_report.json on a restaged design)"
+  fi
+fi
 
 # Auto-scale timeout unless the user explicitly set LVS_TIMEOUT. KLayout's layout
 # netlist EXTRACTION (not just the compare) is super-linear: ~2700s @51K and
