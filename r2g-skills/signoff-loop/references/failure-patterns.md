@@ -1275,6 +1275,32 @@ strategy_ids: [lvs_same_nets_seed]
   124/137-only cleanup left a multi-GB klayout child still spinning. `run_lvs.sh` now reaps orphans
   on **any** nonzero exit.
 
+#### Sub-variant: the retry was dead on the frozen path — every corpus design (2026-10-15)
+
+The retry above was validated on designs whose stage chain `make lvs` could resolve. A design
+**restaged from a harvest** cannot resolve it (its RTL is not mounted), so `make` fails with `No
+rule to make target`, `run_lvs.sh` falls back to the frozen-layout path, and **that** is what
+grades the layout. The crash check sat ABOVE the fallback in the retry loop, so it inspected only
+`make`'s own exit; a SIGSEGV inside the frozen run reached the loop's unconditional `break` having
+never been looked at. `LVS_CRASH_RETRIES=4` therefore meant **1 attempt** on every design in a
+signoff corpus — exactly where the heisenbug matters, and the one case the tests never cover.
+A second defect hid the first: `_REPORT_JSON=$(find "$_LVS_LOGS_DIR" ... | head -1)` aborted the
+script under `set -euo pipefail` when the ORFS `logs/` dir did not exist (find exits 1 → pipefail),
+so LVS died one line after printing its rules path and never reached the loop at all.
+
+- **Fix:** the timeout and crash checks moved BELOW the frozen fallback, and a retry re-enters the
+  frozen path (routing on `_LVS_FROZEN`) instead of re-running the `make` that already failed;
+  both `find` assignments carry `|| true`, matching `run_drc.sh`.
+- **Staging requirement this exposed:** `5_route.odb` is a `_PREFLIGHT_TARGETS` entry. Restaging
+  only `6_final.*` makes `make --question lvs` report the physical stages as out of date, and
+  RMD-P0-01 refuses (`'make lvs' would rebuild physical stages`) — correctly, but the message
+  reads like a harness bug rather than a missing file. Keep `5_route.odb` in the harvest.
+- **What it changes about the verdicts:** before the fix, the first crash was the last word, so a
+  deterministic comparer SIGSEGV and a one-in-four heisenbug were indistinguishable in the corpus.
+  `C00100__tp_mem` (nangate45) now crashes 4/4 — genuinely deterministic — which is only knowable
+  once the retry runs. A baseline's `klayout_crash` count taken before this fix is an upper bound
+  on tool failure and a lower bound on recoverable designs.
+
 #### Sub-variant: writer crash emits a SPURIOUS "don't match" → false `lvs=fail` (2026-06-28)
 
 The claim above ("the deck swallows the `net2id.end()` writer error and the verdict line is still
