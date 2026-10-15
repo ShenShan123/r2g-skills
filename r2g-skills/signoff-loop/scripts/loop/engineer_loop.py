@@ -1947,6 +1947,46 @@ def _arm_knob_digest(project_path: str | os.PathLike) -> tuple[str, int] | None:
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:12], len(knobs)
 
 
+def _arm_layout_digest(project_path: str | os.PathLike) -> tuple[str, int] | None:
+    """(sha256[:12], COMPONENTS) of the arm's final DEF -- "did the LAYOUT change".
+
+    The knob digest answers "did the arm apply a different CONFIGURATION", which
+    is complete only while every strategy lands in `config_edits`. A strategy
+    that acts on the layout directly -- a targeted `repair_antennas -net`, a
+    hook-driven insertion -- leaves both arms' knob sets identical, so a
+    config-only fingerprint reads it as no contrast and `_ab_no_contrast` vetoes
+    a trial that genuinely tested something. That is the shape of the antenna
+    gap: on one apb_gpio layout `check_antennas -verbose` reports 0 net and 0 pin
+    violations while the KLayout deck reports 16, so no config value can reach
+    those nets and the repair has to name them.
+
+    The DEF hash is usable as a contrast signal because two things were measured
+    rather than assumed: the flow is DETERMINISTIC (one config, three runs, two
+    different NUM_CORES, byte-identical DEF md5 fc4bd8bf9769 / COMPONENTS 1398),
+    and the DEF is PATH-INDEPENDENT (those three runs lived in three different
+    project directories and still hashed the same). So an identical DEF means the
+    arms really did the same physical work, and a differing DEF means one of them
+    changed the layout.
+
+    None when no DEF exists -- an arm that never produced a layout is unknown,
+    not identical.
+    """
+    root = Path(project_path or "")
+    defs = sorted(root.glob("backend/RUN_*/results/6_final.def"),
+                  key=lambda f: f.stat().st_mtime if f.exists() else 0,
+                  reverse=True)
+    if not defs:
+        defs = sorted(root.glob("backend/RUN_*/6_final.def"), reverse=True)
+    if not defs:
+        return None
+    try:
+        data = defs[0].read_bytes()
+    except OSError:
+        return None
+    m = re.search(rb"(?m)^COMPONENTS (\d+)", data)
+    return hashlib.sha256(data).hexdigest()[:12], int(m.group(1)) if m else -1
+
+
 def _ab_no_contrast(a_path: str, b_path: str,
                     arm_a_samples: list[dict | None] | None = None,
                     arm_b_samples: list[dict | None] | None = None) -> str | None:
@@ -1983,6 +2023,13 @@ def _ab_no_contrast(a_path: str, b_path: str,
     """
     a, b = _arm_knob_digest(a_path), _arm_knob_digest(b_path)
     if a is None or b is None or a[0] != b[0]:
+        return None
+    # The layout is the second half of "what did this arm apply". A strategy that
+    # acts outside config.mk leaves the knob sets identical, so without this a
+    # genuinely differing pair reads as no contrast. Unknown (no DEF on either
+    # side) is not evidence of sameness, so it falls through to the result check.
+    la, lb = _arm_layout_digest(a_path), _arm_layout_digest(b_path)
+    if la is not None and lb is not None and la[0] != lb[0]:
         return None
     if arm_a_samples is None or arm_b_samples is None:
         return f"no_contrast:knobs_identical:{a[1]}"
@@ -3107,6 +3154,11 @@ def judge_finished_trials(led: Ledger, conn) -> None:
                      "arm_knob_digest": {
                          "A": (_arm_knob_digest(pair["A"][0]["project_path"]) or (None, None))[0],
                          "B": (_arm_knob_digest(pair["B"][0]["project_path"]) or (None, None))[0]},
+                     # the layout half: a strategy acting outside config.mk shows
+                     # up here and nowhere else.
+                     "arm_layout_digest": {
+                         "A": (_arm_layout_digest(pair["A"][0]["project_path"]) or (None, None))[0],
+                         "B": (_arm_layout_digest(pair["B"][0]["project_path"]) or (None, None))[0]},
                      "tool_versions": _tool_versions_map(),
                      "judge_version": 2, "reason": reason,
                      "veto": veto,

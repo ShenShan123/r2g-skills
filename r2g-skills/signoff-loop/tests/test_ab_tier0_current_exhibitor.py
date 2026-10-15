@@ -186,3 +186,29 @@ def test_a_real_family_still_collapses_its_tops():
                   ("rB", "/p/wb2axip__C2__axilxbar", "wb2axip", "nangate45")])
     assert (ab_runner._trial_subject(c, "rA", "rA", "t1")
             == ab_runner._trial_subject(c, "rB", "rB", "t2") == "family:wb2axip")
+
+
+def test_any_unresolved_file_knob_blocks_flowability(tmp_path):
+    """Checking a hand-picked knob list is what let this class through. All 7,491
+    harvested configs resolve VERILOG_FILES and (after the bridge fix) SDC_FILE,
+    yet gf180's also carry `PDN_TCL = /work/pdn_override.cfg` and
+    `TAPCELL_TCL = /work/tapcell_override.tcl` -- container paths from the flow
+    that produced them -- and every gf180 flow died 5s into floorplan on
+    `No rule to make target '/work/tapcell_override.tcl'`."""
+    p = _proj(tmp_path, "stale_tcl")
+    cfg = tmp_path / "stale_tcl" / "constraints" / "config.mk"
+    cfg.write_text(cfg.read_text() + "export TAPCELL_TCL = /work/tapcell_override.tcl\n")
+    assert ab_runner._is_flowable(p, strict=True) is False
+    assert ab_runner._is_flowable(p) is False
+
+
+def test_non_file_knobs_are_not_judged(tmp_path):
+    """Only absolute tokens that look like files are checked, so a directory, a
+    bare number or a make expression must not make a project unflowable."""
+    p = _proj(tmp_path, "mixed")
+    cfg = tmp_path / "mixed" / "constraints" / "config.mk"
+    cfg.write_text(cfg.read_text()
+                   + "export CORE_UTILIZATION = 40\n"
+                   + "export PLATFORM_DIR = /nonexistent/platforms/nangate45\n"
+                   + "export ADDITIONAL_LEFS = $(PLATFORM_DIR)/lef/x.lef\n")
+    assert ab_runner._is_flowable(p, strict=True) is True

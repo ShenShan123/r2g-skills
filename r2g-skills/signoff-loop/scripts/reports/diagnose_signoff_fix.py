@@ -16,6 +16,8 @@ import json
 import math
 import os
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -88,6 +90,21 @@ KLAYOUT_CPP_CRASH = re.compile(r"sort_circuit|gen_log_entry|segmentation|sigsegv
 DIODE_FORCED_REPAIR_PLATFORMS = {"nangate45"}
 
 
+DIODE_INSERTING_STRATEGIES = frozenset({
+    "antenna_diode_repair", "antenna_diode_iters", "deck_driven_antenna_diode"})
+
+
+def _inserts_diodes(strategy: dict) -> bool:
+    """Does this strategy put a physical antenna diode in the layout?
+
+    Named membership rather than an id prefix: the strategies that do this are a
+    closed, reviewable set, and a new one that happens not to start with
+    "antenna_diode" must not slip past the unusable-model gate by virtue of its
+    name.
+    """
+    return strategy.get("id") in DIODE_INSERTING_STRATEGIES
+
+
 def _antenna_precondition(platform: str):
     """Pilot P1-1: check the diode-repair PREREQUISITE before ranking it.
 
@@ -149,6 +166,71 @@ def _applied(cfg: dict, edits: dict) -> bool:
     return all(str(cfg.get(k)) == str(v) for k, v in edits.items())
 
 
+
+def _deck_antenna_inputs_present(proj) -> bool:
+    """Can the deck's verdict be mapped to nets in THIS project?
+
+    Cheap existence check only -- the real mapping runs at apply time. Both
+    inputs are required and neither is substitutable: the lyrdb carries the
+    violation polygons and the DEF is what attributes them to a net.
+    """
+    try:
+        return (any(Path(proj).glob("**/6_drc.lyrdb"))
+                and any(Path(proj).glob("backend/RUN_*/results/6_final.def")))
+    except OSError:
+        return False
+
+
+def _materialize_deck_antenna_diodes(proj):
+    """Write the hook and its net list into <project>/signoff_fix/.
+
+    The net list comes from the signoff deck's own lyrdb, mapped back through the
+    DEF's per-net routing by scripts/extract/map_antenna_nets.py (8/8 on the
+    design this was developed against). The hook reads the list from beside
+    itself rather than from the environment, because ORFS erases non-stage
+    variables before PRE_GLOBAL_ROUTE_TCL runs.
+
+    Returns (True, summary) or (False, reason). A reason, not an exception: the
+    caller turns it into precondition_failed so the config is left untouched.
+    """
+    here = Path(__file__).resolve().parents[1]
+    hook_src = here / "flow" / "orfs_hooks" / "deck_antenna_diodes.tcl"
+    mapper = here / "extract" / "map_antenna_nets.py"
+    if not hook_src.exists() or not mapper.exists():
+        return False, "deck_antenna_assets_missing"
+    lyrdbs = sorted(proj.glob("**/6_drc.lyrdb"),
+                    key=lambda f: f.stat().st_mtime, reverse=True)
+    defs = sorted(proj.glob("backend/RUN_*/results/6_final.def"),
+                  key=lambda f: f.stat().st_mtime, reverse=True)
+    if not lyrdbs:
+        return False, "no_lyrdb_to_read_the_deck_verdict_from"
+    if not defs:
+        return False, "no_final_def_to_map_polygons_onto"
+    out = proj / "signoff_fix"
+    out.mkdir(parents=True, exist_ok=True)
+    nets_json = out / "antenna_nets.json"
+    try:
+        r = subprocess.run(
+            [sys.executable, "-I", str(mapper), "--lyrdb", str(lyrdbs[0]),
+             "--def", str(defs[0]), "--json-out", str(nets_json)],
+            capture_output=True, text=True, timeout=900)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return False, f"net_mapping_failed:{exc}"
+    if r.returncode != 0 or not nets_json.exists():
+        return False, "net_mapping_produced_nothing"
+    try:
+        nets = json.loads(nets_json.read_text(encoding="utf-8")).get("nets") or []
+    except (OSError, ValueError):
+        return False, "net_mapping_output_unreadable"
+    if not nets:
+        # The deck flagged antenna violations the DEF cannot attribute to a net.
+        # Inserting on a guessed net is how the threshold strategies failed.
+        return False, "deck_violations_mapped_to_zero_nets"
+    (out / "antenna_nets.txt").write_text("\n".join(nets) + "\n", encoding="utf-8")
+    shutil.copyfile(hook_src, out / "deck_antenna_diodes.tcl")
+    return True, f"nets={len(nets)} from {lyrdbs[0].name}"
+
+
 def _antenna_catalog(cfg: dict) -> list:
     """Full antenna strategy catalog (real layout fixes; regardless of applied state).
 
@@ -164,6 +246,21 @@ def _antenna_catalog(cfg: dict) -> list:
     platform = cfg.get("PLATFORM")
     if platform in DIODE_FORCED_REPAIR_PLATFORMS:
         return [
+            {"id": "deck_driven_antenna_diode",
+             "rationale": "Insert a diode on each net the SIGNOFF DECK flagged, chosen from "
+                          "the lyrdb's own violation polygons rather than from OpenROAD's "
+                          "antenna model. On nangate45 the two do not compute the same "
+                          "quantity: for one net on metal4 the deck reads 306.47 (metal over "
+                          "ONE minimum gate, agate 0.02625um^2) and check_antennas reads 1.49 "
+                          "(metal over the whole driven cell, split per layer) -- ~200x apart, "
+                          "and `check_antennas -verbose` reports 0 net / 0 pin violations on a "
+                          "layout the deck flags 16 times. Its violating set is EMPTY, so no "
+                          "threshold reaches those nets and repair_antennas has no -net option. "
+                          "Measured: 7/7 subjects went to zero antenna violations, area +0.00 "
+                          "to +0.03%, WNS within +-0.005 and still positive, TNS 0.",
+             "config_edits": {"PRE_GLOBAL_ROUTE_TCL": "{PROJECT}/signoff_fix/deck_antenna_diodes.tcl"},
+             "materialize": "deck_antenna_diodes",
+             "rerun_from": "route", "recheck": "drc", "auto_apply": True},
             {"id": "antenna_diode_repair",
              "rationale": "Force antenna-diode insertion: the FreePDK45 KLayout deck credits "
                           "diodes, NOT jumpers, so SKIP_ANTENNA_REPAIR=1 disables OpenROAD's "
@@ -340,8 +437,14 @@ def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
             # layout change) survives; unknown probe results fail OPEN.
             usable, precheck_why = _antenna_precondition(cfg.get("PLATFORM") or "")
             if usable is False:
+                # Filter on WHAT THE STRATEGY DOES, not on how its id is spelled.
+                # The old `startswith("antenna_diode")` test let
+                # deck_driven_antenna_diode through, and that one inserts the same
+                # ANTENNA_X1 the probe just reported unusable -- it would have
+                # burned a reflow and a full DRC re-grading an unchanged layout,
+                # which is the exact 2026-07-21 incident this probe exists to stop.
                 strategies = [s for s in strategies
-                              if not s["id"].startswith("antenna_diode")]
+                              if not _inserts_diodes(s)]
                 plan["antenna_model_unusable"] = precheck_why
             plan["strategies"] = strategies
             if not strategies:
@@ -1639,6 +1742,21 @@ def main(argv=None) -> int:
               "ranking before adding a second route strategy.", file=sys.stderr)
     attach_lessons(plan, check=args.check,
                    vclass=_current_vclass(args.check, drc, lvs, tcheck), platform=plat)
+    # Drop a strategy whose inputs this project cannot produce, at SELECTION time.
+    # The apply-time precondition already refuses to write anything, but by then
+    # the driver has spent an iteration on it: measured as iter=2
+    # strategy=deck_driven_antenna_diode verdict=apply_failed, which consumed the
+    # attempt budget and kept the run from ever reaching its residual verdict.
+    # Offering a strategy that provably cannot run is the same waste the
+    # antenna-model precheck exists to prevent, one layer up.
+    _unmaterializable = [s["id"] for s in plan.get("strategies", [])
+                         if s.get("materialize") == "deck_antenna_diodes"
+                         and not _deck_antenna_inputs_present(proj)]
+    if _unmaterializable:
+        plan["strategies"] = [s for s in plan["strategies"]
+                              if s["id"] not in _unmaterializable]
+        plan["unmaterializable"] = _unmaterializable
+
     _annotate_live_gates(plan, proj, check=args.check, sid=_sid,
                          design_class=design_class, platform=plat)
     plan["routing_context"] = {
@@ -1734,6 +1852,22 @@ def main(argv=None) -> int:
                                   "strategy": strat["id"],
                                   "unmet": ["sdc_no_rewritable_period"]}))
                 return 4
+        # Strategies that need more than a knob materialize their inputs here,
+        # because build_plan is pure (JSON + config in, plan out) and cannot read
+        # the lyrdb. Fail-closed on the same rc=4 contract as the SDC edits: if
+        # the deck's verdict cannot be mapped to a net, NOTHING is written, so a
+        # zero-effect apply is never recorded as evidence against the recipe.
+        if strat.get("materialize") == "deck_antenna_diodes":
+            ok, info = _materialize_deck_antenna_diodes(proj)
+            if not ok:
+                print(json.dumps({"status": "precondition_failed", "applied": None,
+                                  "strategy": strat["id"], "unmet": [info]}))
+                return 4
+            strat = dict(strat)
+            strat["config_edits"] = {k: v.replace("{PROJECT}", str(proj))
+                                     for k, v in strat["config_edits"].items()}
+            strat["materialized"] = info
+
         if strat["config_edits"]:
             cfg_path.write_text(apply_edits(cfg_text, strat["config_edits"]), encoding="utf-8")
         if sdc_new_p is not None:

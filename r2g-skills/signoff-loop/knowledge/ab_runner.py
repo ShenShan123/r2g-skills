@@ -447,8 +447,15 @@ def _symptom_designs(conn, symptom_id: str, want_platform: str | None,
     return out
 
 
-_FLOWABLE_KNOB_RE = re.compile(
-    r"(?m)^\s*(?:override\s+)?export\s+(VERILOG_FILES|SDC_FILE)\s*=\s*(.*)$")
+_EXPORT_RE = re.compile(r"(?m)^\s*(?:override\s+)?export\s+(\w+)\s*=\s*(.*)$")
+# An absolute token whose basename carries an extension is a FILE the flow will
+# open. Checking every such token -- rather than a hand-picked knob list -- is
+# the point: a VERILOG_FILES/SDC_FILE-only check passed 7,491 harvested configs
+# that also carry `PDN_TCL = /work/pdn_override.cfg` and
+# `TAPCELL_TCL = /work/tapcell_override.tcl`, container paths from the flow that
+# produced them, and every gf180 flow then died at
+# `No rule to make target '/work/tapcell_override.tcl'` 5 s into floorplan.
+_PATHISH = re.compile(r"^/\S*/[^/]+\.[A-Za-z0-9]+$")
 
 
 def _is_flowable(project_path: str, *, strict: bool = False) -> bool:
@@ -480,13 +487,20 @@ def _is_flowable(project_path: str, *, strict: bool = False) -> bool:
         txt = open(cfg, encoding="utf-8", errors="ignore").read()
     except OSError:
         return False
-    knobs = {k: v.strip() for k, v in _FLOWABLE_KNOB_RE.findall(txt)}
+    knobs = {k: v.strip() for k, v in _EXPORT_RE.findall(txt)}
+    # RTL is mandatory: a config with no source cannot flow at all.
     srcs = knobs.get("VERILOG_FILES", "").split()
     if not srcs or not all(os.path.isfile(x) for x in srcs):
         return False
-    sdc = knobs.get("SDC_FILE", "")
-    if sdc and not os.path.isfile(sdc):
-        return False
+    # Every other file-valued knob must resolve. Only absolute tokens that look
+    # like files are judged, so a directory knob or a make expression is left
+    # alone rather than guessed at.
+    for k, v in knobs.items():
+        if k == "VERILOG_FILES":
+            continue
+        for tok in v.split():
+            if _PATHISH.match(tok) and not os.path.exists(tok):
+                return False
     return True
 
 

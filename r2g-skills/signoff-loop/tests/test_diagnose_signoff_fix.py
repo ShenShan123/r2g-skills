@@ -47,10 +47,22 @@ def test_antenna_fail_nangate45_offers_diode_repair(monkeypatch):
     cfg = {"CORE_UTILIZATION": "10", "PLATFORM": "nangate45"}
     plan = d.build_plan(_drc("fail", 7, _antenna_cats()), {}, cfg, check="drc")
     ids = [s["id"] for s in plan["strategies"]]
-    assert ids == ["antenna_diode_repair"]
-    s = plan["strategies"][0]
-    assert s["config_edits"] == {"SKIP_ANTENNA_REPAIR": "1",
-                                 "MAX_REPAIR_ANTENNAS_ITER_DRT": "10"}
+    # deck_driven_antenna_diode ranks FIRST on nangate45: antenna_diode_repair was
+    # measured to be a structural no-op there (check_antennas reports 0 violating
+    # nets on layouts the deck flags, so no threshold reaches them), while the
+    # deck-driven insertion took 7/7 subjects to zero. The old strategy stays as a
+    # fallback rather than being deleted -- it is the one that works wherever the
+    # two tools' criteria DO agree.
+    assert ids == ["deck_driven_antenna_diode", "antenna_diode_repair"]
+    deck, forced = plan["strategies"]
+    # The deck-driven one carries a hook path with a {PROJECT} placeholder, because
+    # build_plan is pure and the real path is only known at apply time.
+    assert deck["config_edits"] == {
+        "PRE_GLOBAL_ROUTE_TCL": "{PROJECT}/signoff_fix/deck_antenna_diodes.tcl"}
+    assert deck["materialize"] == "deck_antenna_diodes"
+    assert forced["config_edits"] == {"SKIP_ANTENNA_REPAIR": "1",
+                                      "MAX_REPAIR_ANTENNAS_ITER_DRT": "10"}
+    s = deck
     assert s["auto_apply"] is True
     assert s["rerun_from"] == "route"
     assert plan["dominant_category"] == "METAL7_ANTENNA"
@@ -567,7 +579,10 @@ def test_driver_nangate45_antenna_residual_when_unfixed(tmp_path):
     sd = _stub_dir(tmp_path, counts=[7, 7, 7])
     r = _run_driver(p, sd)
     lines = (p / "reports" / "fix_log.jsonl").read_text().strip().splitlines()
-    # iter1 applies antenna_diode_repair (no_improvement); iter2 --next → STOP residual.
+    # This fixture has no lyrdb, so deck_driven_antenna_diode cannot map the deck's
+    # verdict to a net and its apply returns precondition_failed (rc=4) WITHOUT
+    # writing anything. The driver must then fall through to antenna_diode_repair
+    # rather than recording a zero-effect apply as evidence against the recipe.
     assert json.loads(lines[0])["strategy"] == "antenna_diode_repair"
     assert any("stop" in json.loads(l)["verdict"] for l in lines)
     # summary table must exist
@@ -653,7 +668,8 @@ def test_antenna_precondition_unknown_fails_open(monkeypatch):
     monkeypatch.setattr(d, "_antenna_precondition",
                         lambda p: (None, "cannot inspect (test)"))
     plan = d._drc_plan(dict(_ANT_FAIL), {"PLATFORM": "nangate45"}, set())
-    assert [s["id"] for s in plan["strategies"]] == ["antenna_diode_repair"]
+    assert [s["id"] for s in plan["strategies"]] == [
+        "deck_driven_antenna_diode", "antenna_diode_repair"]
 
 
 def test_antenna_precondition_keeps_density_relief_elsewhere(monkeypatch):

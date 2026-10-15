@@ -199,6 +199,48 @@ _RUNDIR_ID_RE = re.compile(r"^C\d+$")
 _RUNDIR_PERIOD_RE = re.compile(r"^p[\d.]+$")
 
 
+# The campaign mounted its scratch at /work and wrote per-run overrides there, so
+# EVERY harvested config.mk carries at least one container path -- SDC_FILE on all
+# three platforms, plus PDN_TCL and TAPCELL_TCL on gf180. The harvest cannot
+# recover what those pointed at, so the mapping is explicit here: these are the
+# two measured gf180 platform corrections the campaign ran with (runbook
+# 六之六之二/四 -- without the PDN config the via stacks merge into
+# 0.772x1.028 rectangles and violate V2.1/V3.1, which was 82% of all violations;
+# without tapcell -distance 30 the 5 V devices breach DF.13/14_MV's 15 um
+# nearest-tap cap). A left-behind /work/ path is not cosmetic: the flow dies 5 s
+# into floorplan on `No rule to make target '/work/tapcell_override.tcl'`.
+_WORK_OVERRIDES = {
+    "gf180": {"PDN_TCL": "gf180_pdnfix/a.cfg",
+              "TAPCELL_TCL": "gf180_tapfix/d30.tcl"},
+}
+
+
+def _repoint_work_paths(proj, platform, root=None):
+    """Repoint /work/* knobs at the host files the campaign actually used.
+
+    Unmapped /work/ knobs are left in place ON PURPOSE: ab_runner._is_flowable
+    then refuses the project, which is the honest outcome -- better an excluded
+    subject than one that dies mid-floorplan with a confusing make error.
+    """
+    cfg = os.path.join(proj, "constraints", "config.mk")
+    if not os.path.isfile(cfg):
+        return
+    root = root or os.path.dirname(os.path.dirname(os.path.abspath(proj)))
+    mapping = _WORK_OVERRIDES.get(platform, {})
+    out, changed = [], False
+    for ln in open(cfg, errors="ignore").read().splitlines():
+        m = re.match(r"^(\s*(?:override\s+)?export\s+)(\w+)(\s*=\s*)(.*)$", ln)
+        if m and "/work/" in m.group(4) and m.group(2) in mapping:
+            tgt = os.path.join(root, mapping[m.group(2)])
+            if os.path.isfile(tgt):
+                out.append(f"{m.group(1)}{m.group(2)}{m.group(3)}{tgt}")
+                changed = True
+                continue
+        out.append(ln)
+    if changed:
+        open(cfg, "w").write("\n".join(out) + "\n")
+
+
 def _project_name(run_dir, platform):
     """Lead with the SOURCE-REPO token, because that is how the family is inferred.
 
@@ -260,6 +302,7 @@ def project_for(run_dir, j, out_root, platform):
                          lambda m: f"{m.group(1)} {proj}/constraints/constraint.sdc",
                          txt)
             open(cfg_out, "w").write(txt)
+    _repoint_work_paths(proj, platform)
 
     W = lambda n, o: json.dump(o, open(os.path.join(proj, "reports", n), "w"),
                                indent=1, sort_keys=True)

@@ -133,3 +133,57 @@ def test_normalization_does_not_hide_a_real_recipe(tmp_path):
     b = _arm(tmp_path, "d_abB_r0", BASE + BLOCK)
     assert el._arm_knob_digest(a)[0] != el._arm_knob_digest(b)[0]
     assert el._ab_no_contrast(a, b, SAME, SAME) is None
+
+
+# ── the layout half of the fingerprint ──────────────────────────────────────
+def _with_def(tmp_path, name, cfg_text, def_text):
+    p = _arm(tmp_path, name, cfg_text)
+    d = os.path.join(p, "backend", "RUN_2026-10-14_00-00-00_1_aaaa", "results")
+    os.makedirs(d, exist_ok=True)
+    open(os.path.join(d, "6_final.def"), "w").write(def_text)
+    return p
+
+
+DEF_A = "VERSION 5.8 ;\nDESIGN top ;\nCOMPONENTS 100 ;\nEND COMPONENTS\nEND DESIGN\n"
+DEF_B = "VERSION 5.8 ;\nDESIGN top ;\nCOMPONENTS 101 ;\nEND COMPONENTS\nEND DESIGN\n"
+
+
+def test_layout_digest_reads_components(tmp_path):
+    p = _with_def(tmp_path, "d_abA_r0", BASE, DEF_A)
+    dg, comp = el._arm_layout_digest(p)
+    assert comp == 100 and len(dg) == 12
+
+
+def test_identical_knobs_but_differing_layout_is_not_vetoed(tmp_path):
+    """A strategy acting OUTSIDE config.mk -- a targeted `repair_antennas -net`,
+    a hook-driven insertion -- leaves both knob sets identical. Without the
+    layout half this vetoes a trial that genuinely tested something, which is
+    exactly the antenna gap's shape: on one apb_gpio layout
+    `check_antennas -verbose` reports 0 net and 0 pin violations while the deck
+    reports 16, so no config value can reach those nets."""
+    a = _with_def(tmp_path, "d_abA_r0", BASE, DEF_A)
+    b = _with_def(tmp_path, "d_abB_r0", BASE, DEF_B)
+    assert el._arm_knob_digest(a)[0] == el._arm_knob_digest(b)[0]
+    assert el._arm_layout_digest(a)[0] != el._arm_layout_digest(b)[0]
+    assert el._ab_no_contrast(a, b, SAME, SAME) is None
+
+
+def test_identical_knobs_and_identical_layout_is_still_vetoed(tmp_path):
+    """The flow is deterministic -- one config, three runs, two NUM_CORES values,
+    byte-identical DEF md5 fc4bd8bf9769 / COMPONENTS 1398 -- so an identical DEF
+    means the arms really did the same physical work."""
+    a = _with_def(tmp_path, "d_abA_r0", BASE, DEF_A)
+    b = _with_def(tmp_path, "d_abB_r0", BASE, DEF_A)
+    v = el._ab_no_contrast(a, b, SAME, SAME)
+    assert v and v.startswith("no_contrast")
+
+
+def test_missing_def_is_unknown_not_identical(tmp_path):
+    """An arm that never produced a layout is unknown. The veto must then rest on
+    the result check alone rather than reading absence as sameness."""
+    a = _with_def(tmp_path, "d_abA_r0", BASE, DEF_A)
+    b = _arm(tmp_path, "d_abB_r0", BASE)          # no DEF at all
+    assert el._arm_layout_digest(b) is None
+    a_s = [{"is_success": False, "judged_on": "x"}]
+    b_s = [{"is_success": True, "judged_on": "y"}]
+    assert el._ab_no_contrast(a, b, a_s, b_s) is None
