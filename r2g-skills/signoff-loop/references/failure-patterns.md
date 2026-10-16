@@ -512,6 +512,30 @@ The setup-time floor above only protects projects materialized by `mk_sky130_pro
 - **Validated:** `verilog_ethernet_ip_demux` (1523 pads, PPL-0024 → DIE 560) and `verilog_ethernet_udp_ip_rx_64` (771 pads → DIE 280) re-ran clean through full signoff; the other 134 wave designs (all ≤325 pads) were untouched. Discovered in the 2026-06-12 sky130 wave (waves 2–4).
 - **Resolved 2026-06-13 (was "latent, not changed"):** the predicted large-core case arrived (see DPL-0036 below), so the always-0 `cell_count` read is now fixed. `mk_sky130_project.py` reads `geometry.instance_count` (where `extract_ppa.py` actually writes it) instead of the never-populated top-level `ppa.get("cell_count")`, with `source_def_components()` (logic cells from the source DEF, fillers/taps excluded) as a fallback for sources whose ppa.json predates that field. **Genuinely small designs are unaffected** — their real count is still < the ~640-cell floor threshold, so they keep the byte-identical 200 um floor; only large-core designs (which the floor *broke*) flip to utilization-sizing. The earlier worry that this would "flip 100+ validated small designs" was wrong: small designs sit below the threshold and do not flip.
 
+#### Sub-variant: the placer's demanded perimeter is NOT monotone (2026-10-15)
+
+- **Symptom:** none visible — this is a latent correctness coupling, found by auditing the
+  lever rather than by a failure. `engineer_loop._ppl0024_required_perimeter` returned `<B>`
+  from `Increase the die perimeter from <A>um to <B>um`, and `_set_explicit_die` sizes the core
+  to `B/4 * _PIN_PERIMETER_MARGIN`.
+- **Measured (39 PPL-0024 designs, 2026-10-15 corpus):** the demanded/current ratio spans
+  **0.9839 to 3.7027** (median 1.3275). On **2 of 39** the placer demands LESS perimeter than
+  the die already has while still aborting: `C00599 udma_apb_if` seats 391 pins in 380 slots at
+  221.90 um and demands **218.96 um**; `C00287 lvda` 144.00 um → **141.68 um**. So the message
+  is a *recommendation*, not a lower bound, and `<B>` alone asks the relief to SHRINK precisely
+  the designs that are already too small.
+- **Why it had not bitten:** `_PIN_PERIMETER_MARGIN = 1.15` happens to exceed the contradiction,
+  so the resulting core still grew (63 um vs the 55.5 um it had). Correctness rested on the
+  margin being bigger than the worst non-monotonicity in the tool's output — an invisible
+  coupling between a safety factor and whether the fix works at all.
+- **Fix:** the helper returns `max(<A>, <B>)`, making the target monotone by construction;
+  lowering or removing the margin can no longer reintroduce a shrink. Effect today: `core_side`
+  changes on those 2 designs only (63→64 and 41→42 um). Everything else is byte-identical.
+- **The general lesson:** a tool's suggested value is evidence, not a bound. When a recovery
+  consumes a number the tool prints, clamp it against the state you already know
+  (`max(current, suggested)`) instead of trusting it — and check the suggestion's *range* over
+  the corpus, because a single sampled design cannot show non-monotonicity.
+
 #### Sub-variant: sky130 large-core over-packs the PDN floor (DPL-0036)
 
 - **Symptom (sky130hd/sky130hs):** global placement converges but `[ERROR DPL-0036] Detailed placement failed.` aborts the `place` stage. The place log shows `Design area NNNNN um^2 ~100% utilization` and `GPL-0053 Target density … exceeds the maximum allowed 0.9900`. No final GDS/ODB.

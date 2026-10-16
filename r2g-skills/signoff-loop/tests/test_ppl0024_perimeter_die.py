@@ -11,6 +11,8 @@ recipe ever promoted (promo_ng flat at 0; the stale-noise promotion was correctl
 """
 import re
 
+import pytest
+
 import engineer_loop as el
 
 # The exact placer message wording (note: no space between number and "um", and "the").
@@ -50,6 +52,42 @@ def test_required_perimeter_parses_target(tmp_path):
     proj.mkdir()
     _seed_ppl(proj)
     assert el._ppl0024_required_perimeter(str(proj)) == 851.76
+
+
+@pytest.mark.parametrize("cur,want,expect", [
+    (631.18, 851.76, 851.76),     # the normal case: the demand is the bigger number
+    (221.90, 218.96, 221.90),     # C00599 udma_apb_if: 391 pins into 380 slots
+    (144.00, 141.68, 144.00),     # C00287 lvda
+    (500.00, 500.00, 500.00),     # equal -> either, but never below current
+])
+def test_required_perimeter_is_monotone(tmp_path, cur, want, expect):
+    """The placer's message is NOT monotone: measured over the 39 PPL-0024 designs in
+    the 2026-10-15 corpus the demanded/current ratio spans 0.9839 to 3.7027, and on 2
+    of them it asks for LESS perimeter than the die already has while still aborting.
+    Returning the demanded value alone would ask _set_explicit_die to SHRINK exactly
+    the designs that are already too small, leaving correctness to depend on
+    _PIN_PERIMETER_MARGIN being larger than the contradiction."""
+    proj = tmp_path / "p"
+    proj.mkdir()
+    _seed_ppl(proj, "[ERROR PPL-0024] Number of IO pins (391) exceeds maximum number "
+                    "of available positions (380). Increase the die perimeter from "
+                    f"{cur}um to {want}um.\n")
+    assert el._ppl0024_required_perimeter(str(proj)) == expect
+
+
+def test_shrinking_demand_still_grows_the_core(tmp_path):
+    """End to end on the measured contradiction: the relief must not hand back a core
+    smaller than the one that already failed, whatever the margin is set to."""
+    proj = tmp_path / "p"
+    (proj / "constraints").mkdir(parents=True)
+    (proj / "constraints" / "config.mk").write_text("export CORE_UTILIZATION = 20\n")
+    _seed_ppl(proj, "[ERROR PPL-0024] Number of IO pins (391) exceeds maximum number "
+                    "of available positions (380). Increase the die perimeter from "
+                    "221.9um to 218.96um.\n")
+    target = el._ppl0024_required_perimeter(str(proj))
+    assert el._set_explicit_die(str(proj), target) is True
+    got = _core_perimeter((proj / "constraints" / "config.mk").read_text())
+    assert got >= 221.9, f"core perimeter {got} is below the die that already failed"
 
 
 def test_required_perimeter_none_without_ppl(tmp_path):

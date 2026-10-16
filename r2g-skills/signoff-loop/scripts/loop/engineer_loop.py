@@ -934,16 +934,28 @@ _PIN_CORE_INSET_UM = 10        # core-to-die margin (um) for the IO ring
 
 
 def _ppl0024_required_perimeter(project_path: str) -> float | None:
-    """The die perimeter (um) the IO placer DEMANDS, parsed from the newest backend run's
-    PPL-0024 message ('... Increase the die perimeter from <A>um to <B>um.'). Returns <B>
-    (the REQUIRED perimeter) or None when there is no PPL-0024 / it is unparseable.
+    """The die perimeter (um) a PPL-0024 recovery must hit, from the newest backend run's
+    message ('... Increase the die perimeter from <A>um to <B>um.'). Returns
+    max(<A>, <B>), or None when there is no PPL-0024 / it is unparseable.
 
     This is the placer's OWN stated target -- the only lever that actually closes a
     pin-overflow abort, because CORE_UTILIZATION sizes the die from CELL AREA, not pin
     perimeter: a fixed fractional util step undershoots a cell-tiny/pin-huge design (a
     0.6x step grew ip_demux's perimeter 490->631um where the placer demanded 851.76um),
     so BOTH A/B arms PPL-0024-abort identically -> the trial ties inconclusive forever and
-    no nangate45 recipe ever promotes (2026-06-27 audit)."""
+    no nangate45 recipe ever promotes (2026-06-27 audit).
+
+    Why max() and not simply <B>: the message is not monotone. Across the 39 PPL-0024
+    designs in the 2026-10-15 corpus the demanded/current ratio spans 0.9839 to 3.7027,
+    and on 2 of them the placer asks for LESS perimeter than the die already has while
+    still aborting (C00599 udma_apb_if: 391 pins into 380 slots at 221.9um, demands
+    218.96um; C00287 lvda: 144.0um -> 141.68um). Taking <B> alone therefore asks
+    _set_explicit_die to SHRINK the die on exactly the designs that are already too
+    small, and today only _PIN_PERIMETER_MARGIN being >= the contradiction keeps the
+    result above the original -- correctness by the size of an arbitrary margin rather
+    than by construction. max() makes the target monotone, so lowering the margin can
+    never reintroduce a shrink. Measured effect today: core_side changes on those 2
+    designs only (63->64 and 41->42 um)."""
     proj = Path(project_path)
     logs = sorted(proj.glob("backend/RUN_*/flow.log"))
     if not logs:
@@ -952,8 +964,10 @@ def _ppl0024_required_perimeter(project_path: str) -> float | None:
         txt = logs[-1].read_text(errors="ignore")
     except OSError:
         return None
-    m = re.search(r"die perimeter from [\d.]+\s*um to ([\d.]+)\s*um", txt)
-    return float(m.group(1)) if m else None
+    m = re.search(r"die perimeter from ([\d.]+)\s*um to ([\d.]+)\s*um", txt)
+    if not m:
+        return None
+    return max(float(m.group(1)), float(m.group(2)))
 
 
 def _set_explicit_die(project_path: str, perimeter_um: float | None) -> bool:
