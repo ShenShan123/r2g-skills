@@ -5,6 +5,7 @@ platform: every refusal below must come from the measurement, not an allowlist.
 Each positive assertion is paired with a corruption that must flip it, because a
 gate that only ever says yes on the happy fixture is not a gate.
 """
+import json
 import sys
 from pathlib import Path
 
@@ -250,6 +251,36 @@ def test_override_is_not_applied_blanket():
     assert "\nexport B = 2" in out and "override export B" not in out
 
 
+# ------------------------------------- the platform's own ban list (2026-10-16)
+
+def test_platform_values_accumulate_plus_equals_across_continuations():
+    """sky130hd's DONT_USE_CELLS is eight `+=` continuation lines. Reading it as a
+    plain assignment keeps one fragment and leaks backslashes into the patterns."""
+    text = ("export DONT_USE_CELLS = a_1\n"
+            "export DONT_USE_CELLS += \\\n"
+            "    b_1 \\\n"
+            "    c_1\n")
+    assert dsf.platform_config_values(text)["DONT_USE_CELLS"].split() == \
+        ["a_1", "b_1", "c_1"]
+
+
+def test_question_equals_does_not_overwrite_an_earlier_value():
+    text = "export X = first\nexport X ?= second\n"
+    assert dsf.platform_config_values(text)["X"] == "first"
+
+
+def test_installed_platforms_report_their_real_ban_lists():
+    gf = dsf.platform_dont_use_cells("gf180")
+    n45 = dsf.platform_dont_use_cells("nangate45")
+    sky = dsf.platform_dont_use_cells("sky130hd")
+    if not (gf or n45 or sky):
+        pytest.skip("no ORFS checkout to read platform configs from")
+    assert gf == ["*_1"]
+    assert "TAPCELL_X1" in n45 and "AOI211_X1" in n45
+    assert len(sky) > 10                       # the multi-line += list
+    assert all("\\" not in pat for pat in gf + n45 + sky)
+
+
 # ------------------------------------------------ the strategy as emitted
 
 def test_strategy_carries_the_override_declaration_and_reruns_from_synth(tmp_path,
@@ -284,6 +315,57 @@ def test_strategy_carries_the_override_declaration_and_reruns_from_synth(tmp_pat
     assert ev["surviving_siblings"] == [GOOD]
 
 
+def test_edit_keeps_the_platforms_own_ban_list(tmp_path, monkeypatch):
+    """The edit is written `override export`, which REPLACES the platform's value.
+    A harvested design has no DONT_USE_CELLS line of its own, so appending to the
+    design config alone emits `DONT_USE_CELLS = <master>` and un-bans everything
+    the platform banned -- on gf180, every `*_1` cell. Caught 2026-10-16 by running
+    the real CLI on a real project: surviving_siblings listed the already-banned
+    aoi221_1 as available, which is the same bug seen from the other side."""
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    vios, rows, sizes = one_master_fixture()
+    (proj / "6_final.def").write_text(def_text(rows))
+    lef = tmp_path / "sc.lef"
+    lef.write_text(lef_text((BAD, GOOD, OTHER, "pdk_fd_sc__aoi221_1")))
+    monkeypatch.setattr(dsf, "_drc_geometry_inputs",
+                        lambda p, c: (proj / "x.lyrdb", proj / "6_final.def",
+                                      [str(lef)]))
+    monkeypatch.setattr(dsf, "platform_dont_use_cells", lambda plat: ["*_1"])
+    sys.path.insert(0, str(Path(dsf.__file__).resolve().parents[1] / "dashboard"))
+    import render_drc_violation
+    monkeypatch.setattr(render_drc_violation, "parse_lyrdb_violations",
+                        lambda path: vios)
+
+    # The design config is SILENT about DONT_USE_CELLS, like a harvested one.
+    strat = dsf._cell_master_drc_strategy(proj, {}, {"PLATFORM": "gf180"})
+    assert strat is not None
+    assert strat["config_edits"]["DONT_USE_CELLS"] == f"*_1 {BAD}"
+    # and the sibling search must not offer a cell the platform already banned
+    assert strat["geometry_evidence"]["surviving_siblings"] == [GOOD]
+
+
+def test_platform_and_design_ban_lists_are_unioned_without_duplicates(tmp_path,
+                                                                      monkeypatch):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    vios, rows, sizes = one_master_fixture()
+    (proj / "6_final.def").write_text(def_text(rows))
+    lef = tmp_path / "sc.lef"
+    lef.write_text(lef_text())
+    monkeypatch.setattr(dsf, "_drc_geometry_inputs",
+                        lambda p, c: (proj / "x.lyrdb", proj / "6_final.def",
+                                      [str(lef)]))
+    monkeypatch.setattr(dsf, "platform_dont_use_cells", lambda plat: ["*_1", "FOO"])
+    sys.path.insert(0, str(Path(dsf.__file__).resolve().parents[1] / "dashboard"))
+    import render_drc_violation
+    monkeypatch.setattr(render_drc_violation, "parse_lyrdb_violations",
+                        lambda path: vios)
+    strat = dsf._cell_master_drc_strategy(
+        proj, {}, {"PLATFORM": "gf180", "DONT_USE_CELLS": "FOO BAR"})
+    assert strat["config_edits"]["DONT_USE_CELLS"] == f"*_1 FOO BAR {BAD}"
+
+
 def test_strategy_is_not_reoffered_once_the_master_is_already_banned(tmp_path,
                                                                      monkeypatch):
     proj = tmp_path / "proj"
@@ -305,3 +387,54 @@ def test_strategy_is_not_reoffered_once_the_master_is_already_banned(tmp_path,
 
 def test_missing_geometry_yields_no_strategy_not_a_crash(tmp_path):
     assert dsf._cell_master_drc_strategy(tmp_path, {}, {"PLATFORM": "gf180"}) is None
+
+
+# ------------------------- the apply path's own landing check (2026-10-16)
+
+def test_apply_accepts_an_override_export_as_landed(tmp_path, monkeypatch, capsys):
+    """The post-apply verification must allow the `override` prefix it just wrote.
+
+    Found by running the real CLI end to end on a real gf180 project: the edit DID
+    land as `override export DONT_USE_CELLS = *_1 ...`, make read it back with
+    origin=override, and --apply still reported
+    {"status": "no_effect", "unmet": ["config_edit_not_landed:DONT_USE_CELLS"]}.
+    fix_signoff.sh treats that as a failed apply and never reruns the flow, so the
+    recipe would have been permanently inert in the autonomous driver while the
+    config file plainly carried the fix. Every unit test had written plain
+    `export`, so nothing caught it.
+    """
+    proj = tmp_path / "proj"
+    (proj / "reports").mkdir(parents=True)
+    (proj / "constraints").mkdir(parents=True)
+    (proj / "reports" / "drc.json").write_text(
+        '{"status": "fail", "total_violations": 35, '
+        '"categories": {"CO.6a": {"count": 35}}}')
+    (proj / "constraints" / "config.mk").write_text(
+        "export DESIGN_NAME = t\nexport PLATFORM = gf180\n")
+    vios, rows, _ = one_master_fixture()
+    (proj / "6_final.def").write_text(def_text(rows))
+    lef = tmp_path / "sc.lef"
+    lef.write_text(lef_text())
+
+    monkeypatch.setattr(dsf, "_drc_geometry_inputs",
+                        lambda p, c: (proj / "x.lyrdb", proj / "6_final.def",
+                                      [str(lef)]))
+    monkeypatch.setattr(dsf, "platform_dont_use_cells", lambda plat: ["*_1"])
+    monkeypatch.setattr(dsf, "platform_assigned_keys",
+                        lambda plat: {"DONT_USE_CELLS"})
+    monkeypatch.setattr(dsf, "_annotate_live_gates",
+                        lambda plan, *a, **k: plan.update(
+                            {"lifecycle_gate_ok": True}) or plan)
+    sys.path.insert(0, str(Path(dsf.__file__).resolve().parents[1] / "dashboard"))
+    import render_drc_violation
+    monkeypatch.setattr(render_drc_violation, "parse_lyrdb_violations",
+                        lambda path: vios)
+
+    rc = dsf.main([str(proj), "--check", "drc",
+                   "--apply", "dont_use_violating_master"])
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert out["status"] == "applied", out
+    assert rc == 0
+    text = (proj / "constraints" / "config.mk").read_text()
+    assert ("override export DONT_USE_CELLS = *_1 "
+            f"{BAD}") in text

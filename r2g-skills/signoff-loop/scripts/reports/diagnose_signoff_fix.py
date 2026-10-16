@@ -960,6 +960,61 @@ def assigned_keys_from_text(text: str) -> set:
     return keys
 
 
+def platform_config_values(text: str) -> dict:
+    """Effective VALUE of each variable a platform config sets, as make would see it.
+
+    Needed because the design config cannot read the platform's value: a harvested
+    or freshly-materialized design has no DONT_USE_CELLS line at all, so a naive
+    "append to what the config says" produces an edit that sets the variable to the
+    new cell ALONE -- and combined with `override` that DISCARDS the platform's own
+    ban. On gf180 that would un-ban every `*_1` cell while fixing one master: a
+    worse defect than the silent no-op it replaced. Caught 2026-10-16 by running the
+    real CLI on a real harvested project, where `surviving_siblings` wrongly listed
+    `aoi221_1` as available.
+
+    Handles backslash line continuations (sky130hd's DONT_USE_CELLS spans eight
+    lines) and accumulates `+=` onto whatever came before, which is what make does.
+    `?=` only takes effect when the variable is not already set.
+    """
+    joined, buf = [], ""
+    for line in text.splitlines():
+        stripped = line.rstrip()
+        if stripped.endswith("\\"):
+            buf += stripped[:-1] + " "
+            continue
+        joined.append(buf + stripped)
+        buf = ""
+    if buf:
+        joined.append(buf)
+    values: dict = {}
+    for line in joined:
+        m = re.match(r"\s*(?:override\s+)?(?:export\s+)?"
+                     r"([A-Z0-9_]+)\s*(\+|\?|:)?=\s*(.*?)\s*$", line)
+        if not m:
+            continue
+        key, op, val = m.group(1), m.group(2), m.group(3)
+        if op == "+":
+            values[key] = (values.get(key, "") + " " + val).strip()
+        elif op == "?":
+            values.setdefault(key, val)
+        else:
+            values[key] = val
+    return values
+
+
+def platform_dont_use_cells(platform: str) -> list:
+    """The platform's own DONT_USE_CELLS patterns, in order, or []."""
+    flow_dir = _find_flow_dir()
+    if not platform or not flow_dir:
+        return []
+    cfg = Path(flow_dir) / "platforms" / platform / "config.mk"
+    try:
+        text = cfg.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return []
+    return platform_config_values(text).get("DONT_USE_CELLS", "").split()
+
+
 def platform_assigned_keys(platform: str) -> set:
     """Variables the PLATFORM config assigns with a plain `=` / `:=`.
 
@@ -1348,7 +1403,13 @@ def _cell_master_drc_strategy(project: Path, drc: dict, cfg: dict) -> dict | Non
         sizes, size_conflicts = attrib.parse_lef_macro_sizes(lefs)
         components, _ = attrib.parse_def_components(
             final_def.read_text(encoding="utf-8", errors="ignore"))
-        current = (cfg.get("DONT_USE_CELLS") or "").split()
+        # The EFFECTIVE ban list is the platform's plus the design's, because the
+        # edit is written `override export` and therefore REPLACES the platform's
+        # value outright. Dropping it here un-bans every cell the platform banned.
+        current = platform_dont_use_cells(cfg.get("PLATFORM") or "")
+        for pat in (cfg.get("DONT_USE_CELLS") or "").split():
+            if pat not in current:
+                current.append(pat)
         evidence = attrib.attribute(selected, components, sizes,
                                     dont_use_patterns=current)
     except Exception as exc:                 # fail-soft: no strategy, never a crash
@@ -2144,11 +2205,21 @@ def main(argv=None) -> int:
         # Post-apply effect verification: re-read every touched file and confirm each
         # declared edit is REALLY there. A declared-but-unlanded edit (write raced,
         # regex drifted, block clobbered) must not report rc=0.
+        #
+        # The `override` prefix is OPTIONAL here, matching what apply_edits writes
+        # and what parse_config reads. Without it (2026-10-16) a correctly-landed
+        # `override export DONT_USE_CELLS = ...` reported
+        # status=no_effect / config_edit_not_landed, so fix_signoff.sh would treat
+        # the apply as failed and never rerun the flow -- the recipe would be
+        # permanently inert in the autonomous driver while the config file plainly
+        # carried the edit. Found by running the real CLI end to end, not by a test:
+        # every unit test wrote plain `export`.
         unmet = []
         if strat["config_edits"]:
             cfg_after = cfg_path.read_text(encoding="utf-8") if cfg_path.exists() else ""
             for k, v in strat["config_edits"].items():
-                if not re.search(rf"(?m)^\s*export\s+{re.escape(str(k))}\s*=\s*"
+                if not re.search(rf"(?m)^\s*(?:override\s+)?export\s+"
+                                 rf"{re.escape(str(k))}\s*=\s*"
                                  rf"{re.escape(str(v))}\s*$", cfg_after):
                     unmet.append(f"config_edit_not_landed:{k}")
         if sdc_new_p is not None:

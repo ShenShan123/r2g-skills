@@ -1701,6 +1701,39 @@ time on the verdict** — `grep -l "<value>" runs/*/config.mk | wc -l` against t
 a clobber-prone key also `grep -l "^override export <KEY>"`. A verdict from an unverified knob is
 not a weak verdict, it is a void one.
 
+#### What `override` breaks on the way in: two bugs the unit tests could not see (2026-10-16)
+
+Making the edit *reach* make introduced two defects that only an end-to-end run on a real
+project exposed. Both were invisible to the unit suite, which wrote plain `export`.
+
+**1. The override DISCARDS the platform's value, so the edit must carry it.** A harvested or
+freshly-materialized design config has no `DONT_USE_CELLS` line at all — the platform supplies
+it. Appending the new cell to *the design config's* value therefore emitted
+`override export DONT_USE_CELLS = <master>`, which on gf180 **un-bans every `*_1` cell** while
+fixing one master: strictly worse than the silent no-op it replaced. The visible symptom was
+`surviving_siblings` listing the already-banned `aoi221_1` as an available alternative — the
+same bug seen from the sibling-search side. Fix: `platform_dont_use_cells()` reads the
+platform's own patterns (handling `+=` and backslash continuations — sky130hd's list spans
+eight lines and 36 patterns) and the edit writes the **union** of platform and design values
+plus the new master.
+
+**2. The post-apply landing check rejected the very spelling it had just written.** The
+verification regex was `^\s*export\s+KEY\s*=\s*VALUE$`, with no optional `override`, so a
+correctly-applied edit reported `{"status": "no_effect", "unmet":
+["config_edit_not_landed:DONT_USE_CELLS"]}` while `make` read the value back with
+`origin=override`. `fix_signoff.sh` treats that as a failed apply and never reruns the flow, so
+the recipe would have been **permanently inert in the autonomous driver** with the fix plainly
+sitting in the config file. Fix: allow the optional prefix, matching what `apply_edits` writes,
+what `parse_config` parses, and what the auto-block reader accepts.
+
+**The transferable rule:** when you introduce a new SPELLING for an existing artifact, grep for
+every reader of that artifact and widen them in the same change — writer, parser, idempotency
+reader and post-condition check. Here there were four readers and the first change updated two.
+And verify a config-editing recipe by running the real CLI on a real project and reproducing
+make's include order (`make -f probe.mk` including DESIGN_CONFIG then the platform config, then
+printing `$(origin VAR)`); a unit test that asserts on the file's text cannot tell you whether
+make agrees.
+
 ### LVS Timeout on Large Macro Designs
 
 **Symptoms:**
