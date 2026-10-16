@@ -175,6 +175,7 @@ e.g. `m3.2`, `via.4*`, `via_OFFGRID`) gets `density_relief` (any platform with a
 | `antenna_density_relief` | non-nangate45 | `CORE_UTILIZATION` lowered by 5 (floor 5) | `floorplan` | Reduces placement density / grows area so the router can break long metal runs. `PLACE_DENSITY_LB_ADDON` is **never** touched (hard rule: never below 0.10). **Not offered on nangate45** — empirically counterproductive there (enlarging the die lengthens nets → more antennas; fifo_basic 14→16 at util 10→5). |
 | `density_relief` | any (needs `CORE_UTILIZATION`) | `CORE_UTILIZATION` lowered by 8 (floor 8) | `floorplan` | **Non-antenna routing-geometry DRC** (metal/via spacing, off-grid, via enclosure). Gives the router more room → metal/via *spacing* and off-grid rules resolve. Real layout change (bigger die, sparser routes); the routing/signoff deck is **never** relaxed; `PLACE_DENSITY_LB_ADDON` untouched. **Validated 2026-06-16** on sky130hd: `eeprom_top` 4→0, `axil_reg_if` 34→0, `can_fifo` 20→0, `aximrd2wbsp` 10→0, `eth_mac_mii` 6→0 (all `m3.2`/via, all cleared in 1 iter at util 20→12 / 25→17). No-op when only `DIE_AREA` is set (no util lever) or util already at floor → honest residual. |
 | `pin_side_rebalance` | sky130hd | `PLACE_PINS_ARGS=-exclude <edge>:*` | `floorplan` | **A/B-gated candidate.** Offered only when at least two coordinate-bearing `m3.2` markers exist and at least 80% lie within the outer 2% (minimum 2 um) of one unique die edge. The edge is derived from the current `6_final.def` and `6_drc.lyrdb`, never from a design name. It cannot auto-apply until the exact lifecycle key is promoted. |
+| `dont_use_violating_master` | any (geometric gate) | `DONT_USE_CELLS += <master>` written **`override export`** | `synth` | **Bans the one cell master whose own PDK layout fails the deck.** Offered only when `extract/attribute_drc_to_cells.py` puts >=80% of the dominant rule's violations INSIDE instances of ONE master, all at ONE cell-frame offset (orientation-normalized), and a same-function sibling survives the ban so synthesis still has a cell to map onto. Rule- and platform-agnostic by construction. Measured on gf180 CO.6a: 545/583 coordinate-bearing dirty designs attributed to `gf180mcu_fd_sc_mcu9t5v0__aoi221_2` at cell-frame (6.6675, 4.2) -- same master, rule and offset in all 545, 7163 violations; A/B on 12 subjects 47 -> 0 for <=1.3% cells / <=2.3% area, md5's timing IMPROVED. Negative control: 0/83 sky130hd and 1/364 nangate45 designs qualify -- those classes (m3.2, METAL*_ANTENNA) are router geometry and the gate declines them. |
 
 **Why nangate45 needs `antenna_diode_repair` specifically (verified 2026-06-02, supersedes the
 2026-06-01 "inert/residual" Finding B):** with the antenna model installed, OpenROAD's per-net
@@ -187,6 +188,52 @@ installer). The deck is never relaxed.
 Non-antenna routing-geometry DRC (metal/via spacing, off-grid) is handled by `density_relief`
 where a `CORE_UTILIZATION` knob exists; other non-antenna classes, or designs at the util floor /
 sized by `DIE_AREA`, remain honest residuals.
+
+### DRC the router cannot have caused — one cell master's own layout (2026-10-15)
+
+A DRC class whose layer the router never writes is not a congestion problem. gf180's **CO.6a**
+is the poly/diffusion-to-M1 contact rule: the only CO geometry in the layout belongs to the
+standard cells, shipped by the PDK. So `density_relief`, `pin_side_rebalance` and route-effort
+levers all re-run the flow to move geometry that is not the problem — the master is still
+placed and still violates — and each wrong attempt costs a full route + DRC regrade.
+
+**How the fix is decided.** `scripts/extract/attribute_drc_to_cells.py` maps every violation
+into the **orientation-normalized frame** of the instance that contains it (`cell_frame_offset`
+undoes N/S/FN/FS), then asks three questions, each of which can refuse:
+
+1. Do >=80% of the dominant rule's violations sit inside *some* cell? (Router metal between
+   cells does not — that is the whole non-eligible population.)
+2. Does ONE master own >=80% of those, at ONE cell-frame offset (spread <=0.05 um)? A scattered
+   offset is a context-dependent interaction, not a fixed defect in the master.
+3. Does a same-function sibling survive the ban? Banning a master with no sibling does not clean
+   the design, it starves the mapping. gf180's `aoi221` ships `_1/_2/_4` and the platform already
+   bans `*_1`, so `_4` is what makes the real fix safe.
+
+Plus a fail-closed guard: a flow-inserted master (fill / tap / decap / endcap / diode) is refused
+outright, because `DONT_USE_CELLS` only constrains what *synthesis* maps — those cells are placed
+after mapping and the ban would provably no-op.
+
+**Normalizing the orientation is load-bearing, not cosmetic.** The first attempt at this
+attribution used "nearest instance below-left" and landed on the WRONG master: the offsets came
+out at y=5.85 on a 5.040 um cell, because standard-cell rows alternate N/FS and the violation was
+0.81 um inside the FLIPPED cell of the next row up. Containment plus normalization took the same
+data from a wrong answer to 46/46 on one master.
+
+**`override` is load-bearing too — a plain `export` is a silent no-op.** `scripts/variables.mk`
+includes the platform config AFTER the design config (`flow/Makefile` includes `DESIGN_CONFIG`
+first), and gf180 and nangate45 both assign `DONT_USE_CELLS` with a plain `=`, so the platform's
+value wins. Verified with a two-line makefile reproducing the include order: plain → `[*_1]`
+(origin=file); `override export` → `[*_1 MYCELL]` (origin=override). `apply_edits` therefore takes
+an `override_keys` list and `platform_assigned_keys()` intersects it with the keys that platform
+actually clobbers — **targeted, never blanket**: `override` also defeats make's command-line
+variables, and `run_orfs.sh` passes `DESIGN_CONFIG`/`FLOW_VARIANT` that way. sky130hd uses `+=`
+(which appends to the design value) and correctly gets a plain `export`.
+
+**Scope, honestly.** The gate is general; the finding so far is not. One master on one platform
+accounts for 545 designs; two other platforms' dirty populations produce 1 eligible design between
+them, because their dominant classes (`m3.2`, `METAL*_ANTENNA`) genuinely are router geometry and
+belong to `pin_side_rebalance` / `deck_driven_antenna_diode`. That 0/83 and 1/364 is the negative
+control for the gate, not a gap in it.
 
 ### Optional repair-action contract
 

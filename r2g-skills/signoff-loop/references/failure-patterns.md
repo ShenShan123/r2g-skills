@@ -1638,6 +1638,45 @@ The ORFS Makefile includes the design config.mk (line ~98) before the platform c
 - Create a combined CDL that concatenates the standard cell CDL with CDL stubs for all fakeram types used.
 - CDL stubs can be generated from LEF pin lists: `.SUBCKT fakeram45_NxM <pin1> <pin2> ... VDD VSS` / `.ENDS`
 
+#### Same mode, second instance: `DONT_USE_CELLS` — and the fix is now automatic (2026-10-15)
+
+`CDL_FILE` is not special. **Every** variable the platform config assigns with a plain `=` has
+this property, and a design-config `export` for it is a SILENT no-op — no warning, no error, the
+config file still *looks* edited. `DONT_USE_CELLS` is the second one that mattered: gf180 and
+nangate45 both set it plainly (`export DONT_USE_CELLS = *_1` / `= TAPCELL_X1 FILLCELL_X1 ...`),
+so a cell-ban repair written as a plain `export` changes nothing at all.
+
+Verified rather than assumed, with a two-line makefile reproducing ORFS's include order
+(`flow/Makefile` includes `DESIGN_CONFIG`, then `scripts/variables.mk` includes the platform
+config):
+
+| design-config spelling | `make` reports | origin |
+| --- | --- | --- |
+| `export DONT_USE_CELLS = *_1 MYCELL` | `[*_1]` — the platform's value | `file` |
+| `override export DONT_USE_CELLS = *_1 MYCELL` | `[*_1 MYCELL]` | `override` |
+
+**Now detected, not remembered.** `diagnose_signoff_fix.platform_assigned_keys(platform)` reads
+the platform config and returns the keys it CLOBBERS (plain `=` / `:=` only — `?=` defers to the
+design value and `+=` appends to it, so neither needs `override`); `apply_edits(..., override_keys=)`
+writes `override export` for exactly those. A strategy declares its at-risk keys
+(`"override_keys": ["DONT_USE_CELLS"]`) and the apply site intersects the declaration with what
+that platform actually clobbers, printing a NOTE when a declared key did not need it. sky130hd
+uses `+=` and correctly gets a plain `export`.
+
+**Why the intersection, instead of just overriding everything in the auto-block:** `override` also
+defeats make's **command-line** variables, and `run_orfs.sh` invokes
+`make DESIGN_CONFIG=... FLOW_VARIANT=...` that way. A blanket `override` would make the auto-block
+win over the operator's own command line.
+
+**How this class hides.** The failure is invisible in every artifact a run produces: the config
+carries the line, the flow succeeds, and the violation count comes back unchanged — which reads as
+"the fix does not work" rather than "the fix never ran". Three earlier gf180 trials returned
+byte-identical violation counts for exactly this reason (an invented variable name, same symptom).
+**So a config-edit experiment must self-check that the knob reached the flow before spending signoff
+time on the verdict** — `grep -l "<value>" runs/*/config.mk | wc -l` against the run count, and for
+a clobber-prone key also `grep -l "^override export <KEY>"`. A verdict from an unverified knob is
+not a weak verdict, it is a void one.
+
 ### LVS Timeout on Large Macro Designs
 
 **Symptoms:**

@@ -923,14 +923,90 @@ def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | Non
     return None
 
 
-def apply_edits(config_text: str, edits: dict) -> str:
+def _find_flow_dir() -> str | None:
+    """Delegate to flow/platform_capability.find_flow_dir -- one ORFS resolver for
+    the whole skill (explicit > $FLOW_DIR > $ORFS_ROOT/flow > common roots).
+    A second, slightly-different copy is how a path bug gets fixed in one place
+    and stays live in the other."""
+    try:
+        flow_dir = str(Path(__file__).resolve().parents[1] / "flow")
+        if flow_dir not in sys.path:
+            sys.path.insert(0, flow_dir)
+        import platform_capability
+        return platform_capability.find_flow_dir()
+    except Exception:
+        return None
+
+
+def assigned_keys_from_text(text: str) -> set:
+    """Variables a makefile text CLOBBERS: the plain `=` / `:=` assignments.
+
+    Separated from the file read so the semantics are testable without depending
+    on whichever ORFS checkout happens to be on the box -- find_flow_dir()
+    consults only the environment, so two machines (or a test run with the env
+    scrubbed) can legitimately resolve different platform configs.
+
+    `?=` defers to a value the design already set and `+=` appends to it; only a
+    plain assignment replaces it, and only a replaced variable needs `override`
+    on the design side. A variable assigned twice -- once deferred, once plainly
+    -- still clobbers, so ANY plain assignment puts the key in the set.
+    """
+    keys = set()
+    for line in text.splitlines():
+        m = re.match(r"\s*(?:override\s+)?(?:export\s+)?"
+                     r"([A-Z0-9_]+)\s*(\+|\?|:)?=", line)
+        if m and m.group(2) in (None, ":"):
+            keys.add(m.group(1))
+    return keys
+
+
+def platform_assigned_keys(platform: str) -> set:
+    """Variables the PLATFORM config assigns with a plain `=` / `:=`.
+
+    These are the keys a design-config `export` CANNOT set, because
+    scripts/variables.mk includes the platform config AFTER the design config
+    (flow/Makefile includes DESIGN_CONFIG first, variables.mk second), so the
+    platform's own assignment wins and the design-side edit is a SILENT NO-OP.
+    `?=` and `+=` are excluded: the former defers to whatever the design already
+    set, the latter appends to it -- neither clobbers.
+
+    Measured 2026-10-15 with a two-line Makefile reproducing the include order:
+    a plain `export DONT_USE_CELLS = *_1 MYCELL` in the design config read back
+    `[*_1]` (origin=file, the platform's value); `override export` read back
+    `[*_1 MYCELL]` (origin=override). gf180 and nangate45 both assign
+    DONT_USE_CELLS with a plain `=`, so a DONT_USE edit without `override` does
+    nothing at all on either.
+
+    Returns an empty set when the platform config cannot be located -- callers
+    then emit a plain `export`, which is the pre-existing behaviour.
+    """
+    if not platform:
+        return set()
+    flow_dir = _find_flow_dir()
+    if not flow_dir:
+        return set()
+    cfg = Path(flow_dir) / "platforms" / platform / "config.mk"
+    try:
+        return assigned_keys_from_text(cfg.read_text(encoding="utf-8",
+                                                     errors="ignore"))
+    except OSError:
+        return set()
+
+
+def apply_edits(config_text: str, edits: dict, override_keys=()) -> str:
     """Stack `edits` onto the marked auto-block (idempotent; a key already in the block
     is overridden in place, every other accepted fix is KEPT).
 
     The block holds the ACCEPTED fixes only -- a rejected attempt is rolled back from
     the snapshot before the next apply -- so replacing it wholesale silently undid
     earlier repairs: an LVS feedthrough hook dropped by the timing fix that followed
-    (2026-10-01 AIC v2.2, failure-patterns P0-2e)."""
+    (2026-10-01 AIC v2.2, failure-patterns P0-2e).
+
+    A key in `override_keys` is written `override export` -- see
+    platform_assigned_keys(): without it, an edit to a variable the platform config
+    also assigns is silently discarded. The list is TARGETED, never blanket:
+    `override` also defeats make's COMMAND-LINE variables, and run_orfs.sh passes
+    DESIGN_CONFIG and FLOW_VARIANT that way."""
     out, skip, kept = [], False, {}
     for ln in config_text.splitlines():
         s = ln.strip()
@@ -941,14 +1017,20 @@ def apply_edits(config_text: str, edits: dict) -> str:
             skip = False
             continue
         if skip:
-            if s.startswith("export ") and "=" in s:
-                k, v = s[len("export "):].split("=", 1)
-                kept[k.strip()] = v.strip()
+            # Tolerate both spellings when re-reading the block, or an `override
+            # export` edit would be dropped on the next stacked apply.
+            m = re.match(r"(?:override\s+)?export\s+([A-Z0-9_]+)\s*=\s*(.*)$", s)
+            if m:
+                kept[m.group(1)] = m.group(2).strip()
             continue
         out.append(ln)
     kept.update({k: v for k, v in edits.items()})
+    over = set(override_keys)
     body = "\n".join(out).rstrip("\n")
-    block = [BLOCK_START] + [f"export {k} = {v}" for k, v in kept.items()] + [BLOCK_END]
+    block = ([BLOCK_START]
+             + [f"{'override ' if k in over else ''}export {k} = {v}"
+                for k, v in kept.items()]
+             + [BLOCK_END])
     prefix = (body + "\n\n") if body else ""
     return prefix + "\n".join(block) + "\n"
 
@@ -1176,6 +1258,137 @@ def _edge_localized_pin_strategy(project: Path, drc: dict, cfg: dict) -> dict | 
             "coordinate_count": len(selected),
             "edge_fraction": round(count / len(selected), 4),
             "die_bounds_um": list(bounds),
+        },
+    }
+
+
+def _drc_geometry_inputs(project: Path, cfg: dict):
+    """(lyrdb, def, [lef]) for a geometric DRC diagnosis, or (None, None, []).
+
+    Both project layouts are accepted: a live ORFS project (drc/6_drc.lyrdb +
+    backend/RUN_*/results/6_final.def) and a HARVESTED one, where the signoff
+    artifacts sit flat at the project root. The corpus is the flat shape, so a
+    discovery that only knew the live shape would read every harvested design as
+    "no geometry" and silently decline to diagnose the whole population.
+    """
+    lyrdb = next((p for p in (project / "drc" / "6_drc.lyrdb",
+                              project / "6_drc.lyrdb") if p.is_file()), None)
+    if lyrdb is None:
+        found = sorted(project.glob("**/6_drc.lyrdb"),
+                       key=lambda f: f.stat().st_mtime, reverse=True)
+        lyrdb = found[0] if found else None
+    final_def = _latest_final_def(project)
+    if final_def is None and (project / "6_final.def").is_file():
+        final_def = project / "6_final.def"
+    lefs = []
+    flow_dir = _find_flow_dir()
+    platform = cfg.get("PLATFORM") or ""
+    if flow_dir and platform:
+        lefs = [str(p) for p in
+                sorted((Path(flow_dir) / "platforms" / platform / "lef").glob("*.lef"))]
+    for extra in (cfg.get("ADDITIONAL_LEFS") or "").split():
+        if Path(extra).is_file():
+            lefs.append(extra)
+    return lyrdb, final_def, lefs
+
+
+def _cell_master_drc_strategy(project: Path, drc: dict, cfg: dict) -> dict | None:
+    """Ban the one CELL MASTER whose own layout is failing the DRC deck.
+
+    A DRC class the ROUTER cannot have created -- gf180's CO.6a is the
+    poly/diffusion-to-M1 contact rule, and the router never makes a CO -- is not a
+    congestion problem: no density relief, pin rebalancing or route effort touches
+    it, because the offending geometry is inside the standard cell, shipped by the
+    PDK. It repeats once per placed instance, which is why it looks like a
+    corpus-wide epidemic and behaves like a single defect.
+
+    The decision is GEOMETRIC, not a platform/rule allowlist
+    (extract/attribute_drc_to_cells.py): every violation is mapped into the
+    orientation-normalized frame of the instance that contains it, and the fix is
+    offered only when one master owns >=80% of them at ONE cell-frame offset, and
+    only when a same-function sibling survives the ban so synthesis still has a
+    cell to map onto.
+
+    Measured 2026-10-15 on gf180: 545 of the 583 DRC-dirty designs carrying
+    violation coordinates attributed to gf180mcu_fd_sc_mcu9t5v0__aoi221_2 at
+    cell-frame (6.6675, 4.2) -- the SAME master, rule and offset in all 545, over
+    7163 violations; 532 of them have CO.6a as their ONLY rule. The remaining 38
+    are metal/antenna classes (M4.2a, M3.2a, M4.1, ANT.16) and the gate correctly
+    declines them -- their violations sit outside every cell. A/B on 12 subjects:
+    arm A 47 CO.6a violations, arm B 0, for <=1.3% cells and <=2.3% area, and md5's
+    timing IMPROVED (WNS -0.22 -> -0.16, TNS -1.36 -> -0.73).
+
+    The edit MUST be `override export` (platform_assigned_keys): gf180 and
+    nangate45 both assign DONT_USE_CELLS with a plain `=` in a platform config that
+    variables.mk includes AFTER the design config, so a plain `export` here is a
+    measured silent no-op.
+    """
+    lyrdb, final_def, lefs = _drc_geometry_inputs(project, cfg)
+    if lyrdb is None or final_def is None or not lefs:
+        return None
+    try:
+        extract_dir = str(Path(__file__).resolve().parents[1] / "extract")
+        if extract_dir not in sys.path:
+            sys.path.insert(0, extract_dir)
+        dashboard_dir = str(Path(__file__).resolve().parents[1] / "dashboard")
+        if dashboard_dir not in sys.path:
+            sys.path.insert(0, dashboard_dir)
+        import attribute_drc_to_cells as attrib
+        import render_drc_violation
+        violations = render_drc_violation.parse_lyrdb_violations(lyrdb)
+        if not violations:
+            return None
+        counts: dict = {}
+        for vio in violations:
+            key = str(vio.get("category", "")).strip("'\"")
+            counts[key] = counts.get(key, 0) + 1
+        rule = max(counts, key=lambda k: counts[k])
+        selected = [v for v in violations
+                    if str(v.get("category", "")).strip("'\"").lower() == rule.lower()]
+        sizes, size_conflicts = attrib.parse_lef_macro_sizes(lefs)
+        components, _ = attrib.parse_def_components(
+            final_def.read_text(encoding="utf-8", errors="ignore"))
+        current = (cfg.get("DONT_USE_CELLS") or "").split()
+        evidence = attrib.attribute(selected, components, sizes,
+                                    dont_use_patterns=current)
+    except Exception as exc:                 # fail-soft: no strategy, never a crash
+        print(f"WARNING: cell-master DRC attribution failed "
+              f"({type(exc).__name__}: {exc})", file=sys.stderr)
+        return None
+    if not evidence.get("eligible"):
+        return None
+    master = evidence["dominant_master"]
+    if master in current:
+        return None                           # already banned; nothing to add
+    stats = evidence["per_master"][master]
+    return {
+        "id": "dont_use_violating_master",
+        "rationale": (
+            f"{stats['count']}/{evidence['violations']} {rule} violations sit INSIDE "
+            f"instances of {master}, all at cell-frame offset "
+            f"{stats['offset_median_um']} (spread {stats['offset_spread_um']} um) -- "
+            f"one master's own PDK layout failing the rule, repeated per instance, "
+            f"not routing congestion. Ban that master so synthesis maps onto its "
+            f"surviving sibling(s) {', '.join(evidence['surviving_siblings'])}; the "
+            f"DRC deck is NEVER relaxed. Measured on gf180 CO.6a: 47 -> 0 across 12 "
+            f"designs for <=1.3% cells / <=2.3% area, timing unchanged or better."),
+        "config_edits": {"DONT_USE_CELLS": " ".join(current + [master])},
+        "override_keys": ["DONT_USE_CELLS"],
+        "rerun_from": "synth",
+        "recheck": "drc",
+        "auto_apply": True,
+        "geometry_evidence": {
+            "rule": rule,
+            "master": master,
+            "instances_owning_violations": stats["count"],
+            "coordinate_count": evidence["violations"],
+            "attributed_fraction": evidence["attributed_fraction"],
+            "master_fraction": evidence["master_fraction"],
+            "cell_frame_offset_um": stats["offset_median_um"],
+            "cell_frame_spread_um": stats["offset_spread_um"],
+            "orientations": stats["orientations"],
+            "surviving_siblings": evidence["surviving_siblings"],
+            "lef_size_conflicts": size_conflicts,
         },
     }
 
@@ -1726,6 +1939,19 @@ def main(argv=None) -> int:
             if plan.get("status") == "residual":
                 plan["status"] = drc.get("status", "fail")
                 plan["residual_reason"] = None
+    if args.check == "drc" and "dont_use_violating_master" not in exclude:
+        # Offered FIRST among the DRC strategies it coexists with: when the
+        # violations are provably inside one cell master, every other DRC lever
+        # (density relief, pin rebalance, route effort) is re-running the flow to
+        # move geometry that is not the problem -- the master is still placed and
+        # still violates. Measured cost of getting this order wrong: a full
+        # route+DRC regrade per wrong strategy, on 532 designs.
+        master_strategy = _cell_master_drc_strategy(proj, drc, cfg)
+        if master_strategy is not None:
+            plan.setdefault("strategies", []).insert(0, master_strategy)
+            if plan.get("status") == "residual":
+                plan["status"] = drc.get("status", "fail")
+                plan["residual_reason"] = None
     _apply_repair_action_policy(plan)
     _rank_plan_strategies(plan, recipes, pooled=pooled)
     if args.check == "route" and len(plan.get("strategies", [])) > 1:
@@ -1869,7 +2095,18 @@ def main(argv=None) -> int:
             strat["materialized"] = info
 
         if strat["config_edits"]:
-            cfg_path.write_text(apply_edits(cfg_text, strat["config_edits"]), encoding="utf-8")
+            # Only keys the PLATFORM config also assigns get `override` -- a blanket
+            # override would also defeat make's command-line variables, and
+            # run_orfs.sh passes DESIGN_CONFIG/FLOW_VARIANT that way.
+            _declared = set(strat.get("override_keys") or ())
+            _needs_override = _declared & platform_assigned_keys(cfg.get("PLATFORM") or "")
+            if _declared - _needs_override:
+                print(f"NOTE: {sorted(_declared - _needs_override)} written as a plain "
+                      f"export -- platform {cfg.get('PLATFORM')} does not clobber them",
+                      file=sys.stderr)
+            cfg_path.write_text(
+                apply_edits(cfg_text, strat["config_edits"],
+                            override_keys=_needs_override), encoding="utf-8")
         if sdc_new_p is not None:
             sdc_text = sdc_path.read_text(encoding="utf-8")
             _m_old = _SDC_VAR_RE.search(sdc_text) or _SDC_LIT_RE.search(sdc_text)
