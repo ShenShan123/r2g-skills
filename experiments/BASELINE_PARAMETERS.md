@@ -95,23 +95,63 @@ pass condition once the rate is known.
 
 ## Area
 
-### Utilization — flat 40%, not binned, not swept to the knee
+### Utilization — flat 50%, not binned, not swept to the knee
 
 | | value | evidence |
 | --- | --- | --- |
 | pilot | 20% | achieved utilization came back **19.x% on every design above 100 cells** — the flow was handed the answer and never pushed. A die 5x the cell area never congests. |
-| frozen | **40%** | measured at u40: **57 of 58 designs complete**, the one failure a genuine `place_failed`. ~2% pressure, comfortably below the knee. |
+| frozen | **50%** | OpenLane's own default for sky130 (`FP_CORE_UTIL=50`, `PL_TARGET_DENSITY=0.5`), bracketed by measurement: u40 completes 57 of 58 (~2% pressure, too loose to be a constraint) and u50 is being measured per platform. |
 
-Flat, not per-size-class: the PDN floor already protects tiny designs and 40% is
+Flat, not per-size-class: the PDN floor already protects tiny designs and 50% is
 not tight for large ones, so a table would be one more thing to maintain for no
 gain.
 
-Not swept to the breaking point, for the unfixable-by-design reason above.
+**Why 50 and not the 60–70% the literature recommends.** The published advice is
+consistent — an arXiv physical-design survey says "most industries target 60-70%
+initial core utilization to generate margin for timing optimization at a later
+stage", and floorplanning references give the same band. That advice is written
+for a designer who can still move the floorplan: the 30-40% headroom exists so
+that upsizing and buffer insertion have somewhere to go. **This baseline freezes
+the die**, so that headroom is not a working margin — and every congestion
+failure above the chosen utilization becomes permanently unfixable, because
+r2g's only lever for congestion is `density_relief`, which lowers utilization.
+Pressure that r2g cannot act on is cost without signal.
+
+The honest anchor is therefore the **official open-source flow default for a
+comparable metal stack**, not the industrial figure:
+
+| source | value |
+| --- | --- |
+| OpenLane (`configuration/placement.tcl`, efabless) | `FP_CORE_UTIL` **50**, `PL_TARGET_DENSITY` **0.5** |
+| OpenLane sky130A 1440-run parameter sweep (IEEE DataPort) | swept core utilization **35–55%** only |
+| sky130 MPW-002 slot-020 | dropped to **20** explicitly "to fix the routing congestion due to FPU" |
+| ORFS `FlowVariables.md` | `CORE_UTILIZATION` has **no default and no recommendation** |
+| industry / literature | 60–70% (assumes 8–12 metal layers and a movable floorplan) |
+
+The 60–70%-vs-50% gap is explained by **routing layers**: nangate45 has 10,
+sky130hd 5–6, gf180 5 (variant C = 5LM). The industrial figure assumes a stack
+roughly twice as deep as two of our three platforms, which is also why OpenLane
+— the reference sky130 flow — ships 50 rather than 70.
+
+Two cautions when comparing against any cited number:
+
+- **The definition varies.** Some sources count macros and pads against total
+  core area; others take standard-cell area over placeable area. ORFS's
+  `CORE_UTILIZATION` is cell area over core area.
+- **Utilization alone does not predict congestion.** Pin-dense cells and
+  highly-interconnected netlists produce local hot spots at any global number,
+  which is why the value is confirmed by measurement per platform rather than
+  adopted from a table.
+
+Not swept to the breaking point, for the unfixable-by-design reason above: the
+sweep's job is to confirm 50% has no cliff, not to find the ceiling. The
+u60/u70/u80 points were planned and then dropped once the anchor was settled —
+12 points of machine time with no decision attached to them.
 
 ### Die — explicit, computed once, frozen for both arms
 
 ```
-side     = max( sqrt(pilot_cell_area / 0.40), platform PDN minimum )
+side     = max( sqrt(pilot_cell_area / 0.50), platform PDN minimum )
 DIE_AREA = 0 0 (side+4) (side+4)
 CORE_AREA = 2 2 (side+2) (side+2)
 ```

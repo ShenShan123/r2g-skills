@@ -1833,6 +1833,48 @@ error path that also yields zero/empty is indistinguishable from success. Give t
 error path its own value, and include a POSITIVE CONTROL that must come back
 non-zero — that control is what exposed both defects here.
 
+#### A relative bind-mount source is silently taken as a NAMED VOLUME (2026-10-17)
+
+Third face of the same shape, this time from podman rather than from a shell
+builtin. A checker launched per design with
+
+```python
+"-v", f"{run_dir}:/src:ro,Z"      # run_dir came from a relative --runs
+```
+
+fails with
+
+```
+Error: creating named volume "gf180_full/runs/C00277__…": running volume create
+option: names must match [a-zA-Z0-9][a-zA-Z0-9_.-]*: invalid argument
+```
+
+A bind mount REQUIRES an absolute source. Given a relative one, podman does not
+reject the flag — it reinterprets it as a *named volume*, and the name then
+fails its own charset rule because it contains `/`. The error therefore names a
+volume the caller never asked for, and it arrives at container-creation time,
+which reads as a crashed checker rather than a bad argument.
+
+Why it belongs in this bucket: the checker produced **no report files at all**,
+and a naive reader of "zero violation reports" calls that CLEAN. All four
+designs in that batch would have been recorded as DRC-clean. What caught it was
+the gate written for exactly this shape — a non-zero exit with every report
+missing is recorded as `drc_failed` with the log tail attached, never as a pass:
+
+```python
+if not reports:                      # absence is not cleanliness
+    res["drc_status"] = "drc_failed"
+    res["log_tail"] = tail[-400:]
+    return res
+if rc != 0 and total == 0:           # exited non-zero yet nothing found
+    res["drc_status"] = "drc_failed"
+```
+
+**Resolve every path handed to a container to an absolute path at argument-parse
+time** (`Path(args.runs).resolve()`), not at use time — the same discipline the
+host-path entry above arrives at from the other direction: that one was absolute
+but not *visible* in the container, this one was *visible* but not absolute.
+
 ### LVS Timeout on Large Macro Designs
 
 **Symptoms:**

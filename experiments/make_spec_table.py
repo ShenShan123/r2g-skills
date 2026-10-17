@@ -35,7 +35,16 @@ PERIOD_NS = {
     "sky130hd":  [(100, 1.8), (1000, 3.6), (5000, 6.5), (None, 16.0)],
 }
 # "Utilization - flat 40%" and "PDN core floor - baseline policy"
-UTILIZATION = 0.40
+# 0.50, matching BASELINE_PARAMETERS.md. The anchor is OpenLane's own sky130
+# default (FP_CORE_UTIL=50 / PL_TARGET_DENSITY=0.5) rather than the 60-70% the
+# literature recommends, because that advice assumes a floorplan the designer
+# can still move: here the die is FROZEN, so headroom above the chosen value is
+# not a working margin and every congestion failure above it is permanently
+# unfixable (r2g's only congestion lever, density_relief, lowers utilization).
+# CHANGING THIS REQUIRES REGENERATING THE SPEC TABLE -- it is the one place the
+# die is computed, and a stale table would run designs against a die the frozen
+# spec no longer describes.
+UTILIZATION = 0.50
 PDN_FLOOR_UM = {"nangate45": 32.0, "gf180": 110.0, "sky130hd": 32.0}
 CORE_INSET_UM = 2.0
 PILOT_ROOT = {"nangate45": "n45_full", "gf180": "gf180_full",

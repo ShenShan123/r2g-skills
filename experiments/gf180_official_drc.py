@@ -130,14 +130,14 @@ def main(argv=None) -> int:
             print(f"ERROR 缺少 {need}", file=sys.stderr)
             return 2
 
-    dirs = sorted(Path(p) for p in glob.glob(args.runs.rstrip("/") + "/*")
-                  if Path(p).is_dir())
+    runs_root = Path(args.runs).resolve()
+    dirs = sorted(q.resolve() for q in runs_root.iterdir() if q.is_dir())
     if args.select:
         keep = {l.strip() for l in open(args.select) if l.strip()}
         dirs = [d for d in dirs if d.name in keep]
     if args.limit:
         dirs = dirs[:args.limit]
-    work = Path(args.work)
+    work = Path(args.work).resolve()
     work.mkdir(parents=True, exist_ok=True)
     print(f"官方 run_drc.py 签核: {len(dirs)} 份, {args.workers} 并发 x "
           f"--mp {args.mp}, variant={VARIANT}, --antenna 开, --split_deep 关",

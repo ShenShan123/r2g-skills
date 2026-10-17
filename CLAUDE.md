@@ -155,8 +155,14 @@ bundled (`tools/install_nangate45_lvs.sh`).
   flows, so the fix is to not stack campaigns rather than to halve one.
   **Thrashing is invisible in load and in "are the processes alive"** — both look healthy while
   nothing finishes. The only signal is new-artifacts-per-minute:
-  `find <runs> -name result.json -newermt '-6 minutes' | wc -l` → 0 means stalled, whatever the
-  load says. Two campaigns sat there for 30 minutes before anything noticed.
+  `find <runs> -name result.json -newermt '-30 minutes' | wc -l`. Two campaigns sat at load 130
+  with zero completions for 30 minutes before anything noticed. **The window must be several
+  times the per-design wall time**, or a healthy run reads as stalled: a 6-minute window over a
+  sweep whose designs take 5–15 minutes each returned 0 while the same corpus was in fact
+  producing 1.2 designs/minute over a 30-minute window (2026-10-17 false alarm). Compare two
+  windows (5 and 30) rather than trusting one, and cross-check with where the CPU actually is —
+  `ps -eo pcpu,comm | awk '/openroad|yosys/{s+=$1}END{print s}'` reading ~2300% is work, not
+  thrash.
   `run_orfs.sh` wraps each stage in `timeout` (plain, NOT `setsid` — `setsid` made
   timeout a group leader and silently disabled its tree-kill, orphaning a stage that hit
   `ORFS_TIMEOUT`; failure-patterns #40, 2026-07-12). `timeout` now group-reaps the whole stage tree
