@@ -79,8 +79,15 @@ if [ "$live" -gt 0 ]; then
 fi
 
 say "=== 正式重跑起  worker=$WORKERS  利用率=$UTIL  阶段超时=${STAGE_TIMEOUT}s"
-cat "$D/splits/dev.txt" "$D/splits/held_out.txt" | sort -u > "$D/_rerun_all.select"
-say "受试设计 $(wc -l < $D/_rerun_all.select) 份 (dev + held_out 合并，划分只管怎么报，不管建什么)"
+# dev ONLY. Held-out is deliberately not built yet: it is where repairs
+# developed on dev get validated, and building its baseline now buys nothing
+# while costing half the machine time (three days instead of six). The
+# held-out baseline has to be run before any held-out claim, just not before
+# there is anything to claim.
+SET=${SET:-dev}
+cp "$D/splits/${SET}.txt" "$D/_rerun_all.select"
+say "受试设计 $(wc -l < $D/_rerun_all.select) 份 (只跑 ${SET}；held-out 等有东西要验证时再跑)"
+say "  对照基准 = 试跑的 dev 双清数: nangate45 837 / gf180 754 / sky130hd 1032"
 
 for spec in "${SPECS[@]}"; do
   set -- $spec; P=$1; PER=$2; FL=$3

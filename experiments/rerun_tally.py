@@ -29,6 +29,23 @@ def load_split(name):
     return {l.strip() for l in f.read_text().splitlines() if l.strip()}
 
 
+FRONTEND_MARKERS = ("yosys", "synth", "parse")
+
+
+def is_frontend(d):
+    """Synthesis never produced a netlist, so no layout exists to repair.
+
+    These are RTL problems, platform-independent (the same designs fail on all
+    three platforms), and signoff-loop has no lever on them. They are reported
+    on their own line rather than folded into the denominator: folding them in
+    makes the backend look worse than it is AND credits the repair arm with a
+    pool it cannot touch.
+    """
+    blob = (str(d.get("stage") or "") + " " +
+            str(d.get("failure_class") or "")).lower()
+    return any(t in blob for t in FRONTEND_MARKERS)
+
+
 def design_key(run_dir_name):
     # runs/<design>__<platform>__p<period>  ->  <design>
     return "__".join(run_dir_name.split("__")[:-2])
@@ -48,8 +65,9 @@ def main(argv=None):
 
     print(f"\n=== 冻结 baseline 重跑汇总  stamp={args.stamp}")
     print(f"划分: dev {len(dev)} 份 / held-out {len(held)} 份\n")
-    hdr = (f"{'平台':11s} {'集':8s} {'产出':>6s} {'双清':>6s} "
-           f"{'DRC清':>6s} {'LVS清':>6s} {'无判决':>7s} {'PDN回退':>8s}")
+    hdr = (f"{'平台':11s} {'集':8s} {'产出':>6s} {'后端分母':>8s} {'双清':>6s} "
+           f"{'DRC清':>6s} {'LVS清':>6s} {'无判决':>7s} {'PDN回退':>8s} "
+           f"{'前端失败':>8s}")
     print(hdr)
     grand = {}
     for plat in PLATS:
@@ -93,8 +111,10 @@ def main(argv=None):
             # the two.) A re-run count near 506/374/282 means the explicit die
             # did not pre-empt the abort it was supposed to.
             fb = sum(1 for d in sub if d.get("pdn_fallback"))
-            print(f"{plat:11s} {label:8s} {len(sub):6d} {both:6d} "
-                  f"{drc:6d} {lvs:6d} {nov:7d} {fb:8d}")
+            fe = sum(1 for d in sub if is_frontend(d))
+            backend = len(sub) - fe          # the honest denominator
+            print(f"{plat:11s} {label:8s} {len(sub):6d} {backend:8d} {both:6d} "
+                  f"{drc:6d} {lvs:6d} {nov:7d} {fb:8d} {fe:8d}")
             grand[(plat, label)] = both
         unmatched = [d for d in rows if d["_key"] not in dev | held]
         if unmatched:

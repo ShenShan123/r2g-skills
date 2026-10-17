@@ -27,6 +27,56 @@ unfixable failures are left near the pilot's own setting.
 
 ## Timing
 
+### Timing is NOT a pass condition — the period is a PRESSURE knob
+
+This has to come before the period table, because reading that table as a set
+of targets to be met is wrong and the mistake is easy to make.
+
+The pass condition is DRC-clean **and** LVS-clean. Setup timing is recorded, not
+judged. Measured on the pilot:
+
+| platform | designs that missed their period | of those, still counted dual-clean |
+| --- | --- | --- |
+| nangate45 | 49 | 11 |
+| gf180 | 76 | 4 |
+| **sky130hd** | **237** | **224 (94%)** |
+
+So sky130hd's higher baseline (1032 against 837 and 754 on dev) is partly
+because its timing failures do not count against it.
+
+It stays that way in round 1 for the same reason hold does, below: r2g repairs
+DRC violations, LVS mismatches and backend aborts, and timing closure is
+explicitly outside its scope (`CLAUDE.md`: escalate before attempting
+signoff-quality closure). Making timing a pass condition would manufacture
+~224 sky130hd failures that r2g cannot act on — cost without signal, the
+principle this whole document is built on.
+
+**But the period is not decorative, and that is also measured.** ORFS's yosys
+synthesis is not timing-driven, so `result.json`'s `cells` and `area_um2` — both
+synthesis numbers — come back IDENTICAL at every period, which makes the period
+look inert. The pressure lands after placement, where the resizer inserts
+buffers chasing the constraint. On C00059 (nangate45), run at six periods into
+the same die:
+
+| period | real cell area | of which buffers | achieved utilization |
+| --- | --- | --- | --- |
+| 1 ns | 10 437.6 µm² | 2541 cells | 22.7% |
+| 2 ns | 9 522.0 µm² | 2056 cells | 20.7% |
+| 3 ns | 9 453.11 µm² | 2016 cells | 20.5% |
+
+A 3x tighter period costs **+10.4% real cell area, essentially all of it
+buffers** (the cell-count rise and the buffer-count rise are the same 525), in a
+die that did not grow. So the period sets how hard the tool is asked to work and
+therefore how dense the layout ends up — which is exactly what makes DRC and
+placement harder. It is a pressure knob whose effect is real but modest, and the
+p95 choice below puts that pressure deliberately at the low end.
+
+(Figures are ORFS's own `finish__design__instance__area` over
+`finish__design__core__area`. `instance__area` excludes fill — verified:
+instance + fill_cell equals core area to within 0.1 µm². DEF `COMPONENTS` cannot
+be used instead, because fill moves OPPOSITE to real cells and cancels the
+signal.)
+
 ### Clock period — by post-synthesis cell count
 
 The pilot gave one period per platform. The problem was never that it was too
@@ -36,7 +86,8 @@ roughly right for large ones**: nangate45 handed 2.0 ns to designs whose median
 achievable period is 0.22 ns. The fix is fairness across sizes, not more
 pressure.
 
-Targets are the pilot's **p95 achievable period** per size class, rounded up:
+Values are the pilot's **p95 achievable period** per size class, rounded up —
+pressure settings, not targets to be met (see above):
 
 | post-synth cells | nangate45 | gf180 | sky130hd |
 | --- | --- | --- | --- |
@@ -200,10 +251,53 @@ without the floor those designs are unbuildable and the baseline is a degenerate
 ## Pass conditions
 
 ```
-pass = DRC clean  AND  LVS clean  AND  setup WNS >= 0
-hold slack: recorded only in round 1
+pass = DRC clean  AND  LVS clean
+setup slack: RECORDED, not judged in round 1   (see "Timing is NOT a pass condition")
+hold slack:  RECORDED, not judged in round 1
 no verdict (timeout / crashed checker / no layout) = NOT pass
 ```
+
+An earlier draft of this block read `AND setup WNS >= 0`. That was wrong and
+would have invalidated the comparison: the pilot did NOT enforce it — 237
+sky130hd designs missed their period and 224 of them were recorded dual-clean —
+so a re-run that enforced it would be scored on a different ruler from the
+baseline it is measured against. The tally code was already correct (it counts
+`drc_status == clean and lvs_status == clean`); the document has been corrected
+to match both it and the pilot.
+
+### Designs that never reach a layout are reported apart, not folded in
+
+Synthesis failures are not backend failures. In dev, 55 designs fail synthesis
+on **all three platforms** (parse errors, synthesis errors — the same designs
+each time, since the cause is platform-independent RTL), and 91 fail on at least
+one. They can never be dual-clean anywhere, under any parameters, and
+signoff-loop has no lever on them — they belong to the RTL-acquisition side.
+
+So the backend baseline's denominator is **1194** (1249 − 55), with the 55
+reported on their own line. This is not hiding them: folding them in makes the
+backend look worse than it is AND hands the repair arm a pool it cannot touch,
+so neither the baseline nor the improvement would mean what it says.
+
+The 85 dev designs with no spec entry need no special handling: every one of
+them is a frontend failure on at least one platform (verified — the overlap is
+85 of 85), so the `SPEC MISS` fallback period only ever applies to designs that
+never reach a floorplan.
+
+Two denominators exist and they answer different questions, so the tally prints
+the per-platform one and this document states the corpus one:
+
+- **per-platform** — designs that reached the backend on *that* platform
+  (dev: 1159 nangate45, 1193 gf180, 1160 sky130hd). The right denominator for
+  that platform's pass rate.
+- **corpus-wide 1194** — designs that reach the backend on at least one
+  platform, i.e. 1249 minus the 55 that fail synthesis everywhere. The right
+  denominator for "how many designs are even eligible".
+
+One known blind spot in the per-platform figure: gf180's frontend count (56 on
+dev, against 90 and 89) is probably low, because 34 of its no-layout designs
+carry `failure_class = no_log_harvested` — the log was not captured, so they
+cannot be classified as frontend or backend. Do not read gf180's larger backend
+denominator as a stronger frontend until those 34 are classified.
 
 ## Execution
 
