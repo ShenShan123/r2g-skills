@@ -455,6 +455,9 @@ This skill's failure mode is a plausible-looking CSV with **wrong values**. Full
 | Fmax search (loose-first fastest period; place-proxy + deterioration model) | `r2g-skills/signoff-loop/references/orfs-playbook.md` ("Fmax Search") + `SKILL.md` step 5a |
 | A specific flow/signoff failure (DRC stuck, route congestion, CDL, …) | `r2g-skills/signoff-loop/references/failure-patterns.md`  |
 | What each platform CHECKS, what is official vs r2g-supplied, what counts as a pass | `r2g-skills/signoff-loop/references/signoff-contract.md` |
+| The FROZEN baseline parameters (period/utilization/SDC/execution), each traced to its measurement | `experiments/BASELINE_PARAMETERS.md` |
+| What r2g contributes — eligibility vs repair credit, appended per contribution | `experiments/R2G_CONTRIBUTIONS.md` |
+| The frozen dev / held-out split required by E2 | `experiments/splits/README.md` |
 | Historical debug narratives + corpus results                        | `r2g-skills/signoff-loop/references/lessons-learned.md`   |
 | How to read PPA / signoff JSON                                      | `r2g-skills/signoff-loop/references/ppa-report-guide.md`  |
 | How does def-graph build the dataset (labels → features → graphs)?  | `r2g-skills/def-graph/SKILL.md`                   |
