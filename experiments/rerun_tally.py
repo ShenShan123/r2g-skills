@@ -49,7 +49,7 @@ def main(argv=None):
     print(f"\n=== 冻结 baseline 重跑汇总  stamp={args.stamp}")
     print(f"划分: dev {len(dev)} 份 / held-out {len(held)} 份\n")
     hdr = (f"{'平台':11s} {'集':8s} {'产出':>6s} {'双清':>6s} "
-           f"{'DRC清':>6s} {'LVS清':>6s} {'无判决':>7s}")
+           f"{'DRC清':>6s} {'LVS清':>6s} {'无判决':>7s} {'PDN回退':>8s}")
     print(hdr)
     grand = {}
     for plat in PLATS:
@@ -79,8 +79,22 @@ def main(argv=None):
                                                  "no_gds", "skipped")
                       or d.get("lvs_status") in (None, "timeout", "lvs_failed",
                                                  "no_gds", "skipped"))
+            # The PDN-0185 fallback retries a floorplan abort with an
+            # explicit square core. This baseline writes an explicit die that
+            # is ALREADY floored at spec-build time, so the abort it rescues
+            # should largely not happen any more -- which is a prediction, not
+            # a fact, so it is counted rather than assumed.
+            #
+            # The comparable pilot figure for THIS column -- designs needing
+            # the fallback, all outcomes -- is 506 nangate45 / 374 gf180 / 282
+            # sky130hd. (The 492/367/278 quoted elsewhere is a different
+            # measurement: fallback designs among the DUAL-CLEAN only, which is
+            # the stock-tool adjustment in R2G_CONTRIBUTIONS.md. Do not compare
+            # the two.) A re-run count near 506/374/282 means the explicit die
+            # did not pre-empt the abort it was supposed to.
+            fb = sum(1 for d in sub if d.get("pdn_fallback"))
             print(f"{plat:11s} {label:8s} {len(sub):6d} {both:6d} "
-                  f"{drc:6d} {lvs:6d} {nov:7d}")
+                  f"{drc:6d} {lvs:6d} {nov:7d} {fb:8d}")
             grand[(plat, label)] = both
         unmatched = [d for d in rows if d["_key"] not in dev | held]
         if unmatched:
