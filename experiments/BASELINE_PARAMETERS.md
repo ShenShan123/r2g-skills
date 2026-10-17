@@ -184,6 +184,15 @@ The conformance check now REQUIRES `-setup` and a separate `-hold 0.020`, and
 was verified to report 60 inconsistencies against the pre-fix artifacts. A check
 that accepts both spellings cannot tell the defect from the fix.
 
+**The defect was wider than the one design that exposed it.** Rebuilt with the
+fix, gf180 and nangate45 came back **30/30 and 30/30 complete, zero failures**
+across 60 designs. Before it, gf180's preflight lost one design and the campaign
+lost another to CTS within its first 13. So the missing flag was not merely
+aborting the occasional design at the buffer cap — it was imposing surplus hold
+repair on *every* design, inflating cell counts and pushing the marginal ones
+over. Removing it lowered the failure rate as a side effect, which is why the
+rebuild is also the cleanest evidence that the diagnosis was right.
+
 ### (historical) Clock uncertainty — 5% of the period
 
 The pilot set `set_clock_uncertainty 0.0`, which assumes a perfect clock. Real
