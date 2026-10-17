@@ -28,10 +28,23 @@ LOG=$D/rerun_baseline.log
 STAMP=$(date '+%Y%m%d')
 WORKERS=${WORKERS:-12}
 UTIL=${UTIL:-50}
-STAGE_TIMEOUT=${STAGE_TIMEOUT:-21600}     # 6h, and reaper.sh GRACE_MIN must
+STAGE_TIMEOUT=${STAGE_TIMEOUT:-21600}
+SIGNOFF_WORKERS=${SIGNOFF_WORKERS:-8}     # not 12: a >100K-cell LVS takes
+                                          # 3-5 GB, and CLAUDE.md forbids
+                                          # running several of those at once
+SIGNOFF_TIMEOUT=${SIGNOFF_TIMEOUT:-7200}     # 6h, and reaper.sh GRACE_MIN must
                                           # stay above it (365 min) or it reaps
                                           # designs still legitimately routing
 ONLY=${ONLY:-}                            # restrict to one platform, for a pilot
+# --force is OFF by default so the campaign is RESUMABLE. The driver skips a
+# design that already has a result.json, so a run killed at design 800 of 1249
+# picks up at 801 instead of redoing a day's work. Pass FRESH=1 only to
+# deliberately rebuild from scratch.
+#
+# The driver's skip is not naive: a record that hit PDN-0185 without a core
+# floor is the first half of a retry whose second half never ran, and it counts
+# as unfinished rather than done.
+FRESH=${FRESH:-}
 LIMIT=${LIMIT:-0}                         # designs per platform, 0 = all
 say(){ printf '%s %s\n' "$(date '+%F %T')" "$*" | tee -a "$LOG"; }
 
@@ -79,6 +92,22 @@ if [ "$live" -gt 0 ]; then
 fi
 
 say "=== 正式重跑起  worker=$WORKERS  利用率=$UTIL  阶段超时=${STAGE_TIMEOUT}s"
+
+# Freeze the digests of everything that decides what gets built, and re-check
+# them at the end. Not hypothetical: another session edited orfs_spec.py twice
+# in one day, once making the spec-table hook a silent no-op, and I regenerated
+# the spec table WHILE a measurement was running against it. The launch gate
+# checks these at launch; nothing checked they held for the next four days.
+DIGESTS=$D/rerun_${STAMP}.digests
+: > "$DIGESTS"
+for f in "$D/orfs_spec.py" "$D/signoff45.py" "$D/signoff_pass.py" \
+         "$D/lvs130.py" "$D/rerun_tally.py" \
+         "$D/spec/spec_nangate45.json" "$D/spec/spec_gf180.json" \
+         "$D/spec/spec_sky130hd.json" "$D/spec/area_allowance.json" \
+         "$D/splits/dev.txt" "$D/_rerun_all.select"; do
+  [ -f "$f" ] && sha256sum "$f" >> "$DIGESTS"
+done
+say "已冻结 $(wc -l < "$DIGESTS") 份输入的 sha256 -> $(basename "$DIGESTS")"
 # dev ONLY. Held-out is deliberately not built yet: it is where repairs
 # developed on dev get validated, and building its baseline now buys nothing
 # while costing half the machine time (three days instead of six). The
@@ -104,15 +133,87 @@ for spec in "${SPECS[@]}"; do
     --utilization "$UTIL" \
     --workers "$WORKERS" --cores-per-design 8 \
     --timeout "$STAGE_TIMEOUT" --pdn-core-floor-um "$FL" \
-    ${LIMIT:+--designs $LIMIT} --force \
+    ${LIMIT:+--designs $LIMIT} ${FRESH:+--force} \
     > "$D/rerun_${P}_${STAMP}.driver.log" 2>&1
   rc=$?
   t1=$(date +%s)
   n=$(ls -d $OUT/runs/*/ 2>/dev/null | wc -l)
   miss=$(grep -c "SPEC MISS" "$D/rerun_${P}_${STAMP}.driver.log" 2>/dev/null || true)
-  say "  $P 结束 rc=$rc 用时 $(( (t1-t0)/60 ))min 产出 ${n} 规格缺失 ${miss:-0}"
+  say "  $P flow 结束 rc=$rc 用时 $(( (t1-t0)/60 ))min 产出 ${n} 规格缺失 ${miss:-0}"
   rm -rf "${OUT}_s" 2>/dev/null
+
+  # ---- SIGNOFF. Without this the campaign produces no verdicts at all. -------
+  #
+  # The flow writes result.json with status/stage/cells; drc_status and
+  # lvs_status are written by the SIGNOFF pass, and rerun_tally.py counts those.
+  # An earlier version of this chain went flow -> tally and would have graded
+  # 1249 x 3 designs as "no verdict, therefore fail" after 4.3 days.
+  #
+  # The scripts differ by platform because the LVS TOOL does:
+  #   nangate45         signoff45.py      DRC + LVS together, LVS via klayout
+  #                                       and r2g's FreePDK45.lylvs. netgen has
+  #                                       no setup for this platform.
+  #   gf180, sky130hd   signoff_pass.py   DRC only -- it says so: "LVS is NOT
+  #                                       attempted"
+  #                   + lvs130.py         LVS via r2g's run_netgen_lvs.sh
+  #
+  # Both of the latter write their verdict back into result.json, which is what
+  # the tally reads. Their own json output is a per-pass snapshot and must not
+  # be read as the corpus: the pilot's netgen_lvs.json holds 1475 rows against
+  # 2497 designs (the pre-filter drops designs with no layout) and reading it as
+  # the LVS truth undercounted sky130hd by 669.
+  t2=$(date +%s)
+  if [ "$P" = nangate45 ]; then
+    python3 -I "$D/signoff45.py" \
+        --runs "$OUT/runs" --projroot "$D/rerun_${P}_proj" \
+        --out "$OUT/signoff.json" --workers "$SIGNOFF_WORKERS" \
+        --timeout "$SIGNOFF_TIMEOUT" \
+        > "$D/rerun_${P}_${STAMP}.signoff.log" 2>&1
+    say "  $P 签核(DRC+LVS) rc=$? 用时 $(( ($(date +%s)-t2)/60 ))min"
+  else
+    python3 -I "$D/signoff_pass.py" \
+        --runs "$OUT/runs" --projroot "$D/rerun_${P}_drcproj" \
+        --out "$OUT/signoff.json" --platform "$P" \
+        --workers "$SIGNOFF_WORKERS" --timeout "$SIGNOFF_TIMEOUT" \
+        > "$D/rerun_${P}_${STAMP}.drc.log" 2>&1
+    say "  $P DRC rc=$? 用时 $(( ($(date +%s)-t2)/60 ))min"
+    t3=$(date +%s)
+    python3 -I "$D/lvs130.py" \
+        --runs "$OUT/runs" --projroot "$D/rerun_${P}_lvsproj" \
+        --out "$OUT/netgen_lvs.json" --platform "$P" \
+        --workers "$SIGNOFF_WORKERS" --timeout "$SIGNOFF_TIMEOUT" \
+        > "$D/rerun_${P}_${STAMP}.lvs.log" 2>&1
+    say "  $P LVS rc=$? 用时 $(( ($(date +%s)-t3)/60 ))min"
+  fi
+
+  # A campaign with no verdicts is the failure this section exists to prevent,
+  # so check rather than assume: count result.json rows carrying drc_status.
+  graded=$(python3 -I - <<PY
+import glob, json
+n = 0
+for f in glob.glob("$OUT/runs/*/result.json"):
+    try:
+        if json.load(open(f)).get("drc_status"):
+            n += 1
+    except Exception:
+        pass
+print(n)
+PY
+)
+  say "  $P 带 DRC 判决的设计: ${graded} / ${n}"
+  if [ "${graded:-0}" = 0 ]; then
+    say "!! $P 签核没有产生任何判决 -- 停止，后面的平台不要再跑"
+    exit 1
+  fi
 done
-say "=== 三平台重跑完成，开始汇总"
+say "=== 三平台重跑完成，先核对输入没被改过"
+if sha256sum -c --quiet "$DIGESTS" 2>/dev/null; then
+  say "  输入与起跑时一致 ✓"
+else
+  say "!! 有输入在跑的过程中被修改 -- 结果的来历不完整，逐项列出:"
+  sha256sum -c "$DIGESTS" 2>&1 | grep -v ': OK$' | sed 's/^/     /' | tee -a "$LOG"
+  say "   （不阻塞汇总，但任何结论都必须带上这一条）"
+fi
+say "=== 开始汇总"
 python3 -I "$D/rerun_tally.py" --stamp "$STAMP" >> "$LOG" 2>&1 \
   && say "汇总已出" || say "汇总失败"
