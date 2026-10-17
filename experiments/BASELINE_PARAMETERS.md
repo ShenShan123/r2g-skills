@@ -544,6 +544,39 @@ platform cannot see what it is checking for. That is the case the frozen
 contract describes as "point out where the official data is internally
 inconsistent, and still run the baseline with the apparatus in it".
 
+### Three per-platform decisions, made rather than defaulted
+
+Each of these was previously "whatever the tool does by default", which is not a
+decision. Recorded as decisions so they can be argued with.
+
+**gf180's metal-density rules stay OFF.** The PDK ships `density.drc` and the
+official `run_drc.py` exposes `--density`, off by default. Keeping it off, for
+three reasons in order of weight: density is satisfied by FILL INSERTION, which
+the tool does automatically, so **r2g has no lever on it** — enabling it would
+add a class of failure that is cost without signal, which is the test every
+parameter here was set by; the official runner's default is off, and the
+baseline is defined as the official flow; and the pilot ran with it off, so
+leaving it off keeps the two comparable. If a reviewer wants density in scope it
+belongs in a separate arm, not folded into this baseline.
+
+**sky130hd's violation composition stays unknown for the pilot.** 2156 DRC
+reports exist but that corpus retained 5 of 2497 GDS files, so no report can be
+re-derived from the layout it judges and the composition cannot be established
+to the standard the other two platforms were. Not worth regenerating GDS from
+the 2167 retained DEFs: the re-run keeps GDS on all three platforms and will
+answer it as a side effect. Recorded as a known limitation of the pilot rather
+than quietly left as a gap.
+
+**Both checkers keep a time cap, and the LVS one is a fiction.** A checker that
+does not finish must become a verdict (failure) rather than hang, so the caps
+stay: DRC 7200 s, LVS 5400 s. But the LVS cap is NOT adaptive the way it claims:
+`run_lvs.sh` prints "Auto-scaled LVS timeout to 5400s (cell count: N)" and N
+reads **0 on 1081 of 1084 designs**, so the scaling input is dead and every
+design gets the same 5400 s. Left unchanged — altering it would change the pass
+condition mid-spec — but recorded, because a mechanism that appears to adapt and
+does not is the same defect class as the rest of this document: it looks like it
+is working.
+
 ### What the gf180 checker comparison does and does not establish
 
 The assembled deck is r2g-supplied and the PDK's `run_drc.py` is official, so
