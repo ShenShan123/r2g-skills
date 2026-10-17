@@ -139,6 +139,58 @@ if reap.is_file():
 else:
     gate("回收器", False, "缺 reaper.sh")
 
+# 9. the container image -- results from two images are not comparable
+try:
+    r = subprocess.run(["podman", "image", "inspect", "r2g-orfs:26Q3",
+                        "--format", "{{.Id}} {{.Created}}"],
+                       capture_output=True, text=True, timeout=60)
+    gate("容器镜像", r.returncode == 0,
+         r.stdout.strip()[:52] if r.returncode == 0 else "找不到 r2g-orfs:26Q3")
+except Exception as exc:                                         # noqa: BLE001
+    gate("容器镜像", False, str(exc)[:50])
+
+# 10. the platform decks and LEFs the pilot used.
+#
+# A modified platform file changes what the baseline measures, and one session
+# already edited the driver twice today without anyone noticing. nangate45 is
+# EXPECTED to carry exactly two modified LEFs -- that is contribution A2, the
+# antenna data the platform omits, declared as apparatus. Anything else, on any
+# platform, has to be explained before the campaign runs, so the state is
+# recorded as a digest rather than judged: the first run writes the baseline,
+# later runs compare against it.
+def _platform_digest(plat):
+    h = hashlib.sha256()
+    base = Path("/proj/workarea/yangao/r2g_toolchain/OpenROAD-flow-scripts/"
+                "flow/platforms") / plat
+    if not base.is_dir():
+        return None, 0
+    files = sorted(f for f in base.rglob("*") if f.is_file())
+    for f in files:
+        h.update(str(f.relative_to(base)).encode())
+        h.update(str(f.stat().st_size).encode())
+    return h.hexdigest(), len(files)
+
+
+ref_f = D / "spec/platform_digests.json"
+ref = json.loads(ref_f.read_text()) if ref_f.is_file() else {}
+cur = {}
+for p_ in PLATS:
+    dg, n = _platform_digest(p_)
+    if dg:
+        cur[p_] = {"digest": dg, "files": n}
+if not cur:
+    gate("平台文件指纹", False, "找不到平台目录 -- 路径对吗")
+elif not ref:
+    ref_f.write_text(json.dumps(cur, indent=1, sort_keys=True) + "\n")
+    gate("平台文件指纹", True,
+         "首次记录基准 -> %s（%s）" % (ref_f.name,
+                                      ", ".join("%s:%d 文件" % (k, v["files"])
+                                                for k, v in cur.items())))
+else:
+    moved = [k for k in cur if ref.get(k, {}).get("digest") != cur[k]["digest"]]
+    gate("平台文件指纹", not moved,
+         "与基准一致" if not moved else "变了: %s -- 先解释再跑" % moved)
+
 print()
 if fails:
     print("不要启动。未通过 %d 项: %s" % (len(fails), ", ".join(fails)))
