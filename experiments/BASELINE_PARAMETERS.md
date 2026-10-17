@@ -577,6 +577,53 @@ platform cannot see what it is checking for. That is the case the frozen
 contract describes as "point out where the official data is internally
 inconsistent, and still run the baseline with the apparatus in it".
 
+### What each platform's DRC deck actually checks — measured, not assumed
+
+A deck's rule count is not its coverage. Counted from the decks themselves:
+
+| | rule outputs | commented out | self-disclaimed | what it actually finds |
+| --- | --- | --- | --- | --- |
+| **nangate45** | **136** | **3** | **3 places** | **99.9% antenna** (3526 of 3528) |
+| **sky130hd** | **452** | 7 | 0 | unknown — no GDS retained |
+| **gf180** | **791** (58 PDK tables) | 0 | 0 | CO.6a is 95% of 4113 |
+
+nangate45 checks **one sixth** of gf180's rules, and its own deck disclaims part
+of what remains:
+
+- `POLY.2` (poly-to-active spacing, 140 nm) and `POLY.3` (poly extension beyond
+  active, 55 nm) are **commented out**, above the line `# TODO(rovinski) This
+  section errors out for some reason`.
+- the via-enclosure families `METALx.3` / `METALx.4`, up to 20 outputs across 10
+  metal layers, carry `# TODO(rovinski) Via enclosure rules do not appear to
+  correctly identify violations`.
+
+That resolves something measured earlier and left unexplained: **0 FEOL
+violations across 364 dirty nangate45 designs.** Not clean silicon — two of the
+FEOL rules are switched off and the layer is barely exercised. A measurement of
+zero on a check that is not running is not a measurement.
+
+**This is the strongest reason the three platforms' counts are not summed.** A
+design that is "DRC clean" on nangate45 passed 136 rules of which 3 are off and
+up to 20 are unreliable, with essentially one rule family doing all the finding.
+On gf180 it passed 791. Those are not the same claim.
+
+### What is deliberately NOT checked, per platform
+
+Separating "measured and passed" from "not measured" matters more than the pass
+rate, because an unmeasured check reads as a pass.
+
+| check | nangate45 | gf180 | sky130hd | why |
+| --- | --- | --- | --- | --- |
+| DRC | ✅ 136 rules (3 off) | ✅ 791 | ✅ 452 | the pass condition |
+| LVS | ✅ klayout `.lylvs` (r2g-supplied) | ✅ netgen | ✅ netgen | the pass condition |
+| antenna | ✅ (needs r2g's LEF data) | ✅ `--antenna` on | ✅ deck default | — |
+| metal density | — | **OFF by decision** | — | satisfied by fill insertion, which the tool does automatically: r2g has no lever, so it would be cost without signal |
+| setup timing | recorded | recorded | recorded | r2g does not do timing closure; judging it would manufacture ~224 sky130hd failures it cannot act on |
+| hold timing | recorded | recorded | recorded | failure rate unknown; promoted to a pass condition once it is known |
+| IR drop / EM | ✗ | ✗ | ✗ | never in scope for this baseline, and not claimed |
+| power | ✗ | ✗ | ✗ | same |
+| netlist ≡ RTL | ✗ | ✗ | ✗ | **LVS compares the layout against `6_final.cdl`, which descends from `6_final.v` — the POST-layout netlist.** So LVS proves the layout matches what the tools built, NOT that it matches the design intent: it cannot catch a synthesis error. Standard practice, stated because "LVS clean" is easily read as the stronger claim. Equivalence against RTL is E3's job, not the baseline's. |
+
 ### Three per-platform decisions, made rather than defaulted
 
 Each of these was previously "whatever the tool does by default", which is not a
