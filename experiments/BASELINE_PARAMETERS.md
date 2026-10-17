@@ -437,12 +437,18 @@ The evidence has two halves and only works as a pair:
   violations both count 1. This is what shows the official runner is actually
   looking.
 - **Negative test** — on designs the assembled deck called clean, the official
-  runner finds nothing. Sixteen so far of twenty, weighted toward the large end
-  where a deck is likeliest to miss something.
+  runner finds nothing: **20 of 20**, weighted toward the large end where a deck
+  is likeliest to miss something, every one of them with all 54 tables empty.
 
 Given the control, the negative test is evidence that the deck did not miss
 anything **on those designs**. It is not evidence that it never misses: twenty
 designs is a sample, and the claim stops there.
+
+Cost, measured on the same 20: median 239 s, min 122 s, max 3262 s. That is far
+below the 2598 s averaged over the four deliberately-hard validation designs, so
+the hybrid budget should be priced from the designs it will actually run the
+official checker on -- the 86 the assembled deck cannot grade, which are the
+large ones.
 
 One provenance trap found while assembling this. `6_drc.lyrdb` in a run
 directory is not necessarily the verdict `result.json` describes — on C03506 the

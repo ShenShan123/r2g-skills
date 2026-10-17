@@ -72,20 +72,31 @@ def main(argv=None) -> int:
         # the assembled deck's own report for the same design
         asm = Path(args.assembled_runs) / d.name
         asm_cnt, asm_coords = collections.Counter(), {}
+        # An EMPTY report is not a MISSING report, and the first version of this
+        # script could not tell them apart: an empty lyrdb yields an empty
+        # Counter, which is falsy, so a clean design read as "no report kept"
+        # and 20 of 20 comparisons were reported as impossible. Same shape as
+        # every other defect in this corpus -- absence and zero looking alike --
+        # so presence is tracked separately from content.
+        asm_files = []
         for pat in ("*.lyrdb", "drc_signoff*.xml", "reports/*.lyrdb"):
-            for f in glob.glob(str(asm / pat)):
-                c, co = parse_lyrdb(Path(f))
-                asm_cnt.update(c)
-                for k, v in co.items():
-                    asm_coords.setdefault(k, set()).update(v)
-        rows.append((d.name, n_tables, off_cnt, asm_cnt, off_coords, asm_coords))
+            asm_files += glob.glob(str(asm / pat))
+        for f in asm_files:
+            c, co = parse_lyrdb(Path(f))
+            asm_cnt.update(c)
+            for k, v in co.items():
+                asm_coords.setdefault(k, set()).update(v)
+        rows.append((d.name, n_tables, off_cnt, asm_cnt, off_coords, asm_coords,
+                     bool(asm_files)))
 
     print("%-46s %6s %8s %8s  %s" %
           ("设计", "表数", "官方", "单体", "规则是否一致"))
-    for name, nt, oc, ac, ocd, acd in rows:
+    for name, nt, oc, ac, ocd, acd, has_file in rows:
         orules, arules = set(oc), set(ac)
-        if not ac:
+        if not has_file:
             verdict = "单体没留报告 -- 无法比对产物"
+        elif not oc and not ac:
+            verdict = "两边报告都为空 -- 产物一致，但 0 对 0 不是等价性证据"
         elif orules == arules:
             same = all(oc[r] == ac[r] for r in orules)
             verdict = "规则集相同，计数%s" % ("也相同 ✓" if same else "不同 ✗")
@@ -97,7 +108,7 @@ def main(argv=None) -> int:
         print("%-46s %6d %8d %8d  %s"
               % (name[:46], nt, sum(oc.values()), sum(ac.values()), verdict))
 
-    have_asm = sum(1 for r in rows if r[3])
+    have_asm = sum(1 for r in rows if r[6])
     print()
     print("能做产物比对的: %d / %d 份" % (have_asm, len(rows)))
     if have_asm == 0:
