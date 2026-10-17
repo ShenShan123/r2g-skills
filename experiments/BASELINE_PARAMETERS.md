@@ -335,6 +335,49 @@ designs produces a median that is neither the target nor a measurement of
 anything — it lands wherever the floored/binding split happens to put the
 midpoint.)
 
+**gf180, confirmed — this was the platform the allowance existed for.** 30
+designs, conformance green, 11 PDN-floored, 18 binding:
+
+| | before the allowance | after |
+| --- | --- | --- |
+| median | **60.0%** | **50.1%** |
+| maximum | 71.9% | 68.2% |
+| over target+5 | 6 of 10 | 5 of 18 |
+
+The median lands on target. **The tail does not, and the reason is structural:**
+the five still above 60% are the SMALL designs — 216, 324, 352, 627 and 2773
+cells — not the large ones.
+
+That follows from how the allowance is built. It is one multiplier per platform
+(1.184), and the overshoot it corrects is driven by timing-repair buffers, whose
+share is largest where the period tightened most. gf180's small-design period
+went from the pilot's flat 10 ns to 2.2 ns, **4.5x tighter**, while its large
+designs went to 16 ns, *looser*. One flat multiplier cannot level that: it moves
+the distribution down and centres the median, leaving the small end high.
+
+**Not corrected, deliberately.** All five completed — 68% is routable on gf180,
+and the whole 30-design preflight lost one design (3.3%). A per-size-class
+allowance would add a second table of constants to calibrate and maintain, to
+pull five designs from 68% to 50% that already pass. The frozen standard is "not
+a formality", not "exactly 50% on every design".
+
+Recorded rather than smoothed over, because it is the obvious place to start if
+the allowance is ever refined: **the residual is a small-design effect, and it
+is the period change that drives it.**
+
+**Timing: the p95 table delivers what it claims.** Under the full frozen spec
+(binned periods and the allowance-corrected die), 23 of 24 nangate45 designs and
+22 of 23 gf180 designs meet their period — **96% against the 95% the table was
+built for**. The concern that p95 would under-deliver, because achievable
+periods were measured at the pilot's 20% utilization where wires are shorter,
+does not show at this sample size; the area allowance appears to absorb it.
+
+Two details worth carrying: gf180 has one design at `worst_slack = -15.67 ns`
+against a 2.2–16 ns period — an order out, not a near miss, and isolated (the
+median is +1.49 ns). And 5–6 designs per platform report NO slack at all, having
+no constrained path even with the I/O delays added; they are not failures and
+must not be counted as any — a design with no timing path has no timing.
+
 ### Die — explicit, computed once, frozen for both arms
 
 ```
