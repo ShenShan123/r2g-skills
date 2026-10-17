@@ -1734,6 +1734,56 @@ make's include order (`make -f probe.mk` including DESIGN_CONFIG then the platfo
 printing `$(origin VAR)`); a unit test that asserts on the file's text cannot tell you whether
 make agrees.
 
+#### `setsid` moves the script into a NEW session — killing the launcher's group leaves it running (2026-10-17)
+
+`setsid nohup bash run.sh &` makes `run.sh` a **session leader with its own
+pgid**. The pgid of the `bash -c` that launched it is a DIFFERENT group, so:
+
+```bash
+kill -TERM -<launcher_pgid>     # kills the wrapper, run.sh keeps going
+```
+
+reports success and changes nothing. Find the real group — the session leader
+has `ppid=1`:
+
+```bash
+ps -eo pid,ppid,pgid,sess,etime,args | grep "[r]un.sh"     # take the pgid whose ppid is 1
+kill -TERM -<that_pgid>
+```
+
+**Then VERIFY.** A campaign driver believed dead ran on for 70 more minutes
+here, and because nothing checked, the next hour of work was built on top of it.
+The cost was not the wasted CPU — it was the defect below.
+
+#### Two drivers on the same design = container-name collision, surfacing as a stage "Terminated" (2026-10-17)
+
+This is the concrete mechanism behind the hard rule *"never run two configs with
+the same DESIGN_NAME + FLOW_VARIANT concurrently"*.
+
+`orfs_baseline.py` names each container `--name <design>__<platform>__p<period>`
+and clears a stale same-named container before starting. Two drivers that both
+reach the same design therefore fight over one name, and the later one **kills
+the earlier one's LIVE container**. Inside, `make` reports:
+
+```
+make[1]: *** [Makefile:552: do-5_2_route] Terminated
+```
+
+and the stage classifier files it by whatever stage was active — `route_failed`,
+`1_2_yosys_error` — so it reads as a genuine engineering failure of that stage.
+Two such results were nearly accepted as evidence that a stock PDK LEF breaks
+routing.
+
+**Discriminators, in order of cost:**
+1. `Terminated` in `log_tail` (not `Error`, not a tool message) means a signal,
+   not a tool verdict. The driver's own kill paths set `failure_class` to
+   `oversize` / `timeout` / `aborted_disk`, so a kill wearing a STAGE name came
+   from outside the driver.
+2. Grep the reference corpus for `Terminated`: **0 of 2497** in the baseline
+   here, which proves it is new to the current environment rather than
+   background noise.
+3. Then look for a second driver — including one you believe you stopped.
+
 #### A host path in a config the container cannot see — reported as a yosys failure (2026-10-17)
 
 Pointing `TECH_LEF`/`SC_LEF` (or any file-valued ORFS variable) at a HOST path
