@@ -877,6 +877,32 @@ substrate tap at 15 um for 5 V devices. These are the ORFS platform
 configuration disagreeing with the foundry's own rule manual. A stock-PDN gf180
 baseline would be ~0 dual-clean, against which no repair is measurable.
 
+### Reading the re-run against the pilot: the change is TWO-directional
+
+At the 190-design checkpoint on gf180, the frozen spec and the pilot agree on
+**97%** of the same designs. The 3% that differ are not all losses:
+
+| | designs |
+| --- | --- |
+| pilot pass → now fail | 4 (three `3_3_place_gp`, one `3_5_place_dp`) |
+| **pilot fail → now pass** | **1** |
+
+The reverse case matters more than its count. It refutes the natural reading of
+any headline difference — "the frozen spec is harder, so it can only cost
+designs". A 20% utilization die is not merely *loose*, it is **wrong in both
+directions**: on a tiny design it produces a core so sparse that the placer
+diverges (`GPL-0307`), which is exactly how two 7-cell `lvdc_simulation`
+designs fail here. A spec that sizes the die properly can therefore RECOVER a
+design the pilot lost.
+
+So a sentence of the form "the re-run has N fewer dual-clean than the pilot"
+describes a net of two opposing movements and attributes it entirely to one.
+Report both directions, or report neither.
+
+(Also recorded because the 97% is itself the load-bearing number: if the frozen
+spec agreed with the pilot on only, say, 70% of designs, it would be measuring
+something else and the pilot would stop being usable as context at all.)
+
 ## What the re-run is for
 
 Every contamination question resolved to "apparatus, declared", so **the re-run
