@@ -323,11 +323,29 @@ and the final cell area exceeds the pilot's.
 Measured on the 30-design preflight, counting only designs where utilization
 binds (a PDN-floored design's ratio says nothing — its die came from the floor):
 
-| platform | final / pilot cell area | buffer share of final area | achieved utilization before the fix |
+| platform | final / pilot cell area | buffer share | binding designs |
 | --- | --- | --- | --- |
-| nangate45 | **1.031** (1.01–1.11) | 3.9% | median 50.1%, 1 of 10 over target+5 |
-| gf180 | **1.184** (1.00–1.42) | 12.6% | **median 60.0%, 6 of 10 over target+5** |
-| sky130hd | **1.092** (1.07–1.36) | 2.8% | — |
+| nangate45 | 1.031 → **1.021** | 3.5% | 5 → **15** |
+| gf180 | 1.184 → **1.144** | 10.0% | 7 → **18** |
+| sky130hd | 1.092 → **1.190** | 12.3% | 5 → **18** |
+
+The second column of each pair is the re-derivation from the 30-designs-per-
+platform preflight, and **it is the one in use**. The first, from 5/7/5 binding
+designs, was labelled here as "a first-order correction, not a calibration" —
+and that caveat cashed out exactly where it was pointed:
+
+**sky130hd's allowance was wrong by 9%.** At 1.092 the wide preflight measured a
+**53.7% median against a 50% target, 9 of 27 designs over target+5, maximum
+79.1%** — the same shape gf180 had before ITS correction. 18 binding designs put
+it at 1.190; the die grows 4.4% on a side. nangate45 barely moved (1.031 →
+1.021, 0 designs over target) and gf180 was slightly over-corrected (1.184 →
+1.144, median 46.9%, i.e. marginally loose).
+
+sky130hd was re-verified after the change rather than trusted. The reasoning for
+skipping a re-run would have been "the direction is clear and the mechanism is
+understood" — which is precisely the reasoning that produced the wrong number
+the first time, on this platform. Thirty minutes against the 37 hours sky130hd
+takes in the campaign.
 
 The extra area IS the buffers where the period tightened: on gf180's C03211 they
 are 39% of the final cell area, 27% on C00496, 24% on C03488. The allowance is
