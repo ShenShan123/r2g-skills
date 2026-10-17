@@ -23,6 +23,29 @@ Labels: wirelength (WL), HPWL, ground capacitance (Cgnd), congestion.
 ## E1 — Source-to-graph yield funnel (C1) · must
 
 - Run: M repos → N candidate designs × 3 platforms, fixed config.
+- **The 9 handoffs, DEFINED** (2026-10-17). The plan referenced "the 9 handoffs"
+  without enumerating them anywhere, and `experiment1_task_spec.json` — which
+  `run_experiment1_rtl_acquisition.py` reads — is not in the repo. This is a
+  proposed definition from the pipeline's real artifact boundaries, not a
+  recovered one; each stage is counted by an artifact that either exists or does
+  not, so the funnel cannot be fudged:
+
+  | # | handoff | evidence artifact | data today |
+  | --- | --- | --- | --- |
+  | 1 | source discovered | candidate CSV row (rtl-acquire) | yes |
+  | 2 | RTL acquired + screened | `certified/*/DESIGN.json` in the handoff package | yes |
+  | 3 | parses / elaborates | `1_1_yosys_canonicalize` exit | yes (stage + failure_class) |
+  | 4 | synthesizes to a netlist | `1_2_yosys.v`, `synth_stat.txt` | yes |
+  | 5 | floorplans | `2_floorplan.def` | yes |
+  | 6 | places | `3_place.def` | yes |
+  | 7 | routes | `5_route.def` / `6_final.def` | yes |
+  | 8 | signs off clean (DRC ∧ LVS) | `result.json` verdicts | yes |
+  | 9 | graph built + verified | `dataset/*.pt` + manifest `status` | not for the pilot corpus |
+
+  Stages 3–8 are computable from the pilot today; the dev-half numbers for 3, 4
+  and 8 are in the taxonomy below. Stage 9 needs the def-graph pass, which the
+  pilot never ran, so the funnel's last step is empty until the re-run's clean
+  designs are built into graphs.
 - Report: count at each of the 9 handoffs; loss-reason taxonomy (unsynthesizable, missing top/SDC, black box, DRC, LVS, timing, graph-join fail, ...); end-to-end yield; CPU-h per admitted sample.
 - Baseline: default ORFS flow, no qualification, no repair → where losses concentrate, what repair recovers.
   **The baseline is now specified and frozen: `experiments/BASELINE_PARAMETERS.md`.**
