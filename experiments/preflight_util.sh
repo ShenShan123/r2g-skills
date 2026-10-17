@@ -46,6 +46,17 @@ for spec in "${SPECS[@]}"; do
     --timeout 21600 --pdn-core-floor-um "$FL" --force \
     > "$D/preflight_${P}.driver.log" 2>&1
   say "--- $P 结束 用时 $(( ($(date +%s)-t0)/60 ))min 产出 $(ls -d $OUT/runs/*/ 2>/dev/null | wc -l)"
+  # Conformance gate. The driver and BASELINE_PARAMETERS.md drifted apart twice
+  # with no error -- the spec hook silently became a no-op (flat table read as
+  # nested, so the config kept CORE_UTILIZATION) and the I/O delay moved from
+  # the frozen 15% to 25%. Both runs produced plausible numbers answering a
+  # different question. Checking what was actually EMITTED is the only way to
+  # catch that before it becomes a result.
+  if ! python3 -I "$D/conformance_check.py" --root "_preflight/$P" --platform "$P" \
+       2>&1 | tee -a "$LOG" | tail -1 | grep -q "一致"; then
+    say "!! $P 产出的 config/SDC 与冻结文档不一致 -- 停止，不要据此下结论"
+    exit 1
+  fi
   rm -rf "${OUT}_s" 2>/dev/null
 done
 say "=== 预检跑完，开始量实际利用率"
