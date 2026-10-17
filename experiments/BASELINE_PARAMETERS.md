@@ -325,6 +325,40 @@ denominator as a stronger frontend until those 34 are classified.
 | antenna LEF model | **r2g patch IN the baseline** — see below | n/a | n/a |
 | PDN / tapcell | ORFS defaults | **r2g overrides IN the baseline** — see below | ORFS defaults |
 
+### One slow rule must not destroy the verdict on all the others
+
+Both platforms whose checkers lose verdicts lose them the same way, and the fix
+is the same shape on both: **run the deck in parts, each with its own budget and
+its own recorded outcome.**
+
+- **gf180** — a single monolithic pass over the assembled deck timed out on 86
+  dev designs. The PDK's own `run_drc.py` executes 58 rule tables separately and
+  graded C03506 (18 290 cells) in 3891 s where the monolithic pass produced
+  nothing. Its verdicts match the assembled deck where both finish (1 = 1 on
+  C00277, 2 = 2 on C03746).
+- **nangate45** — 67 dev designs have no DRC verdict, and **all 67 stall at the
+  same place**: `FreePDK45.lydrc:376`, inside the ANTENNA block. That block is
+  the deck's LAST section, so roughly 370 other rules had already run and their
+  result was discarded, because klayout writes its report only at the end. The
+  designs that stall have a median of 89 111 cells against 350 for the designs
+  that grade, and the smallest is 39 782 — it is a scale limit in one check, not
+  a property of those designs. The deck already exposes four switches (`FEOL`,
+  `BEOL`, `OFFGRID`, `ANTENNA`), so the split needs no deck surgery.
+
+The same holds for LVS: 88 dev designs on nangate45 have no LVS verdict, median
+61 821 cells against 533 for those that do.
+
+**A recovered design is not clean.** Splitting turns "no verdict at all" into "a
+verdict on every group that finished, and an explicit unknown on the one that
+did not" — so a design passing FEOL, BEOL and OFFGRID with ANTENNA unfinished is
+`clean_except_antenna`, a third value, never folded into `clean`. Unknown is not
+a pass; that is the same rule that makes a timeout a failure, applied one level
+down.
+
+There is an irony worth recording with it: nangate45 can check antennas at all
+only because r2g supplied the missing LEF antenna data (contribution A2), and
+that same check is what costs 67 designs their verdict.
+
 ### Why two r2g changes sit inside the baseline
 
 Both are cases of **official data that is internally inconsistent**, where

@@ -33,6 +33,16 @@ for spec in "${SPECS[@]}"; do
   SEL=$D/_preflight_${P}.select
   OUT=$D/_preflight/${P}
   [ -s "$SEL" ] || { say "$P 缺选题，跳过"; continue; }
+  # Skip a platform whose designs are already built AND already conformant.
+  # Re-running them would spend the machine to reproduce a result that is
+  # already checked -- but ONLY when the check passes: an unchecked or
+  # non-conformant directory is rebuilt, never trusted.
+  if [ "$(ls -d $OUT/runs/*/ 2>/dev/null | wc -l)" = "$(wc -l < $SEL)" ] \
+     && python3 -I "$D/conformance_check.py" --root "_preflight/$P" \
+            --platform "$P" >> "$LOG" 2>&1; then
+    say "--- $P 已有完整且一致的产出，跳过重跑"
+    continue
+  fi
   rm -rf "$OUT" "${OUT}_s"; mkdir -p "$OUT"
   say "--- $P 起 ($(wc -l < $SEL) 份)"
   t0=$(date +%s)
@@ -52,11 +62,20 @@ for spec in "${SPECS[@]}"; do
   # the frozen 15% to 25%. Both runs produced plausible numbers answering a
   # different question. Checking what was actually EMITTED is the only way to
   # catch that before it becomes a result.
-  if ! python3 -I "$D/conformance_check.py" --root "_preflight/$P" --platform "$P" \
-       2>&1 | tee -a "$LOG" | tail -1 | grep -q "一致"; then
-    say "!! $P 产出的 config/SDC 与冻结文档不一致 -- 停止，不要据此下结论"
+  # Use the EXIT CODE, not a text match on the output. The first version of
+  # this gate grepped `tail -1` for a success word and fired on a conformant
+  # run, because the success line is second-to-last -- and a text match would
+  # equally have passed a failing run if the wording changed. The checker
+  # already returns 0 conformant / 1 mismatch / 2 nothing-to-check; a gate
+  # should read the signal the tool was built to give.
+  python3 -I "$D/conformance_check.py" --root "_preflight/$P" --platform "$P" \
+      >> "$LOG" 2>&1
+  _rc=$?
+  if [ "$_rc" != 0 ]; then
+    say "!! $P 产出的 config/SDC 与冻结文档不一致 (rc=$_rc) -- 停止，不要据此下结论"
     exit 1
   fi
+  say "    $P 一致性检查通过"
   rm -rf "${OUT}_s" 2>/dev/null
 done
 say "=== 预检跑完，开始量实际利用率"
