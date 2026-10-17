@@ -69,29 +69,31 @@ separate decision and is not part of this change.
 ```
 config.mk constraint.sdc flow.log
 6_final.def 6_final.spef 6_final.sdc 6_final.v 6_final.gds
-1_synth.v 1_2_yosys.v
-5_route.odb 6_final.odb 2_floorplan.odb 3_place.odb 4_cts.odb
+1_synth.v
+5_route.odb 6_final.odb
 6_final.cdl 6_final_concat.cdl 6_lvs.lvsdb 6_cdl.log 6_lvs.log
 ```
 
-- **`1_2_yosys.v`, not just `1_synth.v`** — the four-stage dataset takes its
-  canonical topology from `1_2_yosys.v` (so a resizer-deleted gate stays a node
-  with `placement_valid=0`), and rtl-acquire's `netlist_graph.pt` is built from
-  it. Two downstream products; `1_synth.v` substitutes for neither.
-- **`2_floorplan.odb` / `3_place.odb` / `4_cts.odb`** — the per-stage views E3
-  needs. ORFS writes no per-stage `.def`, so they cannot be recovered later from
-  anything else.
-- **ODB rather than a DEF generated now** — decided against my first instinct by
-  measurement. `write_def` on a 197 MB `3_place.odb` takes **20.9 s and produces
-  a 311.7 MB DEF**: eager conversion costs MORE disk (7.0 TB against 4.5 TB over
-  7491 designs) *and* 11 h of campaign time. The one real argument for
-  converting -- an ODB is a version-bound OpenROAD database while a DEF is
-  tool-independent text -- is answered more cheaply by provenance, since
-  `rerun_preflight_gates.py` records the container image id and the conversion
-  can be re-run in the image that wrote the database.
-- **NOT kept**: the ~10 other per-stage ODBs (`1_synth`, `2_1`..`2_4`, `3_1`..`3_5`,
-  `4_1`, `5_1`). One design's `results` directory is 2.6 GB; keeping all of it
-  would cost 19.5 TB against 36 TB free, and nothing downstream reads them.
+Everything here serves SIGNOFF, which is what this corpus is for. The graph
+experiments run on their own corpus, so nothing is kept for them.
 
-Total standing cost of the three added ODBs: about 4.5 TB over the three
-platforms, on a volume with 36 TB free.
+- **`6_final.cdl`, `6_final_concat.cdl`, `6_lvs.lvsdb`, `6_cdl.log`, `6_lvs.log`**
+  — LVS's input chain and its per-device result, which were being deleted with
+  the signoff project directory. See above.
+- **NOT kept, on purpose**: the per-stage ODBs (`2_floorplan`, `3_place`,
+  `4_cts`) and `1_2_yosys.v`. Those serve def-graph's four-stage dataset and
+  rtl-acquire's `netlist_graph.pt`, and **the graph experiments run on their own
+  corpus** — this one never feeds them, so keeping them cost 4.5 TB for nothing.
+  They were added and then removed; `patch_drop_graph_files.py` is that removal,
+  and the driver carries a comment saying why they are absent so the next person
+  does not rediscover it.
+
+  Two facts recorded with that removal, in case it is ever reversed: ORFS writes
+  no per-stage `.def` at all, so these cannot be recovered later from anything
+  that survives; and converting an ODB eagerly is the WRONG trade -- `write_def`
+  on a 197 MB `3_place.odb` takes 20.9 s and yields a **311.7 MB** DEF, larger
+  than its source, so it costs more disk AND more time than keeping the ODB. The
+  version-binding concern that motivated converting is answered by the launch
+  gate recording the container image id.
+- **Also not kept**: the ~10 remaining per-stage ODBs. One design's `results`
+  directory is 2.6 GB; keeping all of it would cost 19.5 TB against 36 TB free.
