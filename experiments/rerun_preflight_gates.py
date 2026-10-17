@@ -21,6 +21,7 @@ the preflight's conformance gate -- which had grepped the output's prose instead
 of reading its exit code. Redirect to a file if the output needs keeping:
 
     python3 -I rerun_preflight_gates.py > gates.out 2>&1; echo $?
+"""
 
 import glob
 import hashlib
