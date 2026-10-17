@@ -151,7 +151,27 @@ pass condition once the rate is known.
 | | value | evidence |
 | --- | --- | --- |
 | pilot | 20% | achieved utilization came back **19.x% on every design above 100 cells** — the flow was handed the answer and never pushed. A die 5x the cell area never congests. |
-| frozen | **50%** | OpenLane's own default for sky130 (`FP_CORE_UTIL=50`, `PL_TARGET_DENSITY=0.5`), bracketed by measurement: u40 completes 57 of 58 (~2% pressure, too loose to be a constraint) and u50 is being measured per platform. |
+| frozen | **50%** | OpenLane's own default for sky130 (`FP_CORE_UTIL=50`, `PL_TARGET_DENSITY=0.5`), bracketed by measurement: u40 completes 60 of 61 and **u50 completes 58 of 61** on nangate45 — no cliff, ~3% pressure. gf180 and sky130hd measuring. |
+
+**nangate45 sweep, 61 designs, period held at the pilot's 2 ns so only area moves:**
+
+| post-synth cells | designs | at 40% | at 50% |
+| --- | --- | --- | --- |
+| 0–100 | 15 | 15/15 | 14/15 |
+| 100–1 000 | 15 | 15/15 | 15/15 |
+| 1 000–5 000 | 15 | 14/15 | 14/15 |
+| 5 000–20 000 | 10 | 10/10 | 10/10 |
+| >20 000 | 6 | 6/6 | 5/6 |
+
+The three u50 failures are real, not contention: one `2_1_floorplan_error` and
+two `place_failed`. ~3% area pressure on top of the period's ~5% is the intended
+total — enough that the constraint is not a formality, little enough that it does
+not manufacture a batch of congestion failures r2g cannot repair.
+
+(The sweep varies utilization at run time and lets the driver derive the die from
+the ACTUAL synthesis area, so it measures whether 50% is ROUTABLE on the
+platform. It cannot catch a mis-sized frozen die — that is the preflight's job,
+and it is what found the area allowance.)
 
 Flat, not per-size-class: the PDN floor already protects tiny designs and 50% is
 not tight for large ones, so a table would be one more thing to maintain for no
