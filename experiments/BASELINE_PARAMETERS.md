@@ -395,6 +395,25 @@ its own recorded outcome.**
   (CO.6a is 3920 of its 4113), which is why it is worth the wall time there and
   marginal here.
 
+  **Status: the nangate45 split is NOT validated, and is not being validated.**
+  A split is only a decomposition if the groups' verdicts are unchanged by
+  running them apart, and there is reason to doubt it here: with `ANTENNA=false`
+  klayout attributes FEOL's first operation to `FreePDK45.lydrc:91` (inside the
+  `classify_by_width` helper) where the full-deck run attributes it to line 114
+  and never reports line 91 at all. The decks are byte-identical but for that
+  one switch, so the execution path really does differ — klayout's deep mode is
+  lazy, and the antenna block's `connect()` statements materialize layers the
+  rest of the deck then reuses.
+  Two attempts to settle it failed on measurement design, not on the tool: the
+  first picked the smallest design with any violations and they were all
+  antenna, making the comparison 0 against 0 — which this project already
+  records as no evidence; the second gave the DRC a 1800 s budget on a design
+  the corpus had needed longer for, and it returned `drc_failed`.
+  It is not worth a third attempt: only **2 of 1044** dev designs carry a
+  non-antenna violation, one each, so even a clean run would be a two-sample
+  test of something already measured to be marginal. If nangate45's 67 designs
+  ever need their verdicts, this has to be settled first.
+
 The same holds for LVS: 88 dev designs on nangate45 have no LVS verdict, median
 61 821 cells against 533 for those that do.
 
