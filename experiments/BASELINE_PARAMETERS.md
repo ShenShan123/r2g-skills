@@ -353,6 +353,32 @@ Two consequences:
   would have to change is the checker, not the design, so r2g's repair arm
   cannot win them back and must not be credited with them.
 
+  **"Both checkers fail on large designs" was an over-generalisation.** Checked
+  properly, the two sets overlap but are not one problem:
+
+  | | designs | cause | explained by size? |
+  | --- | --- | --- | --- |
+  | DRC and LVS both | **61** | timeout | yes — median 95 686 cells |
+  | DRC only | 7 | ANTENNA stall | yes — median 41 010 |
+  | LVS only | **27** | **11 klayout Ruby exceptions + 16 produced no log** | **no** — median 7 657 |
+
+  Two explanations for those 27 were checked and rejected: the netlist is NOT
+  missing (their artifact set is identical to a design whose LVS passes), and
+  `cell count: 0` is NOT the discriminator (it appears on 1084 designs of which
+  992 are clean — the count read always fails and the timeout always falls back
+  to 5400 s). The `make: No rule to make target` line appears in CLEAN designs'
+  logs too: it is the designed frozen-layout fallback, which the log annotates
+  itself, so classifying on it only says the fallback ran.
+
+  The cause of the 11 is **undetermined** — the backtrace carries addresses but
+  not the Ruby exception message. The wrapper prints "LVS completed" after the
+  crash, which is its own defect: a crashed checker reporting completion is how
+  a tool failure gets read as a verdict.
+
+  None of this changes where the 95 designs sit (checker bucket, not
+  repairable). It changes what fixing them would take: 68 need a checker that
+  scales, 27 need a tool bug found.
+
 ```
 pass = DRC clean  AND  LVS clean
 setup slack: RECORDED, not judged in round 1   (see "Timing is NOT a pass condition")
