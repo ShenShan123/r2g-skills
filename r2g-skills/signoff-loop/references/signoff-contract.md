@@ -266,8 +266,39 @@ exactly **two** differ.
 | DRC entry point | the PDK's own `run_drc.py` + 58 `rule_decks/`, variant **C** (metal_top 9K / mim_option B / metal_level 5LM), default `run_mode=flat`, per table with `--mp` | official |
 | `--split_deep` | **OFF — measured lossy.** It runs CO.6/6a/6b in deep mode and reported **0** CO.6a where the official flat default reported **35** on the same design | official |
 | LVS | netgen with the PDK's own `gf180mcuC_setup.tcl` (2024-03, original), driven by r2g's `run_netgen_lvs.sh` | apparatus (rules official) |
-| `--antenna` | **NOT YET DECIDED** — the official default is OFF | — |
-| `R2G_PDN_CFG`, `R2G_TAPCELL_TCL` | **NOT YET DECIDED** — platform strategy overrides present in all 2497 pilot configs | — |
+| `--antenna` | **ON** (the official default is OFF) | official check, non-default switch |
+| `R2G_PDN_CFG`, `R2G_TAPCELL_TCL` | **apparatus**, declared below | apparatus |
+
+**Why `--antenna` is turned on despite the official default being off.** Three
+reasons, in order of weight. An antenna violation is plasma-etch charge damaging
+gate oxide — a real yield and reliability failure, not a cosmetic one.
+nangate45's official deck has `ANTENNA = true` by default, so leaving it off
+here would mean the three platforms measure different things and their numbers
+could not sit in one table. And r2g owns an antenna repair recipe
+(`deck_driven_antenna_diode`) whose value simply cannot be measured on a
+platform that does not check antennas. The cost is runtime — antenna checking
+needs full-layer connectivity extraction, which is why the PDK leaves it opt-in
+— and the official per-table runner absorbs that.
+
+**Why the PDN and tapcell overrides are apparatus rather than repair.** They are
+platform CONFIGURATION applied uniformly to every design, not a response to any
+design's own failure: `gf180_pdnfix/a.cfg` drops `-split_cuts {Metal3 0.128}`
+because the stock strategy merges via arrays into 0.772 x 1.028 rectangles that
+violate V2.1/V3.1, and `d30.tcl` takes tapcell `-distance` from 100 to 30
+because DF.13/14_MV cap the distance to the nearest tap at 15 um for 5 V
+devices. Both are the platform being configured correctly, the same way for
+everyone, which is the apparatus test.
+
+The alternative was measured and rejected on its consequences: the stock PDN
+produced 824 violations on a single design against 0 with the override, so a
+stock-PDN gf180 baseline would be near-zero dual-clean, and every later repair
+would be compared against zero — a baseline that cannot distinguish a good
+repair from a bad one is not worth the days of machine time it costs.
+
+**The honest consequence, which must travel with every gf180 number: this
+baseline is NOT "stock ORFS gf180".** Its PDN strategy and tapcell distance are
+corrected. A reader comparing against an unmodified ORFS gf180 flow is comparing
+against something else.
 
 An assembled 7884-line monolithic deck was used for the pilot. Its judgment is
 sound — on C00006 it reported exactly the same 35 CO.6a as the official runner's
@@ -304,16 +335,29 @@ cells / 75 µm²** against 840 cells / 6600 µm² for the rest — and a design 
 small physically cannot be made narrower than the power grid allows, so the
 "wasted" die is a property of the PDK, not a flaw in the fix.
 
-**Open decision.** Under the die-size rule above the PDN minimum is already a
-hard lower bound, so these designs would never fail and r2g would earn nothing
-for them. Either reading is defensible and the choice must be explicit:
+**Decision: the floor is BASELINE POLICY, not repair.** It is already the lower
+bound in the die-size rule above (`max(cell_area / utilization, PDN minimum)`),
+so under this contract these designs never fail in the first place and there is
+nothing for a repair to rescue.
 
-- **floor as baseline policy** — the failure is an artifact of handing every
-  design one utilization, which no careful input spec would do; r2g is then
-  measured on the harder remaining problems.
-- **floor as repair** — r2g demonstrably automates it, and gets credit.
+The reasoning, since the opposite reading is defensible and was held earlier in
+this file's history: the failure is an artifact of handing every design one
+utilization, which no careful input specification would do — a competent
+engineer sizing a 9-cell design does not pick 20% and then discover the power
+grid will not fit. Crediting r2g for fixing it would dilute its measured
+capability with a trivial win, and the designs are tiny (sky130hd's rescued
+median is 10 cells / 75 um^2 against 840 cells / 6600 um^2 for the rest).
 
-Reporting both, separately labelled, loses nothing.
+**What must still be reported, so the information is not lost:** 1137 of the
+pilot's 5181 dual-clean designs reached that state only through the fallback
+(nangate45 492, gf180 367, sky130hd 278). Under this contract they are ordinary
+in-policy completions. Any comparison against a baseline WITHOUT a die floor —
+including the pilot as originally recorded — must say so.
+
+The improvement target stands either way: r2g's own recipe hard-codes
+`_PDN_DIE_FLOOR_UM = 200` (validated on one design, cordic) where the measured
+minimum is 32 um on sky130hd — a 39x area difference for the same rescue.
+Deriving the floor from the width PDN-0185 actually reports would fix that.
 
 Note for whichever is chosen: r2g's recipe hard-codes `_PDN_DIE_FLOOR_UM = 200`
 (validated on one design, cordic) while the measured minimum is 32 µm on
@@ -323,8 +367,13 @@ improvement target.
 
 ## Open items before this draft can be frozen
 
-1. `target_utilization(size class)` — requires the utilization sweep (running).
-2. ~~Clock uncertainty and I/O delay~~ — **settled: 5% and 25%, validated above.**
-3. gf180 `--antenna` on or off.
-4. gf180 `R2G_PDN_CFG` / `R2G_TAPCELL_TCL` — apparatus or repair.
-5. PDN core floor — baseline policy or repair.
+1. **`target_utilization(size class)` — the only one left.** The utilization
+   sweep is running: 61 designs per platform at 40/50/60/70/80%, taking the
+   highest utilization at which >=80% of a size class still completes.
+
+Settled since the first draft:
+- ~~Clock uncertainty and I/O delay~~ — 5% and 25%, validated end to end.
+- ~~Period spec~~ — formula with both ends clamped to the measured range.
+- ~~gf180 `--antenna`~~ — ON.
+- ~~gf180 PDN / tapcell~~ — apparatus, declared, with the consequence stated.
+- ~~PDN core floor~~ — baseline policy, with the 1137 affected designs reported.
