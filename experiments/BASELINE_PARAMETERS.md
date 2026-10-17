@@ -219,6 +219,44 @@ binding constraint, and PDN-floor-limited below that". Any claim about
 utilization pressure applies to that subset, and the floored designs face no
 area pressure at all.
 
+### The die carries a measured area allowance, because the pilot's area is not the final area
+
+The die is sized from the pilot's recorded cell area, and that number is
+**smaller than what the frozen spec actually builds**. The pilot ran one flat
+period per platform (2 / 10 / 5 ns); the frozen spec gives each size class its
+own, so wherever the period tightened, the resizer inserts timing-repair buffers
+and the final cell area exceeds the pilot's.
+
+Measured on the 30-design preflight, counting only designs where utilization
+binds (a PDN-floored design's ratio says nothing — its die came from the floor):
+
+| platform | final / pilot cell area | buffer share of final area | achieved utilization before the fix |
+| --- | --- | --- | --- |
+| nangate45 | **1.031** (1.01–1.11) | 3.9% | median 50.1%, 1 of 10 over target+5 |
+| gf180 | **1.184** (1.00–1.42) | 12.6% | **median 60.0%, 6 of 10 over target+5** |
+| sky130hd | **1.092** (1.07–1.36) | 2.8% | — |
+
+The extra area IS the buffers where the period tightened: on gf180's C03211 they
+are 39% of the final cell area, 27% on C00496, 24% on C03488. The allowance is
+really two terms — about 1.07 for cells the synthesis area never counted (tap,
+endcap, clock buffers) plus a period-dependent buffer term — which is why
+nangate45, a fast process given comfortable periods, needs 1.03 while gf180 at
+180 nm, with periods up to 4.5x tighter than its pilot's flat 10 ns, needs 1.18.
+
+Why it must be corrected rather than noted: a frozen die turns a 10-point
+overshoot into congestion, and congestion is the one symptom r2g cannot repair
+once the die is fixed, because its only lever lowers utilization. The same test
+every other parameter here was set by.
+
+`derive_area_allowance.py` computes it from the preflight and writes
+`spec/area_allowance.json`, which `make_spec_table.py` reads — so the number is
+measured, not hand-picked, and re-running the preflight updates it. The defaults
+compiled into the script are the same values, for a checkout without that file.
+
+**Sample size is thin: 5, 7 and 5 binding designs.** The allowance is a
+first-order correction, not a calibration, and the preflight should be widened
+before anyone treats these three numbers as precise.
+
 ### Die — explicit, computed once, frozen for both arms
 
 ```

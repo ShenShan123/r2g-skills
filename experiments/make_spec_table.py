@@ -59,9 +59,43 @@ def period_for(platform: str, cells: int) -> float:
     raise AssertionError("unreachable: last bin has upper=None")
 
 
+# Per-platform area allowance, MEASURED by derive_area_allowance.py from the
+# utilization preflight, never hand-picked. The die is sized from the PILOT's
+# recorded cell area, but the pilot ran one flat period per platform while the
+# frozen spec gives each size class its own -- and a tighter period makes the
+# resizer insert timing-repair buffers, so the final layout's cell area exceeds
+# the pilot's. Measured: on gf180's C03211 those buffers are 39% of the final
+# cell area, 27% on C00496, 24% on C03488. Without the allowance the achieved
+# utilization overshot the frozen 50% target by ten points on gf180 (median
+# 60.0%, six of ten designs above target+5%), and a FROZEN die turns that
+# overshoot into congestion -- the one symptom r2g cannot repair once the die is
+# fixed, since its only lever lowers utilization. Cost without signal.
+#
+# The allowance is really two terms: about 1.07 for cells the synthesis area
+# never counted (tap, endcap, clock buffers) plus a period-dependent buffer
+# term. That is why nangate45 (fast process, comfortable periods) needs 1.03
+# while gf180 (180 nm, periods tightened up to 4.5x from the pilot's flat 10 ns)
+# needs 1.18.
+AREA_ALLOWANCE_DEFAULT = {"nangate45": 1.031, "gf180": 1.184, "sky130hd": 1.092}
+ALLOWANCE_FILE = Path("/proj/workarea/yangao/spec/area_allowance.json")
+
+
+def area_allowance(platform: str) -> float:
+    """The measured allowance, read from disk so the number is never copied."""
+    if ALLOWANCE_FILE.is_file():
+        try:
+            v = json.loads(ALLOWANCE_FILE.read_text()).get(platform)
+            if isinstance(v, (int, float)) and 1.0 <= v <= 2.0:
+                return float(v)
+        except Exception:                                        # noqa: BLE001
+            pass
+    return AREA_ALLOWANCE_DEFAULT.get(platform, 1.0)
+
+
 def die_for(platform: str, cell_area_um2: float) -> tuple[float, float]:
     """(die_side, core_side) in um, floored at the platform's PDN minimum."""
-    derived = math.sqrt(cell_area_um2 / UTILIZATION) if cell_area_um2 > 0 else 0.0
+    eff = cell_area_um2 * area_allowance(platform)
+    derived = math.sqrt(eff / UTILIZATION) if eff > 0 else 0.0
     core = max(derived, PDN_FLOOR_UM[platform])
     core = math.ceil(core)
     return core + 2 * CORE_INSET_UM, core
