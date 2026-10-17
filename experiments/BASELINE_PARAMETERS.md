@@ -311,9 +311,29 @@ every other parameter here was set by.
 measured, not hand-picked, and re-running the preflight updates it. The defaults
 compiled into the script are the same values, for a checkout without that file.
 
-**Sample size is thin: 5, 7 and 5 binding designs.** The allowance is a
-first-order correction, not a calibration, and the preflight should be widened
-before anyone treats these three numbers as precise.
+**Sample size for the derivation was thin: 5, 7 and 5 binding designs.** A wider
+preflight (30 per platform) was run against the corrected table to check the
+correction actually lands.
+
+**nangate45, confirmed.** 30 designs, conformance green (so the run used the
+allowance-corrected table), 29 measured, 1 flow failure (3.3%, matching the u50
+sweep's rate). Of the 29, **14 are PDN-floored** — their die comes from the
+floor, so their achieved utilization (1.3–40%) says nothing about the target and
+drags the overall median to 48.5%. The 15 designs where utilization BINDS land
+at:
+
+```
+48.5  48.9  48.9  49.0  49.0  49.1  49.3  49.7  50.8  51.1  52.0  52.5  52.7  53.1  54.1
+```
+
+centred near 50–51% against a 50% target, with the **maximum down from 57.4% to
+54.1%** — which is what the allowance is for: pulling in the overshooting tail
+rather than shifting the whole distribution. No change needed on this platform.
+
+(Report the binding subset, not the overall median. Mixing in the floored
+designs produces a median that is neither the target nor a measurement of
+anything — it lands wherever the floored/binding split happens to put the
+midpoint.)
 
 ### Die — explicit, computed once, frozen for both arms
 
