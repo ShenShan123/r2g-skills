@@ -49,6 +49,29 @@ either LEF changes, and the GDS library is untouched.
 **Without it all 369 antenna-dirty nangate45 designs are permanently
 unfixable.**
 
+**Measured 2026-10-17 — this one check is 99.9% of what nangate45's DRC
+finds.** Across the 1044 dev designs holding a nangate45 DRC report: 858 have no
+violation, 184 have *only* antenna violations, and **2 have a non-antenna
+violation, one each**. 3526 of 3528 violations are antenna.
+
+So the stock platform's DRC is not merely missing a rule — with no antenna data
+it is close to vacuous on this corpus: 1042 of 1044 designs would pass a deck
+that found two violations in total. The patch is what gives nangate45 a DRC with
+content.
+
+Two consequences, and the second is a cost:
+
+- **The nangate45 baseline sits 184 designs BELOW where the stock platform would
+  put it.** The patch is declared apparatus — both arms get it, so it earns no
+  repair credit — and it makes the baseline harder, not easier. Recording it
+  here because the opposite is the natural assumption about a contribution.
+- **It is also what blocks 67 dev designs from any DRC verdict at all**: every
+  one of them stalls inside the ANTENNA block (`FreePDK45.lydrc:376`), after the
+  other ~370 rules have run. Splitting the deck recovers those rules' verdict,
+  but on this platform that verdict is almost content-free for the same reason
+  the patch matters — the other rules find nothing. See BASELINE_PARAMETERS.md,
+  "One slow rule must not destroy the verdict on all the others".
+
 ### A3. ORFS does nothing on PDN-0185; r2g recovers it
 
 `pdngen` needs a core wider than one strap set (sky130hd: 13.57 µm offset +

@@ -383,6 +383,18 @@ its own recorded outcome.**
   a property of those designs. The deck already exposes four switches (`FEOL`,
   `BEOL`, `OFFGRID`, `ANTENNA`), so the split needs no deck surgery.
 
+  **But splitting buys much less here than the same move buys on gf180, and the
+  measurement says so.** Across the 1044 dev designs with a nangate45 report:
+  858 hold no violation, 184 hold *only* antenna violations, and **2 hold a
+  non-antenna violation — one each**. Of 3528 violations in total, 3526 are
+  antenna: **99.9%**. So the ~370 rules that would be recovered by splitting are
+  the rules that find nothing on this platform, and the check that did not
+  finish is the only one that finds anything. The recovered verdict is real but
+  nearly uninformative — "clean on every check that was never going to fire".
+  On gf180 the same split recovers a verdict that can and does say `violations`
+  (CO.6a is 3920 of its 4113), which is why it is worth the wall time there and
+  marginal here.
+
 The same holds for LVS: 88 dev designs on nangate45 have no LVS verdict, median
 61 821 cells against 533 for those that do.
 
@@ -393,9 +405,50 @@ did not" — so a design passing FEOL, BEOL and OFFGRID with ANTENNA unfinished 
 a pass; that is the same rule that makes a timeout a failure, applied one level
 down.
 
-There is an irony worth recording with it: nangate45 can check antennas at all
-only because r2g supplied the missing LEF antenna data (contribution A2), and
-that same check is what costs 67 designs their verdict.
+There is an irony worth recording with it, and it now has a number: nangate45
+can check antennas at all only because r2g supplied the missing LEF antenna data
+(contribution A2) — and that one check accounts for **99.9% of everything the
+platform's DRC finds**, while also being what costs 67 designs their verdict.
+
+Without the patch, 184 of the 1044 dev designs that currently read
+`drc_status=violations` would read clean, and nangate45's DRC would be
+essentially vacuous: 1042 of 1044 designs passing a deck that found two
+violations in total. The patch is declared APPARATUS — both arms get it, so it
+earns no repair credit — but it does mean **the nangate45 baseline sits 184
+designs below where the stock platform would put it**, because the stock
+platform cannot see what it is checking for. That is the case the frozen
+contract describes as "point out where the official data is internally
+inconsistent, and still run the baseline with the apparatus in it".
+
+### What the gf180 checker comparison does and does not establish
+
+The assembled deck is r2g-supplied and the PDK's `run_drc.py` is official, so
+using the fast one where it finishes and the official one where it cannot needs
+the two to agree. "Both said clean" is not that evidence, and
+`EXPERIMENT_RUNBOOK_zh.md` records why — three LVS configurations once agreed
+and all three were failing; what agreed was the failure.
+
+The evidence has two halves and only works as a pair:
+
+- **Positive control** — on three designs the assembled deck graded dirty, the
+  official runner reports the same RULE NAMES with the same per-rule counts: 1
+  on C00277, 2 on C03746, and 10 on C03506 (18 290 cells, which the monolithic
+  pass could not grade at all). Rule names, not counts: two different
+  violations both count 1. This is what shows the official runner is actually
+  looking.
+- **Negative test** — on designs the assembled deck called clean, the official
+  runner finds nothing. Sixteen so far of twenty, weighted toward the large end
+  where a deck is likeliest to miss something.
+
+Given the control, the negative test is evidence that the deck did not miss
+anything **on those designs**. It is not evidence that it never misses: twenty
+designs is a sample, and the claim stops there.
+
+One provenance trap found while assembling this. `6_drc.lyrdb` in a run
+directory is not necessarily the verdict `result.json` describes — on C03506 the
+report is a day newer than the timed-out attempt recorded beside it. It judges
+the SAME unmodified GDS, so the comparison holds, but the check that it does
+has to be made rather than assumed.
 
 ### Why two r2g changes sit inside the baseline
 
