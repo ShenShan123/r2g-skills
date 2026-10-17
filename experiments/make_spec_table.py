@@ -21,6 +21,7 @@ cost), which is how a tape-out behaves.
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import glob
 import json
 import math
@@ -113,11 +114,30 @@ def main(argv=None) -> int:
             print(f"{plat}: 缺 {pilot}，跳过")
             continue
         spec, skipped = build(plat, pilot)
-        p = out / f"spec_{plat}.json"
-        p.write_text(json.dumps(spec, indent=1, sort_keys=True) + "\n")
         floored = sum(1 for v in spec.values() if v["pdn_floored"])
         periods = sorted({v["period_ns"] for v in spec.values()})
-        print(f"{plat}: {len(spec)} 份 -> {p}")
+        # Provenance, so a consumer can refuse a table that no longer describes
+        # the frozen spec. The re-run chain's preflight compares `utilization`
+        # against the value it is about to run with and will not start on a
+        # mismatch -- without this stamp a table built at 40% would silently
+        # hand out 40%-derived dies to a 50% run, and the dies are the whole
+        # point of the table (they are explicit, so nothing downstream
+        # recomputes them).
+        spec["_meta"] = {
+            "utilization": UTILIZATION,
+            "core_inset_um": CORE_INSET_UM,
+            "pdn_floor_um": PDN_FLOOR_UM[plat],
+            "platform": plat,
+            "designs": len(spec),
+            "pdn_floored": floored,
+            "skipped_no_pilot_size": len(skipped),
+            "periods": periods,
+            "pilot_root": str(pilot),
+            "generated": _dt.date.today().isoformat(),
+        }
+        p = out / f"spec_{plat}.json"
+        p.write_text(json.dumps(spec, indent=1, sort_keys=True) + "\n")
+        print(f"{plat}: {len(spec) - 1} 份 -> {p}")
         print(f"   周期取值 {periods}   被 PDN 下限兜底 {floored} 份"
               f"   无试跑尺寸(跳过) {len(skipped)} 份")
         if skipped:

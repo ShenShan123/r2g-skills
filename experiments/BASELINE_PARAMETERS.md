@@ -148,6 +148,26 @@ sweep's job is to confirm 50% has no cliff, not to find the ceiling. The
 u60/u70/u80 points were planned and then dropped once the anchor was settled —
 12 points of machine time with no decision attached to them.
 
+**50% does not bind on the whole corpus, and the number must be stated with
+that.** The die is `max(sqrt(cell_area / 0.50), platform PDN minimum)`, so for a
+design small enough that the derived side falls under the PDN floor, the floor
+sets the die and the achieved utilization comes out *below* 50% no matter what
+the spec says. Raising the frozen value from 40% to 50% shrinks every derived
+die by sqrt(0.4/0.5) = 0.894, which pushes more designs under the floor:
+
+| platform | designs | PDN-floored | utilization actually binds on |
+| --- | --- | --- | --- |
+| nangate45 | 2330 | 837 | **1493 (64%)** |
+| gf180 | 2330 | 583 | **1747 (74%)** |
+| sky130hd | 2330 | 426 | **1904 (81%)** |
+
+This is not a defect to fix — a die below the platform's minimum PDN pitch
+cannot be built — but it does mean "a 50% utilization baseline" is shorthand for
+"50% on the two thirds to four fifths of the corpus where the cell area is the
+binding constraint, and PDN-floor-limited below that". Any claim about
+utilization pressure applies to that subset, and the floored designs face no
+area pressure at all.
+
 ### Die — explicit, computed once, frozen for both arms
 
 ```
