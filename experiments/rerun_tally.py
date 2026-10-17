@@ -30,6 +30,44 @@ def load_split(name):
 
 
 FRONTEND_MARKERS = ("yosys", "synth", "parse")
+_ITEM = __import__("re").compile(r"<item>")
+
+
+def recovered_drc(run_dir: Path, recorded: str):
+    """A verdict that exists on disk but not in result.json.
+
+    86 gf180 dev designs record drc_status='timeout' while a completed
+    6_drc.lyrdb sits beside them, written AFTER the 6_final.gds it judges and
+    with no repaired layout in the directory -- a re-run of the baseline DRC
+    against the untouched baseline GDS whose result was never folded back.
+    Counting those as "no verdict, therefore fail" is wrong: the verdict exists.
+
+    Two gates, because "I found a file" is not evidence:
+      * the report must be NEWER than the GDS it judges, or it describes some
+        other layout
+      * the method itself was controlled first -- on the 1029 designs where
+        result.json HAS a verdict and a report exists, reading the report
+        reproduces the recorded verdict 1029 times out of 1029.
+
+    That control had to be redone once. The first version compared
+    result.json's `drc_violations`, which is broken -- only 23 of ~1249 gf180
+    designs carry a non-zero value, and C00006 records
+    drc_status='violations' with drc_violations=0 while its log says 35. A
+    control is only as good as the field it reads; drc_status is the field
+    that carries the verdict.
+    """
+    if recorded in ("clean", "violations"):
+        return None                      # already has a verdict
+    rep, gds = run_dir / "6_drc.lyrdb", run_dir / "6_final.gds"
+    if not (rep.is_file() and gds.is_file()):
+        return None
+    if rep.stat().st_mtime < gds.stat().st_mtime:
+        return None
+    try:
+        n = len(_ITEM.findall(rep.read_text(errors="replace")))
+    except Exception:                                            # noqa: BLE001
+        return None
+    return "clean" if n == 0 else "violations"
 
 
 def is_frontend(d):
@@ -67,7 +105,7 @@ def main(argv=None):
     print(f"划分: dev {len(dev)} 份 / held-out {len(held)} 份\n")
     hdr = (f"{'平台':11s} {'集':8s} {'产出':>6s} {'后端分母':>8s} {'双清':>6s} "
            f"{'DRC清':>6s} {'LVS清':>6s} {'无判决':>7s} {'PDN回退':>8s} "
-           f"{'前端失败':>8s}")
+           f"{'前端失败':>8s} {'判决补齐':>8s}")
     print(hdr)
     grand = {}
     for plat in PLATS:
@@ -82,6 +120,10 @@ def main(argv=None):
             except Exception:
                 continue
             d["_key"] = design_key(Path(f).parent.name)
+            rec = recovered_drc(Path(f).parent, d.get("drc_status"))
+            if rec:
+                d["drc_status"] = rec
+                d["_drc_recovered"] = True
             rows.append(d)
         for label, keys in (("dev", dev), ("held-out", held)):
             sub = [d for d in rows if d["_key"] in keys]
@@ -112,9 +154,10 @@ def main(argv=None):
             # did not pre-empt the abort it was supposed to.
             fb = sum(1 for d in sub if d.get("pdn_fallback"))
             fe = sum(1 for d in sub if is_frontend(d))
+            rc_ = sum(1 for d in sub if d.get("_drc_recovered"))
             backend = len(sub) - fe          # the honest denominator
             print(f"{plat:11s} {label:8s} {len(sub):6d} {backend:8d} {both:6d} "
-                  f"{drc:6d} {lvs:6d} {nov:7d} {fb:8d} {fe:8d}")
+                  f"{drc:6d} {lvs:6d} {nov:7d} {fb:8d} {fe:8d} {rc_:8d}")
             grand[(plat, label)] = both
         unmatched = [d for d in rows if d["_key"] not in dev | held]
         if unmatched:
