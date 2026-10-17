@@ -91,6 +91,41 @@ roughly right for large ones**: nangate45 handed 2.0 ns to designs whose median
 achievable period is 0.22 ns. The fix is fairness across sizes, not more
 pressure.
 
+### Why p95 and not p90 — tightening would make r2g measure WORSE
+
+Asked directly whether p95 leaves too little pressure. It does not, and the
+decisive reason is not that p95 is tight enough:
+
+**Tightening dilutes the measurement in one direction.** A repair result is
+`repaired / total failures`. The failures p90 adds are congestion — more
+timing-repair buffers, denser layout — and congestion is **the one symptom r2g
+cannot repair once the die is frozen**, since its only lever lowers utilization.
+So p90 grows the denominator and not the numerator. That is not a harder exam;
+it is adding unmarked questions to the paper.
+
+**The premise that p95 produces few problems does not hold.** The pilot ran at
+essentially zero parameter pressure — 20% utilization, one loose period per
+platform — and still failed 412 of 1249 dev designs on nangate45 (33%), 495 on
+gf180 (40%), 217 on sky130hd (17%). Failures are not scarce and the parameters
+are not their source; the designs and the tools are. The parameters' job is to
+make "pass" mean something, not to manufacture failures. The repairable pool is
+**706 dev designs** — large enough that nothing needs to be added to it.
+
+**The compounding figure does not apply here.** "Joint pass rate 86% at p95
+against 73% at p90" is 0.95³ versus 0.90³, and it assumes three constraints that
+each gate. Timing does not gate. Those numbers describe a pass rate that does
+not exist, and they must not be used to argue p95 is loose — the same caveat is
+attached to them in the design-intent section above.
+
+How much tighter p90 actually is, measured: 10–17% on the smallest size class
+and **33–37% on 5 000–20 000 cells and above**, i.e. concentrated exactly on the
+designs whose routing is already hardest.
+
+What would change this: a repairable pool too small to measure against. At 706
+it is not. And a demonstration that the flow holds under harsher conditions is a
+DIFFERENT experiment — it does not belong inside the control arm, whose job is
+to give repair a clean comparison.
+
 Values are the pilot's **p95 achievable period** per size class, rounded up —
 pressure settings, not targets to be met (see above):
 
