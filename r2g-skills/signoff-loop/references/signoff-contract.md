@@ -84,22 +84,61 @@ unclamped quantity**: `wns` clamps to 0 whenever timing is met, so
 information. Using `wns` here produced a table whose every entry equalled the
 input period; the error was caught only because that result was implausible.
 
-### Period target — p80 of the pilot's achievable period, by cell count
+### Period target — a formula, not bins
 
-p80 is chosen because it preserves the pilot's own calibration intent (gf180's
-10 ns was picked to clear ~80% of a 24-design study), now applied per size class
-instead of globally. Roughly 20% of each class is expected to miss it; that
+```
+period_target(cells) = clamp( coefficient x cells^0.25 , floor , ceiling )
+```
+
+| platform | coefficient | floor | ceiling |
+| --- | --- | --- | --- |
+| nangate45 | 0.142 | 0.30 ns | 1.95 ns |
+| gf180 | 0.818 | 1.58 ns | 10.30 ns |
+| sky130hd | 0.534 | 1.22 ns | 8.80 ns |
+
+**Why a formula and not the bins it replaces.** Measured on the pilot, the
+spread WITHIN a size class (p20..p80 of 1.4x–3.0x) is larger than the step
+BETWEEN adjacent classes (1.05x–1.64x) — cell count explains only part of a
+critical path, since a 1000-cell serial adder chain and a 1000-cell parallel
+datapath differ sharply. Finer bins are therefore false precision, and bins of
+any width introduce a cliff: at a 1000-cell boundary two designs two cells apart
+would get targets 1.8x apart. A power law fits as well as bins do (max deviation
+1.4–1.6x, i.e. the same as the within-class spread) with no edge to argue about.
+
+The exponent is shared because the pilot fitted 0.243 / 0.240 / 0.262 on the
+three platforms independently — close enough to call 0.25, with only the
+coefficient carrying the technology.
+
+**Why BOTH ends are clamped to the measured range.** The fit was anchored on bin
+midpoints and was never validated at the extremes. Unclamped it asks a 1-cell
+nangate45 design for 0.142 ns while its 0–100 class demonstrably reaches 0.30 —
+twice as fast as its peers — and above ~5k cells it keeps rising while the
+measurement saturates, handing a 50k design 2.12 ns where peers reach 1.96. The
+floor is the smallest measured class's p80; the ceiling is the largest p80
+observed. A target outside the measured range is not the measurement it claims
+to be.
+
+**Why p80 at all.** It preserves the pilot's own calibration intent (gf180's
+10 ns was picked to clear ~80% of a 24-design study), now applied per size
+rather than globally. About 20% of each class is expected to miss it, and that
 20% is the headroom a repair campaign is measured against.
 
-| post-synth cells | nangate45 | gf180 | sky130hd |
-| --- | --- | --- | --- |
-| 0–100 | 0.30 ns | 1.58 ns | 1.22 ns |
-| 100–1 000 | 0.55 ns | 3.39 ns | 2.55 ns |
-| 1 000–10 000 | 1.39 ns | 7.79 ns | 5.23 ns |
-| 10 000–100 000 | 1.91 ns | 9.95 ns | 7.97 ns |
-| >100 000 | 1.80 ns | 10.36 ns | 5.65 ns |
+### Where the per-design value comes from
 
-(sky130hd's >100 000 row rests on 3 designs and is the weakest cell in the table.)
+Computed **offline** into a per-design table from the pilot's cell count, by
+`experiments/spec/make_spec_table.py`. Offline because the formula takes
+post-synthesis cell count as input while synthesis reads the period from the SDC
+(ABC constrains against it) — a circular dependency a two-pass flow would move
+rather than remove. It also matches the rule above: a design's class is pinned at
+baseline synthesis so a repair cannot shrink its own target.
+
+Honest limit: the pilot count was synthesised at the pilot period, and a tighter
+period buffers more, so the count will move (~±20%). Class boundaries are a
+decade apart, so it does not cross them.
+
+A design with **no** pilot cell count (no `synth_stat`; 166 per platform) gets
+**no spec** and keeps the platform default. A design with no spec can neither
+pass nor fail one, and inventing a value would place it in the denominator.
 
 ### Die size — fixed explicitly, never derived at repair time
 
@@ -140,9 +179,22 @@ else. Three consequences, all of which the contract fixes:
 
 | item | pilot | contract | why |
 | --- | --- | --- | --- |
-| clock uncertainty | **0.0** | a realistic fraction of the period | zero assumes a perfect clock and makes setup artificially easy; real signoff budgets jitter + skew |
-| input/output delay | **none** | set on all ports | without it only reg-to-reg paths are constrained, and **27–28% of designs (≈1814) have no constrained path at all** — they report `worst slack max INF` while `wns` reads 0.00, which looks like a pass |
+| clock uncertainty | **0.0** | **5% of the period** | zero assumes a perfect clock and makes setup artificially easy; real signoff budgets jitter + skew |
+| input/output delay | **none** | **25% of the period**, on all ports | without it only reg-to-reg paths are constrained, and **27–28% of designs (≈1814) have no constrained path at all** — they report `worst slack max INF` while `wns` reads 0.00, which looks like a pass |
 | hold | **unchecked** | required (condition 4) | see above |
+
+**Validated end to end on a design the old SDC let through.**
+`C01203__array_multiplier__ignitertl` (200 cells, combinational, no reg-to-reg
+path) recorded `timing_path_constrained=False, worst_slack=None, wns=0.00` in the
+pilot — indistinguishable from a pass. Under the contract's SDC it reports
+`timing_path_constrained=True, worst_slack=-1.5` against its assigned 0.534 ns:
+it needs ~2.03 ns, so it genuinely cannot reach its size class's target and is
+now a measurable failure. The flow echoes
+`R2G_SDC period=0.534 uncertainty=0.0267 io=0.1335`, confirming the derived
+values reach the tool. Note the mechanism: this design has no clock port and
+gets a virtual clock, and **a virtual clock still constrains input-to-output
+paths once I/O delays exist** — which is why the previously-vacuous class comes
+into scope.
 
 Clock identification stays as the pilot's heuristic and is part of the contract:
 a 29-name candidate port list, a `(^|_)(clk|clock)([0-9_]*$|_)` regex fallback
@@ -271,8 +323,8 @@ improvement target.
 
 ## Open items before this draft can be frozen
 
-1. `target_utilization(size class)` — requires the utilization sweep.
-2. Clock uncertainty and I/O delay — pick the fractions of period.
+1. `target_utilization(size class)` — requires the utilization sweep (running).
+2. ~~Clock uncertainty and I/O delay~~ — **settled: 5% and 25%, validated above.**
 3. gf180 `--antenna` on or off.
 4. gf180 `R2G_PDN_CFG` / `R2G_TAPCELL_TCL` — apparatus or repair.
 5. PDN core floor — baseline policy or repair.
