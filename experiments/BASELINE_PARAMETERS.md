@@ -157,7 +157,34 @@ nominal period, so it is a legitimate and traceable source; using it also avoids
 the circularity of needing the cell count before synthesis in order to set the
 period synthesis reads.
 
-### Clock uncertainty — 5% of the period
+### Clock uncertainty — 5% of the period for SETUP, a fixed 20 ps for HOLD
+
+```tcl
+set_clock_uncertainty -setup [expr {$_per * 0.05}] [get_clocks *]
+set_clock_uncertainty -hold  0.020                 [get_clocks *]
+```
+
+**`-setup` is load-bearing and its absence aborted designs.** Written without
+the flag, SDC applies the value to HOLD as well — and a hold margin scaled to
+the PERIOD is meaningless, because hold reflects clock skew alone and does not
+grow when the clock slows down. On gf180's 16 ns designs the missing flag
+demanded **0.8 ns of hold margin**, against the tens of picoseconds real skew
+amounts to. The resizer answered by inserting **1955 hold buffers (+30% cells)**
+and then aborting CTS at `[ERROR RSZ-0060] Max buffer count reached`.
+
+Found 13 designs into the campaign: `C00023__qoi_compress` passed in the pilot
+and failed here. Re-run with the flag, the same design passes at `final` with
+8909 cells. ORFS's own 1877 shipped designs and the pilot all use
+`set_clock_uncertainty 0.0`, i.e. nobody puts a fraction of the period on hold.
+
+Hold gets a fixed 20 ps instead — independent of the period, which is what skew
+is. Nearer real signoff than ORFS's zero, without being absurd.
+
+The conformance check now REQUIRES `-setup` and a separate `-hold 0.020`, and
+was verified to report 60 inconsistencies against the pre-fix artifacts. A check
+that accepts both spellings cannot tell the defect from the fix.
+
+### (historical) Clock uncertainty — 5% of the period
 
 The pilot set `set_clock_uncertainty 0.0`, which assumes a perfect clock. Real
 signoff budgets jitter and skew. 5% is modest: p95 is 25–100% looser than p80,

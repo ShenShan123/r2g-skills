@@ -66,7 +66,12 @@ def check_run(run_dir: Path, spec: dict) -> list:
 
     # 3. uncertainty and I/O must be the frozen fractions
     for label, key, pat in (
-            ("不确定度", "uncertainty_pct", r"set_clock_uncertainty\s+\[expr\s+\{\$_per\s*\*\s*([0-9.]+)\}\]"),
+            # -setup is REQUIRED in the pattern, not optional. Without the flag
+            # the value lands on hold too, which demanded 0.8 ns of hold margin
+            # on gf180's 16 ns designs and aborted CTS at RSZ-0060 after 1955
+            # hold buffers. A check that accepts both spellings cannot tell the
+            # defect from the fix.
+            ("不确定度", "uncertainty_pct", r"set_clock_uncertainty\s+-setup\s+\[expr\s+\{\$_per\s*\*\s*([0-9.]+)\}\]"),
             ("I/O延迟", "io_pct", r"set\s+_io\s+\[expr\s+\{\$_per\s*\*\s*([0-9.]+)\}\]")):
         mm = re.search(pat, t)
         if not mm:
@@ -75,7 +80,14 @@ def check_run(run_dir: Path, spec: dict) -> list:
             bad.append("%s: %s %.1f%% != 冻结的 %.1f%%"
                        % (name[:40], label, float(mm.group(1)) * 100, FROZEN[key]))
 
-    # 4. the clock port must NOT carry an input delay
+    # 4. hold uncertainty must be a FIXED value, not a fraction of the period
+    mh = re.search(r"set_clock_uncertainty\s+-hold\s+([0-9.]+)", t)
+    if not mh:
+        bad.append("%s: SDC 没有单独的 -hold 不确定度" % name[:40])
+    elif abs(float(mh.group(1)) - 0.020) > 1e-9:
+        bad.append("%s: hold 不确定度 %s != 冻结的 0.020" % (name[:40], mh.group(1)))
+
+    # 5. the clock port must NOT carry an input delay
     if "set_input_delay" in t and "lsearch -all -inline -not -exact" not in t:
         bad.append("%s: 输入延迟没有排除时钟端口" % name[:40])
     return bad
