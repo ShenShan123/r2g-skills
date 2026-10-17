@@ -13,9 +13,14 @@ adds no measurable signal and only lowers the baseline.
 
 Two measurements set the ceiling on how tight to go:
 
-- **Compounding.** Three independent constraints at p80 give a joint pass rate
-  of 0.8³ ≈ **51%**; at p95, **86%**. Half the corpus failing by construction
-  would bury the repair signal.
+- **Compounding.** Three independent constraints at p80 would give a joint pass
+  rate of 0.8³ ≈ **51%**; at p95, **86%**. Half the corpus failing by
+  construction would bury the repair signal. *(This was written when timing was
+  assumed to be a pass condition. It is not — see below — so the knobs no longer
+  compound directly into the pass rate. They compound INDIRECTLY, by each making
+  the layout harder to build: measured, the period at p95 costs ~5% and
+  utilization at 50% ~3% of designs on nangate45. The conclusion is unchanged
+  and the arithmetic is now an upper bound rather than the estimate.)*
 - **Unfixable-by-design.** A tight utilization produces routing congestion, and
   r2g's only lever for congestion is `density_relief` — which lowers
   utilization, i.e. undoes the constraint. With the die frozen that is
@@ -534,5 +539,16 @@ is needed because the SPEC changed** — per-design period, explicit die, three
 SDC additions — not because the pilot was contaminated. The nangate45 stock-LEF
 re-run that was planned for contamination is cancelled.
 
-Both halves of `experiments/splits/` (dev 1249, held-out 1248) are run in the
-same pass; held-out results are not read before the recipes are frozen.
+**Round 1 builds dev only** (1249 designs). Held-out is where repairs developed
+on dev get validated, so building its baseline before there is anything to
+validate buys nothing and costs half the machine time — `SET=held_out` switches
+`rerun_baseline.sh` over when the time comes. Its baseline has to exist before
+any held-out claim; it just does not have to exist yet.
+
+Cost, priced from the pilot's own per-design wall times rather than from a
+throughput figure: at `--workers 12`, dev is 16.2 h of flow for nangate45, 50.7 h
+for gf180 (28.2 of it DRC) and 37.0 h for sky130hd — **104 h = 4.3 days
+sequentially**, and that excludes nangate45's signoff, which that corpus does not
+record. Including the 67 designs that stall for their full 7200 s brings it to
+roughly 4.8 days. Three platforms cannot be run concurrently to compress it;
+that is the state where load read 130 and nothing completed for 30 minutes.
