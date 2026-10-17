@@ -313,6 +313,29 @@ without the floor those designs are unbuildable and the baseline is a degenerate
 
 ## Pass conditions
 
+### "DRC clean AND LVS clean" is not the same condition on the three platforms
+
+Measured, and it changes how the numbers may be used:
+
+| | what DRC actually finds | LVS checker | LVS failures + mismatches (dev) |
+| --- | --- | --- | --- |
+| nangate45 | **99.9% antenna** (3526 of 3528) — effectively one check | **r2g's `FreePDK45.lylvs` (klayout)** | **88 + 23 = 111** |
+| gf180 | 54 rule tables, CO.6a 95% of violations, **zero** antenna | netgen + the PDK's own `gf180mcuC_setup.tcl` | 0 + 15 |
+| sky130hd | **unknown** — 2156 reports exist but the corpus kept 5 of 2497 GDS, so none can be re-derived | netgen + the PDK's own `sky130A_setup.tcl` | 0 + 7 |
+
+Two consequences:
+
+- **The three platforms' counts must not be summed.** A total like "5344
+  dual-clean" is arithmetic over three different conditions, not a measurement of
+  one thing. Each platform is compared against ITSELF (its own pilot, its own
+  control arm); cross-platform totals are dropped.
+- **nangate45's LVS is a different TOOL from the other two and fails 7–15x more
+  often.** Whether that is because it is stricter or because it is less reliable
+  is NOT established, and the two readings have opposite meanings for the
+  baseline: stricter means the number is honest, less reliable means 88 designs
+  are being failed by the checker rather than by their layout. Open question,
+  recorded here rather than assumed either way.
+
 ```
 pass = DRC clean  AND  LVS clean
 setup slack: RECORDED, not judged in round 1   (see "Timing is NOT a pass condition")
@@ -361,6 +384,20 @@ dev, against 90 and 89) is probably low, because 34 of its no-layout designs
 carry `failure_class = no_log_harvested` — the log was not captured, so they
 cannot be classified as frontend or backend. Do not read gf180's larger backend
 denominator as a stronger frontend until those 34 are classified.
+
+### The stage timeout was 3 h in the pilot and is 6 h here — that alone raises the number
+
+Measured: the pilot ran a 10 800 s stage timeout, and it bound on **114 dev
+designs** (27 nangate45, 34 gf180, 53 sky130hd). No design exceeded 6 h because
+none was given 6 h — the flow-time maximum is ~10 833 s on every platform, i.e.
+the timeout itself.
+
+So some of those 114 will complete under the frozen 21 600 s, and the re-run's
+count will be higher than the pilot's **partly for that reason alone**. That is a
+looser ruler, not a repair. The pilot's numbers are context for the re-run, never
+a baseline the re-run improves on, and any claim of the form "the re-run is N
+designs better" is invalid: the only valid comparison is repair-arm against
+control-arm WITHIN the re-run, where both arms get 6 h.
 
 ## Execution
 
