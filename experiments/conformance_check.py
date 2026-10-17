@@ -98,6 +98,32 @@ def main(argv=None):
     for r in runs:
         allbad += check_run(r, spec)
     print("查了 %d 份  (%s)" % (len(runs), args.platform))
+
+    # Discriminate the two reasons a mismatch happens, because they call for
+    # opposite responses and the message otherwise reads the same:
+    #   * the DRIVER emitted the wrong thing      -> fix the driver, re-run
+    #   * the TABLE changed after the run was built -> the artifacts are merely
+    #     stale; re-run against the frozen table, nothing is wrong with either
+    # This happened for real: the spec table was regenerated with the area
+    # allowance WHILE a preflight was running against the previous one, and
+    # every die then read 4.5% small -- exactly sqrt(1.092).
+    spec_f = D / ("spec/spec_%s.json" % args.platform)
+    try:
+        t_spec = spec_f.stat().st_mtime
+        # Compare against each run's own config.mk -- that is the artifact
+        # carrying the spec values. A run DIRECTORY's mtime moves when results
+        # land at the end, which on the first attempt made the newest run look
+        # newer than the table and silenced this very message.
+        t_runs = min((r / "config.mk").stat().st_mtime for r in runs
+                     if (r / "config.mk").is_file())
+        if allbad and t_spec > t_runs:
+            import datetime as _d
+            print("  注意: 规格表(%s) 比这批产物(%s) 新 -- 这些产物是用旧表建的，"
+                  "属于过期而不是驱动出错；用冻结的表重跑即可"
+                  % (_d.datetime.fromtimestamp(t_spec).strftime("%H:%M:%S"),
+                     _d.datetime.fromtimestamp(t_runs).strftime("%H:%M:%S")))
+    except Exception:                                            # noqa: BLE001
+        pass
     if allbad:
         print("不一致 %d 处:" % len(allbad))
         for b in allbad:
