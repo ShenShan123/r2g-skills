@@ -1875,6 +1875,45 @@ time** (`Path(args.runs).resolve()`), not at use time — the same discipline th
 host-path entry above arrives at from the other direction: that one was absolute
 but not *visible* in the container, this one was *visible* but not absolute.
 
+#### The whole family: "no signal" and "the signal is zero" look identical (2026-10-17)
+
+Six instances landed in one day, in six different languages and layers, and each
+one inverted a verdict in the safe-looking direction. Listing them together
+because the individual fixes are unmemorable and the SHAPE is not:
+
+| where | the absence | what it read as |
+| --- | --- | --- |
+| `grep -c PATTERN "$DEF" \|\| echo 0` | the DEF was never produced | 0 violations → PASS |
+| `podman run -v rel/path:/src` | the container never started | 0 report files → CLEAN |
+| a checker killed at 43 of 54 tables | 43 empty reports, exit non-zero | 0 violations → CLEAN |
+| `cats = Counter(); if not cats:` | an EMPTY lyrdb | "no report kept" → unanalysable |
+| `for f in $DIR/drc/*; do [ -f "$f" ]` | the glob matched nothing | nothing copied, no error |
+| antenna-only design with ANTENNA off | the violation class was removed | 0 vs 0 → "the split is equivalent" |
+
+The rule that catches all six, and it is not "be careful":
+
+- **Check the artifact EXISTS before measuring it**, and give its absence its own
+  loud value — never a value in the measurement's own range.
+- **A probe whose good answer is zero needs a POSITIVE CONTROL** that must come
+  back non-zero. Two of the six were caught by one and the rest were caught by
+  someone noticing a number was implausible, which does not scale.
+  `EXPERIMENT_RUNBOOK_zh.md` states the principle for equivalence claims: "0 → 0
+  consistency proves nothing, because the violation never appeared, so it cannot
+  be observed whether it changed."
+- **Distinguish presence from content** in whatever structure holds the result. An
+  empty container is data; a missing container is an error. One boolean.
+- **When a gate's own output is the signal, read the EXIT CODE**, not prose. A gate
+  that grepped `tail -1` for a success word fired on a conformant run, because
+  the success line was second-to-last — and would equally have passed a failing
+  run after a wording change.
+
+The companion failure, from the same day and the same root: **a control is only
+as good as the field it reads.** A recovery method was rejected on 273 of 1029
+disagreements before the disagreement turned out to be a broken COLUMN —
+`result.json.drc_violations` is non-zero on only 23 of ~1249 gf180 designs, and
+C00006 records `drc_status='violations'` with `drc_violations=0` while its own
+log says 35. Re-run against `drc_status`, the control passed 1029 of 1029.
+
 ### LVS Timeout on Large Macro Designs
 
 **Symptoms:**
