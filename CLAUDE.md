@@ -144,8 +144,15 @@ bundled (`tools/install_nangate45_lvs.sh`).
 - **Never set `PLACE_DENSITY_LB_ADDON` below 0.10.** Placer divergence is irrecoverable.
 - **For >100K-cell designs, never run multiple LVS jobs concurrently** (3-5GB RAM each → 2-3× wall time).
 - **Parallel ORFS:** when running flows concurrently, cap per-flow threads with `NUM_CORES` so
-  `flows × NUM_CORES ≈ cores` — the default grabs `nproc` (96) per flow, so N flows oversubscribe N×
-  and thrash. `run_orfs.sh` wraps each stage in `timeout` (plain, NOT `setsid` — `setsid` made
+  `flows × NUM_CORES ≈ PHYSICAL cores` — the default grabs `nproc` per flow, so N flows oversubscribe
+  N× and thrash. **Budget against physical cores, not `nproc`** (2026-10-17): on a hyperthreaded box
+  `nproc` double-counts — 96 here is 2 sockets × 24 cores × 2 threads = **48 physical** — and a design
+  in global route draws ~7 cores whatever `NUM_CORES` says (measured 750%/746%/662%). So 10 flows at
+  `NUM_CORES=8` demand ~70 physical cores against 48, and the box enters a state where load looks
+  healthy while **nothing completes**: two campaigns sat at load 130 with ZERO results for 30 minutes,
+  and the only signal that showed it was new-artifact-per-minute
+  (`find <runs> -name result.json -newermt '-6 minutes' | wc -l` → 0). Neither load nor
+  "are the processes alive" distinguishes thrashing from progress. `run_orfs.sh` wraps each stage in `timeout` (plain, NOT `setsid` — `setsid` made
   timeout a group leader and silently disabled its tree-kill, orphaning a stage that hit
   `ORFS_TIMEOUT`; failure-patterns #40, 2026-07-12). `timeout` now group-reaps the whole stage tree
   on expiry; a manually-killed driver can still leave the stage's own group running — `kill -9
