@@ -169,9 +169,42 @@ pass condition once the rate is known.
 | >20 000 | 6 | 6/6 | 5/6 |
 
 The three u50 failures are real, not contention: one `2_1_floorplan_error` and
-two `place_failed`. ~3% area pressure on top of the period's ~5% is the intended
-total — enough that the constraint is not a formality, little enough that it does
-not manufacture a batch of congestion failures r2g cannot repair.
+two `place_failed`.
+
+**gf180 and sky130hd, 59 designs each** (the last two of 61 were still routing
+when the sweep was closed; the period is each platform's pilot value so again
+only area moves):
+
+| post-synth cells | gf180 | sky130hd |
+| --- | --- | --- |
+| 0–100 | 15/15 | 15/15 |
+| 100–1 000 | 15/15 | 14/15 |
+| 1 000–5 000 | 15/15 | 15/15 |
+| 5 000–20 000 | 10/10 | 10/10 |
+| >20 000 | 4/4 | **2/4** |
+| total | **59/59** | **56/59** |
+
+So across the three platforms: **173 of 179 complete at 50%, a 3.4% failure
+rate**, and on top of the period's ~5% that is about 8% total pressure. Enough
+that the constraint is not a formality — the pilot's 20% failed almost nothing —
+and little enough that it does not manufacture a batch of failures r2g cannot
+repair.
+
+**The one exception, and why it is not acted on.** sky130hd loses 2 of 4 designs
+above 20 000 cells (one `place_failed`, two `route_failed`). Three reasons to
+leave the frozen value alone:
+
+- **4 designs.** 2 of 4 carries no statistical weight and is not grounds for
+  moving a parameter that applies to 2330.
+- **It matches the platform, rather than contradicting it.** sky130hd has 5–6
+  routing layers, so `route_failed` on its largest designs at 50% is the
+  expected symptom and not an anomaly. gf180 has 5 layers and lost none, which
+  rules out "5 layers cannot do 50%".
+- **The trade is wrong even if the effect is real.** Dropping sky130hd to 40%
+  enlarges the die for all 2330 designs to recover 2 — and those 2 failed with
+  `route_failed`, which **r2g cannot repair anyway**, since relieving congestion
+  means enlarging the die and the die is frozen. Cost without signal, from the
+  other direction.
 
 (The sweep varies utilization at run time and lets the driver derive the die from
 the ACTUAL synthesis area, so it measures whether 50% is ROUTABLE on the
