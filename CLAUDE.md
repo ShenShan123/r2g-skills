@@ -144,20 +144,32 @@ bundled (`tools/install_nangate45_lvs.sh`).
 - **Never set `PLACE_DENSITY_LB_ADDON` below 0.10.** Placer divergence is irrecoverable.
 - **For >100K-cell designs, never run multiple LVS jobs concurrently** (3-5GB RAM each → 2-3× wall time).
 - **Parallel ORFS:** when running flows concurrently, cap per-flow threads with `NUM_CORES` so
-  `flows × NUM_CORES ≈ PHYSICAL cores` — the default grabs `nproc` per flow, so N flows oversubscribe
-  N× and thrash. **Budget against physical cores, not `nproc`** (2026-10-17): on a hyperthreaded box
-  `nproc` double-counts — 96 here is 2 sockets × 24 cores × 2 threads = **48 physical** — and a design
-  in global route draws ~7 cores whatever `NUM_CORES` says (measured 750%/746%/662%). So 10 flows at
-  `NUM_CORES=8` demand ~70 physical cores against 48, and the box enters a state where load looks
-  healthy while **nothing completes**: two campaigns sat at load 130 with ZERO results for 30 minutes,
-  and the only signal that showed it was new-artifact-per-minute
-  (`find <runs> -name result.json -newermt '-6 minutes' | wc -l` → 0). Neither load nor
-  "are the processes alive" distinguishes thrashing from progress. `run_orfs.sh` wraps each stage in `timeout` (plain, NOT `setsid` — `setsid` made
+  `flows × NUM_CORES ≈ nproc` — the default grabs `nproc` per flow, so N flows oversubscribe N×
+  and thrash. **The real rule is ONE campaign at a time** (corrected 2026-10-17): the proven
+  setting on the 96-thread box is `--workers 12 --cores-per-design 8` = 96 nominal, which
+  sustained ~57 designs/hour across three 2497-design corpora. That is 2× the 48 PHYSICAL cores
+  (2 sockets × 24 × 2 threads) and it is fine, because a design only draws its ~7 routing cores
+  (measured 747%/734%/700%) part of the time. An earlier revision of this rule said to budget
+  against physical cores; that was an over-correction from a **misattributed** failure — the
+  load-130-with-zero-completions state was THREE concurrent campaigns (~45 containers), not 12
+  flows, so the fix is to not stack campaigns rather than to halve one.
+  **Thrashing is invisible in load and in "are the processes alive"** — both look healthy while
+  nothing finishes. The only signal is new-artifacts-per-minute:
+  `find <runs> -name result.json -newermt '-6 minutes' | wc -l` → 0 means stalled, whatever the
+  load says. Two campaigns sat there for 30 minutes before anything noticed.
+  `run_orfs.sh` wraps each stage in `timeout` (plain, NOT `setsid` — `setsid` made
   timeout a group leader and silently disabled its tree-kill, orphaning a stage that hit
   `ORFS_TIMEOUT`; failure-patterns #40, 2026-07-12). `timeout` now group-reaps the whole stage tree
   on expiry; a manually-killed driver can still leave the stage's own group running — `kill -9
-  -<pgid>` the process group, not just the python. A tool process older than `ORFS_TIMEOUT` with
-  `PPID=1` beside a frozen ledger is a hang alarm the honesty DBs cannot see (a hang writes no run).
+  -<pgid>` the process group, not just the python. **A `setsid`'d driver is NOT in the launching
+  shell's process group**, so `kill -TERM -<launcher_pgid>` reports success and leaves it running:
+  take the pgid of the session leader (`ppid=1`) and then VERIFY. A tool process older than
+  `ORFS_TIMEOUT` with `PPID=1` beside a frozen ledger is a hang alarm the honesty DBs cannot see
+  (a hang writes no run). **A container-name collision is the concrete mechanism behind the
+  same-`DESIGN_NAME` rule above**: the corpus driver names containers
+  `<design>__<platform>__p<period>` and clears a stale same-named one before starting, so two
+  drivers over the same design kill each other's live containers, and `make` reports `Terminated`
+  which the stage classifier misfiles as a route/synth failure.
   Signoff CHECKERS (DRC/LVS/netgen/magic) never use raw `timeout | tee` — they run under
   `_bounded_run.sh`'s session supervisor (`r2g_bounded_run`: group TERM→grace→KILL + survivor
   reap; failure-patterns #55, 2026-07-24).
