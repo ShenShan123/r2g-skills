@@ -329,12 +329,29 @@ Two consequences:
   dual-clean" is arithmetic over three different conditions, not a measurement of
   one thing. Each platform is compared against ITSELF (its own pilot, its own
   control arm); cross-platform totals are dropped.
-- **nangate45's LVS is a different TOOL from the other two and fails 7–15x more
-  often.** Whether that is because it is stricter or because it is less reliable
-  is NOT established, and the two readings have opposite meanings for the
-  baseline: stricter means the number is honest, less reliable means 88 designs
-  are being failed by the checker rather than by their layout. Open question,
-  recorded here rather than assumed either way.
+- **nangate45's LVS failure rate is not a strictness difference — RESOLVED.**
+  Reading the 88 `lvs_failed` logs: **72 are timeout/killed, 16 have no log at
+  all, and ZERO say the netlists do not match.** Median cell count 61 821. The
+  genuine mismatches are the separate `mismatch` count, and those three numbers
+  ARE comparable:
+
+  | | genuine LVS mismatch | no verdict (timeout / no log) |
+  | --- | --- | --- |
+  | nangate45 | **23** | 88 |
+  | gf180 | **15** | 0 |
+  | sky130hd | **7** | 0 |
+
+  So the 7–15x gap was entirely no-verdict designs. nangate45's checker is not
+  stricter and its judgement is not suspect; it does not SCALE. Which is the
+  same shape as its DRC: 67 designs stall in the ANTENNA block at a median of
+  89 111 cells, 72 time out in LVS at a median of 61 821. **Both of nangate45's
+  checkers fail to reach a verdict on large designs, while gf180's and
+  sky130hd's do.**
+
+  "No verdict is not a pass" still counts those 88 as failures, correctly. But
+  they belong in the taxonomy's **checker** bucket, not the repairable one: what
+  would have to change is the checker, not the design, so r2g's repair arm
+  cannot win them back and must not be credited with them.
 
 ```
 pass = DRC clean  AND  LVS clean
