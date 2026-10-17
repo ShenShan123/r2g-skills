@@ -1734,6 +1734,55 @@ make's include order (`make -f probe.mk` including DESIGN_CONFIG then the platfo
 printing `$(origin VAR)`); a unit test that asserts on the file's text cannot tell you whether
 make agrees.
 
+#### A host path in a config the container cannot see — reported as a yosys failure (2026-10-17)
+
+Pointing `TECH_LEF`/`SC_LEF` (or any file-valued ORFS variable) at a HOST path
+while the flow runs in a container that mounts only `/work` and the package makes
+`make` die with:
+
+```
+make: *** No rule to make target '/abs/host/path/Foo.lef',
+      needed by '/work/results/<plat>/<top>/base/1_synth.odb'.  Stop.
+```
+
+**It is filed as `1_2_yosys_error`** by the stage classifier, because yosys is the
+stage that just completed — the missing prerequisite belongs to the NEXT target.
+Four runs were triaged as "stock LEF breaks synthesis" on that label alone; the
+real cause is one line further down in `log_tail`. **When a stage failure makes no
+mechanical sense, read `log_tail`'s last line before believing `failure_class`.**
+
+The fix is the pattern the driver already uses for `R2G_PDN_CFG` / `R2G_TAPCELL_TCL`:
+copy the file next to `config.mk` in the work dir and reference it as
+`/work/<name>`, never as a host path.
+
+#### `grep -c FILE || echo 0` also prints 0 when the FILE IS MISSING (2026-10-17)
+
+A second face of the documented `grep -c` trap. The earlier note covered "grep
+prints 0 AND exits 1 on zero matches, so `|| echo 0` yields a two-line value".
+This one is worse because it is silent and inverts a verdict:
+
+```bash
+n=$(grep -c PATTERN "$OUT/6_final.def" || echo 0)   # DEF absent -> n=0
+```
+
+A run that produced **no DEF at all** reads as "0 matches", i.e. as a PASS. That
+turned a pre-flight whose whole purpose was to check "did the stock LEF produce a
+layout with no diodes" into a false pass, on four runs that had produced nothing —
+and nearly authorized a 44-hour corpus re-run on it.
+
+**Check the artifact exists before counting it**, and make the absent case a
+distinct, loud outcome:
+
+```bash
+if [ ! -f "$DEF" ]; then echo "*** no DEF produced (not zero -- absent) ***"; continue; fi
+n=$(grep -c PATTERN "$DEF" || true); n=${n:-0}
+```
+
+The generalization: when a probe's "good" answer is a zero or an empty string, an
+error path that also yields zero/empty is indistinguishable from success. Give the
+error path its own value, and include a POSITIVE CONTROL that must come back
+non-zero — that control is what exposed both defects here.
+
 ### LVS Timeout on Large Macro Designs
 
 **Symptoms:**
