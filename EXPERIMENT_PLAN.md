@@ -1,7 +1,7 @@
 # R2GSkills — Experiment Plan
 
 Source: abstract + `sections/01_introduction_V2.tex` + Fig. 1 only.
-Platforms: sky130, Nangate45, ASAP7. LLMs: Opus, GPT, Qwen, GLM — versions TBD: pick the latest available at P0, record exact API model ID + access date, freeze for all runs (a mid-study model update invalidates E2 comparisons).
+Platforms: **sky130hd, nangate45, gf180** — not ASAP7. `run_orfs.sh` refuses asap7 (exit 65) and `platform_capability.py` reports it `unsupported`: it carries an irreducible false-violation floor, ships no LVS deck, and Calibre is not installed, so it can never read DRC-clean and therefore can never promote a recipe. gf180 takes its place. LLMs: Opus, GPT, Qwen, GLM — versions TBD: pick the latest available at P0, record exact API model ID + access date, freeze for all runs (a mid-study model update invalidates E2 comparisons).
 Labels: wirelength (WL), HPWL, ground capacitance (Cgnd), congestion.
 
 ## Claims → experiments
@@ -25,6 +25,24 @@ Labels: wirelength (WL), HPWL, ground capacitance (Cgnd), congestion.
 - Run: M repos → N candidate designs × 3 platforms, fixed config.
 - Report: count at each of the 9 handoffs; loss-reason taxonomy (unsynthesizable, missing top/SDC, black box, DRC, LVS, timing, graph-join fail, ...); end-to-end yield; CPU-h per admitted sample.
 - Baseline: default ORFS flow, no qualification, no repair → where losses concentrate, what repair recovers.
+  **The baseline is now specified and frozen: `experiments/BASELINE_PARAMETERS.md`.**
+  Every parameter is traced to a measurement, the pass condition is DRC-clean AND
+  LVS-clean with no verdict counting as not-clean, and `experiments/rerun_preflight_gates.py`
+  refuses to launch unless ten conditions hold. Round 1 builds dev only; 104 h
+  across three platforms sequentially at `--workers 12`.
+- Loss-reason taxonomy, measured on the pilot's dev half (`experiments/baseline_report.py`)
+  — this is what bounds the measurable improvement, and it is not the raw failure count:
+
+  | bucket | what would have to change | nangate45 | gf180 | sky130hd |
+  | --- | --- | --- | --- | --- |
+  | dirty layout (DRC/LVS violations) | the design or its config — r2g's target | 180 | 275 | 52 |
+  | backend abort, no layout | same | 48 | 78 | 73 |
+  | checker reached no verdict | a better CHECKER, not a repaired design | 94 | 86 | 3 |
+  | frontend (synthesis/parse) failure | the RTL — signoff has no lever | 90 | 56 | 89 |
+
+  r2g's addressable pool is **706 of 1124 dev failures**. 55 designs fail synthesis
+  on all three platforms and can never be clean anywhere, so the backend
+  denominator is 1194, not 1249.
 - Gate ablation: drop signoff gate → % "admitted" samples carrying residual violations.
 - Determinism: rerun K=20 designs × 3 → graph/label hashes identical.
 - Dedup: near-duplicate RTL detection across repos/forks (needed for E2/E4 splits).
@@ -33,6 +51,11 @@ Labels: wirelength (WL), HPWL, ground capacitance (Cgnd), congestion.
 ## E2 — Held-out repair transfer (C2) · must, core
 
 **Split.** Per platform, disjoint dev / held-out by design family (repo-level, after dedup). Learn + validate recipes on dev only; freeze before touching held-out.
+**Frozen 2026-10-17: `experiments/splits/` — dev 1249 / held-out 1248**, sha256
+recorded and checked by the launch gate. Union-find over three relations put 2495
+designs into 1245 family units (largest 63) with zero units straddling the split.
+Measured balance on the pilot: the two halves are 0.9–5.7% apart per platform, so a
+held-out claim is not reading noise.
 
 **Learner.** Learn recipes once with Opus (recommended). Optional ablation: learner = Qwen, to show recipes from an open model also transfer.
 
