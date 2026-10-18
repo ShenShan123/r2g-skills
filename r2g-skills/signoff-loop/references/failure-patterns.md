@@ -1914,6 +1914,32 @@ disagreements before the disagreement turned out to be a broken COLUMN —
 C00006 records `drc_status='violations'` with `drc_violations=0` while its own
 log says 35. Re-run against `drc_status`, the control passed 1029 of 1029.
 
+#### A seventh instance, in the monitor built to watch for the other six
+
+The campaign monitor counted designs by `json.load`-ing each `result.json`. A
+file read WHILE the driver writes it raises, and the handler was
+`except: continue` -- so the design vanished from the count. The totals flapped
+(274 -> 275 -> 274) and, worse, the two sides flapped ASYMMETRICALLY:
+
+| read that fails | effect on the reported rate |
+| --- | --- |
+| the current run's `result.json` | numerator and denominator both drop |
+| **the PILOT's `result.json`** | **numerator alone drops -- the rate reads LOW** |
+
+The second case is the dangerous one: a transient read makes a regression
+disappear, and the control that exists to catch a rising regression rate
+reports a falling one. This is the same shape as the six instances above --
+absence read as zero -- in the instrument built to watch for them.
+
+The fix is the one this family always needs: retry once, and if it still fails,
+COUNT the unreadable and print the count (`(N 份暂不可读)`) rather than
+silently dropping it. A monitor that cannot read its input must say so.
+
+The general rule, now stated for monitors specifically: **a monitoring script's
+exception handler is a measurement decision**. `except: continue` silently
+substitutes "I could not look" for "there is nothing there", and in any control
+whose alarm fires on a RISING count, that substitution biases toward silence.
+
 ### LVS Timeout on Large Macro Designs
 
 **Symptoms:**
