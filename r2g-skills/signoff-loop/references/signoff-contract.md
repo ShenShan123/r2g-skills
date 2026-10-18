@@ -126,7 +126,7 @@ rather than globally. About 20% of each class is expected to miss it, and that
 ### Where the per-design value comes from
 
 Computed **offline** into a per-design table from the pilot's cell count, by
-`experiments/spec/make_spec_table.py`. Offline because the formula takes
+`experiments/make_spec_table.py`. Offline because the formula takes
 post-synthesis cell count as input while synthesis reads the period from the SDC
 (ABC constrains against it) — a circular dependency a two-pass flow would move
 rather than remove. It also matches the rule above: a design's class is pinned at
@@ -213,7 +213,7 @@ different heuristic is a different benchmark.
 | synthesis target | `ABC_AREA = 1` (area-optimised, not speed) |
 | `SYNTH_MEMORY_MAX_BITS` | 131072 |
 | cores per design | 8 — a different thread count can perturb routing and makes runs incomparable |
-| stage timeout | 10800 s |
+| stage timeout | 21600 s (6 h; was 10800 in the pilot) |
 | max work tree per design | 30 GB — a **hidden size ceiling**: exceeding it is recorded as `oversize`, so it must be stated rather than discovered |
 | DRC budget | 7200 s; no verdict counts as not clean |
 | PDN core floor | sky130hd 32 µm (measured minimum; 30 µm still fails after site snapping), gf180 110 µm |

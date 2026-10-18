@@ -137,16 +137,30 @@ if {{[llength $cand] > 0}} {{
   puts "R2G_CLOCK virtual none"
 }}
 
-# Clock uncertainty: 5% of the period, not 0. Zero assumes a perfect clock and
-# makes every setup check artificially easy; real signoff budgets jitter+skew.
-set_clock_uncertainty [expr {{$_per * 0.05}}] [get_clocks *]
+# Clock uncertainty, SETUP ONLY -- 5% of the period, not 0. Zero assumes a
+# perfect clock and makes every setup check artificially easy; real signoff
+# budgets jitter+skew.
+#
+# The -setup is load-bearing. Without it, SDC applies the value to HOLD as well,
+# and a hold margin scaled to the PERIOD is nonsense: hold reflects clock skew
+# alone and does not grow with the period. On gf180's 16 ns designs the missing
+# flag demanded 0.8 ns of hold margin, and the resizer answered by inserting
+# 1955 hold buffers -- +30% cells -- before hitting RSZ-0060 "Max buffer count
+# reached" and aborting CTS. C00023__qoi_compress passed in the pilot and failed
+# here for exactly that reason, caught 13 designs into the campaign.
+#
+# Hold gets a small FIXED margin instead, independent of the period, which is
+# what clock skew actually is. ORFS's own 1877 shipped designs use 0.0 for
+# both; 20 ps is nearer real signoff than zero without being absurd.
+set_clock_uncertainty -setup [expr {{$_per * 0.05}}] [get_clocks *]
+set_clock_uncertainty -hold 0.020 [get_clocks *]
 
-# I/O delay: 25% of the period on every port. Without it ONLY reg-to-reg paths
+# I/O delay: 15% of the period on every port. Without it ONLY reg-to-reg paths
 # are constrained, and 27-28% of the pilot's designs (about 1814) had no
 # constrained path at all -- they report `worst slack max INF` while wns clamps
 # to 0.00, which reads like a pass. Constraining the ports brings them into the
 # timing criterion instead of leaving them vacuously clean.
-set _io [expr {{$_per * 0.25}}]
+set _io [expr {{$_per * 0.15}}]
 set _clks [get_clocks *]
 set _in [all_inputs]
 foreach _c $cand {{
@@ -236,24 +250,49 @@ def write_config(design_dir: Path, meta: dict, work: Path, platform: str,
     # NO spec and keeps the platform default: a design with no spec can neither
     # pass nor fail one, and inventing a value would put it in the denominator.
     _spec_p = os.environ.get("R2G_SPEC_TABLE", "")
-    if _spec_p and Path(_spec_p).is_file():
-        _tbl = json.loads(Path(_spec_p).read_text()).get(platform) or {}
+    if _spec_p:
+        if not Path(_spec_p).is_file():
+            raise SystemExit(f"R2G_SPEC_TABLE not found: {_spec_p}")
+        _raw = json.loads(Path(_spec_p).read_text())
+        # make_spec_table.py writes ONE FLAT FILE PER PLATFORM, keyed by design,
+        # with a `_meta` block. An earlier revision of this hook read
+        # `_raw[platform][design]`; that misses every design, leaves
+        # CORE_UTILIZATION in place and runs the flow anyway -- a silent no-op
+        # that cost 30 designs of preflight measuring the wrong thing. A
+        # configured table that yields no designs is now fatal.
+        _tbl = {k: v for k, v in _raw.items() if not k.startswith("_")}
+        if not _tbl:
+            raise SystemExit(
+                f"R2G_SPEC_TABLE {_spec_p} has no design entries "
+                f"(expected a flat {{design: {{...}}}} map from "
+                f"make_spec_table.py)")
         _e = _tbl.get(design_dir.name)
-        if _e and _e.get("period_ns"):
-            period = str(_e["period_ns"])
-            (work / "constraint.sdc").write_text(
-                SDC.format(ports=CLOCK_PORTS, period=period))
-        if _e and _e.get("core_side_um"):
-            _inset = 10
-            _core = float(_e["core_side_um"])
-            _die = _core + 2 * _inset
-            cfg = [c for c in cfg
-                   if not c.startswith("export CORE_UTILIZATION")
-                   and not c.startswith("export DIE_AREA")
-                   and not c.startswith("export CORE_AREA")]
-            cfg.append(f"export DIE_AREA  = 0 0 {_die:g} {_die:g}")
-            cfg.append(f"export CORE_AREA = {_inset:g} {_inset:g} "
-                       f"{_core + _inset:g} {_core + _inset:g}")
+        if _e is None:
+            # Recorded, never invented: a design with no spec can neither pass
+            # nor fail one, and a silent fallback would put it in the
+            # denominator under a period its peers did not get.
+            print(f"  SPEC MISS {design_dir.name}: no entry, "
+                  f"keeping platform default", flush=True)
+        else:
+            if _e.get("period_ns"):
+                _p = float(_e["period_ns"])
+                (work / "constraint.sdc").write_text(
+                    SDC.format(ports=CLOCK_PORTS, period=str(_e["period_ns"]),
+                               unc=f"{_p * 0.05:.4f}",
+                               iodly=f"{_p * 0.15:.4f}"))
+            # die and inset come FROM THE TABLE -- it is the one place the die
+            # is computed, so re-deriving them here could only disagree with it
+            if _e.get("die_side_um") and _e.get("core_side_um"):
+                _die = float(_e["die_side_um"])
+                _core = float(_e["core_side_um"])
+                _inset = float(_e.get("core_inset_um", 2.0))
+                cfg = [c for c in cfg
+                       if not c.startswith("export CORE_UTILIZATION")
+                       and not c.startswith("export DIE_AREA")
+                       and not c.startswith("export CORE_AREA")]
+                cfg.append(f"export DIE_AREA  = 0 0 {_die:g} {_die:g}")
+                cfg.append(f"export CORE_AREA = {_inset:g} {_inset:g} "
+                           f"{_core + _inset:g} {_core + _inset:g}")
 
     # Arbitrary extra make assignments, newline-separated. Platform defaults
     # use `?=`, so a design-config export overrides them -- which is how a
@@ -396,7 +435,34 @@ def harvest(work: Path, dest: Path) -> None:
                     # happened on sky130hd because only 6_final.* was kept.
                     # 5_route.odb and 6_final.odb are ~90 MB each here, so the
                     # whole corpus costs about 500 GB of a 35 TB volume.
-                    "5_route.odb", "6_final.odb"):
+                    "5_route.odb", "6_final.odb",
+                    # NOT kept, on purpose (2026-10-17): the per-stage ODBs
+                    # 2_floorplan / 3_place / 4_cts and 1_2_yosys.v. They would
+                    # only serve def-graph's four-stage dataset and
+                    # rtl-acquire's netlist_graph.pt, and the graph experiments
+                    # run on their OWN corpus -- this corpus never feeds them.
+                    # Keeping them cost 4.5 TB for nothing. If that ever
+                    # changes, note that ORFS writes no per-stage .def, and that
+                    # converting an ODB eagerly is the WRONG trade: write_def on
+                    # a 197 MB 3_place.odb takes 20.9 s and yields a 311.7 MB
+                    # DEF, so it costs more disk AND more time than keeping the
+                    # ODB. The launch gate records the image id, so a later
+                    # conversion can use the binary that wrote the database.
+                    # The LVS INPUT chain and its RESULT, added 2026-10-17 after
+                    # three forensics attempts had to reconstruct or give up:
+                    #   6_final.v -> 6_final.cdl -> 6_final_concat.cdl (+ the
+                    #   platform std-cell CDL) -> 6_lvs.lvsdb
+                    # None of it was kept. 6_lvs.lvsdb is LVS's equivalent of
+                    # DRC's 6_drc.lyrdb -- the per-device result -- so without it
+                    # an LVS verdict can only ever be re-derived by re-running,
+                    # and `make lvs` cannot re-run on a frozen layout
+                    # (RMD-P0-01). EXPERIMENT_RUNBOOK_zh.md settles LVS
+                    # equivalence questions by the md5 of 6_final.cdl and the
+                    # extracted netlist, which is impossible if neither survives.
+                    "6_final.cdl", "6_final_concat.cdl", "6_lvs.lvsdb",
+                    # and the logs that name the rule or exception, which the
+                    # result.json verdict never does
+                    "6_cdl.log", "6_lvs.log"):
         for src in work.rglob(pattern):
             shutil.copy2(src, dest / src.name)
             break

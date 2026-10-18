@@ -1,4 +1,24 @@
 #!/usr/bin/env bash
+
+# ============================ SUPERSEDED ============================
+# This is the PILOT chain. It is kept as the record of how the pilot was
+# executed -- the pilot is the comparison baseline, so its exact parameters
+# are evidence -- but it MUST NOT be run again: it carries the pilot's
+# settings, not the frozen spec's.
+#
+#   stage timeout   10800 s here   vs   21600 s frozen
+#   period          one flat value vs   4 bins by post-synthesis cell count
+#   utilization     the pilot's     vs   50% with a measured area allowance
+#
+# Running it would silently produce numbers on the old ruler. The current
+# chain is experiments/rerun_baseline.sh.
+if [ "${ALLOW_PILOT_CHAIN:-0}" != 1 ]; then
+  echo "拒绝执行：这是试跑链条，参数已过期。当前链条是 experiments/rerun_baseline.sh" >&2
+  echo "（确实要重跑试跑请设 ALLOW_PILOT_CHAIN=1）" >&2
+  exit 64
+fi
+# ====================================================================
+
 # nangate45 end to end: full flow -> backfill -> DRC + LVS signoff -> funnel.
 #
 # Period 2 ns. Round one of the P0 put the 80% crossing between 1.5 and 1.8 ns

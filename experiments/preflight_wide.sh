@@ -6,10 +6,16 @@
 #   1. CONFIRM the measured area allowance works. The first preflight found
 #      gf180 landing at 60.0% against a frozen 50% target because the die was
 #      sized from the pilot's cell area, which does not include the
-#      timing-repair buffers a tighter period provokes. The allowance (1.031 /
-#      1.184 / 1.092) is now applied, so achieved utilization should come back
-#      near 50 on all three. If it does not, the correction is wrong and the
-#      campaign would bake it in.
+#      timing-repair buffers a tighter period provokes. The first-order
+#      allowance (1.031 / 1.184 / 1.092, from 5/7/5 binding designs) was applied
+#      here so achieved utilization could be re-measured against it.
+#
+#      OUTCOME, recorded so these numbers are not mistaken for current: this
+#      preflight REPLACED them with 1.021 / 1.144 / 1.190 over 15/18/18 binding
+#      designs. sky130hd's was wrong by 9% -- at 1.092 it landed at 53.7%
+#      median against a 50% target. The live values are in
+#      spec/area_allowance.json and make_spec_table.py; the pair above is
+#      history.
 #   2. TIGHTEN the allowance itself. It was derived from 5, 7 and 5 binding
 #      designs -- a first-order correction, not a calibration. Thirty per
 #      platform makes it one.

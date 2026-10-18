@@ -3,10 +3,9 @@
 AI-driven open-source EDA flow: natural-language spec → GDSII via OpenROAD-flow-scripts
 (ORFS), with full signoff (DRC, LVS, RCX), then a **training-ready graph dataset** for GNN
 predictors. Implemented as the `r2g-skills` Claude Code skill collection — **four sub-skills**
-(`signoff-loop` + `def-graph` from the 2026-07-07 split, see
-`docs/superpowers/plans/r2g-skills-split-2026-07-07.md`; `eda-install` added 2026-07-08, see
-`docs/superpowers/plans/r2g-skills-bootstrap-2026-07-08.md`; `rtl-acquire` ingested 2026-07-09, see
-`docs/superpowers/plans/rtl-acquire-ingestion-2026-07-09.md`):
+(`signoff-loop` + `def-graph` from the 2026-07-07 split; `eda-install` added 2026-07-08;
+`rtl-acquire` ingested 2026-07-09. The three design plans were retired once completed — see
+`git log` for them, not a path in the tree):
 - **`eda-install`** — detects the machine and installs + verifies the toolchain the others run
   (ORFS + openroad/yosys, iverilog, klayout, magic/netgen, sky130A PDK, torch venv). One command,
   `bootstrap.sh` (detect → plan → install → pin `env.local.sh` → verify); no-sudo conda path by default.
@@ -114,10 +113,14 @@ the toolchain. `--dry-run` prints a per-tier plan and installs nothing; without 
 **no-sudo** path (pre-built conda `litex-hub` binaries + a torch venv on a big volume, never a full
 `$HOME`). Detection (`eda-install/scripts/setup/detect_env.sh`) + the pin generator
 (`eda-install/scripts/setup/write_env_local.sh`, which writes `env.local.sh` into signoff-loop AND
-def-graph) are the honesty layer — a bootstrapped env is auto-found next session. Design + rationale:
-`docs/superpowers/plans/r2g-skills-bootstrap-2026-07-08.md`.
+def-graph) are the honesty layer — a bootstrapped env is auto-found next session. Design + rationale: retired with the other completed plans; `git log --diff-filter=D` finds it.
 
-**This machine (verified 2026-10-04):** everything is under `/home/yangao` — there is **no `/proj`
+**Corpus campaigns do NOT run here — they run on `memlab216`** (`D=/proj/workarea/yangao`, 36 TB
+free, 96 threads), reached over SSH. Its toolchain is its own: ORFS + the driver at `$D`, signoff
+tools under `$D/miniconda3/envs/eda/bin` (netgen, magic), klayout from `/usr/bin`, and the gf180 PDK
+at `$D/miniconda3/envs/eda/share/pdk`. Paths below describe THIS box (208), used for development.
+
+**This machine (208, verified 2026-10-04):** everything is under `/home/yangao` — there is **no `/proj`
 mount here**, so ignore any `/proj/workarea/...` path in older notes (those describe hosts 203/208).
 ORFS + the pinned openroad/yosys live in `/home/yangao/r2g_toolchain/OpenROAD-flow-scripts`; signoff
 tools (magic, netgen) and the sky130A PDK in `/home/yangao/.conda/envs/eda` (`share/pdk/sky130A`);
@@ -127,8 +130,9 @@ The graph-stage torch venv is `/home/yangao/r2g_toolchain/pyenvs/r2g-graph` (tor
 `pytest`+`jsonschema` to run the `tools/`, `experiments/` and def-graph suites (installed 2026-10-04;
 without them 11 test files fail to collect on numpy/torch and 3 more on jsonschema), and `pyg-lib` or
 `torch-sparse` for `gnn-node`'s NeighborSampler (still absent — 4 gnn-node tests are gated on it).
-`$HOME` has ~1.4 TB free here, so install into it; the "never install into `$HOME`" rule was about
-203/208, where it was full. `check_env.sh` reads STRICT-READY on `nangate45`, `sky130hd` and
+`$HOME` here had ~1.4 TB free on 2026-10-04 and **387 GB on 2026-10-18** — still installable, but
+check before a large install rather than trusting this line; the "never install into `$HOME`" rule
+was about 203/208, where it was full. `check_env.sh` reads STRICT-READY on `nangate45`, `sky130hd` and
 `sky130hs`. Platforms in this checkout: `nangate45`, `sky130hd` (default), `sky130hs`, `gf180`,
 `gt2n`, `ihp-sg13g2` (plus the `sky130io`/`sky130ram`/`common` support decks). **`asap7` is NOT SUPPORTED in
 this version** — `run_orfs.sh` refuses it (exit 65) and `platform_capability.py` reports tier
@@ -147,7 +151,9 @@ bundled (`tools/install_nangate45_lvs.sh`).
   `flows × NUM_CORES ≈ nproc` — the default grabs `nproc` per flow, so N flows oversubscribe N×
   and thrash. **The real rule is ONE campaign at a time** (corrected 2026-10-17): the proven
   setting on the 96-thread box is `--workers 12 --cores-per-design 8` = 96 nominal, which
-  sustained ~57 designs/hour across three 2497-design corpora. That is 2× the 48 PHYSICAL cores
+  sustained ~57 designs/hour across three 2497-design corpora at the pilot's loose settings, and
+  ~47/hour on the 2026-10-17 frozen-spec re-run (50% utilization, binned periods — denser dies route
+  slower, so quote the figure WITH its settings). That is 2× the 48 PHYSICAL cores
   (2 sockets × 24 × 2 threads) and it is fine, because a design only draws its ~7 routing cores
   (measured 747%/734%/700%) part of the time. An earlier revision of this rule said to budget
   against physical cores; that was an over-correction from a **misattributed** failure — the
