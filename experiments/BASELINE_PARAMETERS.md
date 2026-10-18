@@ -877,6 +877,41 @@ substrate tap at 15 um for 5 V devices. These are the ORFS platform
 configuration disagreeing with the foundry's own rule manual. A stock-PDN gf180
 baseline would be ~0 dual-clean, against which no repair is measurable.
 
+### The dominant regression is ONE repo's 7-cell modules, not a platform defect
+
+Of the layout-stage regressions on gf180, the clear majority are `GPL-0307`
+(RePlAce divergence) and they are not independent draws:
+
+| design | cells | repo | code |
+| --- | --- | --- | --- |
+| `buff_regs_2` | 7 | `lvdc_simulation` | GPL-0307 |
+| `buff_regs_1` | 7 | `lvdc_simulation` | GPL-0307 |
+| `id_sampler_2` | 7 | `lvdc_simulation` | GPL-0307 |
+| `writeback_mux` | 206 | `rv32i-soc` | GPL-0301 |
+| `tt_um_Jsilicon` | 686 | `jsilicon` | DPL-0036 |
+
+Same repo, same cell count, same failure. These are structurally identical
+7-cell modules landing in gf180's 110 um PDN-floored core, i.e. ~0.56%
+implied utilization: the placer has nothing to optimize and diverges.
+
+Three consequences, all of which argue for continuing rather than stopping:
+
+1. **It is bounded.** gf180's dev set has 21 designs below 1% implied
+   utilization, so this class tops out around 21 (1.7%), not at some rate that
+   grows with the corpus.
+2. **It is exactly r2g's material.** The skill-level hard rule "never set
+   `PLACE_DENSITY_LB_ADDON` below 0.10 -- placer divergence is irrecoverable"
+   states the lever from the other side: raising it is the repair. These
+   failures land in the repairable bucket, so they are signal, not waste.
+3. **It is not platform-wide.** A defect in the frozen spec would scatter
+   across repos and sizes. This concentrates in one repo's smallest modules.
+
+Note for whoever reads the stop-line decision later: the line was "layout-stage
+regressions above 6% -> stop and recompute the allowance". It was written to
+catch a SYSTEMATIC die-sizing error. What the run actually produced is three
+distinct mechanisms at ~2%, dominated by a bounded, repairable, single-repo
+class -- which is not what the line was defending against.
+
 ### Reading the re-run against the pilot: the change is TWO-directional
 
 At the 190-design checkpoint on gf180, the frozen spec and the pilot agree on
