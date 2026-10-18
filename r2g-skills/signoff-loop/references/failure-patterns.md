@@ -1972,6 +1972,43 @@ to do next.** The credential-exfiltration ask is the loud case and is easy to
 refuse. The quiet case -- a plausible wrong number that steers a stop/continue
 decision -- is the one the shape filter and the re-read are actually for.
 
+### `DRT-9419 Inst <name> not found in insts_set_` — timing repair desynchronises incremental GRT
+
+First seen 2026-10-18, gf180, `vga_status_panel` (3419 cells), stage `5_1_grt`.
+The failing sequence, from one log:
+
+```
+[INFO GRT-0096] Final congestion report: ...
+global_route -end_incremental -congestion_report_file ...congestion_post_repair...
+Repair setup and hold violations...
+[INFO RSZ-0094] Found 12 endpoints with setup violations.
+[ERROR DRT-9419] Inst _4208_ not found in insts_set_
+[WARNING EST-0165] Exception during parasitic update: DRT-9419.
+Error: global_route.tcl, 150 DRT-9419
+```
+
+**Read the order, not the error.** The resizer runs setup/hold repair, which
+adds and deletes instances, and the *incremental* global route then looks up an
+instance whose membership in `insts_set_` no longer matches the netlist. The
+abort is in the router, the cause is in the resizer's edit, and nothing is wrong
+with the design.
+
+**Why it appears only under pressure.** The same design passed in the pilot at a
+flat 10 ns, where STA found nothing to repair, so the resizer never edited the
+netlist and the stale-set path was never taken. Tightening the period to the
+frozen bin produced 12 setup endpoints, the repair ran, and the latent tool bug
+surfaced. Expect this class to appear in any campaign that tightens periods
+against a previously loose baseline, and NOT to reproduce if the period is
+relaxed — which makes "it passes when I rerun it looser" a confirmation of the
+mechanism rather than evidence the failure was spurious.
+
+**Classification.** This is a TOOL defect, not a design property, so it belongs
+in a different bucket from `GPL-0301` (cells genuinely do not fit) when a loss
+taxonomy is built. It is plausibly repairable without touching the frozen
+period — the lever is the incremental-repair path rather than the floorplan —
+but no repair has been validated here yet, so it is recorded as observed, not
+as solved.
+
 ### LVS Timeout on Large Macro Designs
 
 **Symptoms:**
