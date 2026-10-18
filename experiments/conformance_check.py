@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Does what the driver EMITS match what BASELINE_PARAMETERS.md FREEZES?
+"""Does what the driver EMITS match the FROZEN baseline spec?
 
 Written after a silent divergence: the driver was edited to read the spec table
 as `table[platform][design]` while the table is flat, so the hook became a no-op
@@ -22,7 +22,23 @@ import sys
 from pathlib import Path
 
 D = Path("/proj/workarea/yangao")
-# the frozen constants, mirrored from BASELINE_PARAMETERS.md
+# The frozen SDC/geometry constants. Each is checked against a real emitted
+# config.mk + constraint.sdc, because the document and the code drift silently.
+#
+#   uncertainty_pct 5.0  applied as `set_clock_uncertainty -setup`. The -setup
+#                        is load-bearing: without it the value applies to HOLD
+#                        as well, and on gf180's 16 ns designs that demanded
+#                        0.8 ns of hold margin, so the resizer inserted 1955
+#                        hold buffers (+30% cells) and aborted CTS at
+#                        [ERROR RSZ-0060]. Hold carries a separate fixed 20 ps.
+#   io_pct          15.0 of the period on inputs and outputs.
+#   utilization     0.50 anchored on OpenLane's sky130 defaults (FP_CORE_UTIL=50
+#                        / PL_TARGET_DENSITY=0.5), NOT the 60-70% the literature
+#                        suggests -- that advice assumes a floorplan the designer
+#                        can still move, and here the die is frozen, so headroom
+#                        above the chosen value is not margin and any congestion
+#                        above it is permanently unfixable.
+#   core_inset_um   2.0  die side = core side + 2 * inset.
 FROZEN = {"uncertainty_pct": 5.0, "io_pct": 15.0, "utilization": 0.50,
           "core_inset_um": 2.0}
 

@@ -26,10 +26,25 @@ import glob
 import json
 import math
 import os
+import sys
 from pathlib import Path
 
-# BASELINE_PARAMETERS.md "Clock period - by post-synthesis cell count":
-# the pilot's p95 achievable period per size class, rounded up.
+# The pilot's p95 achievable period per size class, rounded up.
+#
+# Why p95 and not p90. The period is a PRESSURE knob, not a pass condition --
+# a design that misses its period still passes if it is DRC+LVS clean (measured
+# on the pilot: 237 sky130hd designs missed their period and 224 of those were
+# still dual-clean). So tightening the period does not create failures to
+# repair; it creates timing-repair buffers, which grow cell area (measured on
+# C00059: a 3x tighter period cost +10.4% real cell area, essentially all
+# buffers) and therefore utilization. Against a FROZEN die, extra utilization
+# turns into congestion -- the one symptom r2g cannot repair, since its only
+# congestion lever lowers utilization and the die will not follow.
+#
+# p90 would thus have made r2g measure WORSE, not better: more cost, and the
+# added failures land in the one class outside its repair envelope. p95 keeps
+# the period inside what the platform demonstrably achieves while still binding
+# (verified: 23/24 nangate45 and 22/23 gf180 preflight designs meet it).
 PERIOD_NS = {
     "nangate45": [(100, 0.5), (1000, 1.0), (5000, 1.6), (None, 3.0)],
     "gf180":     [(100, 2.2), (1000, 5.0), (5000, 9.0), (None, 16.0)],
@@ -46,6 +61,11 @@ PERIOD_NS = {
 # die is computed, and a stale table would run designs against a die the frozen
 # spec no longer describes.
 UTILIZATION = 0.50
+# The smallest core each platform's PDN grid can be built in. Applied
+# PROACTIVELY here rather than left to ORFS's PDN-0185 run-time fallback, so the
+# die is known before the flow starts and both arms get the same one. A design
+# small enough to be floored runs at far below the 50% target by construction;
+# that is accepted (it is a property of the design, not a spec error).
 PDN_FLOOR_UM = {"nangate45": 32.0, "gf180": 110.0, "sky130hd": 32.0}
 CORE_INSET_UM = 2.0
 PILOT_ROOT = {"nangate45": "n45_full", "gf180": "gf180_full",
@@ -76,8 +96,22 @@ def period_for(platform: str, cells: int) -> float:
 # term. That is why nangate45 (fast process, comfortable periods) needs 1.03
 # while gf180 (180 nm, periods tightened up to 4.5x from the pilot's flat 10 ns)
 # needs 1.18.
-AREA_ALLOWANCE_DEFAULT = {"nangate45": 1.031, "gf180": 1.184, "sky130hd": 1.092}
+# These are the MEASURED values (derive_area_allowance.py over the 30-design
+# wide preflight: 15/18/18 binding designs after PDN-floored ones are excluded).
+# They were previously the pre-measurement ESTIMATES 1.031/1.184/1.092, and the
+# wide preflight found sky130hd's to be wrong by 9% -- at 1.092 the achieved
+# utilization came in at 53.7% median against a 50% target, i.e. the die was
+# too small on exactly the platform whose sample had been thinnest.
+#
+# Keeping the old estimates here would have been a silent trap: the file below
+# normally supplies the real numbers, so the fallback only fires when the file
+# is MISSING -- the one moment nobody is looking -- and it would then size every
+# die from superseded values with no error. Same shape as every other defect in
+# this project's catalog: a fallback that quietly substitutes a worse value.
+# So the fallback now (a) holds the measured numbers and (b) says so on stderr.
+AREA_ALLOWANCE_DEFAULT = {"nangate45": 1.021, "gf180": 1.144, "sky130hd": 1.190}
 ALLOWANCE_FILE = Path("/proj/workarea/yangao/spec/area_allowance.json")
+_warned: set[str] = set()
 
 
 def area_allowance(platform: str) -> float:
@@ -89,6 +123,11 @@ def area_allowance(platform: str) -> float:
                 return float(v)
         except Exception:                                        # noqa: BLE001
             pass
+    if platform not in _warned:
+        _warned.add(platform)
+        print("警告: 读不到 %s，%s 回退到内置余量 %.3f（应与实测一致，但请确认）"
+              % (ALLOWANCE_FILE, platform,
+                 AREA_ALLOWANCE_DEFAULT.get(platform, 1.0)), file=sys.stderr)
     return AREA_ALLOWANCE_DEFAULT.get(platform, 1.0)
 
 

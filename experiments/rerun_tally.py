@@ -10,6 +10,13 @@ sky130hd by 669 designs.
 layout are all NOT clean, which is how the pilot recorded them, so the frozen
 number stays on the same ruler as its history.
 
+A pass is `DRC clean AND LVS clean`. Timing is NOT a term: a design that misses
+its period still passes if it is dual-clean, because the period is a pressure
+knob rather than a gate (measured on the pilot: 237 sky130hd designs missed
+their period and 224 of those were still dual-clean). Adding a `WNS >= 0` term
+would silently change the ruler the pilot was measured with. Timing is reported
+beside the verdict, never folded into it.
+
 dev and held-out are reported apart and never summed into one headline. The
 split exists so a repair developed against dev can be claimed on held-out; a
 single combined figure would make that claim unauditable.

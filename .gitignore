@@ -313,5 +313,7 @@ docs/paper/
 # at ~/r2g-notes-local-20261017/, and the full history remains in git.
 EXPERIMENT_RUNBOOK_zh.md
 EXPERIMENT_PLAN.md
+experiments/BASELINE_PARAMETERS.md
+experiments/R2G_CONTRIBUTIONS.md
 docs/experiments/
 docs/superpowers/plans/
