@@ -28,6 +28,14 @@ LOG=$D/rerun_baseline.log
 STAMP=$(date '+%Y%m%d')
 WORKERS=${WORKERS:-12}
 UTIL=${UTIL:-50}
+# PER-DESIGN, not per-stage, despite the name kept for compatibility with the
+# callers that already set it. orfs_spec.py runs ONE container per design that
+# executes the whole `make` (all stages) and arms a single deadline over it, so
+# 21600 s is the budget for floorplan+place+cts+route+finish TOGETHER. A design
+# needing three stages of three hours each is killed at six hours with no single
+# stage having timed out. The reaper's GRACE_MIN=365 min is 360+5 and only
+# sweeps containers the runner failed to clean up -- it cannot false-kill a live
+# design, because the runner always kills first.
 STAGE_TIMEOUT=${STAGE_TIMEOUT:-21600}
 SIGNOFF_WORKERS=${SIGNOFF_WORKERS:-8}     # not 12: a >100K-cell LVS takes
                                           # 3-5 GB, and CLAUDE.md forbids
@@ -91,7 +99,7 @@ if [ "$live" -gt 0 ]; then
   exit 1
 fi
 
-say "=== 正式重跑起  worker=$WORKERS  利用率=$UTIL  阶段超时=${STAGE_TIMEOUT}s"
+say "=== 正式重跑起  worker=$WORKERS  利用率=$UTIL  每设计总超时=${STAGE_TIMEOUT}s"
 
 # Freeze the digests of everything that decides what gets built, and re-check
 # them at the end. Not hypothetical: another session edited orfs_spec.py twice
