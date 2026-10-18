@@ -304,3 +304,14 @@ r2g-skills/signoff-loop/knowledge/knowledge.db
 
 # The ICLR draft is archived outside the repo (not submitted; see r2g-paper-archive-*)
 docs/paper/
+
+# Experiment how-to-run docs and dated run narratives stay LOCAL (2026-10-17).
+# The repo carries the functional scripts; the prose that explains how to drive
+# them, and the dated per-campaign write-ups, are working notes rather than
+# shipped code. No script reads any of these -- every reference to them is a
+# comment -- so untracking them breaks nothing. A copy lives outside the repo
+# at ~/r2g-notes-local-20261017/, and the full history remains in git.
+EXPERIMENT_RUNBOOK_zh.md
+EXPERIMENT_PLAN.md
+docs/experiments/
+docs/superpowers/plans/
