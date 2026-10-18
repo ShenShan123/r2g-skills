@@ -877,6 +877,39 @@ substrate tap at 15 um for 5 V devices. These are the ORFS platform
 configuration disagreeing with the foundry's own rule manual. A stock-PDN gf180
 baseline would be ~0 dual-clean, against which no repair is measurable.
 
+### How much pressure the frozen spec actually adds: -1.7 points on gf180
+
+Measured at the 363-design mark, comparing the pilot and the re-run **on the
+same 363 designs** (the only valid comparison -- the corpus runs in name order,
+so an early slice is easier than the whole set: the pilot scores 94.8% on this
+slice against 89.3% over its full 1249):
+
+| | designs | backend pass |
+| --- | --- | --- |
+| pilot, on these 363 | 344 | 94.8% |
+| frozen spec, on these 363 | 338 | 93.1% |
+| | **-6** | **-1.7 points** |
+
+And the -6 is a net of two opposing movements, not six losses:
+
+- **+2 recovered** (`entropy`, `uart_fifo`): pilot fail, frozen-spec pass.
+- **-8 lost**: five `lvdc_simulation` 7-cell clones (`GPL-0307`, r2g-repairable),
+  two area-infeasible (`GPL-0301`, not repairable under a frozen die), one
+  `DPL-0036`.
+
+This is the number that answers "is the pressure real but not excessive". A 0%
+drop would mean the spec changed nothing; a 10%+ drop would mean the spec itself
+is broken. 1.7 points, of which five designs are inside r2g's repair envelope,
+is signal without loss of control. The 97% verdict agreement over the same slice
+confirms the two runs are still measuring the same thing.
+
+**Caveat that must travel with this figure:** it is BACKEND pass (flow reached
+`6_final`), not dual-clean. Sign-off has not run yet. Dual-clean should fall
+further than backend pass under the same pressure, because raising utilization
+from the pilot's 20% to 50% crowds routing and DRC violations scale with
+congestion -- and that gap is precisely r2g's repair target, so it is wanted,
+not feared. Do not quote this -1.7 as the pressure's effect on dual-clean.
+
 ### Two designs exceed the area allowance by ~2x, and the allowance stays put
 
 `GPL-0301` ("Utilization exceeds 100%") is the regression class the stop line
