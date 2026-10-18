@@ -877,6 +877,40 @@ substrate tap at 15 um for 5 V devices. These are the ORFS platform
 configuration disagreeing with the foundry's own rule manual. A stock-PDN gf180
 baseline would be ~0 dual-clean, against which no repair is measurable.
 
+### Two designs exceed the area allowance by ~2x, and the allowance stays put
+
+`GPL-0301` ("Utilization exceeds 100%") is the regression class the stop line
+was actually written to catch, because a frozen die cannot be grown to fix it.
+Two gf180 designs hit it:
+
+| design | pilot cell area | actual movable area | ratio | achieved util |
+| --- | --- | --- | --- | --- |
+| `writeback_mux` (rv32i-soc) | 5450 um2 | 10671 um2 | **1.96x** | 106.5% |
+| `wbpriarbiter` (zipcpu) | 6470 um2 | 15159 um2 | **2.34x** | 125.7% |
+
+Both are far outside the allowance's measured range. The 1.190 figure came from
+30 preflight designs whose actual/pilot ratios spanned 1.00-1.58; these need
+1.96 and 2.34.
+
+**The allowance is NOT being raised.** Sizing it to cover 2.34x would enlarge
+the die of all 1247 other designs by the same factor, dropping achieved
+utilization from 50% to about 21% -- back to the pilot's slack, with the
+pressure gone and the frozen spec pointless. Spending 1247 designs' pressure to
+rescue 2 is the wrong trade.
+
+The honest reading is that these two designs **do not fit in 50% utilization at
+their frozen period** -- that is a property of the design, not an error in the
+die computation. They are recorded as failures in the loss taxonomy's
+"area-infeasible" class, which is exactly the kind of distinction E1's
+loss-reason breakdown exists to make. They are also, unlike the `GPL-0307`
+class, NOT repairable by r2g once the die is frozen: every r2g area lever moves
+utilization down, and the die will not follow.
+
+Threshold for revisiting: if `GPL-0301` alone exceeds 1.5% of a platform's
+designs, the question "should the allowance be banded by design size?" goes to
+the user, because that is a change to a frozen parameter. At the 309-design
+checkpoint it is 2 designs, 0.65%.
+
 ### The dominant regression is ONE repo's 7-cell modules, not a platform defect
 
 Of the layout-stage regressions on gf180, the clear majority are `GPL-0307`
