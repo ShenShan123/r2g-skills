@@ -2009,6 +2009,39 @@ period — the lever is the incremental-repair path rather than the floorplan �
 but no repair has been validated here yet, so it is recorded as observed, not
 as solved.
 
+### `PPL-0024` — the die is sized by AREA, but I/O pins need PERIMETER
+
+```
+[ERROR PPL-0024] Number of IO pins (5327) exceeds maximum number of available
+                 positions (4924). Increase the die perimeter...
+```
+
+gf180, `openrv64_mesh_router_tile` (25 850 cells, core 1377 um at 50%
+utilization), stage `3_2_place_iop`. It passed in the pilot, where a 20%
+utilization target gave it a die roughly 1.6x wider on a side and therefore
+enough perimeter.
+
+**This is not a bug, it is the shape of any area-based die rule.** Cell area
+scales with core side squared; pin capacity scales with core side. Raise
+utilization and the die shrinks faster in perimeter than the pin count falls --
+which is to say, never, since the pin count is fixed by the RTL. A design whose
+pin-to-area ratio is high (a mesh router tile is the archetype: almost all
+ports) therefore runs out of perimeter before it runs out of area.
+
+Like `GPL-0301`, it is **not repairable under a frozen die**: every r2g area
+lever moves utilization down and the die does not follow. The two together are
+the unfixable bucket, and a loss taxonomy should say so rather than counting
+them as repair opportunities r2g failed to take.
+
+**A sampling trap when estimating exposure.** `place_pins` prints the pin count
+only when placement FAILS, so grepping pilot logs for it returns a set biased
+entirely toward failures. Two designs found that way (`keccak_pad_block`,
+`shake256_pad_block`) looked like imminent regressions at 1.83x and 1.68x over
+capacity; both had in fact failed at `3_2_place_iop` in the pilot too, so
+neither is a regression. Measured rate at 1034 designs: one regression, 0.10%.
+To size this class properly, count ports from the netlist rather than reading
+the logs that only speak on failure.
+
 ### LVS Timeout on Large Macro Designs
 
 **Symptoms:**
