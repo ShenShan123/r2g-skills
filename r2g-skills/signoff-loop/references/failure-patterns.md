@@ -2042,6 +2042,56 @@ neither is a regression. Measured rate at 1034 designs: one regression, 0.10%.
 To size this class properly, count ports from the netlist rather than reading
 the logs that only speak on failure.
 
+### Auditing DRC rule coverage: the log is a TAIL, and the verdict line is SYNTHESISED
+
+Two properties of `signoff_pass.py`'s gf180 path that together produce a
+confident wrong answer about what the DRC checked.
+
+**1. `drc_signoff.log` is `log[-20000:]`.** It is the last 20 KB, not the run.
+Rules that executed early are simply absent. Grepping that tail reported 239
+executed rules and ZERO antenna on a run whose `6_drc.lyrdb` holds **482
+categories including 21 `ANT.*`** — which is exactly what the 2026-10-10
+decision recorded ("天线要进": 33 antenna rules, 21 executed under this switch
+set, 0 violations, +103 s). The log said the deck had stopped checking antenna;
+the lyrdb showed it had not.
+
+**Rule coverage is audited from `6_drc.lyrdb`, never from `drc_signoff.log`.**
+The lyrdb is KLayout's own output and is written at the END of the run, so its
+`<name>` entries are the rules that actually executed and its `<item>` count is
+the violations. The log is for reading an error message, nothing else.
+
+**2. `DRC completed: N violations` is written by the SCRIPT, not by KLayout.**
+
+```python
+if r.returncode != 0 or not lyrdb.is_file():
+    return log                       # no verdict line -> one() reports drc_failed
+n = lyrdb.read_text().count("<item>")
+return log + f"\nDRC completed: {n} violations\n"
+```
+
+So the guard against a half-finished check is `returncode != 0 or lyrdb absent`.
+That does NOT cover a **Ruby error KLayout swallows**: a direct host run of this
+same deck hit `ArgumentError: bad value for range` at `main.drc:1726` (rule
+`CO.2b`, `with_bbox_min(co2b_egde_length..nil)`), stopped after 68 of 482 rules,
+**exited 0, and still wrote a lyrdb**. Fed to the logic above, that partial
+database becomes the verdict — 3721 violations here, but a partial run that
+happened to find nothing would be recorded **clean**.
+
+The corpus evidence says the container path does not hit this (the pilot's 2225
+graded designs all carry ~483-category lyrdbs, and `drc_status` has no
+`drc_failed` at all), so this is a latent hole rather than an active defect. The
+cheap closure is to require a minimum category count in the lyrdb — a gf180 run
+with far fewer than ~480 `<name>` entries did not finish its deck, whatever the
+exit code says. Queued rather than applied: `signoff_pass.py`'s sha256 is frozen
+in the running campaign's input digests, and breaking that check for a comment
+would turn the honesty mechanism into noise.
+
+**Method note.** Every wrong turn in this investigation came from measuring with
+the wrong instrument, not from a wrong hypothesis: the truncated log, then a
+host-side KLayout invocation standing in for the container one. When a
+measurement contradicts a recorded decision, suspect the measurement first —
+re-derive it from the tool's own artifact before editing the record.
+
 ### LVS Timeout on Large Macro Designs
 
 **Symptoms:**
