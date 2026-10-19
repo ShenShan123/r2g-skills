@@ -28,14 +28,10 @@ LOG=$D/rerun_baseline.log
 STAMP=$(date '+%Y%m%d')
 WORKERS=${WORKERS:-12}
 UTIL=${UTIL:-50}
-# PER-DESIGN, not per-stage, despite the name kept for compatibility with the
-# callers that already set it. orfs_spec.py runs ONE container per design that
-# executes the whole `make` (all stages) and arms a single deadline over it, so
-# 21600 s is the budget for floorplan+place+cts+route+finish TOGETHER. A design
-# needing three stages of three hours each is killed at six hours with no single
-# stage having timed out. The reaper's GRACE_MIN=365 min is 360+5 and only
-# sweeps containers the runner failed to clean up -- it cannot false-kill a live
-# design, because the runner always kills first.
+# PER-DESIGN, not per-stage: orfs_spec.py runs one container per design over
+# the whole `make` and arms a single deadline, so this covers floorplan through
+# finish TOGETHER. A design needing three 3-hour stages dies at 6 h with no
+# single stage having timed out. The name is kept for callers that set it.
 STAGE_TIMEOUT=${STAGE_TIMEOUT:-21600}
 SIGNOFF_WORKERS=${SIGNOFF_WORKERS:-8}     # not 12: a >100K-cell LVS takes
                                           # 3-5 GB, and CLAUDE.md forbids
@@ -57,11 +53,43 @@ LIMIT=${LIMIT:-0}                         # designs per platform, 0 = all
 say(){ printf '%s %s\n' "$(date '+%F %T')" "$*" | tee -a "$LOG"; }
 
 #          platform  fallback_period  pdn_floor
+# gf180 FIRST. The platforms run sequentially either way, so the order costs
+# nothing and decides which results arrive on day 2 instead of day 4:
+#   * its checkers are the healthiest -- 0 designs with no LVS verdict, against
+#     88 on nangate45
+#   * it has the largest repairable pool, 353 dev failures r2g can act on
+#     against 228 and 125
+#   * it is the only platform whose DRC finds violations across many rule
+#     families rather than essentially one (CO.6a is 95% of 4113; nangate45 is
+#     99.9% antenna)
+# So the first closed loop -- baseline, repair, compare -- is visible soonest on
+# the platform where it says the most.
 SPECS=(
-  "nangate45 2  32"
   "gf180     10 110"
+  "nangate45 2  32"
   "sky130hd  5  32"
 )
+
+# gf180 ONLY: two platform overrides the pilot applied and this chain did not,
+# which cost a full 1248-design flow (2026-10-18).
+#
+#   R2G_PDN_CFG      drops `-split_cuts {Metal3 0.128}` from add_pdn_connect.
+#                    With it the cuts merge into 0.772 x 1.028 rectangles and
+#                    each violates V2.1/V3.1 ("Min/max Via2 size 0.26um").
+#                    Measured on audio_playout, same deck, same switches:
+#                    3 violations with the override, 10685 without.
+#   R2G_TAPCELL_TCL  tapcell -distance 100 -> 30. gf180 ships 100 while its own
+#                    DF.13/DF.14_MV cap the distance to the nearest substrate
+#                    tap at 15 um for 5 V devices.
+#
+# They are APPARATUS, not frozen parameters: identical in both arms, declared,
+# no credit claimed. They were invisible to every pre-launch check because none
+# of them asked what the PILOT did that this chain does not -- the checks all
+# started from what this chain contains. Gate 11 now asks that question.
+# nangate45 and sky130hd need neither (verified: their pilot config.mk field
+# sets are identical to this chain's).
+GF180_PDN_CFG=${GF180_PDN_CFG:-$D/gf180_pdnfix/a.cfg}
+GF180_TAP_TCL=${GF180_TAP_TCL:-$D/gf180_tapfix/d30.tcl}
 
 # ---- preflight: refuse to start on a stale or missing frozen artifact -------
 fail=0
@@ -132,7 +160,15 @@ for spec in "${SPECS[@]}"; do
   OUT=$D/rerun_${P}_${STAMP}
   say "=== $P 起 (回退周期 ${PER}ns, PDN 下限 ${FL}um) -> $OUT"
   t0=$(date +%s)
+  PDN_ENV=""; TAP_ENV=""
+  if [ "$P" = gf180 ]; then
+    [ -f "$GF180_PDN_CFG" ] || { say "!! 缺 $GF180_PDN_CFG -- gf180 不能跑"; exit 70; }
+    [ -f "$GF180_TAP_TCL" ] || { say "!! 缺 $GF180_TAP_TCL -- gf180 不能跑"; exit 70; }
+    PDN_ENV="$GF180_PDN_CFG"; TAP_ENV="$GF180_TAP_TCL"
+    say "  gf180 覆盖: PDN=$(basename $PDN_ENV)  TAPCELL=$(basename $TAP_ENV)"
+  fi
   R2G_SPEC_TABLE=$D/spec/spec_${P}.json \
+  R2G_PDN_CFG="$PDN_ENV" R2G_TAPCELL_TCL="$TAP_ENV" \
   python3 "$D/orfs_spec.py" \
     --package "$D/rtl-certified-handoff-0002" \
     --select "$D/_rerun_all.select" \
@@ -148,6 +184,22 @@ for spec in "${SPECS[@]}"; do
   n=$(ls -d $OUT/runs/*/ 2>/dev/null | wc -l)
   miss=$(grep -c "SPEC MISS" "$D/rerun_${P}_${STAMP}.driver.log" 2>/dev/null || true)
   say "  $P flow 结束 rc=$rc 用时 $(( (t1-t0)/60 ))min 产出 ${n} 规格缺失 ${miss:-0}"
+
+  # Verify the campaign's OWN output against the frozen document, rather than
+  # trusting a preflight that ran earlier against a possibly older spec table.
+  # That distinction is not academic: at launch the preflight artifacts for two
+  # platforms were flagged stale, because the area allowance had been
+  # recalibrated after they were built. Checking here removes the question --
+  # what matters is that THESE designs carry the frozen die, period, uncertainty
+  # and I/O delay, and nothing about an earlier run can establish it.
+  python3 -I "$D/conformance_check.py" --root "$(basename "$OUT")" --platform "$P" \
+      >> "$LOG" 2>&1
+  _crc=$?
+  if [ "$_crc" != 0 ]; then
+    say "!! $P 的产出与冻结文档不一致 (rc=$_crc) -- 停止，不要据此下结论"
+    exit 1
+  fi
+  say "    $P 一致性检查通过（查的是本次产出）"
   rm -rf "${OUT}_s" 2>/dev/null
 
   # ---- SIGNOFF. Without this the campaign produces no verdicts at all. -------
