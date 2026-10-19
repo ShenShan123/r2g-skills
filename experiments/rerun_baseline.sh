@@ -134,6 +134,15 @@ say "=== 正式重跑起  worker=$WORKERS  利用率=$UTIL  每设计总超时=$
 # in one day, once making the spec-table hook a silent no-op, and I regenerated
 # the spec table WHILE a measurement was running against it. The launch gate
 # checks these at launch; nothing checked they held for the next four days.
+# The select list is written BEFORE the digests, because it is one of them.
+# It used to be written after, so the frozen hash described whatever the
+# PREVIOUS campaign had left in the file and the closing `sha256sum -c` failed
+# on every run whose SET differed -- a control that cries wolf by construction,
+# which is worse than no control because it teaches you to ignore it.
+SET=${SET:-dev}
+cp "$D/splits/${SET}.txt" "$D/_rerun_all.select"
+say "受试设计 $(wc -l < $D/_rerun_all.select) 份 (只跑 ${SET}；held-out 等有东西要验证时再跑)"
+
 DIGESTS=$D/rerun_${STAMP}.digests
 : > "$DIGESTS"
 for f in "$D/orfs_spec.py" "$D/signoff45.py" "$D/signoff_pass.py" \
@@ -149,9 +158,7 @@ say "已冻结 $(wc -l < "$DIGESTS") 份输入的 sha256 -> $(basename "$DIGESTS
 # while costing half the machine time (three days instead of six). The
 # held-out baseline has to be run before any held-out claim, just not before
 # there is anything to claim.
-SET=${SET:-dev}
-cp "$D/splits/${SET}.txt" "$D/_rerun_all.select"
-say "受试设计 $(wc -l < $D/_rerun_all.select) 份 (只跑 ${SET}；held-out 等有东西要验证时再跑)"
+
 say "  对照基准 = 试跑的 dev 双清数: nangate45 837 / gf180 754 / sky130hd 1032"
 
 for spec in "${SPECS[@]}"; do

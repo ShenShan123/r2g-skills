@@ -10,6 +10,22 @@ sky130hd by 669 designs.
 layout are all NOT clean, which is how the pilot recorded them, so the frozen
 number stays on the same ruler as its history.
 
+TWO RULERS ON gf180, REPORTED SEPARATELY. This chain runs a second DRC pass
+(the PDK's own run_drc.py) over designs the fast assembled deck could not grade;
+the pilot ran no such pass, so 180 of its gf180 designs -- 86 in dev -- carry no
+DRC verdict at all and count as not-clean. Backfilling them can only ADD clean
+designs, up to +86 against a pilot dev baseline of 754, and none of that comes
+from repair: it is the measurement improving. Each design records which checker
+produced its verdict in `drc_checker`, so the tally reports dual-clean twice:
+
+  same_ruler   verdicts from the assembled deck only (drc_checker is the fast
+               deck or absent) -- directly comparable with the pilot
+  full         every verdict including the official backfill -- the better
+               measurement, not comparable with the pilot without saying so
+
+Quote `same_ruler` against the pilot. Quote `full` as this run's own number.
+Never quote one as the other.
+
 A pass is `DRC clean AND LVS clean`. Timing is NOT a term: a design that misses
 its period still passes if it is dual-clean, because the period is a pressure
 knob rather than a gate (measured on the pilot: 237 sky130hd designs missed
@@ -162,6 +178,17 @@ def main(argv=None):
             sub = [d for d in rows if d["_key"] in keys]
             if not sub:
                 continue
+            # The official backfill is identifiable per design, so the
+            # pilot-comparable count is recoverable without a second run.
+            OFFICIAL = "pdk_run_drc.py"
+            both_same = sum(1 for d in sub
+                            if d.get("drc_status") == "clean"
+                            and d.get("lvs_status") == "clean"
+                            and d.get("drc_checker") != OFFICIAL)
+            backfilled = sum(1 for d in sub
+                             if d.get("drc_checker") == OFFICIAL
+                             and d.get("drc_status") == "clean"
+                             and d.get("lvs_status") == "clean")
             drc = sum(1 for d in sub if d.get("drc_status") == "clean")
             lvs = sum(1 for d in sub if d.get("lvs_status") == "clean")
             both = sum(1 for d in sub if d.get("drc_status") == "clean"
@@ -191,6 +218,12 @@ def main(argv=None):
             backend = len(sub) - fe          # the honest denominator
             print(f"{plat:11s} {label:8s} {len(sub):6d} {backend:8d} {both:6d} "
                   f"{drc:6d} {lvs:6d} {nov:7d} {fb:8d} {fe:8d} {rc_:8d}")
+            if backfilled:
+                # Printed only when it is non-zero, so a run with no backfill
+                # reads exactly as before and nobody has to subtract a zero.
+                print(f"{'':11s} {'':8s} {'':6s} {'':8s} "
+                      f"同尺 {both_same:5d}  官方补判另加 {backfilled:4d}"
+                      f"   (与试跑比用「同尺」)")
             grand[(plat, label)] = both
         unmatched = [d for d in rows if d["_key"] not in dev | held]
         if unmatched:
