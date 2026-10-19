@@ -2092,6 +2092,35 @@ host-side KLayout invocation standing in for the container one. When a
 measurement contradicts a recorded decision, suspect the measurement first —
 re-derive it from the tool's own artifact before editing the record.
 
+### Never edit a bash script that is currently running
+
+`bash` reads a script incrementally and tracks its position as a BYTE OFFSET,
+not a line number. Replacing the file while it runs leaves the offset pointing
+into the new content, and execution resumes mid-statement:
+
+```
+rerun_baseline.sh: line 291: son: command not found
+rerun_baseline.sh: line 293: syntax error near unexpected token `('
+rerun_baseline.sh: line 293: `for f in glob.glob("$OUT/runs/*/result.json"):'
+```
+
+Those lines are the inside of a python heredoc, reached because the offset no
+longer lined up with a statement boundary. The script itself was valid --
+`bash -n` passed on both copies.
+
+In the 2026-10-18 smoke run this cost the chain's closing section: the frozen
+input digest re-check and the tally never ran, although all three platforms had
+completed their flow and sign-off. Re-running those two steps by hand recovered
+them, so nothing was lost, but a longer tail could have skipped something that
+mattered.
+
+**Change a copy and deploy it for the NEXT run, or stop the chain first.** The
+same applies to any file a long-running process reads lazily. The related rule,
+for files a run has frozen by digest, is in the same family: editing one mid-run
+does not corrupt the run, but it makes the closing `sha256sum -c` report
+tampering it cannot distinguish from the real thing -- so the honesty mechanism
+goes off for a reason nobody will remember next week.
+
 ### LVS Timeout on Large Macro Designs
 
 **Symptoms:**
