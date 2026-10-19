@@ -20,6 +20,32 @@ beside the verdict, never folded into it.
 dev and held-out are reported apart and never summed into one headline. The
 split exists so a repair developed against dev can be claimed on held-out; a
 single combined figure would make that claim unauditable.
+
+The headline pass rate is a NET of two parameter changes pulling opposite ways,
+and must be reported decomposed or not at all. Measured on gf180's 1248
+comparable dev designs:
+
+    pilot pass 1115 (89.3%)  ->  frozen-spec pass 1123 (90.0%)   net +8
+
+    +18  pilot timeout -> pass   the 3 h -> 6 h budget. 33 pilot timeouts,
+                                 18 now finish; 15 of those took over 3 h, so
+                                 the old ceiling was cutting them off, not the
+                                 designs failing.
+     +2  pilot place/route fail -> pass   a 20% utilization die is wrong in
+                                 both directions; proper sizing recovers some.
+    -12  pass -> place/route fail        the cost of 50% utilization and
+                                 binned periods.
+
+"The frozen spec raised the pass rate" is therefore true and misleading: the
+pressure cost 12 designs and a separate change gained 18.
+
+BEWARE THE PARTIAL-CORPUS ARTIFACT. The same decomposition over the first 363
+designs read -6 (2 rescued, 8 lost), the opposite sign. The corpus runs in NAME
+order and the rescued designs are overwhelmingly large, so an early slice is not
+a random sample of it -- it is the small-design end, where almost no timeouts
+live. Restricting the comparison to designs BOTH runs completed is necessary but
+not sufficient; the completed set itself is biased until the run finishes. Do
+not quote a mid-run rate as the corpus rate.
 """
 import argparse
 import collections
