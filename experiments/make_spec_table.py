@@ -67,6 +67,13 @@ UTILIZATION = 0.50
 # small enough to be floored runs at far below the 50% target by construction;
 # that is accepted (it is a property of the design, not a spec error).
 PDN_FLOOR_UM = {"nangate45": 32.0, "gf180": 110.0, "sky130hd": 32.0}
+
+# IO positions per um of PERIMETER, for the pin floor below. NOT fitted:
+# place_pins keeps two tracks between pins, so k = 1/(2 * pin-layer pitch).
+# Both observed PPL-0024 failures confirm it -- nangate45 reported 1642
+# positions on a 228 um core (k=1.80 -> pitch 0.278, LEF says 0.28) and gf180
+# 4924 on 1377 (k=0.894 -> pitch 0.56, LEF says 0.56).
+IO_POS_PER_UM = {"nangate45": 1.80, "gf180": 0.894, "sky130hd": 1.0 / (2 * 0.46)}
 CORE_INSET_UM = 2.0
 PILOT_ROOT = {"nangate45": "n45_full", "gf180": "gf180_full",
               "sky130hd": "full_out"}
