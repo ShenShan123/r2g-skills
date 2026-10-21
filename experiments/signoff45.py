@@ -233,7 +233,11 @@ def main() -> None:
     ap.add_argument("--projroot", default=str(D / "n45_signoff_proj"))
     ap.add_argument("--out", default=str(D / "n45_full" / "signoff.json"))
     ap.add_argument("--workers", type=int, default=24)
-    ap.add_argument("--timeout", type=int, default=7200)
+    ap.add_argument("--timeout", type=int, default=21600,
+                    help="per-design sign-off bound in seconds. 6h, matching "
+                         "STAGE_TIMEOUT. The old 7200 default cost 88 nangate45 "
+                         "verdicts on a hand-launched run, so the right value "
+                         "lives here rather than in whoever remembers to pass it.")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
 

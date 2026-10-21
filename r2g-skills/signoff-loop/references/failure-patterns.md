@@ -7036,3 +7036,90 @@ NaN-with-valid=0 is a legal state; only the comparison makes it suspicious.
 - **PDNSim in stock OpenROAD (26Q1) has no SPICE export** — only `-voltage_file`/`-error_file`/
   `-em_outfile`. R2G2.0's `ir_drop_mV` label needs `VDD_extracted.sp`, so on this toolchain the
   column is honestly NaN with `irdrop_valid=0`; it is *unavailable*, not skipped by preference.
+
+## The Setting You Passed Is Not The Setting In Effect (2026-10-20 — failure-patterns #61)
+
+Four incidents in one day, all the same shape: a parameter was set, the run looked
+normal, and the parameter had no effect. None of them announced itself — each was
+found only because a *downstream* number was impossible.
+
+**`TECH_LEF` in a design `config.mk` is silently overridden.** The platform's own
+`config.mk` assigns it on line 7 with `=`, not `?=`, and the platform config is
+included *after* `include $(DESIGN_CONFIG)` (Makefile:89). So a design-level
+`export TECH_LEF = /work/patched.lef` is discarded without a word. Two complete
+antenna experiments ran against the stock LEF and produced byte-identical layouts;
+the tell was that lowering `ANTENNAAREARATIO` from 300 to 50 found *exactly* the
+same 106 violations as 300, which is physically impossible. **Any platform-file
+override must be a bind mount over the platform's own path** (the mechanism
+`signoff45.py` already uses for the DRC deck), and `R2G_EXTRA_MK` does not help —
+it appends to the same losing file.
+
+**The fix is a read-back assertion, not more care.** Before the run, read the value
+back from inside the container and refuse if it differs:
+
+```bash
+got=$(podman run --rm -v "$W/tech.lef":"$LEFPATH":ro,Z $IMAGE \
+      bash -lc "grep -oE 'ANTENNAAREARATIO [0-9]+' $LEFPATH | sort -u | head -1" | awk '{print $2}')
+[ "$got" = "$RATIO" ] || { echo "挂载未生效（读回 $got）"; return 1; }
+```
+
+This is the existing "read the artifact, not the script" rule applied to
+configuration. A campaign that silently ignores its own override produces a
+plausible, fully-populated, worthless result set.
+
+**A bound in the caller is a bound that will be forgotten.** `signoff45.py` defaulted
+`--timeout` to 7200 while the campaign chain passed 21600. A hand-launched sign-off
+inherited the default and 88 nangate45 designs lost their verdict to a 2h cutoff on
+the antenna section. Changing the chain is not the fix — the *script's own default*
+must be right, because the next invocation will also be by hand. Same shape as
+gf180's PDN/tapcell overrides (no default, caller must remember → 1248 layouts
+regraded) and nangate45's patched DRC deck (applied by hand in the pilot, so it
+lived in no script at all).
+
+**The generalizable fix is a declared manifest, checked before the run**
+(`experiments/apparatus.json` + `apparatus_check.py`, wired into
+`rerun_baseline.sh`, exit 72). Every ingredient that is not the stock platform is
+declared once with its path, its sha256 prefix, why it exists, its equivalence
+argument, and what breaks if it is absent; the checker verifies disk *and* image
+contents and refuses rather than warns. **Reviewing a launch script cannot catch an
+omission** — the script states what it does, never what it fails to do, which is
+exactly why three rounds of careful review missed gf180's missing override. The
+manifest doubles as the paper's apparatus declaration, with each entry tagged
+`checking` / `apparatus` / `repair`.
+
+### A signature read off one artifact is not a signature
+
+Twice in the same investigation a conclusion was drawn from a single log and was
+wrong both times, because the signature was never checked against the *passing*
+population:
+
+- `No rule to make target <source.v>` appeared in the failing LVS log and looked
+  like the cause. It appears in **all 1039** LVS logs, including every one of the
+  997 that report `Netlists match`. Benign noise.
+- An "empty layout circuit list" was then extracted as the discriminator. The
+  extraction regex was wrong and returned 0 for *every* group, matches included,
+  so the metric was vacuous rather than informative.
+
+**Before believing a signature distinguishes failures, count it in the successes.**
+A discriminator that is present in both tells you nothing, and a measurement that
+returns the same value everywhere is broken, not conclusive. The settling test was
+not a third grep but an A/B: the same design through both LVS paths. Both reported
+`Netlists don't match`, so the 21 mismatches are real and the baseline stands.
+
+### An experiment whose bound is shorter than its known runtime measures nothing
+
+A verification DRC was given `timeout 560` for a deck whose antenna section was
+already known to take 30–50 minutes. KLayout was SIGTERM'd at line 376 —
+`antenna_check` — after completing 120 of 130 rule categories, and wrote a valid
+lyrdb containing **0 violations**. Read naively that says "the repair worked,
+208 → 0". It says "the antenna rules never ran".
+
+The guard is the **category count**: a complete nangate45 run registers 130 rule
+categories (136 when violations add their own), so a verdict backed by fewer is
+partial and must not be read as clean. The main sign-off was audited for the same
+defect across all 1114 designs and is clean — 455 of 455 `clean` verdicts carry
+exactly 130 categories, and `run_drc.sh` keeps no lyrdb at all on timeout, so a
+cut-off run necessarily grades `timeout` rather than `clean`. `signoff_pass.py`
+(gf180/sky130hd) guards only on `returncode != 0 or lyrdb missing`, which a
+swallowed Ruby error slips past, so **the category-count floor belongs there
+before those two platforms sign off**: nangate45 130, sky130hd 146, gf180 482.

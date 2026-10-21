@@ -1,0 +1,129 @@
+{
+  "_comment": [
+    "Every ingredient of a baseline run that is not the stock platform, declared once.",
+    "",
+    "This file exists because the same class of mistake happened three times: a",
+    "campaign was launched with an ingredient missing, and nothing noticed until",
+    "the verdicts were already wrong. gf180 lost its PDN and tapcell overrides and",
+    "would have graded every design dirty (10685 violations instead of 3); nangate45",
+    "lost its patched DRC deck, which the pilot had applied by hand so it lived in no",
+    "script; and a manually launched sign-off inherited the 2h default bound instead",
+    "of the intended 6h, costing 88 verdicts. Reviewing what was written cannot catch",
+    "an omission -- only a declared list, checked before the run, can.",
+    "",
+    "The three layers are the attribution contract:",
+    "  checking  = the grader. Official where possible; a modified checker needs an",
+    "              equivalence argument, recorded here, or its verdicts mean nothing.",
+    "  apparatus = not official, but applied IDENTICALLY to both arms and declared.",
+    "              Earns no credit for r2g.",
+    "  repair    = applied by the repair arm only. This is the measured credit.",
+    "",
+    "Paths are relative to $D (the campaign root on the campaign host)."
+  ],
+  "host": "memlab216",
+  "D": "/proj/workarea/yangao",
+  "image": {
+    "ref": "localhost/r2g-orfs:26Q3",
+    "id": "5d92bbe588a0",
+    "layer": "apparatus",
+    "why": "One pinned image for every run on every platform, so a toolchain change cannot be mistaken for a result."
+  },
+  "ingredients": [
+    {
+      "id": "n45-drc-deck-tiled",
+      "layer": "checking",
+      "platform": "nangate45",
+      "path": "drcfix/FreePDK45_tiled.lydrc",
+      "sha256": "965425b4a9f0ff74",
+      "env": "R2G_DRC_DECK_OVERRIDE",
+      "why": "The stock FreePDK45 deck runs CONTACT.3 flat over the whole die and does not finish inside any usable bound; 36 workers sat on 167 designs for 11 hours. Tiling the LOCAL geometry rules took the same 167 designs to 11 minutes.",
+      "equivalence": "Antenna and the net-tracing rules stay in deep mode, because tiling a net-tracing check makes it WRONG rather than merely faster. Same-layout A/B on C00006: stock timed out at 7278s, patched reported its violations in 310s. The pilot ran this deck too, so both rounds are graded by the same ruler.",
+      "fail_if_missing": "The campaign must stop. Without it nangate45 sign-off does not complete, and a timeout is not a pass."
+    },
+    {
+      "id": "gf180-pdn-nosplit",
+      "layer": "apparatus",
+      "platform": "gf180",
+      "path": "gf180_pdnfix/a.cfg",
+      "sha256": "730ada5248e2c505",
+      "env": "R2G_PDN_CFG",
+      "why": "The stock gf180 PDN config emits Via2/Via3 with -split_cuts, which merge into 0.772x1.028 rectangles and violate GF's V2.1/V3.1 'every Via2/Via3 edge exactly 0.26 um'. Differs from the stock config by exactly one dropped clause.",
+      "equivalence": "Measured on audio_playout with the same deck and the same switches, only the overrides differing: 3 violations with it, 10685 without (V2.1 3480 + V3.1 3480 + DF.13_MV 1862 + DF.14_MV 1859). The pilot used it, so this is parity with the pilot, not an advantage over it.",
+      "fail_if_missing": "The campaign must stop. Every gf180 design would grade dirty and dual-clean would read ~0 against the pilot's 754."
+    },
+    {
+      "id": "gf180-tapcell-d30",
+      "layer": "apparatus",
+      "platform": "gf180",
+      "path": "gf180_tapfix/d30.tcl",
+      "sha256": "582faad84be540b2",
+      "env": "R2G_TAPCELL_TCL",
+      "why": "gf180 ships -distance 100 while its own DF.13/DF.14_MV rules cap the distance to the nearest substrate tap at 15 um. -distance 30 satisfies the rule.",
+      "equivalence": "Part of the same audio_playout measurement above (DF.13_MV and DF.14_MV account for 3721 of the 10685).",
+      "fail_if_missing": "The campaign must stop, for the same reason as the PDN config."
+    },
+    {
+      "id": "n45-antenna-model",
+      "layer": "apparatus",
+      "platform": "nangate45",
+      "path": "IMAGE:platforms/nangate45/lef/NangateOpenCellLibrary.tech.lef",
+      "sha256": "a9694ec4f6c47c1e",
+      "installer": "tools/install_nangate45_antenna.sh",
+      "why": "The stock nangate45 tech LEF ships NO per-layer antenna rule at all (its .r2g-pre-antenna.orig backup has zero ANTENNAAREARATIO lines), so OpenROAD's repair_antennas has nothing to fire on while the sign-off deck grades antennas at 300:1. The installer adds ANTENNAMODEL OXIDE1 + ANTENNAAREARATIO 300 on all 10 routing layers.",
+      "equivalence": "Ratio 300 deliberately MATCHES the grader rather than relaxing it. Present in the toolchain since 2026-07-22, so the pilot and this round both ran with it.",
+      "fail_if_missing": "Not fatal, but the arms stop being comparable to the pilot and the antenna repair has no model to act on."
+    },
+    {
+      "id": "n45-diode-diffarea",
+      "layer": "apparatus",
+      "platform": "nangate45",
+      "path": "IMAGE:platforms/nangate45/lef/NangateOpenCellLibrary.macro.mod.lef",
+      "sha256": "d39b70ec7182fcf7",
+      "installer": "tools/install_nangate45_antenna.sh",
+      "why": "ANTENNA_X1, the platform's only diode, ships ANTENNADIFFAREA 0.0, which OpenROAD rejects with GRT-0246 'No diode found'. The installer gives it a non-zero area so repair_antennas will accept it.",
+      "equivalence": "Same installer and same vintage as the antenna model, so both rounds have it.",
+      "fail_if_missing": "Not fatal, but no diode can be inserted, so the antenna repair cannot work at all."
+    },
+    {
+      "id": "spec-tables",
+      "layer": "apparatus",
+      "platform": "all",
+      "path": "spec/spec_{nangate45,sky130hd,gf180}.json",
+      "sha256": {
+        "spec_nangate45.json": "844bc72a4f812ec6",
+        "spec_sky130hd.json": "9bad6d0f51f31466",
+        "spec_gf180.json": "bcedd07e1b52f159",
+        "area_allowance.json": "769a24478b3df547",
+        "platform_digests.json": "d9815fd0ca8e4b31"
+      },
+      "generator": "experiments/make_spec_table.py",
+      "why": "The frozen per-design period, utilization and die. Frozen rather than derived at run time, because a repair that cuts cell count would otherwise shrink its own die and move the goalposts.",
+      "equivalence": "One generator is the single place the die is computed; both arms read the same table files.",
+      "fail_if_missing": "The campaign must stop. A run without the frozen table is not the frozen baseline."
+    },
+    {
+      "id": "bounds",
+      "layer": "apparatus",
+      "platform": "all",
+      "values": {"STAGE_TIMEOUT": 21600, "SIGNOFF_TIMEOUT": 21600},
+      "why": "Six hours per design for the flow and for sign-off. The pilot used 7200 for sign-off, so a verdict earned only by the longer bound is ours and not like-for-like with the pilot -- which is why it is declared here rather than left implicit.",
+      "equivalence": "Applied to both arms. A design that still times out is NOT clean; no verdict is not a pass.",
+      "fail_if_missing": "A shorter bound silently costs verdicts: 88 nangate45 designs lost one to the 7200 default."
+    },
+    {
+      "id": "antenna-ratio-repair",
+      "layer": "repair",
+      "platform": "nangate45",
+      "value": {"ANTENNAAREARATIO": 10},
+      "applies_to": "ONLY designs diagnosed as antenna-only DRC violations with LVS already clean",
+      "why": "With both sides at ratio 300 the router reports 4 violating nets and the grader reports 208 on the same layout -- the models disagree inside the computation, not in their configuration. Over-constraining the router to 10:1 makes it repair until the grader's 300:1 is satisfied with margin. Validated on C00315: 208 antenna violations to 0, LVS still matching, worst slack 0.2748 -> 0.2754, at +11.9% instances and +3.4% cell area.",
+      "not_gaming": "This makes the ROUTER stricter than the rule, not the GRADER looser. The sign-off deck and its 300:1 are untouched and identical in both arms. It is the opposite direction from relaxing a rule, and it departs deliberately from install_nangate45_antenna.sh's choice of 300, whose stated intent was to match the grader.",
+      "rejected_alternatives": [
+        "ANTENNACUMAREARATIO: no effect. The apparent 0->9 improvement came from a standalone check_antennas on a final DEF, an artificial setting; inside the flow the layout was byte-identical.",
+        "MAX_REPAIR_ANTENNAS_ITER_GRT/DRT = 10: no effect, byte-identical layout. The repair had already converged; it was never iteration-bound.",
+        "ratio 50: reduced violations on 5 of 5 designs and cleared none of them. Only zero counts toward dual-clean.",
+        "TECH_LEF in the design config.mk: silently overridden by the platform config's `=`. Any override must be a bind mount with a read-back assertion."
+      ]
+    }
+  ]
+}

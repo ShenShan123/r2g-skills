@@ -36,7 +36,12 @@ STAGE_TIMEOUT=${STAGE_TIMEOUT:-21600}
 SIGNOFF_WORKERS=${SIGNOFF_WORKERS:-8}     # not 12: a >100K-cell LVS takes
                                           # 3-5 GB, and CLAUDE.md forbids
                                           # running several of those at once
-SIGNOFF_TIMEOUT=${SIGNOFF_TIMEOUT:-7200}     # 6h, and reaper.sh GRACE_MIN must
+# 6 h, the same budget the flow gets. The pilot used 7200 here, so a design that
+# gets a verdict only because of the longer bound is OUR verdict, not a
+# like-for-like one. Cost: a timing-out design holds its slot for 6 h instead of
+# 2, which over the pilot's 149 nangate45 antenna-section timeouts is roughly 11
+# extra hours of pure waiting at 56 workers.
+SIGNOFF_TIMEOUT=${SIGNOFF_TIMEOUT:-21600}     # 6h, and reaper.sh GRACE_MIN must
                                           # stay above it (365 min) or it reaps
                                           # designs still legitimately routing
 ONLY=${ONLY:-}                            # restrict to one platform, for a pilot
@@ -90,6 +95,48 @@ SPECS=(
 # sets are identical to this chain's).
 GF180_PDN_CFG=${GF180_PDN_CFG:-$D/gf180_pdnfix/a.cfg}
 GF180_TAP_TCL=${GF180_TAP_TCL:-$D/gf180_tapfix/d30.tcl}
+
+# nangate45 ONLY, and for SIGN-OFF rather than the flow. The stock
+# FreePDK45.lydrc baked into the container stalls in CONTACT.3: its geometric
+# unions (well, implant, active.or(poly.or(metal1))) degenerate to die-sized
+# polygons under `deep`, the hierarchy collapses, and the run crawls -- measured
+# at 938 s to reach 21 of 132 rules on a 6563-cell design, which also HID 19
+# real antenna violations behind the 111 rules it never reached. It is not only
+# slow, it under-reports.
+#
+# The patched deck tiles the local geometric checks (tiles(200), borders(2),
+# where per-tile evaluation is exact) and switches back to `deep` before the
+# antenna section, which traces nets across the die and would be WRONG if tiled.
+# Equivalence was measured two ways in the pilot: identical categories and
+# geometry on the CONTACT.3 fixture, and 257 s vs 263 s with 19 violations
+# matching per antenna layer on a routed design.
+#
+# This is the override lost on 2026-10-20, which cost a sign-off restart. The
+# pilot applied it BY HAND, so it lived in no chain script and no config.mk --
+# invisible to the field-set gate, which only compares emitted configs. It is
+# declared here for the same reason gf180's two are: apparatus the run must not
+# be able to start without.
+#
+# tools/install_nangate45_drc.sh installs it into a HOST ORFS checkout, which
+# does not reach the container, so the mount stays the mechanism here. Baking it
+# into the image would retire this line.
+N45_DRC_DECK=${N45_DRC_DECK:-$D/drcfix/FreePDK45_tiled.lydrc}
+
+# Declared ingredients, verified before anything runs. The per-ingredient
+# fail-stops below stay, but they only catch what someone remembered to write a
+# check for -- gf180's PDN override had no check because the chain was rewritten
+# from the spec document rather than from the previous chain, and an omission is
+# invisible to any review of what IS there.
+APPARATUS_CHECK=${APPARATUS_CHECK:-$D/apparatus_check.py}
+if [ -f "$APPARATUS_CHECK" ]; then
+  say "== 器具校验"
+  if ! python3 -I "$APPARATUS_CHECK" --manifest "$D/apparatus.json" 2>&1 | tee -a "$LOG" | tail -1 | grep -q "齐备"; then
+    say "!! 器具校验未通过 -- 不开跑（缺文件退 70，指纹不符退 71）"
+    exit 72
+  fi
+else
+  say "!! 找不到 $APPARATUS_CHECK -- 配料未经校验，这正是 gf180 那次的处境"
+fi
 
 # ---- preflight: refuse to start on a stale or missing frozen artifact -------
 fail=0
@@ -231,6 +278,9 @@ for spec in "${SPECS[@]}"; do
   # the LVS truth undercounted sky130hd by 669.
   t2=$(date +%s)
   if [ "$P" = nangate45 ]; then
+    [ -f "$N45_DRC_DECK" ] || { say "!! 缺 $N45_DRC_DECK -- 原版 deck 会在 CONTACT.3 卡死，停"; exit 71; }
+    say "    nangate45 DRC deck: $(basename "$N45_DRC_DECK") sha $(sha256sum "$N45_DRC_DECK" | cut -c1-12)"
+    R2G_DRC_DECK_OVERRIDE="$N45_DRC_DECK" \
     python3 -I "$D/signoff45.py" \
         --runs "$OUT/runs" --projroot "$D/rerun_${P}_proj" \
         --out "$OUT/signoff.json" --workers "$SIGNOFF_WORKERS" \
