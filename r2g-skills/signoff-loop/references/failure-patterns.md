@@ -2121,6 +2121,19 @@ does not corrupt the run, but it makes the closing `sha256sum -c` report
 tampering it cannot distinguish from the real thing -- so the honesty mechanism
 goes off for a reason nobody will remember next week.
 
+**"Deploy a copy" is not enough if the copy is written over the original.**
+On 2026-10-21 the rule above was followed in spirit and broken in mechanism:
+an A/B wrapper (`knob_ab.sh`) was improved twice while instances of it were
+running, each time with `ssh host 'cat > knob_ab.sh' < local` -- an in-place
+overwrite of the same inode. One instance had a 2.5 h flow in flight; when the
+flow returned, bash resumed at its old byte offset in the new text and died
+with `syntax error near unexpected token ')'`, losing the judge step of a
+finished experiment (recovered by a separate finish script; the flow itself was
+intact). **Deploy by rename**: write `<dest>.new`, verify its sha256 on the
+host, `mv` it over `<dest>`. A rename replaces the directory entry only; a
+running instance keeps reading the inode it already holds open. That is now
+`tools/deploy216.sh`, and every deploy to the campaign host goes through it.
+
 ### LVS Timeout on Large Macro Designs
 
 **Symptoms:**
