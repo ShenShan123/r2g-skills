@@ -21,6 +21,32 @@ rm -rf "$W"; mkdir -p "$W/work" "$W/runs/$RUN"
 cp "$SRC/config.mk" "$SRC/constraint.sdc" "$W/work/"
 # EXTRA_FILES="<host path> ...": copied into the work dir (seen as /work/<name>)
 for f in ${EXTRA_FILES:-}; do cp "$f" "$W/work/"; done
+# SPEC_TABLE=<spec json>: apply this design's frozen period and die exactly as
+# orfs_spec.py does for a design WITH an entry -- `set _per` in the SDC (the
+# uncertainty and I/O delays derive from it), DIE_AREA/CORE_AREA in config.mk,
+# and no CORE_UTILIZATION. Used for designs the baseline ran on the platform
+# default because the pilot never sized them; refuses if the entry is missing.
+if [ -n "${SPEC_TABLE:-}" ]; then
+  python3 - "$SPEC_TABLE" "$RUN" "$W/work/config.mk" "$W/work/constraint.sdc" <<'PY' || { echo "result no_spec_entry"; exit 6; }
+import json, re, sys
+tbl, run, cfg, sdc = sys.argv[1:5]
+short = "__".join(run.split("__")[:3])
+e = json.load(open(tbl)).get(short)
+if not e:
+    sys.exit(1)
+c = open(cfg).read()
+c = re.sub(r"(?m)^export (CORE_UTILIZATION|DIE_AREA|CORE_AREA)\s*=.*\n", "", c)
+d, i = e["die_side_um"], e["core_inset_um"]
+c += "export DIE_AREA  = 0 0 %g %g\nexport CORE_AREA = %g %g %g %g\n" % (d, d, i, i, d - i, d - i)
+open(cfg, "w").write(c)
+t = open(sdc).read()
+t2 = re.sub(r"(?m)^set _per\s+\S+", "set _per %s" % e["period_ns"], t)
+assert t2 != t or ("set _per %s" % e["period_ns"]) in t
+open(sdc, "w").write(t2)
+print("readback SPEC: period %s ns  die %g  core %g  size_source %s"
+      % (e["period_ns"], d, e["core_side_um"], e.get("size_source")))
+PY
+fi
 for line in "$@"; do
   var=$(echo "$line" | awk '{print $2}')
   sed -i "/^export $var[[:space:]]*=/d" "$W/work/config.mk"

@@ -194,25 +194,30 @@ EXTRA_PIN_LOG_ROOTS: list[str] = []
 # {design: (cells, chip_area)} from the BASELINE re-run's synth_stat.txt, for
 # designs the pilot never synthesised. Filled from --baseline-size-root.
 BASELINE_SIZES: dict = {}
+REPAIR_SIZES: dict = {}
 
 
-def load_baseline_sizes(roots: list[str]) -> None:
+def load_baseline_sizes(roots: list[str], into: dict | None = None) -> None:
     """Read synth_stat.txt exactly as orfs_spec.py's harvest does, so the
-    fallback is the same quantity as the pilot's, not an approximation."""
+    fallback is the same quantity as the pilot's, not an approximation. The
+    design is identified by the first path component that looks like a run
+    name (C<5 digits>__...), so any layout of work dirs under a root works."""
+    into = BASELINE_SIZES if into is None else into
     pat_area = re.compile(r"^\s*(\d+)\s+(\S+)\s+\d+\s+\S+\s+cells\s*$", re.M)
-    pat_cells = re.compile(r"Number of cells:\s+(\d+)")
     for root in roots:
-        for stat in sorted(Path(root).glob("*/reports/*/*/*/synth_stat.txt")):
-            run = stat.parts[len(Path(root).parts)]
-            short = "__".join(run.split("__")[:-2])
-            if short in BASELINE_SIZES:
+        for stat in sorted(Path(root).rglob("synth_stat.txt")):
+            comp = next((c for c in stat.parts if re.match(r"C\d{5}__", c)), None)
+            if comp is None:
+                continue
+            short = "__".join(comp.split("__")[:3])
+            if short in into:
                 continue
             t = stat.read_text(errors="replace")
             m = pat_area.search(t)
             if not m:
                 continue
             try:
-                BASELINE_SIZES[short] = (int(m.group(1)), float(m.group(2)))
+                into[short] = (int(m.group(1)), float(m.group(2)))
             except ValueError:
                 continue
 
@@ -271,6 +276,15 @@ def build(platform: str, pilot_dir: Path) -> tuple[dict, dict]:
         if (not cells or not area) and short in BASELINE_SIZES:
             cells, area = BASELINE_SIZES[short]
             size_src = "baseline_rerun_synth_stat"
+        # Last resort, for a design whose baseline cannot synthesise at all
+        # (default parser rejects it, a header is listed standalone, an
+        # async-load flop has no cell): its only synthesis is the repair arm's.
+        # Labelled as such so the provenance is never mistaken for a baseline
+        # measurement; it exists so a repair-arm win is judged under the same
+        # period/die formula as every peer, not under the platform default.
+        if (not cells or not area) and short in REPAIR_SIZES:
+            cells, area = REPAIR_SIZES[short]
+            size_src = "repair_arm_synth_stat"
         if not cells or not area:
             skipped[short] = f"no pilot size (cells={cells}, area={area})"
             continue
@@ -305,10 +319,14 @@ def main(argv=None) -> int:
     ap.add_argument("--baseline-size-root", action="append", default=[],
                     help="a baseline re-run's work/scratch dir whose synth_stat.txt "
                          "sizes designs the pilot never synthesised (repeatable)")
+    ap.add_argument("--repair-size-root", action="append", default=[],
+                    help="repair-arm work dirs whose synth_stat.txt sizes a design "
+                         "the baseline cannot synthesise at all (repeatable)")
     ap.add_argument("--platforms", default="nangate45,gf180,sky130hd")
     args = ap.parse_args(argv)
     EXTRA_PIN_LOG_ROOTS.extend(args.extra_pin_log_root)
     load_baseline_sizes(args.baseline_size_root)
+    load_baseline_sizes(args.repair_size_root, REPAIR_SIZES)
 
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)

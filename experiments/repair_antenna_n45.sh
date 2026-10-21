@@ -152,6 +152,13 @@ PY
 one() {
   local nm=$1 rec=$OUT/verdicts/$1.json
   [ -f "$rec" ] && return 0                                  # resumable
+  # A design is owned by exactly one worker, across instances. Two workers on
+  # one design share its work dir (flow() starts with rm -rf of it) and its
+  # container names (a stale same-named container is removed by name), so they
+  # destroy each other's live work -- the concrete form of the hard rule
+  # against running the same design twice. mkdir is atomic: the first wins.
+  mkdir -p "$OUT/locks"
+  mkdir "$OUT/locks/$nm" 2>/dev/null || return 0
   # Net lists live OUTSIDE the per-rung work dir. flow() begins with rm -rf of
   # that dir, and the first launch kept r1's list inside it: deleted one line
   # before it was copied, so 12 flows started with no list for the hook to read.
