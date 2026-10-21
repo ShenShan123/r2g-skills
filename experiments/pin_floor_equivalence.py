@@ -31,8 +31,17 @@ def load(p):
             return None
 
 
+# Pin count is a property of the RTL, so it is the same on every platform, and
+# pooling the three pilot roots covers more designs than nangate45 alone (1156
+# of 2331). That wider coverage is why this script reported 15 raised designs
+# while make_spec_table.py, which reads only the platform's own pilot root,
+# reports 8: both are right about their own population and the two numbers are
+# simply not comparable. PLATFORM_ROOTS below is therefore the knob -- set it to
+# ("n45_full",) to reproduce the generator's count exactly.
+PLATFORM_ROOTS = ("n45_full", "gf180_full", "full_out")
+
 pins = {}
-for root in ("n45_full", "gf180_full", "full_out"):
+for root in PLATFORM_ROOTS:
     for f in glob.glob(str(D / root / "runs/*/6_final.def")):
         s = "__".join(Path(f).parent.name.split("__")[:-2])
         if s in pins:
@@ -60,7 +69,10 @@ for f in glob.glob(str(R / "*/result.json")):
     if not e or p is None:
         continue
     need = math.ceil(p / (K * 4))
-    grows = max(e["core_side_um"], need, PDN) > e["core_side_um"]
+    # Only the PIN term counts as growth here. Writing
+    # max(core, need, PDN) > core also fires when the PDN floor binds, which
+    # would attribute a PDN-floored die to the pin floor.
+    grows = need > e["core_side_um"]
     ppl = False
     for g in sorted(glob.glob(str(rd / "logs/*/*/*/*.log")),
                     key=lambda x: -Path(x).stat().st_mtime)[:3]:

@@ -25,6 +25,7 @@ import datetime as _dt
 import glob
 import json
 import math
+import re
 import os
 import sys
 from pathlib import Path
@@ -138,17 +139,66 @@ def area_allowance(platform: str) -> float:
     return AREA_ALLOWANCE_DEFAULT.get(platform, 1.0)
 
 
-def die_for(platform: str, cell_area_um2: float) -> tuple[float, float]:
-    """(die_side, core_side) in um, floored at the platform's PDN minimum."""
+def pin_counts(pilot_dir: Path) -> dict:
+    """Pin count per design, from the PINS header of whatever DEF the pilot wrote.
+
+    Only designs that produced a DEF have one, which is roughly 60% of the
+    corpus, so this cannot become a term in the general formula without
+    inventing numbers for the rest. It does not need to be: the floor can only
+    RAISE a core side, and pin_floor_equivalence.py shows that over all 1249
+    nangate45 designs every design the floor would raise has ALREADY failed, all
+    15 of them with PPL-0024, while zero passing designs would be raised and
+    zero PPL failures would be left unraised. So applying it exactly where the
+    count is known is equivalent to having run it from the start.
+    """
+    pins = {}
+    for f in glob.glob(str(pilot_dir / "runs" / "*" / "6_final.def")):
+        short = "__".join(os.path.basename(os.path.dirname(f)).split("__")[:-2])
+        if short in pins:
+            continue
+        try:
+            with open(f, "r", errors="replace") as fh:
+                head = fh.read(200000)
+        except OSError:
+            continue
+        m = re.search(r"^PINS (\d+)", head, re.M)
+        if m:
+            pins[short] = int(m.group(1))
+    return pins
+
+
+def pin_required_core(platform: str, npins: int) -> float:
+    """Smallest core side whose perimeter holds npins IO positions.
+
+    k is derived, not fitted: place_pins keeps two tracks between pins, so
+    k = 1/(2*pitch) on the pin layer -- nangate45's 1.80 matches its 0.278/LEF
+    0.28 pitch, gf180's 0.894 its 0.56. Cell area scales with the square of the
+    core side while IO capacity scales with its perimeter, which is why a die
+    sized purely from area can be large enough for the cells and still too
+    small for the pins; that asymmetry is the whole PPL-0024 failure mode.
+    """
+    k = IO_POS_PER_UM.get(platform)
+    return 0.0 if not k or npins <= 0 else npins / (k * 4.0)
+
+
+def die_for(platform: str, cell_area_um2: float,
+            npins: int = 0) -> tuple[float, float, bool]:
+    """(die_side, core_side, pin_floored) in um.
+
+    core = max(area_derived, pin_required, pdn_floor). The pin term is applied
+    only where a pin count is known; see pin_counts() for why that is sound.
+    """
     eff = cell_area_um2 * area_allowance(platform)
     derived = math.sqrt(eff / UTILIZATION) if eff > 0 else 0.0
-    core = max(derived, PDN_FLOOR_UM[platform])
+    need = pin_required_core(platform, npins)
+    core = max(derived, need, PDN_FLOOR_UM[platform])
     core = math.ceil(core)
-    return core + 2 * CORE_INSET_UM, core
+    return core + 2 * CORE_INSET_UM, core, need > max(derived, PDN_FLOOR_UM[platform])
 
 
 def build(platform: str, pilot_dir: Path) -> tuple[dict, dict]:
     spec, skipped = {}, {}
+    pins = pin_counts(pilot_dir)
     for f in glob.glob(str(pilot_dir / "runs" / "*" / "result.json")):
         name = os.path.basename(os.path.dirname(f))
         short = "__".join(name.split("__")[:-2])
@@ -165,7 +215,8 @@ def build(platform: str, pilot_dir: Path) -> tuple[dict, dict]:
         if not cells or not area:
             skipped[short] = f"no pilot size (cells={cells}, area={area})"
             continue
-        die, core = die_for(platform, float(area))
+        npins = pins.get(short, 0)
+        die, core, pin_floored = die_for(platform, float(area), npins)
         spec[short] = {
             "cells": int(cells),
             "pilot_cell_area_um2": round(float(area), 3),
@@ -174,6 +225,10 @@ def build(platform: str, pilot_dir: Path) -> tuple[dict, dict]:
             "core_side_um": core,
             "core_inset_um": CORE_INSET_UM,
             "pdn_floored": core <= PDN_FLOOR_UM[platform],
+            # recorded even when it does not bind, so a die can be re-derived
+            # from the table alone without going back to the pilot's DEFs
+            "pins": npins,
+            "pin_floored": pin_floored,
         }
     return spec, skipped
 
