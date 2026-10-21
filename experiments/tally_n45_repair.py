@@ -63,15 +63,17 @@ def main() -> int:
     # Designs the baseline cannot synthesise count ONLY from their formula-spec
     # re-runs (hdr_drop_spec, sv_frontend_spec); the earlier platform-default
     # runs of the same recipes are superseded and deliberately not read.
-    for recipe in ("skip_incr", "hdr_drop_spec", "aldff", "m1wide", "strip_attr"):
+    for recipe in ("skip_incr", "hdr_drop_spec", "aldff", "m1wide", "strip_attr", "dontuse_oai221x4", "case_rename", "no_rcx"):
         for so in (D / "knob_ab" / recipe).glob("*/signoff.json"):
             for k, r in load_signoff(so).items():
                 if dual(r):
                     rep.setdefault(k, recipe)
-    for so in (D / "sv_frontend_spec").glob("*/signoff.json"):
-        for k, r in load_signoff(so).items():
-            if dual(r):
-                rep.setdefault(k, "sv_frontend")
+    for root, label in (("sv_frontend_spec", "sv_frontend"),
+                        ("sv_frontend_spec_ant", "sv_frontend+antenna")):
+        for so in (D / root).glob("*/signoff.json"):
+            for k, r in load_signoff(so).items():
+                if dual(r):
+                    rep.setdefault(k, label)
 
     devk = {short(n) for n in DEV}
     b_frozen = {k for k in devk if k in base and dual(base[k])}
@@ -86,6 +88,13 @@ def main() -> int:
                  if k in devk and k not in baseline and k not in stratum}
     pending = {k: v for k, v in r2g_extra.items() if k not in spec}
     r2g_extra = {k: v for k, v in r2g_extra.items() if k in spec}
+    # Repairs of designs that fail AT SYNTHESIS are set aside for now (user,
+    # 2026-10-21): the headline gap counts back-end flow and sign-off repairs
+    # only. The failure stage decides, not where the fix is applied -- the
+    # OAI221_X4 dont-use acts in synthesis but repairs a sign-off DRC violation.
+    SYNTH_STAGE = {"aldff", "strip_attr", "hdr_drop_spec", "sv_frontend", "sv_frontend+antenna"}
+    synth_side = {k: v for k, v in r2g_extra.items() if v in SYNTH_STAGE}
+    r2g_extra = {k: v for k, v in r2g_extra.items() if v not in SYNTH_STAGE}
 
     print("dev %d 份" % len(devk))
     print("  冻结基线双清            %4d" % len(b_frozen))
@@ -95,6 +104,7 @@ def main() -> int:
     for k, v in Counter(r2g_extra.values()).most_common():
         print("        %-16s %3d" % (k, v))
     print("  差距（r2g - 基线）        %+4d" % len(r2g_extra))
+    print("  暂不计：综合阶段失败的修复成功 %d 份  %s" % (len(synth_side), dict(Counter(synth_side.values()))))
     print("  待按公式规格重跑的 r2g 成功 %3d   %s" % (len(pending), dict(Counter(pending.values()))))
     print("  单独一层：驱动缺陷救回（不进比较） %d 份，其中双清 %d"
           % (len(stratum), sum(1 for k in stratum if dual(rescued_other[k]))))
