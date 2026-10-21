@@ -7189,3 +7189,96 @@ cut below the pilot's 28800; the outer bound sits 900 s above the inner so the
 checker's own timeout fires and is classified `timeout`; and the effective deck
 sha and bounds are printed at start and read back from a live container. Deploys
 to the host are checksum-compared against the repo copy.
+
+## Flow failures that are not the design's fault (2026-10-21 — failure-patterns #62)
+
+Of 135 nangate45 dev designs that never produced a GDS, most failed on the
+*inputs to* the flow or on a tool limit with a known workaround, not on physical
+design. Each class below was diagnosed from its logs and, where marked, fixed and
+A/B-validated (treatment judged by the same `signoff45.py` as the baseline). The
+pilot failed every one of these designs too, so none is a regression.
+
+### Driver file-list defects (apparatus: fix the driver, both arms)
+
+- **Path with whitespace** (34): `make` splits a variable on whitespace with no
+  quoting, so `src/RSIC-V core/Flopr.v` becomes two nonexistent files —
+  `No rule to make target '<prefix>'`, reported upstream as `no_log_harvested`.
+  Fix: route make-hostile paths through a symlink in the design's work dir
+  (`orfs_spec.py:_make_safe`), pointed at the deepest hostile component so
+  relative `` `include``s still resolve through the real directory.
+- **Included file also listed** (15): `can_bsp.v` includes `can_acf.v` and both
+  are listed → `Re-definition of module $abstract\can_acf`. Drop the listed copy
+  ONLY if it defines a module and has no include guard. The unrestricted rule
+  changed 69 configs of designs that already passed — a driver fix must never move
+  the baseline, so every such change goes through a regression gate over all
+  configs (here: exactly the 58 targeted designs change, 0 passing ones).
+- **Memory image listed as source** (9): `program.hex`, `p64.mem`, `*.init` in
+  `VERILOG_FILES` → yosys parses hex words: `syntax error, unexpected
+  TOK_CONSTVAL`. Use a blacklist of image suffixes; a whitelist of HDL suffixes
+  dropped HardFloat's `.vi` include from a passing design.
+- **Diagnosing these**: the error text points at the parser, not the file list.
+  `TOK_CONSTVAL` read as "SystemVerilog the parser lacks" until slang, a full SV
+  frontend, failed the same way on `program.hex:26: expected a declaration name`.
+  **Run a stronger parser before concluding the RTL is unsupported** — if it fails
+  too, the input is wrong, not the parser.
+
+### Repairs (repair arm, diagnosis-driven)
+
+- **RSZ-0074 at 5_1_grt** (`Failed to build tree from global routes ... found
+  route to N pins`): the post-GRT `repair_design`/`repair_timing` edits the
+  netlist and the incremental global route then cannot rebuild a net's tree —
+  the same family as DRT-9419 above. `SKIP_INCREMENTAL_REPAIR=1` → **2/2
+  dual-clean**, worst slack still positive (+0.44, +0.53). Read-back: the
+  treatment's `5_1_grt.log` has no repair lines; the baseline's has them and the
+  RSZ-0074. This validates the lever DRT-9419's entry names but had not tested.
+  Timing is not a pass condition in the frozen study, so skipping the repair
+  costs no verdict.
+- **Async-load flip-flop** (`check -assert` after `Cell ... is an unmapped
+  internal cell of type $_ALDFFE_PNP_`): an asynchronous signal loads a DATA
+  value — an FPGA idiom with no nangate45 cell, and `dfflibmap` does not
+  legalize it. A `SYNTH_CANONICALIZE_TCL` hook that runs `proc`, then
+  `simplemap t:$aldff t:$aldffe` and `dfflegalize -cell $_DFFSR_PPP_ 01 -cell
+  $_DFFSRE_PPPP_ 01 t:$_ALDFF* t:$_ALDFFE*` — yosys's own functionally-equivalent
+  emulation, restricted to those cells — → **2/2 dual-clean**. Read-back:
+  unmapped-cell warnings 0 (baseline 2); the netlist gains exactly the 2 DFFRS.
+  In Tcl every cell-type `$` must be escaped (`t:\$aldff`), or the hook dies on
+  variable substitution.
+- **STA-0171 on `1_2_yosys.v` line 3**: an Intel `altera_attribute` carrying an
+  SDC statement with escaped quotes and braces is copied into the netlist, which
+  OpenSTA cannot parse. Strip that one attribute before synthesis (`setattr -mod
+  -unset altera_attribute; setattr -unset altera_attribute`) → **dual-clean**;
+  attribute count 0 (baseline 2), cell count identical.
+- **Module-body fragment listed standalone** (`display_modes.vh` with
+  `localparam X = (DISPLAY_MODE == 0) ? ...`, `coeffs.vh` with `coeff[0] = ...`):
+  only valid inside the includer's module. Dropping such headers at the driver
+  level changed 24 passing designs (SystemVerilog accepts `localparam` at file
+  scope and other files may rely on it), so it is a per-design repair: drop that
+  header from a design whose parse failed on it → 2/2 dual-clean so far.
+- **SystemVerilog the default parser rejects**: the image's yosys 0.64 cannot
+  load the only slang plugin present (oss-cad-suite's, built for 0.51:
+  `undefined symbol _ZN5Yosys5RTLIL2ID4ARGSE`). Use oss-cad-suite's yosys+slang
+  as a pre-processor (`read_slang ...; proc; write_verilog`) and run the ORFS flow
+  unchanged from its output — 9 of 14 parse; slang rejects the other 5 (4 were
+  the header case above, 1 is `Feature unimplemented` in slang itself).
+
+### Not repairable here (recorded so nobody re-chases them)
+
+`$readmemh` image missing from the repository (7; deleting the `$readmem`
+changes ROM contents); multiple conflicting drivers in RTL (1); FPGA-fabric
+designs needing ~537 GB at floorplan (4); GPL-0301 at 111% utilization under a
+frozen die (the tighter period grows the cells, and the die may not move); SPEF
+net names with a negative bus index `cfgfb[\-1]` that OpenSTA rejects (1; the
+fix is a rename, with more risk than one design is worth); ports `CLK` and `clk`
+differing only by case, which CDL cannot distinguish (1).
+
+### Method notes that changed decisions
+
+- **Routing is independent of NUM_CORES**: one design routed at 4 and at 8 cores
+  produced byte-identical COMPONENTS and NETS sections in `6_final.def`, so a
+  repair arm may run at fewer cores without confounding the comparison.
+- **A design without a spec entry runs on the platform default period** (2.0 ns,
+  unfrozen die). Every one of the 85 such baseline designs failed before
+  synthesis, so the frozen baseline's 887 is entirely formula-timed (all 1164
+  SDCs with an entry carry exactly the table's period). A repair that rescues one
+  of them must be judged under the formula too: size it from its first synthesis
+  (baseline if possible, else the repair arm's, labelled `size_source`).
