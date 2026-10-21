@@ -91,9 +91,9 @@
       "platform": "all",
       "path": "spec/spec_{nangate45,sky130hd,gf180}.json",
       "sha256": {
-        "spec_nangate45.json": "e31b627e4e7df462",
-        "spec_sky130hd.json": "7e70475fcd9f6255",
-        "spec_gf180.json": "8c9cbd5bb68cdd51",
+        "spec_nangate45.json": "16bf7c49c4f9f897",
+        "spec_sky130hd.json": "2f926db0dbc93d12",
+        "spec_gf180.json": "51a7ae7933de3938",
         "area_allowance.json": "769a24478b3df547",
         "platform_digests.json": "d9815fd0ca8e4b31"
       },
@@ -102,7 +102,8 @@
       "equivalence": "One generator is the single place the die is computed; both arms read the same table files.",
       "fail_if_missing": "The campaign must stop. A run without the frozen table is not the frozen baseline.",
       "history": [
-        "2026-10-21: regenerated with the pin floor, core = max(area, pins/(4k), pdn). Moves nangate45 8 / sky130hd 10 / gf180 1 designs; none had read dual-clean. The nangate45 baseline ran on the previous tables (spec_pre_pinfloor_20261020_2109/), and exactly one dev design moves under the new ones -- C02939__multi_kernel_relu, which had failed with PPL-0024 -- so it alone is re-run. sky130hd and gf180 run on the new tables from the start."
+        "2026-10-21: regenerated with the pin floor, core = max(area, pins/(4k), pdn). Moves nangate45 8 / sky130hd 10 / gf180 1 designs; none had read dual-clean. The nangate45 baseline ran on the previous tables (spec_pre_pinfloor_20261020_2109/), and exactly one dev design moves under the new ones -- C02939__multi_kernel_relu, which had failed with PPL-0024 -- so it alone is re-run. sky130hd and gf180 run on the new tables from the start.",
+        "2026-10-21 13:25: pin counts also taken from PPL-0024 logs (the pilot's, then the frozen re-run's) for designs that never wrote a DEF -- the very designs the floor is for. Moves nangate45 +47 / sky130hd +29 / gf180 +3; in nangate45 dev 24 more, none previously passing. All 25 dev PPL-0024 failures are now pin_floored and are re-run."
       ]
     },
     {
@@ -134,6 +135,15 @@
         "ratio 50: reduced violations on 5 of 5 designs and cleared none of them. Only zero counts toward dual-clean.",
         "TECH_LEF in the design config.mk: silently overridden by the platform config's `=`. Any override must be a bind mount with a read-back assertion."
       ]
+    },
+    {
+      "id": "driver-file-list-hygiene",
+      "layer": "apparatus",
+      "platform": "all",
+      "path": "experiments/orfs_spec.py write_config()",
+      "why": "Three defects of this driver's config generation, not of any RTL: (1) make splits paths on whitespace and has no quoting, so a source dir with a space became two nonexistent files (34 nangate45 dev designs never reached yosys); (2) a file both listed and `include`d by another listed file was read twice -> 'Re-definition of module' (15); (3) $readmem memory images (.hex/.mem/.init/.list...) listed as sources were parsed as HDL -> 'unexpected TOK_CONSTVAL' (9). Fixed by symlinking make-hostile paths through the work dir, dropping a listed file that another listed file includes ONLY when it defines a module and has no include guard, and dropping memory-image suffixes (a blacklist: a whitelist dropped a HardFloat `.vi` include from a passing design).",
+      "equivalence": "Regression gate over all 1249 dev designs: 58 configs change (34+15+9), all of them designs that failed; 0 passing designs change; 1191 byte-identical.",
+      "fail_if_missing": "The 58 designs fail before synthesis, in both arms."
     }
   ]
 }

@@ -52,6 +52,12 @@ INTENTIONALLY_DROPPED = {
 }
 PILOT_ROOT = {"nangate45": "n45_full", "gf180": "gf180_full", "sky130hd": "full_out"}
 
+# Designs the driver reported as absent from the spec table, read from its log.
+# Empty until main() fills it; a design missing from the table AND from this set
+# is a genuine inconsistency, because then nobody recorded that it ran on
+# platform defaults.
+SPEC_MISS_LOGGED: set[str] = set()
+
 
 def _fields(cfg_text: str) -> set:
     return {l.split("=", 1)[0].split()[-1]
@@ -108,8 +114,16 @@ def check_run(run_dir: Path, spec: dict) -> list:
     c, t = cfg.read_text(), sdc.read_text()
 
     if e is None:
-        if "SPEC MISS" not in t:
-            bad.append("%s: 规格表无此设计，但也没留下 SPEC MISS 记录" % name[:40])
+        # The driver PRINTS `SPEC MISS <design>: no entry, keeping platform
+        # default` to its own log; it does not write anything into the SDC.
+        # This test used to search the SDC text, so it could never pass for a
+        # spec-missing design and it halted a finished 1249-design flow on
+        # 2026-10-19 -- the same shape as the digest that hashed the select
+        # list before it was written: a control that cries wolf by
+        # construction. The caller now supplies the set it found in the log.
+        if name not in SPEC_MISS_LOGGED:
+            bad.append("%s: 规格表无此设计，驱动日志里也没有 SPEC MISS 记录"
+                       % name[:40])
         return bad
 
     # 1. the die must be the table's, and CORE_UTILIZATION must be gone
@@ -177,6 +191,14 @@ def main(argv=None):
         print("没有运行目录可查 -- 不能据此说一致")
         return 2
     allbad = []
+    drv = D / f"{args.root}.driver.log"
+    if drv.is_file():
+        SPEC_MISS_LOGGED.update(
+            re.findall(r"SPEC MISS (\S+?):", drv.read_text(errors="replace")))
+        print("  驱动日志记录的 SPEC MISS: %d 份" % len(SPEC_MISS_LOGGED))
+    else:
+        print("  注意: 找不到 %s，无法确认 SPEC MISS 是否被记录" % drv.name)
+
     bad_fields = check_field_set(runs, args.platform,
                                  D / PILOT_ROOT.get(args.platform, ""))
     for r in runs:

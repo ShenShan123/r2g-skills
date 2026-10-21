@@ -179,6 +179,121 @@ CLOCK_PORTS = ("clk clock i_clk clk_i core_clk CLK CLOCK HCLK clock_i sys_clk "
                "clock0 clk0 clkA clk_a ref_clk refclk mclk MCLK fclk sclk")
 
 
+# make splits a variable on whitespace and has no quoting, so a source path with a
+# space in it becomes two nonexistent files and the flow dies before synthesis
+# with "No rule to make target '<prefix>'". 34 nangate45 dev designs (8 repos,
+# e.g. tiny_soc's `src/RSIC-V core/`) never reached yosys in the pilot or in the
+# frozen re-run for exactly this reason -- a defect of this driver, not of the
+# RTL. `#` (comment) and `$` (expansion) are hostile to make for the same reason.
+_MAKE_HOSTILE = re.compile(r"[\s#$]")
+
+
+def _make_safe(paths: list[str], work: Path, links: dict) -> list[str]:
+    """Rewrite make-hostile paths through symlinks in the work dir.
+
+    The link points at the DEEPEST hostile component's real path, so everything
+    below it is reached through the real directory and relative `include`s keep
+    resolving exactly as they would from the original location. Links live in
+    the design's own work dir (mounted at /work), never in the shared package,
+    and a path with nothing hostile in it is returned unchanged -- so every
+    design that already worked gets a byte-identical config.
+    """
+    out = []
+    for p in paths:
+        parts = Path(p).parts
+        bad = [i for i, c in enumerate(parts) if _MAKE_HOSTILE.search(c)]
+        if not bad:
+            out.append(p)
+            continue
+        i = bad[-1]
+        target = str(Path(*parts[:i + 1]))
+        name = links.get(target)
+        if name is None:
+            name = "d%d" % len(links)
+            links[target] = name
+            (work / "_src").mkdir(exist_ok=True)
+            os.symlink(target, work / "_src" / name)
+        out.append("/".join(["/work/_src", name, *parts[i + 1:]]))
+    return out
+
+
+def _dedupe(paths: list[str]) -> list[str]:
+    """Each path once, first occurrence wins."""
+    seen, out = set(), []
+    for p in paths:
+        if p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
+
+
+# A blacklist of memory-image formats, not a whitelist of HDL suffixes: HDL comes
+# with suffixes no list anticipates (Berkeley HardFloat ships `.vi` include
+# files), and the whitelist version dropped one from a design that passed.
+_MEMORY_IMAGE_SUFFIXES = (".hex", ".mem", ".init", ".list", ".bin", ".coe",
+                          ".mif", ".dat")
+
+
+def _hdl_only(files: list[str]) -> list[str]:
+    """Drop memory-image data files listed as sources.
+
+    Ten nangate45 dev designs list a $readmemh/$readmemb image (`program.hex`,
+    `p64.mem`, `numbers2b.list`, `*.init`) among their Verilog sources, so yosys
+    parses hex words as code and stops with `syntax error, unexpected
+    TOK_CONSTVAL` -- a metadata defect, not a SystemVerilog one. The file is
+    still on disk for $readmem to load; it just must not be read as HDL.
+    """
+    return [f for f in files if not f.lower().endswith(_MEMORY_IMAGE_SUFFIXES)]
+
+
+_INCLUDE_RE = re.compile(r'^\s*`include\s+"([^"]+)"', re.M)
+
+
+def _drop_included(files: list[str], incs: list[str]) -> list[str]:
+    """Drop a listed file that another listed file already `include`s.
+
+    yosys then reads it twice and aborts with "Re-definition of module" -- 15
+    nangate45 dev designs, every one the same shape (can_bsp.v includes
+    can_acf.v and both are listed). The include itself resolved on the first
+    read, so the standalone entry is redundant. Targets are compared by resolved
+    path (includer's directory first, then the include dirs, which is yosys's
+    search order), never by bare file name.
+    """
+    listed = {str(Path(f).resolve()) for f in files}
+    included = set()
+    for f in files:
+        try:
+            txt = Path(f).read_text(errors="replace")
+        except OSError:
+            continue
+        for inc in _INCLUDE_RE.findall(txt):
+            for base in [str(Path(f).parent), *incs]:
+                cand = Path(base) / inc
+                if cand.is_file():
+                    included.add(str(cand.resolve()))
+                    break
+    # Only a file that would actually be DEFINED twice: it declares a module and
+    # has no include guard. A header (macros/parameters only) or a guarded file
+    # is read twice harmlessly, and the unrestricted rule changed the config of
+    # 69 designs that already passed -- moving the baseline, which a driver fix
+    # must never do.
+    def _redefines(path: str) -> bool:
+        try:
+            t = Path(path).read_text(errors="replace")
+        except OSError:
+            return False
+        has_module = re.search(r"(?m)^\s*module\s+\w", t) is not None
+        guarded = re.search(r"(?m)^\s*`ifndef\s+\w+\s*\n\s*`define\s+\w+", t) is not None
+        return has_module and not guarded
+    # NOT extended to module-body fragments (a header of `localparam`s or
+    # procedural assignments): that version changed the config of 24 designs
+    # that already passed, because SystemVerilog accepts such declarations at
+    # file scope and other files may rely on them. The 4 designs that need it are
+    # handled as a diagnosis-driven repair instead, on designs that failed only.
+    drop = {f for f in (listed & included) if _redefines(f)}
+    return [f for f in files if str(Path(f).resolve()) not in drop]
+
+
 def write_config(design_dir: Path, meta: dict, work: Path, platform: str,
                  period: str, utilization: str,
                  core_floor_um: float | None = None) -> None:
@@ -187,6 +302,12 @@ def write_config(design_dir: Path, meta: dict, work: Path, platform: str,
         files.append(str((design_dir / f["file"]).resolve()))
     for i in meta.get("include_dirs") or []:
         incs.append(str((design_dir / i).resolve()))
+    files, incs = _dedupe(files), _dedupe(incs)
+    files = _hdl_only(files)
+    files = _drop_included(files, incs)
+    links: dict = {}
+    files = _make_safe(files, work, links)
+    incs = _make_safe(incs, work, links)
     defines = " ".join(meta.get("defines") or [])
     (work / "constraint.sdc").write_text(SDC.format(ports=CLOCK_PORTS, period=period))
     cfg = [f'export DESIGN_NAME = {meta["top_module"]}',

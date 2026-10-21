@@ -163,8 +163,58 @@ def pin_counts(pilot_dir: Path) -> dict:
             continue
         m = re.search(r"^PINS (\d+)", head, re.M)
         if m:
-            pins[short] = int(m.group(1))
+            pins[short] = (int(m.group(1)), "pilot_def")
+    # A design that failed place_pins never wrote a DEF -- which is exactly the
+    # design the floor exists for. place_pins prints the count when it refuses
+    # ("[ERROR PPL-0024] Number of IO pins (313) exceeds ..."), so failed runs
+    # carry it in their logs. Pin count is a property of the RTL, so any run of
+    # the design states the same number: where the pilot log and the frozen
+    # re-run's log both have it, all 14 agree. Without this source the floor
+    # reached 1 of the 25 nangate45 dev designs failing PPL-0024.
+    for root in [pilot_dir / "runs", *(Path(r) for r in EXTRA_PIN_LOG_ROOTS)]:
+        for rd in sorted(root.glob("*")):
+            short = "__".join(rd.name.split("__")[:-2])
+            if short in pins:
+                continue
+            for lg in rd.glob("logs/*/*/*/*.log"):
+                try:
+                    t = lg.read_text(errors="replace")
+                except OSError:
+                    continue
+                m = re.search(r"\[ERROR PPL-0024\] Number of IO pins \((\d+)\)", t)
+                if m:
+                    pins[short] = (int(m.group(1)),
+                                   "pilot_ppl_log" if root == pilot_dir / "runs" else "rerun_ppl_log")
+                    break
     return pins
+
+
+# Extra run roots whose PPL-0024 logs may state a pin count the pilot lacks.
+EXTRA_PIN_LOG_ROOTS: list[str] = []
+# {design: (cells, chip_area)} from the BASELINE re-run's synth_stat.txt, for
+# designs the pilot never synthesised. Filled from --baseline-size-root.
+BASELINE_SIZES: dict = {}
+
+
+def load_baseline_sizes(roots: list[str]) -> None:
+    """Read synth_stat.txt exactly as orfs_spec.py's harvest does, so the
+    fallback is the same quantity as the pilot's, not an approximation."""
+    pat_area = re.compile(r"^\s*(\d+)\s+(\S+)\s+\d+\s+\S+\s+cells\s*$", re.M)
+    pat_cells = re.compile(r"Number of cells:\s+(\d+)")
+    for root in roots:
+        for stat in sorted(Path(root).glob("*/reports/*/*/*/synth_stat.txt")):
+            run = stat.parts[len(Path(root).parts)]
+            short = "__".join(run.split("__")[:-2])
+            if short in BASELINE_SIZES:
+                continue
+            t = stat.read_text(errors="replace")
+            m = pat_area.search(t)
+            if not m:
+                continue
+            try:
+                BASELINE_SIZES[short] = (int(m.group(1)), float(m.group(2)))
+            except ValueError:
+                continue
 
 
 def pin_required_core(platform: str, npins: int) -> float:
@@ -208,14 +258,23 @@ def build(platform: str, pilot_dir: Path) -> tuple[dict, dict]:
             skipped[short] = f"unreadable result.json: {type(exc).__name__}"
             continue
         cells, area = d.get("cells"), d.get("area_um2")
-        # A design the pilot never synthesised has no size, so it has no spec.
-        # It still RUNS -- it just inherits the platform's smallest bin and the
-        # PDN floor, which is the honest default for an unknown size. Recording
-        # it here keeps that visible instead of silent.
+        size_src = "pilot_synth_stat"
+        # A design the pilot never synthesised has no pilot size. Before
+        # 2026-10-21 that meant no spec at all and the platform default period
+        # (2.0 ns on nangate45, unfrozen die) -- harmless while every such
+        # design also failed before synthesis, but 67 nangate45 dev designs
+        # only failed on driver defects that are now fixed, and they would have
+        # entered the denominator under a period no peer got. The fallback is
+        # the SAME quantity (synth_stat.txt's cells and chip area) measured by
+        # the frozen BASELINE re-run, never by a repair arm, so the size class
+        # is still fixed once and no repair can move its own target.
+        if (not cells or not area) and short in BASELINE_SIZES:
+            cells, area = BASELINE_SIZES[short]
+            size_src = "baseline_rerun_synth_stat"
         if not cells or not area:
             skipped[short] = f"no pilot size (cells={cells}, area={area})"
             continue
-        npins = pins.get(short, 0)
+        npins, pins_src = pins.get(short, (0, None))
         die, core, pin_floored = die_for(platform, float(area), npins)
         spec[short] = {
             "cells": int(cells),
@@ -228,6 +287,8 @@ def build(platform: str, pilot_dir: Path) -> tuple[dict, dict]:
             # recorded even when it does not bind, so a die can be re-derived
             # from the table alone without going back to the pilot's DEFs
             "pins": npins,
+            "pins_source": pins_src,
+            "size_source": size_src,
             "pin_floored": pin_floored,
         }
     return spec, skipped
@@ -238,8 +299,16 @@ def main(argv=None) -> int:
     ap.add_argument("--pilot-root", default="/proj/workarea/yangao",
                     help="directory holding n45_full / gf180_full / full_out")
     ap.add_argument("--out-dir", default="/proj/workarea/yangao/spec")
+    ap.add_argument("--extra-pin-log-root", action="append", default=[],
+                    help="a runs dir whose PPL-0024 logs may give a pin count the "
+                         "pilot lacks (repeatable)")
+    ap.add_argument("--baseline-size-root", action="append", default=[],
+                    help="a baseline re-run's work/scratch dir whose synth_stat.txt "
+                         "sizes designs the pilot never synthesised (repeatable)")
     ap.add_argument("--platforms", default="nangate45,gf180,sky130hd")
     args = ap.parse_args(argv)
+    EXTRA_PIN_LOG_ROOTS.extend(args.extra_pin_log_root)
+    load_baseline_sizes(args.baseline_size_root)
 
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
