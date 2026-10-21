@@ -195,6 +195,23 @@ EXTRA_PIN_LOG_ROOTS: list[str] = []
 # designs the pilot never synthesised. Filled from --baseline-size-root.
 BASELINE_SIZES: dict = {}
 REPAIR_SIZES: dict = {}
+# {design: (die_perimeter_um, pins, available_positions)} from the most recent
+# PPL-0024 refusal under --ppl-correction-root.
+PPL_CORRECTIONS: dict = {}
+
+
+def load_ppl_corrections(roots: list[str]) -> None:
+    pat = re.compile(r"Number of IO pins \((\d+)\) exceeds maximum number of available "
+                     r"positions \((\d+)\)\. Increase the die perimeter from ([0-9.]+)um")
+    for root in roots:
+        for lg in sorted(Path(root).glob("*/logs/*/*/*/3_2_place_iop.log")):
+            comp = next((c for c in lg.parts if re.match(r"C\d{5}__", c)), None)
+            if comp is None:
+                continue
+            m = pat.search(lg.read_text(errors="replace"))
+            if m:
+                PPL_CORRECTIONS["__".join(comp.split("__")[:3])] = (
+                    float(m.group(3)), int(m.group(1)), int(m.group(2)))
 
 
 def load_baseline_sizes(roots: list[str], into: dict | None = None) -> None:
@@ -290,6 +307,22 @@ def build(platform: str, pilot_dir: Path) -> tuple[dict, dict]:
             continue
         npins, pins_src = pins.get(short, (0, None))
         die, core, pin_floored = die_for(platform, float(area), npins)
+        # Per-design correction from the design's OWN place_pins refusal. The
+        # derived k (1/(2*pitch) = 1.80 positions/um) is slightly optimistic:
+        # over 68 nangate45 PPL-0024 logs the measured positions per um of die
+        # perimeter run 1.666-1.783 (median 1.747; corners cost more on small
+        # dies), so 6 pin-floored designs still came up 0.2-0.6% short. Lowering
+        # k globally would also raise designs that already place their pins --
+        # moving the baseline -- so the correction is applied only where a
+        # PPL-0024 log exists: positions scale with perimeter, hence
+        # needed = current * pins / available, plus 1%.
+        corr = PPL_CORRECTIONS.get(short)
+        if corr:
+            cur_perim, n, avail = corr
+            need_side = math.ceil(cur_perim * n / avail * 1.01 / 4.0)
+            need_core = need_side - 2 * CORE_INSET_UM
+            if need_core > core:
+                core, die, pin_floored = need_core, need_core + 2 * CORE_INSET_UM, True
         spec[short] = {
             "cells": int(cells),
             "pilot_cell_area_um2": round(float(area), 3),
@@ -322,11 +355,15 @@ def main(argv=None) -> int:
     ap.add_argument("--repair-size-root", action="append", default=[],
                     help="repair-arm work dirs whose synth_stat.txt sizes a design "
                          "the baseline cannot synthesise at all (repeatable)")
+    ap.add_argument("--ppl-correction-root", action="append", default=[],
+                    help="runs dir whose PPL-0024 refusals correct that design's die "
+                         "from its own measured positions/perimeter (repeatable)")
     ap.add_argument("--platforms", default="nangate45,gf180,sky130hd")
     args = ap.parse_args(argv)
     EXTRA_PIN_LOG_ROOTS.extend(args.extra_pin_log_root)
     load_baseline_sizes(args.baseline_size_root)
     load_baseline_sizes(args.repair_size_root, REPAIR_SIZES)
+    load_ppl_corrections(args.ppl_correction_root)
 
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)

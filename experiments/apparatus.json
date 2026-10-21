@@ -91,7 +91,7 @@
       "platform": "all",
       "path": "spec/spec_{nangate45,sky130hd,gf180}.json",
       "sha256": {
-        "spec_nangate45.json": "16bf7c49c4f9f897",
+        "spec_nangate45.json": "1a9f024ad3b3629f",
         "spec_sky130hd.json": "2f926db0dbc93d12",
         "spec_gf180.json": "51a7ae7933de3938",
         "area_allowance.json": "769a24478b3df547",
@@ -103,7 +103,8 @@
       "fail_if_missing": "The campaign must stop. A run without the frozen table is not the frozen baseline.",
       "history": [
         "2026-10-21: regenerated with the pin floor, core = max(area, pins/(4k), pdn). Moves nangate45 8 / sky130hd 10 / gf180 1 designs; none had read dual-clean. The nangate45 baseline ran on the previous tables (spec_pre_pinfloor_20261020_2109/), and exactly one dev design moves under the new ones -- C02939__multi_kernel_relu, which had failed with PPL-0024 -- so it alone is re-run. sky130hd and gf180 run on the new tables from the start.",
-        "2026-10-21 13:25: pin counts also taken from PPL-0024 logs (the pilot's, then the frozen re-run's) for designs that never wrote a DEF -- the very designs the floor is for. Moves nangate45 +47 / sky130hd +29 / gf180 +3; in nangate45 dev 24 more, none previously passing. All 25 dev PPL-0024 failures are now pin_floored and are re-run."
+        "2026-10-21 13:25: pin counts also taken from PPL-0024 logs (the pilot's, then the frozen re-run's) for designs that never wrote a DEF -- the very designs the floor is for. Moves nangate45 +47 / sky130hd +29 / gf180 +3; in nangate45 dev 24 more, none previously passing. All 25 dev PPL-0024 failures are now pin_floored and are re-run.",
+        "2026-10-21 15:12: nangate45 only. (1) Per-design die correction from each design's own PPL-0024 refusal in the pin-floor re-run (positions/perimeter measured 1.666-1.783 over 68 logs vs the derived 1.80): exactly the 6 designs still 0.2-0.6% short move, no other field of any existing entry changes. (2) 13 NEW entries sized from the repair arm's own synthesis (size_source=repair_arm_synth_stat) for designs the baseline cannot synthesise at all, so a repair-arm win is judged under the same period/die formula as its peers."
       ]
     },
     {

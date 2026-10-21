@@ -50,6 +50,7 @@ def main() -> int:
     # they are reported as their own stratum and kept OUT of the comparison
     # rather than re-run under a formula spec at no benefit to the gap.
     app = load_signoff(D / "ppl_fix_n45" / "signoff.json")
+    app.update(load_signoff(D / "ppl_fix2_n45" / "signoff.json"))   # per-design PPL correction
     rescued_other = {}
     for b in ("apparatus_fix_n45", "datafile_fix_n45"):
         rescued_other.update(load_signoff(D / b / "signoff.json"))
@@ -59,12 +60,15 @@ def main() -> int:
         v = json.loads(f.read_text())
         if v.get("cleared_at"):
             rep[short(v["design"])] = "antenna@" + v["cleared_at"]
-    for recipe in ("skip_incr", "hdr_drop", "aldff", "m1wide", "strip_attr"):
+    # Designs the baseline cannot synthesise count ONLY from their formula-spec
+    # re-runs (hdr_drop_spec, sv_frontend_spec); the earlier platform-default
+    # runs of the same recipes are superseded and deliberately not read.
+    for recipe in ("skip_incr", "hdr_drop_spec", "aldff", "m1wide", "strip_attr"):
         for so in (D / "knob_ab" / recipe).glob("*/signoff.json"):
             for k, r in load_signoff(so).items():
                 if dual(r):
                     rep.setdefault(k, recipe)
-    for so in (D / "sv_frontend_n45").glob("*/signoff.json"):
+    for so in (D / "sv_frontend_spec").glob("*/signoff.json"):
         for k, r in load_signoff(so).items():
             if dual(r):
                 rep.setdefault(k, "sv_frontend")
