@@ -38,7 +38,8 @@
       "env": "R2G_DRC_DECK_OVERRIDE",
       "why": "The stock FreePDK45 deck runs CONTACT.3 flat over the whole die and does not finish inside any usable bound; 36 workers sat on 167 designs for 11 hours. Tiling the LOCAL geometry rules took the same 167 designs to 11 minutes.",
       "equivalence": "Antenna and the net-tracing rules stay in deep mode, because tiling a net-tracing check makes it WRONG rather than merely faster. Same-layout A/B on C00006: stock timed out at 7278s, patched reported its violations in 310s. The pilot ran this deck too, so both rounds are graded by the same ruler.",
-      "fail_if_missing": "The campaign must stop. Without it nangate45 sign-off does not complete, and a timeout is not a pass."
+      "fail_if_missing": "The campaign must stop. Without it nangate45 sign-off does not complete, and a timeout is not a pass.",
+      "enforced_by": "experiments/signoff45.py resolve_deck(): defaults to this deck and REFUSES to run if it is missing or if R2G_DRC_DECK_OVERRIDE names a missing file. Before 2026-10-21 a hand launch without the env var silently graded with the stock deck."
     },
     {
       "id": "gf180-pdn-nosplit",
@@ -90,31 +91,40 @@
       "platform": "all",
       "path": "spec/spec_{nangate45,sky130hd,gf180}.json",
       "sha256": {
-        "spec_nangate45.json": "844bc72a4f812ec6",
-        "spec_sky130hd.json": "9bad6d0f51f31466",
-        "spec_gf180.json": "bcedd07e1b52f159",
+        "spec_nangate45.json": "e31b627e4e7df462",
+        "spec_sky130hd.json": "7e70475fcd9f6255",
+        "spec_gf180.json": "8c9cbd5bb68cdd51",
         "area_allowance.json": "769a24478b3df547",
         "platform_digests.json": "d9815fd0ca8e4b31"
       },
       "generator": "experiments/make_spec_table.py",
       "why": "The frozen per-design period, utilization and die. Frozen rather than derived at run time, because a repair that cuts cell count would otherwise shrink its own die and move the goalposts.",
       "equivalence": "One generator is the single place the die is computed; both arms read the same table files.",
-      "fail_if_missing": "The campaign must stop. A run without the frozen table is not the frozen baseline."
+      "fail_if_missing": "The campaign must stop. A run without the frozen table is not the frozen baseline.",
+      "history": [
+        "2026-10-21: regenerated with the pin floor, core = max(area, pins/(4k), pdn). Moves nangate45 8 / sky130hd 10 / gf180 1 designs; none had read dual-clean. The nangate45 baseline ran on the previous tables (spec_pre_pinfloor_20261020_2109/), and exactly one dev design moves under the new ones -- C02939__multi_kernel_relu, which had failed with PPL-0024 -- so it alone is re-run. sky130hd and gf180 run on the new tables from the start."
+      ]
     },
     {
       "id": "bounds",
       "layer": "apparatus",
       "platform": "all",
-      "values": {"STAGE_TIMEOUT": 21600, "SIGNOFF_TIMEOUT": 21600},
+      "values": {
+        "STAGE_TIMEOUT": 21600,
+        "SIGNOFF_TIMEOUT": 21600
+      },
       "why": "Six hours per design for the flow and for sign-off. The pilot used 7200 for sign-off, so a verdict earned only by the longer bound is ours and not like-for-like with the pilot -- which is why it is declared here rather than left implicit.",
       "equivalence": "Applied to both arms. A design that still times out is NOT clean; no verdict is not a pass.",
-      "fail_if_missing": "A shorter bound silently costs verdicts: 88 nangate45 designs lost one to the 7200 default."
+      "fail_if_missing": "A shorter bound silently costs verdicts: 88 nangate45 designs lost one to the 7200 default.",
+      "enforced_by": "signoff45.py passes DRC_TIMEOUT=--timeout and LVS_TIMEOUT=max(run_lvs.sh size table, --timeout) into the container, with the outer subprocess bound 900s above, and classifies the checker's own 'timed out after' as timeout. Before 2026-10-21 --timeout was the outer bound only and the inner DRC bound stayed at run_drc.sh's 7200 default."
     },
     {
       "id": "antenna-ratio-repair",
       "layer": "repair",
       "platform": "nangate45",
-      "value": {"ANTENNAAREARATIO": 10},
+      "value": {
+        "ANTENNAAREARATIO": 10
+      },
       "applies_to": "ONLY designs diagnosed as antenna-only DRC violations with LVS already clean",
       "why": "With both sides at ratio 300 the router reports 4 violating nets and the grader reports 208 on the same layout -- the models disagree inside the computation, not in their configuration. Over-constraining the router to 10:1 makes it repair until the grader's 300:1 is satisfied with margin. Validated on C00315: 208 antenna violations to 0, LVS still matching, worst slack 0.2748 -> 0.2754, at +11.9% instances and +3.4% cell area.",
       "not_gaming": "This makes the ROUTER stricter than the rule, not the GRADER looser. The sign-off deck and its 300:1 are untouched and identical in both arms. It is the opposite direction from relaxing a rule, and it departs deliberately from install_nangate45_antenna.sh's choice of 300, whose stated intent was to match the grader.",

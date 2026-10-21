@@ -51,27 +51,70 @@ def stage(run_dir: Path, proj: Path, top: str) -> bool:
     return got
 
 
-def check(kind: str, proj: Path, top: str, variant: str, timeout: int):
+# The patched deck and the in-container bounds are resolved HERE, by the
+# script, and never left to whoever launches it. Twice a hand-launched sign-off
+# ran without R2G_DRC_DECK_OVERRIDE and without R2G_DRC_TIMEOUT: the first time
+# it cost 88 verdicts to a 2h cutoff, the second time a 17-hour "6h re-run"
+# graded 76 designs with the stock deck under the same 2h cutoff and wrote
+# drc_failed over their baseline result.json. Raising --timeout did not help,
+# because --timeout was only the OUTER subprocess bound; run_drc.sh reads
+# DRC_TIMEOUT and defaults it to 7200 when it is absent.
+#
+# So: the deck defaults to the patched one and a missing deck is FATAL rather
+# than a silent fall-back to stock (the old `and Path(_ovr).is_file()` dropped
+# a mistyped override without a word); the inner DRC bound follows --timeout;
+# the inner LVS bound is never lowered below run_lvs.sh's own size-scaled value;
+# and the outer bound sits above the inner ones, so the checker's own timeout
+# fires and is classified, instead of the subprocess being killed from outside.
+PATCHED_DECK = D / "drcfix" / "FreePDK45_tiled.lydrc"
+OUTER_GRACE_S = 900
+
+
+def resolve_deck() -> Path | None:
+    ovr = os.environ.get("R2G_DRC_DECK_OVERRIDE", "")
+    if ovr:
+        if not Path(ovr).is_file():
+            raise SystemExit(f"R2G_DRC_DECK_OVERRIDE={ovr} does not exist -- "
+                             "refusing to fall back to the stock deck")
+        return Path(ovr)
+    if PATCHED_DECK.is_file():
+        return PATCHED_DECK
+    if os.environ.get("R2G_ALLOW_STOCK_DECK") == "1":
+        return None
+    raise SystemExit(f"patched deck {PATCHED_DECK} missing. The stock FreePDK45 "
+                     "deck does not finish CONTACT.3 inside any usable bound. "
+                     "Set R2G_ALLOW_STOCK_DECK=1 only for an equivalence check.")
+
+
+def lvs_bound(cells: int, timeout: int) -> int:
+    """run_lvs.sh's own size table, floored at --timeout. Never lower it: the
+    pilot's LVS ran with this table, so cutting a huge design below 28800 would
+    lose verdicts the pilot could earn."""
+    auto = (28800 if cells > 250000 else 21600 if cells > 100000
+            else 14400 if cells > 50000 else 5400)
+    return max(auto, timeout)
+
+
+DECK = None  # set in main()
+
+
+def check(kind: str, proj: Path, top: str, variant: str, timeout: int,
+          cells: int = 0):
     """Run r2g's run_drc.sh / run_lvs.sh in the container."""
-    # The platform deck ships inside the image. R2G_DRC_DECK_OVERRIDE mounts a
-    # replacement over that exact path, so run_drc.sh's resolution is untouched
-    # and its own DECK_SHA records which deck ran. Kept behind a switch: the
-    # equivalence claim is only checkable while the stock deck is still
-    # reachable.
     _deck_mount = []
-    _ovr = os.environ.get("R2G_DRC_DECK_OVERRIDE", "")
-    if kind == "drc" and _ovr and Path(_ovr).is_file():
-        _deck_mount = ["-v", f"{_ovr}:/r2g_toolchain/OpenROAD-flow-scripts/"
+    if kind == "drc" and DECK is not None:
+        _deck_mount = ["-v", f"{DECK}:/r2g_toolchain/OpenROAD-flow-scripts/"
                              f"flow/platforms/{PLAT}/drc/FreePDK45.lydrc:ro,Z"]
+    inner = timeout if kind == "drc" else lvs_bound(cells, timeout)
+    _bound = (["-e", f"DRC_TIMEOUT={os.environ.get('R2G_DRC_TIMEOUT', inner)}"]
+              if kind == "drc" else
+              ["-e", f"LVS_TIMEOUT={os.environ.get('R2G_LVS_TIMEOUT', inner)}"])
+    outer = int(os.environ.get("R2G_DRC_TIMEOUT" if kind == "drc" else
+                               "R2G_LVS_TIMEOUT", inner)) + OUTER_GRACE_S
     return subprocess.run(
         ["podman", "run", "--rm", "-v", f"{R2G}:/r2g:ro,Z",
          "-v", f"{proj.parent}:{proj.parent}:Z", "-e", "NUM_CORES=4",
-         # run_drc.sh line 200 reads this; 7200 is its default. Judged
-         # designs finish inside 340s, so a lower bound drops no verdict
-         # and stops a CONTACT.3 stall from burning two hours.
-         *(["-e", f"DRC_TIMEOUT={os.environ['R2G_DRC_TIMEOUT']}"]
-           if os.environ.get("R2G_DRC_TIMEOUT") else []),
-         *_deck_mount, IMAGE,
+         *_bound, *_deck_mount, IMAGE,
          "bash", "-lc",
          # these scripts `find` under the ORFS logs dir and abort under `set -e`
          # when it is missing, so create the tree their restage writes into
@@ -79,7 +122,7 @@ def check(kind: str, proj: Path, top: str, variant: str, timeout: int):
          f"$ORFS_ROOT/flow/reports/{PLAT}/{top}/{variant} "
          f"$ORFS_ROOT/flow/objects/{PLAT}/{top}/{variant}; "
          f"bash /r2g/scripts/flow/run_{kind}.sh '{proj}' {PLAT}"],
-        capture_output=True, text=True, timeout=timeout)
+        capture_output=True, text=True, timeout=outer)
 
 
 def one(run_dir: Path, projroot: Path, timeout: int) -> dict:
@@ -112,6 +155,11 @@ def one(run_dir: Path, projroot: Path, timeout: int) -> dict:
         if m:
             out["drc_violations"] = int(m.group(1))
             out["drc_status"] = "clean" if out["drc_violations"] == 0 else "violations"
+        elif re.search(r"DRC timed out after \d+s", log):
+            # run_drc.sh's own bound fired. With the outer bound now above the
+            # inner one this is the normal way a slow design ends, and filing it
+            # as drc_failed made 76 timeouts read as checker errors.
+            out["drc_status"] = "timeout"; out["drc_log"] = log[-300:]
         else:
             out["drc_status"] = "drc_failed"; out["drc_log"] = log[-300:]
     except subprocess.TimeoutExpired:
@@ -138,7 +186,8 @@ def one(run_dir: Path, projroot: Path, timeout: int) -> dict:
         break
 
     try:
-        r = check("lvs", proj, top, run_dir.name, timeout)
+        r = check("lvs", proj, top, run_dir.name, timeout,
+                  int(res.get("cells") or 0))
         log = (r.stdout or "") + (r.stderr or "")
         (run_dir / "lvs_signoff.log").write_text(log[-20000:])
         # Order matters: the refusal cases first, so a run r2g DECLINED to grade
@@ -150,6 +199,8 @@ def one(run_dir: Path, projroot: Path, timeout: int) -> dict:
             out["lvs_status"] = "clean"
         elif re.search(r"Netlists don.t match", log):
             out["lvs_status"] = "mismatch"
+        elif re.search(r"LVS timed out after \d+s", log):
+            out["lvs_status"] = "timeout"
         else:
             # run_lvs.sh records why it declined in its own json; that is more
             # trustworthy than guessing from the log tail.
@@ -240,6 +291,14 @@ def main() -> None:
                          "lives here rather than in whoever remembers to pass it.")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
+    global DECK
+    DECK = resolve_deck()
+    import hashlib
+    _sha = (hashlib.sha256(DECK.read_bytes()).hexdigest()[:12]
+            if DECK else "STOCK")
+    print(f"{time.strftime('%H:%M:%S')} 生效配置: deck={DECK.name if DECK else 'STOCK'} "
+          f"sha={_sha}  DRC内层={os.environ.get('R2G_DRC_TIMEOUT', args.timeout)}s  "
+          f"LVS内层=max(按规模,{args.timeout})s  外层=内层+{OUTER_GRACE_S}s", flush=True)
 
     if not (R2G / "scripts" / "flow" / "run_lvs.sh").is_file():
         sys.exit(f"r2g signoff-loop not found at {R2G}")

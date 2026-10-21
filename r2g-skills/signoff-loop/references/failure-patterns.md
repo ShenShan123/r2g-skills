@@ -7158,3 +7158,34 @@ corrections were needed before it was safe, both caught by dry-run:
   the unrestricted rule judged two running experiments as orphans. The rule is
   now scoped to containers mounting a driver projroot (`PROJROOT_RE=_proj(/|$)`),
   which every leak it exists to catch does and ad-hoc work does not.
+
+### A fix to the caller's bound is not a fix to the bound in effect (2026-10-21)
+
+The day after #61 was written, a hand-launched "6 h" re-run of the 94 designs that
+had lost their verdict ran for 17 hours and produced 76 verdicts, every one
+`drc_failed`. Three stacked causes, each of the kind #61 describes:
+
+- `signoff45.py --timeout` was raised to 21600 — but it is the OUTER subprocess
+  bound. `run_drc.sh` reads `DRC_TIMEOUT` from its own environment and defaults
+  it to 7200, and `signoff45.py` passed it only when `R2G_DRC_TIMEOUT` was set. So
+  the in-container bound was still two hours. (And the raised default had never
+  reached the campaign host: the repo copy was edited, the host copy was not.)
+- The launch omitted `R2G_DRC_DECK_OVERRIDE`, and `signoff45.py` treated a missing
+  or absent override as "use the stock deck" without a word — the deck that does
+  not finish CONTACT.3. Logs stop mid-rule on a single `or` that took 2949 s.
+- `run_drc.sh`'s own `ERROR: DRC timed out after Ns` was classified `drc_failed`,
+  because only the outer `TimeoutExpired` mapped to `timeout`.
+
+It also wrote those 76 artifacts over the baseline's `result.json` (via `--force`
+on symlinked run dirs). They were restored from the main sign-off's own
+`signoff.json` and dual-clean came back to exactly 887; the invalid logs were kept
+under a `.invalid_stock_deck_rerun` suffix rather than deleted.
+
+The fix moves every one of these into the script, so no launcher can get them
+wrong: the deck defaults to the patched one and a missing deck or a missing
+override file is FATAL; `DRC_TIMEOUT` is always passed and follows `--timeout`;
+`LVS_TIMEOUT = max(run_lvs.sh size table, --timeout)` so a huge design is never
+cut below the pilot's 28800; the outer bound sits 900 s above the inner so the
+checker's own timeout fires and is classified `timeout`; and the effective deck
+sha and bounds are printed at start and read back from a live container. Deploys
+to the host are checksum-compared against the repo copy.
