@@ -7123,3 +7123,38 @@ cut-off run necessarily grades `timeout` rather than `clean`. `signoff_pass.py`
 (gf180/sky130hd) guards only on `returncode != 0 or lyrdb missing`, which a
 swallowed Ruby error slips past, so **the category-count floor belongs there
 before those two platforms sign off**: nangate45 130, sky130hd 146, gf180 482.
+
+### Killing by age instead of by identity (2026-10-20)
+
+A finished sign-off left 19 containers running at ~90% CPU each, burning ~17
+cores for nearly four hours. The reaper did not take them because its single
+`GRACE_MIN=390` is sized for the 360-minute flow bound, while that sign-off ran
+a 120-minute DRC bound — **one global grace cannot serve two different bounds**,
+so a short-bound run's leftovers linger for hours past any sane deadline.
+
+The cleanup then destroyed live work. The filter was "age > 120 min, therefore
+from the finished sign-off", justified by "the re-run only started 87 minutes
+ago". That reasoning excludes the re-run and *nothing else* — an antenna
+experiment launched 129 minutes earlier matched the filter, and two of its
+designs were `SIGKILL`ed (rc=137) after completing their flow and GDS, mid-LVS.
+Their names (`antb_10_<design>`) were sitting in the capture file, unread.
+
+**Filter destructive operations by identity, not by elapsed time**, and give a
+hand-run cleanup the same discipline as the automation: the replacement reaper
+was dry-run three times before deployment while the one-off `podman rm -f` was
+not dry-run at all.
+
+The replacement adds an ownership criterion beside the age backstop: a container
+is an orphan when no live driver's command line names any path it mounts. Two
+corrections were needed before it was safe, both caught by dry-run:
+
+- Keying on the `/work` mount made the rule **inert** — a sign-off container
+  mounts its projroot at that same absolute path, not at `/work`, so every
+  container read as unattributable. It now scans all mount sources. (Same shape
+  as this script's historical `date -d` bug, which also made it silently do
+  nothing.)
+- "No live driver claims this path" is **not** the same as "abandoned": a
+  container launched from an ad-hoc shell script is legitimately unclaimed, and
+  the unrestricted rule judged two running experiments as orphans. The rule is
+  now scoped to containers mounting a driver projroot (`PROJROOT_RE=_proj(/|$)`),
+  which every leak it exists to catch does and ad-hoc work does not.
