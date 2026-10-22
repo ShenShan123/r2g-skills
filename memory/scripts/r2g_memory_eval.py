@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -103,15 +104,89 @@ def make_variant(design, variant):
     return dst
 
 
+KILL_GRACE_S = 60
+
+
+def _session_pids(sid):
+    """Live pids whose session id is ``sid`` (field 6 of /proc/<pid>/stat)."""
+    out = []
+    for d in Path('/proc').iterdir():
+        if d.name.isdigit():
+            try:
+                stat = (d / 'stat').read_text()
+            except OSError:
+                continue
+            if int(stat.rsplit(')', 1)[1].split()[3]) == sid:
+                out.append(int(d.name))
+    return out
+
+
+def _stop_session(p, grace=KILL_GRACE_S):
+    """Stop EVERY process of the child's session: TERM, wait up to ``grace``, then KILL survivors. Killing
+    only the child (or its process group) would orphan tools that `timeout` placed in their own process
+    group, so a deadline would not bound processes that are already running (P1a)."""
+    for sig, wait in ((signal.SIGTERM, grace), (signal.SIGKILL, 10)):
+        for pid in _session_pids(p.pid):
+            try:
+                os.kill(pid, sig)
+            except ProcessLookupError:
+                pass
+        end = time.time() + wait
+        while time.time() < end and _session_pids(p.pid):
+            p.poll()
+            time.sleep(0.5)
+        if not _session_pids(p.pid):
+            break
+    for _ in range(3):                           # late forks / slow exits: re-check, then KILL any survivor
+        left = _session_pids(p.pid)
+        if not left:
+            break
+        for pid in left:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        time.sleep(1)
+    p.wait()
+
+
+_EPISODE = {}   # T2a 5.1: the episode whose ledger records every orchestrator-dispatched tool call
+
+
+def _tool_name(cmd):
+    parts = [str(c) for c in cmd]
+    script = next((c for c in parts[1:] if c.endswith(('.py', '.sh', '.tcl'))), parts[0])
+    return Path(script).name
+
+
 def run(cmd, env, log, timeout):
+    """Run ``cmd`` in its own session; on timeout stop the whole session (no orphaned tools) and return -9.
+    With an episode set (``_EPISODE['ledger']``), every call is recorded as a ``tool_call`` event: tool, start,
+    end, elapsed, children CPU time, exit status, timeout. Wrapped children (ORFS stages, checkers) keep their own
+    ledger records and are linked by the episode."""
+    import resource as _res
+    t0, c0 = time.time(), _res.getrusage(_res.RUSAGE_CHILDREN)
+    rc = None
     with open(log, 'a') as f:
         f.write('\n$ %s\n' % ' '.join(map(str, cmd)))
         f.flush()
+        p = subprocess.Popen([str(c) for c in cmd], env=env, stdout=f, stderr=subprocess.STDOUT,
+                             start_new_session=True)
         try:
-            return subprocess.run([str(c) for c in cmd], env=env, stdout=f, stderr=subprocess.STDOUT, timeout=timeout).returncode
+            rc = p.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             f.write('TIMEOUT\n')
-            return -9
+            f.flush()
+            _stop_session(p)
+            rc = -9
+    if _EPISODE.get('ledger') is not None:
+        c1 = _res.getrusage(_res.RUSAGE_CHILDREN)
+        _ledger(_EPISODE['ledger'], 'event', '--type', 'tool_call', '--json', json.dumps(
+            {'tool': _tool_name(cmd), 'start': round(t0, 3), 'end': round(time.time(), 3),
+             'elapsed_s': round(time.time() - t0, 3),
+             'cpu_s': round((c1.ru_utime - c0.ru_utime) + (c1.ru_stime - c0.ru_stime), 3),
+             'exit_status': rc, 'timed_out': rc == -9, 'timeout_s': timeout, 'parent': 'harness'}))
+    return rc
 
 
 def jload(p):
@@ -133,7 +208,7 @@ def control_flow(proj, env):
     if final:
         run(['python3', SKILL / 'scripts/reports/check_timing.py', proj], env, log, 600)
         rec['timing_tier'] = jload(proj / 'reports/timing_check.json').get('tier')
-        rec['signoff_rc'] = run(['bash', FLOW / 'run_strict_signoff.sh', proj, CFG['platform']], env, log, 9000)
+        rec['signoff_rc'] = final_signoff(proj, env, log)
         for leg in ('drc', 'lvs', 'rcx'):
             j = jload(proj / 'reports' / (leg + '.json'))
             rec[leg] = {k: j.get(k) for k in ('status', 'total_violations', 'mismatch_class') if k in j}
@@ -210,6 +285,42 @@ def arm_project(design, variant, arm):
     return dst
 
 
+FINAL_SIGNOFF_TIMEOUT_S = 9000
+
+
+def final_signoff(proj, env, log):
+    """The final verification (strict DRC/LVS/RCX). Under a budget it runs as final_acceptance, which may spend
+    the reserve, bounded by the time left before the attempt deadline (less the kill grace), and is ledgered.
+    No time left -> 'budget_exhausted' (not run); a ledger error -> 'accounting_error' (not run)."""
+    purpose = env.get('R2G_VERIFICATION_PURPOSE', 'final_acceptance')
+    if purpose not in ('repair', 'final_acceptance'):
+        raise ValueError('Unknown verification purpose: ' + purpose)
+    limit = FINAL_SIGNOFF_TIMEOUT_S
+    if _budgeted():
+        rc, out = _ledger(proj, 'remaining', '--purpose', purpose)
+        try:
+            left = json.loads(out).get('wall_s') if rc == 0 else 'ERR'
+        except ValueError:
+            left = 'ERR'
+        if left in ('ERR', 'UNKNOWN'):
+            _ledger(proj, 'event', '--type', 'final_verification', '--json', json.dumps({'status': 'accounting_error'}))
+            return 'accounting_error'
+        if left is not None:
+            limit = min(limit, int(left) - KILL_GRACE_S)
+        if limit <= 0:
+            _ledger(proj, 'event', '--type', 'final_verification', '--json', json.dumps({'status': 'budget_exhausted'}))
+            return 'budget_exhausted'
+    t0 = time.time()
+    fin_env = {**env, 'R2G_BUDGET_PURPOSE': purpose, 'R2G_BUDGET_COMPONENT':
+               'candidate_verification' if purpose == 'repair' else 'final_acceptance'}
+    if _budgeted():                     # checker steps (r2g_bounded_run) stop gracefully at the same deadline
+        fin_env['R2G_CHECKER_DEADLINE'] = str(int(time.time() + limit))
+    rc = run(['bash', FLOW / 'run_strict_signoff.sh', proj, CFG['platform']], fin_env, log, limit)
+    _ledger(proj, 'event', '--type', 'final_verification', '--json', json.dumps(
+        {'status': 'ran', 'rc': rc, 'purpose': purpose, 'timeout_s': limit, 'wall_s': round(time.time() - t0, 1)}))
+    return rc
+
+
 def final_verdict(proj, env, log):
     """Uniform final check: judge ONLY the newest backend run (amendment A3 -- an older completed run must never
     stand in for a newer failed one). Timing tier + strict signoff run only when that newest run completed."""
@@ -220,7 +331,7 @@ def final_verdict(proj, env, log):
     if final:
         run(['python3', SKILL / 'scripts/reports/check_timing.py', proj], env, log, 600)
         rec['timing_tier'] = jload(proj / 'reports/timing_check.json').get('tier')
-        rec['signoff_rc'] = run(['bash', FLOW / 'run_strict_signoff.sh', proj, CFG['platform']], env, log, 9000)
+        rec['signoff_rc'] = final_signoff(proj, env, log)
         for leg in ('drc', 'lvs', 'rcx'):
             j = jload(proj / 'reports' / (leg + '.json'))
             rec[leg] = {k: j.get(k) for k in ('status', 'total_violations', 'mismatch_class') if k in j}
@@ -238,25 +349,59 @@ def final_verdict(proj, env, log):
         design, variant = proj.name.split('__')[:2]
         src = (CASES / ('%s__%s__%s' % (design, CFG['platform'], variant)) / 'constraints/constraint.sdc')
         ms = re.search(r'set\s+clk_period\s+([0-9.]+)', src.read_text(errors='replace')) if src.exists() else None
+        expected = ms[1] if ms else None
+        manifest_path = env.get('R2G_TASK_MANIFEST') or os.environ.get('R2G_TASK_MANIFEST')
+        if manifest_path:
+            expected = json.loads(Path(manifest_path).read_text()).get('expected_clock_period_ns')
         run(['python3', SKILL / 'scripts/reports/acceptance_check.py', proj]
-            + (['--expected-clock-period', ms[1]] if ms else []), env, log, 300)
+            + (['--expected-clock-period', str(expected)] if expected is not None else []), env, log, 300)
         acc = jload(proj / 'reports/acceptance.json')
         rec['acceptance'] = {'accepted': bool(acc.get('accepted')), 'failed': acc.get('failed'),
                              'unknown': acc.get('unknown'),
                              'checks': {k: c.get('result') for k, c in (acc.get('checks') or {}).items()}}
     rec['accepted'] = bool((rec.get('acceptance') or {}).get('accepted'))
+    if final and rec.get('signoff_rc') != 0:
+        # Even artifact-identical cached reports are not a launch receipt for
+        # checks refused/stopped at this episode's deadline.
+        rec['accepted'] = False
+        rec['verification_stop'] = rec.get('signoff_rc')
+    # T2a 3.3: acceptance also requires the frozen per-task constraint and area envelope (effective config, run
+    # environment, immutable files, produced geometry). A missing measurement makes it UNVERIFIED, never accepted.
+    mpath = env.get('R2G_TASK_MANIFEST') or os.environ.get('R2G_TASK_MANIFEST')
+    if mpath:
+        import t2a_envelope
+        man = json.loads(Path(mpath).read_text())
+        rec['envelope'] = t2a_envelope.envelope(man, proj, newest, env=env)
+        fixlog = proj / 'reports/fix_log.jsonl'
+        rows = [json.loads(l) for l in fixlog.read_text().splitlines() if l.strip()] if fixlog.exists() else []
+        rec['envelope']['intermediate_violations'] = t2a_envelope.recorded_violations(man, rows)
+        rec['accepted'] = rec['accepted'] and rec['envelope']['status'] == 'PASS'
+    elif os.environ.get('R2G_REQUIRE_LLM_BUDGET') == '1' and os.environ.get('R2G_REQUIRE_TASK_MANIFEST') == '1':
+        rec['envelope'] = {'status': 'UNVERIFIED', 'reason': 'no task manifest'}
+        rec['accepted'] = False
     rec['backend_runs'] = len([d for d in (proj / 'backend').glob('RUN_*') if d.is_dir()])
+    # P1a shared budget ledger (resource_ledger.py): spent resources, refusals and flows per component
+    led = SKILL / 'scripts/flow/resource_ledger.py'
+    if led.exists() and (proj / 'reports' / 'resource_ledger.jsonl').exists():
+        try:
+            rec['resources'] = json.loads(subprocess.run(['python3', str(led), 'summary', str(proj), '--json'],
+                                                         capture_output=True, text=True, env=env, timeout=60).stdout)
+        except (ValueError, subprocess.SubprocessError):
+            rec['resources'] = 'UNKNOWN'
     rec['final_config'] = (proj / 'constraints/config.mk').read_text()
     return rec
 
 
 def run_engineer(proj, arm, env):
-    ledger = EVAL / 'ledgers' / (proj.name + '.jsonl')
+    branch=env.get('R2G_ENGINEER_BRANCH','main')
+    if branch not in ('main','task_fallback'):raise ValueError('Unknown engineer branch')
+    ledger = EVAL / 'ledgers' / (proj.name + ('.task_fallback' if branch=='task_fallback' else '') + '.jsonl')
     ledger.parent.mkdir(exist_ok=True)
     log = proj / 'eval_arm.log'
     t0 = time.time()
     run(['python3', LOOP, 'add', '--ledger', ledger, '--project', proj, '--platform', CFG['platform']], env, log, 600)
-    rc = run(['python3', LOOP, 'run', '--ledger', ledger, '--max', '1', '--workers', '1'], env, log, 4 * 3600)
+    rc = run(['python3', LOOP, 'run', '--ledger', ledger, '--max', '1', '--workers', '1'], env, log,
+             float(env.get('R2G_ENGINEER_TIMEOUT_S', 4 * 3600)))
     rec = {'loop_rc': rc, 'loop_wall_s': round(time.time() - t0)}
     last = {}
     for ln in ledger.read_text().splitlines():
@@ -316,24 +461,191 @@ def observation(proj):
     return obs
 
 
-LLM_SYSTEM = ('You are a physical-design engineer closing an OpenROAD-flow-scripts (ORFS) run on the {platform} platform. '
-              'You cannot run tools. Given the failure evidence and the current config.mk knobs, propose ONE set of '
-              'config.mk knob changes that should let the flow reach a signoff-clean layout (DRC clean, LVS clean) '
-              'without changing the clock period. Answer with exactly one json object: {"set": {"KNOB": "value", ...}, '
-              '"unset": ["KNOB", ...], "rerun_from": "synth|floorplan|place|cts|route", "rationale": "<one sentence>"}. '
-              'Allowed knobs: ' + ', '.join(sorted(KNOBS)) + '. PLACE_DENSITY_LB_ADDON must be at least 0.10. '
-              'DIE_AREA/CORE_AREA are "x0 y0 x1 y1" in microns; use either DIE_AREA+CORE_AREA or CORE_UTILIZATION, not both.')
+def _llm_system_text(knobs):
+    return ('You are a physical-design engineer closing an OpenROAD-flow-scripts (ORFS) run on the {platform} platform. '
+            'You cannot run tools. Given the failure evidence and the current config.mk knobs, propose ONE set of '
+            'config.mk knob changes that should let the flow reach a signoff-clean layout (DRC clean, LVS clean) '
+            'without changing the clock period. Answer with exactly one json object: {"set": {"KNOB": "value", ...}, '
+            '"unset": ["KNOB", ...], "rerun_from": "synth|floorplan|place|cts|route", "rationale": "<one sentence>"}. '
+            'Allowed knobs: ' + ', '.join(sorted(knobs)) + '. PLACE_DENSITY_LB_ADDON must be at least 0.10. '
+            'DIE_AREA/CORE_AREA are "x0 y0 x1 y1" in microns; use either DIE_AREA+CORE_AREA or CORE_UTILIZATION, not both.')
 
 
-def llm_call(key, messages, out_prefix, backoff=()):
-    body = json.dumps({'model': LLM_API_MODEL, 'temperature': 0.3, 'max_tokens': 800, 'stream': False,
-                       'thinking': {'type': 'disabled'}, 'response_format': {'type': 'json_object'},
-                       'messages': messages}).encode()
-    for attempt in range(len(backoff) + 1 if backoff else 3):  # transport retries only (H-A4: with backoff)
-        req = urllib.request.Request('https://api.deepseek.com/chat/completions', data=body, method='POST',
+LLM_SYSTEM = _llm_system_text(KNOBS)
+
+
+def executable_knobs(manifest):
+    """T2a: the knobs a proposal may set or unset = the task's published allowlist minus its immutable knobs.
+    One permission set for every arm (failure-patterns "T2a contract/executor knob mismatch", 2026-10-16)."""
+    allow = (manifest or {}).get('allowlist') or {}
+    immutable = set(((manifest or {}).get('immutable') or {}).get('knobs') or [])
+    return sorted(k for k in allow if k not in immutable)
+
+
+def llm_system(platform, manifest=None):
+    """System prompt; with a task manifest its 'Allowed knobs' are exactly the executable ones."""
+    text = _llm_system_text(executable_knobs(manifest)) if manifest else LLM_SYSTEM
+    return text.replace('{platform}', platform)
+
+
+LLM_MAX_TOKENS = 800       # output bound per request; reserved in full before the request
+# T2a authorization (contract section 6.1): per request at most 12,000 input and 2,000 output tokens. A token is at
+# least one byte, so a request body of at most 12,000 bytes is GUARANTEED within the input ceiling; a larger body
+# is refused before sending (observed bodies: median 2.6 KB, max 6.8 KB).
+LLM_MAX_INPUT_BYTES = 12000
+LLM_OUTPUT_CEILING = 2000
+assert LLM_MAX_TOKENS <= LLM_OUTPUT_CEILING
+LLM_ENDPOINT = 'https://api.deepseek.com/chat/completions'
+LLM_ALLOWED_REPORTED_MODELS = ('deepseek-flash', 'deepseek-v4.1-flash')   # no silent model substitution
+LLM_TIMEOUT_S = 300
+LLM_KILL_GRACE_S = 30      # margin below the attempt deadline for a request to end and be settled
+
+
+def _ledger(proj, *args, env=None):
+    """resource_ledger.py (P1a shared budget) for this project -> (exit code, stdout). 75 = budget
+    exhausted; any other non-zero = accounting error (with a budget configured the caller must stop)."""
+    led = SKILL / 'scripts/flow/resource_ledger.py'
+    if proj is None or not led.exists():
+        return 0, ''
+    r = subprocess.run(['python3', str(led), args[0], str(proj), *args[1:]], capture_output=True, text=True,
+                       env=env)
+    return r.returncode, r.stdout.strip()
+
+
+def _phase():
+    """The phase-wide LLM allocation (T2a A3: calibration 24 / 336k; formal 336 / 4.704M): a
+    SHARED ledger (``R2G_PHASE_LEDGER``) capped by ``R2G_PHASE_BUDGET_FILE``. Every request of every attempt of
+    the phase, retries included, is admitted against it (exclusive lock: parallel attempts cannot overrun it).
+    Returns (project dir, env) or None when not configured."""
+    led, budget = os.environ.get('R2G_PHASE_LEDGER'), os.environ.get('R2G_PHASE_BUDGET_FILE')
+    if not led or not budget:
+        return None
+    env = {**os.environ, 'R2G_LEDGER_PATH': str(Path(led)), 'R2G_BUDGET_FILE': budget,
+           'R2G_BUDGET_COMPONENT': 'llm_repair'}
+    env.pop('R2G_BUDGET_PURPOSE', None)
+    return Path(led).parent, env
+
+
+_LLM_STOPPED = {}           # a reported-model mismatch stops every later call of this process
+
+
+def _budgeted():
+    return bool(os.environ.get('R2G_BUDGET_FILE'))
+
+
+REPAIR_TURNS = 3            # T2a A1/A2: LLM repair-candidate generations per (task, arm, repeat), test-wide
+_APPLIED_TURNS = set()      # a repair turn yields at most one applied candidate
+
+
+def llm_call(key, messages, out_prefix, backoff=(), ledger=None, role='repair', sampling_override=None):
+    """One LLM repair request with transport retries. With a ledger, each request is a hold booked BEFORE
+    sending (one request, the body's byte length as the input-token bound, the full output maximum),
+    bounded in time by the attempt deadline, and settled at the reported usage afterwards (UNKNOWN if not
+    reported). Returns (content, usage); usage carries budget_exhausted / accounting_error when the
+    ledger stops the call."""
+    sampling = {'temperature': 0.3, 'max_tokens': LLM_MAX_TOKENS, 'stream': False,
+                'thinking': {'type': 'disabled'}, 'response_format': {'type': 'json_object'}}
+    if sampling_override:
+        if set(sampling_override) - {'temperature', 'max_tokens'}:
+            return None, {'refused': 'invalid_sampling_override'}
+        sampling.update(sampling_override)
+    if not 0 < sampling['max_tokens'] <= LLM_OUTPUT_CEILING:
+        return None, {'refused': 'output_ceiling'}
+    body = json.dumps({'model': LLM_API_MODEL, **sampling, 'messages': messages}).encode()
+    if _LLM_STOPPED:
+        return None, {'stopped': dict(_LLM_STOPPED)}
+    governed = os.environ.get('R2G_REQUIRE_LLM_BUDGET') == '1'
+    phase = _phase()
+    if role not in ('repair', 'auxiliary'):
+        return None, {'refused': 'unknown_role:%s' % role}
+    if governed and (ledger is None or not _budgeted() or phase is None):
+        return None, {'accounting_error': 'governed run without the attempt budget and the phase ledger'}
+    if len(body) > LLM_MAX_INPUT_BYTES:              # refused before sending: the input ceiling
+        if ledger is not None:
+            _ledger(ledger, 'event', '--type', 'llm_request_refused', '--json', json.dumps(
+                {'reason': 'input_ceiling', 'request_bytes': len(body), 'ceiling_bytes': LLM_MAX_INPUT_BYTES}))
+        return None, {'refused': 'input_ceiling', 'request_bytes': len(body)}
+    acct_error = False
+    # A2: a repair turn is reserved atomically BEFORE generation and shared by the whole episode; transport retries of
+    # the identical request stay inside it (each request still charged); a returned candidate, usable or not, spends it
+    turn = None
+    if role == 'repair' and ledger is not None:
+        rc, out = _ledger(ledger, 'admit', '--hold', '--component', 'llm_repair', '--need', 'repair_attempts=1')
+        if rc == 75:
+            # exhausted only when no turn is left; otherwise the ledger refused for another reason (an UNKNOWN amount
+            # fails closed): a metering/budget stop, not the repair allowance
+            rc2, rem = _ledger(ledger, 'remaining')
+            try:
+                left = json.loads(rem).get('repair_attempts') if rc2 == 0 else None
+            except ValueError:
+                left = None
+            if left is not None and left != 'UNKNOWN' and float(left) <= 0:
+                return None, {'repair_allowance_exhausted': True}
+            return None, {'budget_exhausted': True}
+        if rc != 0 and _budgeted():
+            return None, {'accounting_error': 'repair admit rc=%d' % rc}
+        turn = out or None
+    elif role == 'repair' and governed:
+        return None, {'accounting_error': 'repair turn without an episode ledger'}
+    sent = False
+
+    def _settle_turn():
+        if turn:
+            _ledger(ledger, 'settle', '--hold-id', turn, '--actual', 'repair_attempts=%d' % (1 if sent else 0))
+    for attempt in range(len(backoff) + 1):  # retries exist only when explicitly registered
+        hold, timeout, phase_hold = None, LLM_TIMEOUT_S, None
+        if phase is not None:                        # the phase allocation first: one request, its bounds
+            rc, out = _ledger(phase[0], 'admit', '--hold', '--component', 'llm_repair', '--need', 'llm_requests=1',
+                              '--need', 'tokens_in=%d' % len(body), '--need', 'tokens_out=%d' % sampling['max_tokens'],
+                              env=phase[1])
+            if rc == 75:
+                _settle_turn()
+                return None, {'budget_exhausted': True, 'scope': 'phase'}
+            if rc != 0:
+                _settle_turn()
+                return None, {'accounting_error': 'phase admit rc=%d' % rc}
+            phase_hold = out or None
+
+        def _release_phase():                       # nothing was sent: the phase hold is settled to zero
+            if phase_hold:
+                _ledger(phase[0], 'settle', '--hold-id', phase_hold, '--actual', 'llm_requests=0',
+                        '--actual', 'tokens_in=0', '--actual', 'tokens_out=0', env=phase[1])
+        if ledger is not None:
+            rc, out = _ledger(ledger, 'admit', '--hold', '--component', 'llm_repair', '--need', 'llm_requests=1',
+                              '--need', 'tokens_in=%d' % len(body), '--need', 'tokens_out=%d' % sampling['max_tokens'])
+            if rc == 75:
+                _release_phase()
+                _settle_turn()
+                return None, {'budget_exhausted': True}
+            if rc != 0 and _budgeted():
+                _release_phase()
+                _settle_turn()
+                return None, {'accounting_error': 'admit rc=%d' % rc}
+            hold = out or None
+            if _budgeted():
+                rc, out = _ledger(ledger, 'remaining')
+                try:
+                    left = json.loads(out).get('wall_s') if rc == 0 else 'ERR'
+                except ValueError:
+                    left = 'ERR'
+                if left in ('ERR', 'UNKNOWN'):
+                    _release_phase()
+                    _settle_turn()
+                    return None, {'accounting_error': 'remaining rc=%d' % rc}
+                if left is not None:
+                    timeout = min(LLM_TIMEOUT_S, left - LLM_KILL_GRACE_S)
+                    if timeout <= 0:                       # no time left: nothing is sent
+                        _ledger(ledger, 'settle', '--hold-id', hold, '--actual', 'llm_requests=0',
+                                '--actual', 'tokens_in=0', '--actual', 'tokens_out=0')
+                        _release_phase()
+                        _settle_turn()
+                        return None, {'budget_exhausted': True}
+        sent = True
+        request_started = time.time()
+        req = urllib.request.Request(LLM_ENDPOINT, data=body, method='POST',
                                      headers={'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'})
         try:
-            with urllib.request.urlopen(req, timeout=300) as r:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
                 raw, status = r.read(), r.status
         except urllib.error.HTTPError as exc:
             raw, status = exc.read() or str(exc).encode(), exc.code
@@ -341,40 +653,116 @@ def llm_call(key, messages, out_prefix, backoff=()):
             raw, status = str(exc).encode(), -1
         Path(str(out_prefix) + '.try%d.request.json' % attempt).write_bytes(body)
         Path(str(out_prefix) + '.try%d.response.json' % attempt).write_bytes(raw)
-        if status != -1 and status < 500:
+        try:
+            rep = json.loads(raw)
+        except ValueError:
+            rep = {}
+        rep = rep if isinstance(rep, dict) else {}
+        u = rep.get('usage') if isinstance(rep.get('usage'), dict) else {}
+        amt = {res: (str(u[k]) if isinstance(u.get(k), (int, float)) else 'UNKNOWN')
+               for res, k in (('tokens_in', 'prompt_tokens'), ('tokens_out', 'completion_tokens'))}
+        if phase_hold and _ledger(phase[0], 'settle', '--hold-id', phase_hold, '--actual', 'llm_requests=1',
+                                  '--actual', 'tokens_in=' + amt['tokens_in'],
+                                  '--actual', 'tokens_out=' + amt['tokens_out'], env=phase[1])[0]:
+            acct_error = True
+        mismatch = status == 200 and rep.get('model') not in LLM_ALLOWED_REPORTED_MODELS
+        if mismatch:
+            _LLM_STOPPED['model_mismatch'] = rep.get('model')
+        if ledger is not None:
+            rcs = []
+            if hold:
+                rcs.append(_ledger(ledger, 'settle', '--hold-id', hold, '--actual', 'llm_requests=1',
+                                   '--actual', 'tokens_in=' + amt['tokens_in'],
+                                   '--actual', 'tokens_out=' + amt['tokens_out'])[0])
+            rcs.append(_ledger(ledger, 'event', '--type', 'llm_request', '--json', json.dumps(
+                {'attempt': attempt, 'status': status, 'hold_id': hold, 'phase_hold_id': phase_hold,
+                 'role': role, 'repair_turn_id': turn,
+                 'model_requested': LLM_API_MODEL, 'model_reported': rep.get('model'),
+                 'model_mismatch': mismatch, 'request_id': rep.get('id'), 'endpoint': LLM_ENDPOINT,
+                 'sampling': sampling, 'request_bytes': len(body), 'date': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+                 'started': request_started, 'ended': time.time(), 'latency_s': time.time() - request_started,
+                 'usage_reported': u or 'UNKNOWN', 'timeout_s': timeout}))[0])
+            if any(rcs) and _budgeted():
+                acct_error = True
+        if mismatch:
+            _settle_turn()
+            return None, {'stopped': {'model_mismatch': rep.get('model')}}
+        if acct_error or (status != -1 and status < 500):
             break
         if attempt < len(backoff):
             time.sleep(backoff[attempt])
     try:
         data = json.loads(raw)
-        return data['choices'][0]['message']['content'], data.get('usage', {})
+        content, usage = data['choices'][0]['message']['content'], data.get('usage', {})
     except Exception:
-        return None, {}
+        content, usage = None, {}
+    _settle_turn()
+    if acct_error:
+        usage = {**usage, 'accounting_error': 'settle or event write failed'}
+    usage = {**usage, 'role': role}
+    if role == 'repair' and turn and content is not None:
+        usage['repair_turn_id'] = turn          # the only key that lets a response become a candidate
+    return content, usage
 
 
-def apply_llm(proj, content):
-    """Apply a whitelisted knob proposal to config.mk; returns (rerun_from, applied) or (None, reason)."""
+def apply_llm(proj, content, turn=None, manifest=None):
+    """Apply a whitelisted knob proposal to config.mk; returns (rerun_from, applied) or (None, reason).
+    ``turn`` must be the repair turn id that generated ``content`` (A2): an auxiliary/helper response or a second
+    candidate from the same turn is refused. With a T2a task ``manifest`` the published contract is the whitelist,
+    checked by the same check_config as acceptance; without one the legacy knob_policy bounds apply."""
+    if os.environ.get('R2G_REQUIRE_LLM_BUDGET') == '1':
+        if not turn:
+            return None, 'not_a_repair_turn'
+        if turn in _APPLIED_TURNS:
+            return None, 'turn_already_used'
+        _APPLIED_TURNS.add(turn)
     try:
         obj = json.loads(content)
     except Exception:
         return None, 'malformed_json'
-    sets, unsets = obj.get('set') or {}, obj.get('unset') or []
+    if not isinstance(obj, dict):
+        return None, 'malformed_proposal'
+    sets, unsets = obj.get('set', {}), obj.get('unset', [])
     if not isinstance(sets, dict) or not isinstance(unsets, list):
         return None, 'malformed_proposal'
-    bad = [k for k in list(sets) + list(unsets) if k not in KNOBS]
-    if bad:
-        return None, 'non_whitelisted:' + ','.join(bad)
-    for k, v in sets.items():
-        rng = KNOBS[k]
-        if rng is not None:
-            try:
-                x = float(v)
-            except (TypeError, ValueError):
-                return None, 'non_numeric:' + k
-            if not rng[0] <= x <= rng[1]:
-                return None, 'out_of_range:%s=%s' % (k, v)
+    if any(not isinstance(k, str) for k in list(sets) + unsets):
+        return None, 'malformed_proposal'
+    if set(sets).intersection(unsets):
+        return None, 'malformed_proposal'
     cfg = proj / 'constraints/config.mk'
+    if manifest:
+        allowed = set(executable_knobs(manifest))
+        bad = [k for k in list(sets) + list(unsets) if k not in allowed]
+        if bad:
+            return None, 'non_whitelisted:' + ','.join(bad)
+        import t2a_envelope
+        candidate = _cfg_dict(cfg)
+        candidate.update({k: str(v) for k, v in sets.items()})
+        for k in unsets:
+            candidate.pop(k, None)
+        res = t2a_envelope.check_config({**manifest, 'immutable': {'knobs': (manifest.get('immutable') or {})
+                                                                   .get('knobs', [])}}, candidate)
+        proposed = [v for v in res['violations'] if v.get('knob') in set(sets) | set(unsets)
+                    or v.get('kind') in ('ambiguous_floorplan_mode', 'core_outside_die')]
+        if proposed:
+            return None, 'contract_violation:' + ','.join('%s:%s' % (v.get('knob', '-'), v['kind']) for v in proposed)
+    else:
+        bad = [k for k in list(sets) + list(unsets) if k not in KNOBS]
+        if bad:
+            return None, 'non_whitelisted:' + ','.join(bad)
+        for k, v in sets.items():
+            rng = KNOBS[k]
+            if rng is not None:
+                try:
+                    x = float(v)
+                except (TypeError, ValueError):
+                    return None, 'non_numeric:' + k
+                if not rng[0] <= x <= rng[1]:
+                    return None, 'out_of_range:%s=%s' % (k, v)
     text = cfg.read_text()
+    current = _cfg_dict(cfg)
+    if not any(str(current.get(k)) != str(v) for k, v in sets.items()) and not any(k in current for k in unsets):
+        return None, 'no_change'
     for k in list(sets) + list(unsets):
         text = re.sub(r'^export %s\s*=.*\n' % k, '', text, flags=re.M)
     text += ''.join('export %s = %s\n' % (k, v) for k, v in sets.items())
@@ -427,7 +815,10 @@ R_ARMS = {'RS': 'sandbox-f/tehm/SL-{lane}',                              # Phase
           'RG': 'sandbox-f/tehm/G-{lane}',                               # Phase G G
           'RP': 'evaluation-h-ablation/no_llm_evidence-{lane}',          # Phase I P (pool only)
           'RL': 'evaluation-h-ablation/no_component_trial_evidence-{lane}',  # Phase I L (LLM-derived rules only)
-          'RJ': 'evaluation-i/stores/IJ-{lane}'}                          # Phase I J (neither)
+          'RJ': 'evaluation-i/stores/IJ-{lane}',                         # Phase I J (neither)
+          # feature-freeze phase (r2g_feature_freeze_phase_20261009): TEHM-M0 = one-shot build of the frozen
+          # SOURCE-v1 (main caliber, D1); one store for both lanes; read-only, bound per task as a snapshot
+          'TM0': 'stores-v1/TEHM-M0-v2'}
 RERUN_ARMS = S_ARMS + tuple(R_ARMS)   # judged on acceptance; private stores; pre-LLM snapshot kept
 LAYOUT_BINARIES = ('*.odb', '*.gds', '*.gds.gz', '*.def', '*.spef', '*.v', '*.lef')  # never read by any analysis
 D2_ORDER_SEED = '20261001'  # preregistered task-order seed (card D-A2 / D2 section)
@@ -529,14 +920,21 @@ def d2_env(arm):
 
 
 def rerun_env(arm, proj):
-    """Env for a Phase S / R arm: memoryless, or TEHM on a private copy of the arm's frozen store (read-only)."""
+    """Env for a Phase S / R arm: memoryless, or TEHM on a task-level SNAPSHOT of the arm's store (P1b / D3):
+    one committed store version bound at task start (online backup, watermark + snapshot_id recorded,
+    exactly its referenced artifacts), opened read-only by the runtime for the whole task. A plain directory
+    copy could miss WAL-resident commits (the read-only runtime ignores the WAL) and copy unreferenced or
+    half-written files."""
     if arm in S_ARMS:
         return d2_env(arm)
+    if str(REPO / 'memory') not in sys.path:
+        sys.path[:0] = [str(REPO / 'memory')]
+    from tehm.snapshot import bind_snapshot
     src = EVAL / R_ARMS[arm].format(lane=CFG['lane'])
     dst = proj / '.tehm-store'
     if dst.exists():
         shutil.rmtree(dst)
-    shutil.copytree(src, dst)
+    bind_snapshot(src, dst)
     env = base_env('tehm')
     env.update(TEHM_DB=str(dst / 'tehm.sqlite'), TEHM_ARTIFACTS_ROOT=str(dst / 'artifacts'),
                R2G_MEMORY_READ_ONLY_EVAL='1')
@@ -569,7 +967,8 @@ def llm_assist(proj, arm, env, key, budget, situation, backoff=()):
     msgs = [{'role': 'system', 'content': LLM_SYSTEM.replace('{platform}', CFG['platform'])}]
     iters, last = [], None
     for i in range(1, LLM_ITERS + 1):
-        if budget['calls'] >= budget['max_calls'] or budget['tokens'] >= budget['max_tokens']:
+        if (budget['calls'] >= budget['max_calls'] or budget['tokens'] >= budget['max_tokens']
+                or budget.get('tokens_unknown') or budget.get('accounting_error')):
             iters.append({'iter': i, 'skipped': 'cap'}); break
         check, vclass, count = _task_failure(proj)
         sit = situation.from_project(proj, check, vclass, count)
@@ -577,17 +976,35 @@ def llm_assist(proj, arm, env, key, budget, situation, backoff=()):
         obs = observation(proj)
         msgs.append({'role': 'user', 'content': 'Failure evidence (iteration %d):\n%s\nReply with the json object only.'
                                                 % (i, json.dumps(obs, indent=1))})
-        content, usage = llm_call(key, msgs, proj / ('llm_assist%d' % i), backoff=backoff)
+        content, usage = llm_call(key, msgs, proj / ('llm_assist%d' % i), backoff=backoff, ledger=proj)
+        usage_raw = dict(usage)
+        if usage.get('repair_allowance_exhausted'):
+            iters.append({'iter': i, 'result': 'repair_allowance_exhausted'}); break
+        if usage.get('budget_exhausted'):
+            iters.append({'iter': i, 'result': 'budget_exhausted'}); break
+        if usage.get('accounting_error') and content is None:
+            iters.append({'iter': i, 'result': 'accounting_error', 'detail': usage['accounting_error']}); break
         budget['calls'] += 1
-        budget['tokens'] += int(usage.get('total_tokens', 0))
+        if usage.get('accounting_error'):
+            budget['accounting_error'] = usage['accounting_error']   # the response is used; no further calls
+        if isinstance(usage.get('total_tokens'), (int, float)):
+            budget['tokens'] += int(usage['total_tokens'])
+        else:
+            budget['tokens_unknown'] = True   # missing usage is UNKNOWN, never 0: no further calls (fail closed)
         usage = {k: usage.get(k) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens')}   # Phase H
         if content is None:
             iters.append({'iter': i, 'result': 'call_failed', 'usage': usage}); break
         msgs.append({'role': 'assistant', 'content': content})
-        rf, applied = apply_llm(proj, content)
+        rf, applied = apply_llm(proj, content, turn=usage_raw.get('repair_turn_id'))
         if rf is None:
-            iters.append({'iter': i, 'result': applied, 'usage': usage}); break
-        run(['bash', FLOW / 'run_orfs.sh', proj, CFG['platform']], env, log, 6000)
+            iters.append({'iter': i, 'result': applied, 'usage': usage,
+                          'repair_turn_id': usage_raw.get('repair_turn_id'), 'flow_launched': False})
+            if applied in ('not_a_repair_turn', 'turn_already_used'):
+                break
+            msgs.append({'role': 'user', 'content': 'The proposal was not executed: %s. '
+                         'This repair turn is consumed. Supply a valid, non-empty allowed change if another turn remains.' % applied})
+            continue
+        run(['bash', FLOW / 'run_orfs.sh', proj, CFG['platform']], {**env, 'R2G_BUDGET_COMPONENT': 'llm_repair'}, log, 6000)
         run(['python3', SKILL / 'scripts/extract/extract_ppa.py', proj, proj / 'reports/ppa.json'], env, log, 600)
         v = last = final_verdict(proj, env, log)
         edits = dict(applied['set'])
@@ -681,8 +1098,13 @@ def d2_stream(args):
                 env = task_store_env(rerun_env(args.arm, proj), proj)
                 if args.arm in R_ARMS:
                     src = EVAL / R_ARMS[args.arm].format(lane=CFG['lane'])
+                    from tehm.snapshot import read_snapshot
+                    rec['memory_snapshot'] = read_snapshot(proj / '.tehm-store')
                     rec['memory_store'] = {'source': str(src), 'sha256': {n: sha(src / n) for n in
                                            ('tehm.sqlite', 'tehm.sqlite-wal') if (src / n).exists()}}
+            # P1a: the attempt's wall-time budget starts here, not at its first flow
+            _ledger(proj, 'event', '--type', 'attempt_start', '--json', json.dumps(
+                {'arm': args.arm, 'task': '%s/%s' % (d, v), 'budget_file': env.get('R2G_BUDGET_FILE')}))
             rec.update(run_engineer(proj, args.arm, env=env))
             # Phase S / R judge acceptance (checklist v1); earlier phases physical closure
             done = rec.get('accepted') if args.arm in RERUN_ARMS else rec.get('physical_clean')

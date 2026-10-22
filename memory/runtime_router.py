@@ -73,7 +73,7 @@ def signoff_strategies(*, project_dir: Path, check: str, design_id: str | None,
             "rationale": "TEHM validity-gated typed rule",
             "config_edits": action_payload.get("config_edits") or {},
             "rerun_from": action_payload.get("rerun_from"),
-            "recheck": action_payload.get("recheck") or check,
+            "recheck": action_payload.get("recheck"),
             "auto_apply": True,
             "tehm_score": candidate.score,
             "transformation_family": (binding.get("transformation_family") or
@@ -98,14 +98,19 @@ def signoff_strategies(*, project_dir: Path, check: str, design_id: str | None,
                                         rewrite.get("config_edits") or {})
             strategy["rerun_from"] = (strategy["rerun_from"] or
                                       execution.get("rerun_from"))
-            strategy["recheck"] = (strategy["recheck"] or
-                                   execution.get("recheck") or check)
+            strategy["recheck"] = strategy["recheck"] or execution.get("recheck")
         # B4: never hand the fix loop an action it cannot execute faithfully.
         reason = _reject_reason(strategy, action_payload)
         if reason:
             print(f"TEHM strategy {strategy['id']} rejected: {reason}", file=sys.stderr)
             continue
-        strategy["recheck"] = check
+        # Executor contract: the recheck is the rule's OWN recorded check, mapped to the fix
+        # loop's vocabulary; a missing or inconsistent value is an invalid candidate that the
+        # shared gate reports as a technical failure (never overwritten by the query check).
+        recorded = action_payload.get("recheck") or (execution.get("recheck") if isinstance(skill, dict) else None)
+        strategy["recheck"], contract_error = recheck_for_rule(recorded, check)
+        if contract_error:
+            strategy["contract_error"] = contract_error
         strategy["mechanisms"] = mechanisms(strategy)
         print("TEHM mechanisms: %s %s" % (strategy["id"], ",".join(strategy["mechanisms"])), file=sys.stderr)
         strategies.append(strategy)
@@ -114,10 +119,26 @@ def signoff_strategies(*, project_dir: Path, check: str, design_id: str | None,
     return strategies
 
 
+def recheck_for_rule(rule_check, query_check):
+    """(fix-loop recheck, None) from a rule's recorded check, or (None, reason) when it is
+    missing, unmappable or inconsistent with the check the rule was retrieved for."""
+    knowledge = Path(__file__).resolve().parents[1] / "r2g-skills/signoff-loop/knowledge"
+    if str(knowledge) not in sys.path:
+        sys.path.insert(0, str(knowledge))
+    from candidate_contract import recheck_from_evidence
+    value = recheck_from_evidence(rule_check)
+    if value is None:
+        return None, "recorded recheck %r cannot be mapped" % (rule_check,)
+    if value != recheck_from_evidence(query_check):
+        return None, "recorded recheck %r does not match the query check %r" % (rule_check, query_check)
+    return value, None
+
+
 def _composition_strategies(backend, check, cfg, situation, severity) -> list[dict]:
     """Phase G2: compositions of verified components (tehm.retrieval.compose), AFTER the
     rule strategies. Every composition is a trial (never promoted here); the knob policy
     and exclusion gates of the caller still apply."""
+    from candidate_contract import recheck_from_evidence
     from tehm.retrieval.compose import compositions
     from tehm.retrieval.vetoes import verified_outcomes
     conn, _ = backend._open()
@@ -127,7 +148,9 @@ def _composition_strategies(backend, check, cfg, situation, severity) -> list[di
             "id": "tehm_" + c["id"], "source": "tehm_compose", "rule_id": c["id"],
             "rationale": "TEHM composition of verified components (%s, predicted severity %s)"
                          % (c["reason"], c["predicted_severity"]),
-            "config_edits": c["edits"], "rerun_from": "floorplan", "recheck": check,
+            # recheck in the fix loop's vocabulary (orfs_stage -> route), like a rule's own
+            # recorded check; contract: knowledge/candidate_contract.py.
+            "config_edits": c["edits"], "rerun_from": "floorplan", "recheck": recheck_from_evidence(check),
             "auto_apply": True, "transformation_family": "COMPOSE_" + "_".join(c["dims"]),
             "memory_trial": True, "witness_selected": [], "dropped_knobs": [],
             "composition": {"predicted_severity": c["predicted_severity"], "tested": c["tested"],

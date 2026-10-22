@@ -39,11 +39,14 @@ def test_knob_policy_hard_rules():
 
 def test_memory_strategies_gated_with_reasons(capsys):
     cfg = {"CORE_UTILIZATION": "40"}
-    sts = [{"id": "tehm_a", "config_edits": {"CORE_UTILIZATION": "30"}},
-           {"id": "tehm_b", "config_edits": {"CORE_UTILIZATION": "30"}},   # excluded
-           {"id": "tehm_c", "config_edits": {"CORE_UTILIZATION": "40"}},   # in effect
-           {"id": "tehm_d", "config_edits": {"CLOCK_PERIOD": "20"}},       # policy
-           {"id": "tehm_e", "config_edits": {"PLACE_DENSITY_LB_ADDON": "0.02"}}]
+    # Contract-valid candidates (candidate_contract.py, 2026-10-17): an invalid shape is a
+    # technical failure, tested in test_candidate_contract.py, not an ordinary gate drop.
+    ok = {"recheck": "drc", "rerun_from": "floorplan"}
+    sts = [{"id": "tehm_a", "config_edits": {"CORE_UTILIZATION": "30"}, **ok},
+           {"id": "tehm_b", "config_edits": {"CORE_UTILIZATION": "30"}, **ok},   # excluded
+           {"id": "tehm_c", "config_edits": {"CORE_UTILIZATION": "40"}, **ok},   # in effect
+           {"id": "tehm_d", "config_edits": {"CLOCK_PERIOD": "20"}, **ok},       # policy
+           {"id": "tehm_e", "config_edits": {"PLACE_DENSITY_LB_ADDON": "0.02"}, **ok}]
     kept = dsf._gate_memory_strategies(sts, cfg, {"tehm_b"})
     assert [s["id"] for s in kept] == ["tehm_a"]
     err = capsys.readouterr().err
@@ -69,6 +72,8 @@ def test_current_situation_prefers_the_logged_snapshot(monkeypatch, tmp_path):
 
 
 # -- B6 pre-escalation hook ----------------------------------------------------------
+# Router output always carries recheck + rerun_from (contract-valid; T1 evidence: all 12
+# TEHM executions did). Contract violations are tested further below.
 
 @pytest.fixture
 def loop(monkeypatch, tmp_path):
@@ -108,7 +113,7 @@ def test_hook_applies_one_rule_merges_block_and_records(loop):
     el, led, entry, calls, state = loop
     calls["strategies"] = [{"id": "tehm_r1", "rule_id": "r1",
                             "transformation_family": "CORE_UTIL_RELIEF",
-                            "config_edits": {"CORE_UTILIZATION": "30"}}]
+                            "config_edits": {"CORE_UTILIZATION": "30"}, **VALID}]
     assert el._memory_recovery(led, entry, None, "place") == "clean"
     cfg = (Path(entry["project_path"]) / "constraints" / "config.mk").read_text()
     assert "export CORE_UTILIZATION = 30" in cfg
@@ -126,7 +131,7 @@ def test_hook_failed_retry_is_recorded_as_negative_evidence(loop):
     el, led, entry, calls, state = loop
     state["fail_stage"] = "place"
     calls["strategies"] = [{"id": "tehm_r1", "rule_id": "r1",
-                            "config_edits": {"CORE_UTILIZATION": "30"}}]
+                            "config_edits": {"CORE_UTILIZATION": "30"}, **VALID}]
     el._memory_recovery(led, entry, None, "place")
     row = _rows(entry)[-1]
     assert row["verdict"] == "no_change" and row["after"] == 1
@@ -137,7 +142,7 @@ def test_hook_escalates_when_memory_has_nothing_usable(loop, monkeypatch, case):
     el, led, entry, calls, state = loop
     calls["strategies"] = [{"id": "tehm_r1", "rule_id": "r1",
                             "transformation_family": "CORE_UTIL_RELIEF",
-                            "config_edits": {"CORE_UTILIZATION": "30"}}]
+                            "config_edits": {"CORE_UTILIZATION": "30"}, **VALID}]
     if case == "legacy":
         monkeypatch.setenv("R2G_MEMORY_BACKEND", "legacy")
     elif case == "ab_arm":
@@ -261,3 +266,118 @@ def test_diagnose_subprocess_reaches_the_real_tehm_router(tmp_path):
                        env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr[-2000:]
     assert "TEHM consultation skipped" not in r.stderr, r.stderr[-2000:]
+
+
+# -- B6 for RECIPE: the same place-abort entry, execution and recording (2026-10-17) ----
+# Shared-harness fairness fix (failure-patterns "Memory candidate broke the executor
+# contract", follow-up): the place-abort memory hook was TEHM-only, so the SOURCE recipe
+# arm could never use its 34 orfs_stage/place recipes. RECIPE now enters through the same
+# hook, gates and recorder; it keeps its own retrieval (exact situation match) and has no
+# TEHM veto knowledge.
+
+VALID = {"recheck": "route", "rerun_from": "floorplan"}
+
+
+def _recipe_file(tmp_path, edits=None, sit=None):
+    sit = dict(SIT if sit is None else sit)
+    path = tmp_path / "RECIPE.json"
+    path.write_text(json.dumps({"status": "FROZEN", "recipes": [{
+        "id": "recipe_place1", "situation": {k: sit.get(k) for k in
+                                              ("platform", "check", "violation_class", "die_mode",
+                                               "util_band", "timeout")},
+        "config_edits": edits or {"CORE_UTILIZATION": "30"}, "rerun_from": "floorplan",
+        "unit_ids": ["u1", "u2"], "first_time": ""}]}))
+    return path
+
+
+@pytest.fixture
+def recipe_loop(loop, monkeypatch, tmp_path):
+    el, led, entry, calls, state = loop
+    monkeypatch.setenv("R2G_MEMORY_BACKEND", "none")
+    monkeypatch.setenv("R2G_RECIPE_FILE", str(_recipe_file(tmp_path)))
+    monkeypatch.delenv("R2G_RECIPE_SUSPENDED", raising=False)
+    return loop
+
+
+def test_recipe_place_abort_uses_the_same_entry_execution_and_record(recipe_loop):
+    el, led, entry, calls, state = recipe_loop
+    assert el._memory_recovery(led, entry, None, "place") == "clean"
+    cfg = (Path(entry["project_path"]) / "constraints" / "config.mk").read_text()
+    assert "export CORE_UTILIZATION = 30" in cfg
+    assert "export PLACE_DENSITY_LB_ADDON = 0.20" in cfg
+    row = _rows(entry)[-1]
+    assert row["memory_rule"] == "recipe_place1" and row["strategy"] == "source_concrete_recipe"
+    assert row["verdict"] == "cleared" and row["situation"] == SIT and calls["retries"] == 1
+    assert el._memory_recovery(led, entry, None, "place") is None            # once per visit
+
+
+def test_recipe_place_abort_failure_is_recorded_as_negative_evidence(recipe_loop):
+    el, led, entry, calls, state = recipe_loop
+    state["fail_stage"] = "place"
+    el._memory_recovery(led, entry, None, "place")
+    row = _rows(entry)[-1]
+    assert row["memory_rule"] == "recipe_place1" and row["verdict"] == "no_change" and row["after"] == 1
+
+
+@pytest.mark.parametrize("case", ["suspended", "policy", "no_match", "ab_arm"])
+def test_recipe_place_abort_escalates_when_nothing_usable(recipe_loop, monkeypatch, tmp_path, case):
+    el, led, entry, calls, state = recipe_loop
+    if case == "suspended":
+        monkeypatch.setenv("R2G_RECIPE_SUSPENDED", "1")
+    elif case == "policy":
+        monkeypatch.setenv("R2G_RECIPE_FILE", str(_recipe_file(tmp_path, {"CORE_UTILIZATION": "2"})))
+    elif case == "no_match":
+        monkeypatch.setenv("R2G_RECIPE_FILE", str(_recipe_file(tmp_path, sit={**SIT, "violation_class": "route"})))
+    else:
+        entry["kind"] = "ab_arm"
+    assert el._memory_recovery(led, entry, None, "place") is None
+    assert calls["retries"] == 0 and not _rows(entry)
+
+
+def test_recipe_has_no_tehm_veto_knowledge(recipe_loop):
+    el, led, entry, calls, state = recipe_loop
+    calls["vetoes"] = {"source_concrete_recipe": {"failures": 9}, "core_util_relief": {"failures": 9}}
+    assert el._memory_recovery(led, entry, None, "place") == "clean"
+
+
+def test_nb_has_no_place_abort_memory(loop, monkeypatch):
+    el, led, entry, calls, state = loop
+    monkeypatch.setenv("R2G_MEMORY_BACKEND", "none")
+    monkeypatch.delenv("R2G_RECIPE_FILE", raising=False)
+    calls["strategies"] = [{"id": "tehm_r1", "rule_id": "r1", "config_edits": {"CORE_UTILIZATION": "30"}, **VALID}]
+    assert el._memory_recovery(led, entry, None, "place") is None and calls["retries"] == 0
+
+
+@pytest.mark.parametrize("source", ["tehm", "recipe"])
+def test_an_invalid_place_abort_candidate_is_a_technical_stop(loop, monkeypatch, tmp_path, source):
+    el, led, entry, calls, state = loop
+    states = []
+    led = types.SimpleNamespace(set_state=lambda design, st, **kw: states.append((st, kw.get("reason"))))
+    if source == "tehm":
+        calls["strategies"] = [{"id": "tehm_bad", "rule_id": "bad", "rerun_from": "floorplan",
+                                "config_edits": {"CORE_UTILIZATION": "30"}}]          # no recheck
+    else:
+        monkeypatch.setenv("R2G_MEMORY_BACKEND", "none")
+        path = _recipe_file(tmp_path)
+        data = json.loads(path.read_text())
+        data["recipes"][0]["situation"]["check"] = "UNKNOWN"                           # unmappable recheck
+        path.write_text(json.dumps(data))
+        monkeypatch.setenv("R2G_RECIPE_FILE", str(path))
+        monkeypatch.setattr(el.situation, "from_project", lambda *a, **k: {**SIT, "check": "UNKNOWN"})
+    assert el._memory_recovery(led, entry, None, "place") == "technical_failure"
+    import technical_failure
+    rows = technical_failure.load(entry["project_path"])
+    assert rows and rows[-1]["kind"] == "invalid_candidate" and source in rows[-1]["detail"]
+    assert calls["retries"] == 0 and not _rows(entry)
+    assert states[-1] == ("escalated", "technical_failure")
+
+
+def test_a_crashed_recipe_consultation_is_a_technical_stop(recipe_loop, monkeypatch, tmp_path):
+    el, led, entry, calls, state = recipe_loop
+    led = types.SimpleNamespace(set_state=lambda design, st, **kw: None)
+    (tmp_path / "broken.json").write_text("{not json")
+    monkeypatch.setenv("R2G_RECIPE_FILE", str(tmp_path / "broken.json"))
+    assert el._memory_recovery(led, entry, None, "place") == "technical_failure"
+    import technical_failure
+    assert technical_failure.load(entry["project_path"])[-1]["kind"] == "consultation_crash"
+    assert calls["retries"] == 0

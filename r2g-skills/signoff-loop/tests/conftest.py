@@ -42,6 +42,16 @@ if str(LOOP_DIR_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(LOOP_DIR_SCRIPTS))
 
 
+@pytest.fixture(autouse=True)
+def _isolated_process_backend_lock():
+    """Memory and legacy-loop tests must not share a simulated process lock."""
+    for name in ('factory', 'memory.factory'):
+        if name in sys.modules: sys.modules[name].reset()
+    yield
+    for name in ('factory', 'memory.factory'):
+        if name in sys.modules: sys.modules[name].reset()
+
+
 @pytest.fixture(scope="session")
 def _session_knowledge_copy(tmp_path_factory) -> Path:
     """One per-session copy of the SHIPPED knowledge.sqlite (see _isolate_knowledge)."""

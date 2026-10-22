@@ -17,6 +17,7 @@ diagnose/suggest and are never touched here.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -26,6 +27,7 @@ import subprocess
 import sys
 import threading
 import traceback
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -289,6 +291,10 @@ def _run_flow(entry: dict) -> int:
         except OSError:
             pass
     env = os.environ.copy()
+    # A recursive recovery reflow is not another initial flow, even when the
+    # harness passed component=initial to the whole engineer loop.
+    if env.get("R2G_BUDGET_COMPONENT", "initial") == "initial":
+        env["R2G_BUDGET_COMPONENT"] = "recovery" if _has_backend_run(entry) else "initial"
     # A SYNTH backend-abort A/B arm is judged ONLY on 'synth cleared' (_arm_metric synth=True),
     # so it does NOT need to flow place/route -- run synth-ONLY. arm B (recipe) clears synth in
     # MINUTES, vs the HOURS the FF-expanded memory takes to place/route -- which it route-fails
@@ -491,6 +497,21 @@ def _enqueue_check_mismatch(conn, symptom_id: str, strategy: str) -> str | None:
         return (f"symptom {symptom_id} is {row[0]}|{row[1]} but {strategy} repairs "
                 f"{want}; enqueue it under the {want} symptom of the failing check")
     return None
+
+
+def _technical_stop(led, conn, entry: dict, fix_rc: int) -> bool:
+    """A technical failure (invalid candidate, crashed diagnose/consultation) stops this
+    design: no further repair path runs and it is never escalated as an ordinary residual
+    (failure-patterns "Memory candidate broke the executor contract", 2026-10-17)."""
+    import technical_failure
+    from candidate_contract import TECHNICAL_EXIT
+    rows = technical_failure.load(entry["project_path"])
+    if fix_rc != TECHNICAL_EXIT and not rows:
+        return False
+    design = entry.get("design") or Path(entry["project_path"]).name
+    led.set_state(design, "escalated", reason="technical_failure")
+    print(f"[loop] {design}: technical failure, design stopped ({len(rows)} recorded)", file=sys.stderr)
+    return True
 
 
 def _run_fix(entry: dict) -> int:
@@ -806,6 +827,59 @@ def _newest_stage_log(project_path: str) -> Path | None:
     if not runs:
         return None
     return max(runs, key=lambda d: d.stat().st_mtime) / "stage_log.jsonl"
+
+
+# Chain log v1 (T2 design draft §8d; failure-patterns "History annotator cited a row field that
+# no on-disk row has", 2026-10-17). A recovery's retry is launched under an explicit action id;
+# run_orfs records it in the run it creates (backend/RUN_*/r2g_action.json). The recorder's row
+# names the run the recovery responded to (the run this loop diagnosed, read BEFORE the retry)
+# and the run the retry produced (the unique run naming the action). The live recovery path has
+# no revert (restores exist only in A/B arm setup), so rolled_back is recorded false. The
+# SOURCE-v1 recorder rows had none of this, which is why no place abort could be bound.
+@contextlib.contextmanager
+def _chain_action(entry: dict):
+    log = _newest_stage_log(entry["project_path"])
+    ctx = {"action_id": "elp_" + uuid.uuid4().hex[:16],
+           "pre_run_tag": log.parent.name if log is not None else None}
+    prev = os.environ.get("R2G_ACTION_ID")
+    os.environ["R2G_ACTION_ID"] = ctx["action_id"]
+    try:
+        yield ctx
+    finally:
+        if prev is None:
+            os.environ.pop("R2G_ACTION_ID", None)
+        else:
+            os.environ["R2G_ACTION_ID"] = prev
+
+
+def _chain_fields(proj: Path, chain: dict | None, stage: str | None) -> dict:
+    if not chain:
+        return {}
+    own = []
+    for m in proj.glob("backend/RUN_*/r2g_action.json"):
+        try:
+            if json.loads(m.read_text()).get("action_id") == chain["action_id"]:
+                own.append(m.parent.name)
+        except (OSError, ValueError):
+            pass
+    own.sort()
+    post = own[0] if len(own) == 1 else None
+    out = {"chain_version": 1, "action_id": chain["action_id"], "parent_action": None,
+           "pre_run_tag": chain.get("pre_run_tag"), "post_run_tag": post,
+           "rolled_back": False, "rollback_reason": None, "step_check": None}
+    if len(own) > 1:
+        out["post_run_ambiguous"] = own
+    if post is not None:
+        last = {}
+        try:
+            rows = [json.loads(l) for l in (proj / "backend" / post / "stage_log.jsonl").read_text().splitlines()
+                    if l.strip()]
+            last = rows[-1] if rows else {}
+        except (OSError, ValueError):
+            pass
+        out["step_check"] = {"check": "orfs_stage", "stage": stage, "graded_run_tag": post,
+                             "last_stage": last.get("stage"), "last_status": last.get("status")}
+    return out
 
 
 def _fail_stage(entry: dict) -> str | None:
@@ -1125,7 +1199,7 @@ def _effect_fields(entry: dict, *, cleared: bool) -> dict:
 
 
 def _record_pdn_fix(entry: dict, *, cleared: bool,
-                    situation_: dict | None = None) -> None:
+                    situation_: dict | None = None, chain: dict | None = None) -> None:
     """Record the PDN-0185 die-floor (CORE_UTILIZATION -> explicit PDN-feasible DIE_AREA) as a
     fix_log row so the NEXT _ingest projects it into fix_events -> fix_trajectories -> a Tier-3
     recipe, making the recovery VISIBLE to learning (mirrors _record_resize_fix). Keyed
@@ -1150,12 +1224,13 @@ def _record_pdn_fix(entry: dict, *, cleared: bool,
     }
     if situation_:
         row["situation"] = situation_
+    row.update(_chain_fields(proj, chain, row.get("violation_class")))
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
 def _record_resize_fix(entry: dict, *, cleared: bool,
-                       situation_: dict | None = None) -> None:
+                       situation_: dict | None = None, chain: dict | None = None) -> None:
     """Record the FLW-0024 die-resize (DIE_AREA -> CORE_UTILIZATION) as a fix_log row
     so the NEXT _ingest projects it into fix_events -> fix_trajectories -> a Tier-3
     recipe — making the recovery VISIBLE to learning (honest accounting, a
@@ -1194,12 +1269,13 @@ def _record_resize_fix(entry: dict, *, cleared: bool,
     }
     if situation_:
         row["situation"] = situation_
+    row.update(_chain_fields(proj, chain, row.get("violation_class")))
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
 def _record_pin_perimeter_fix(entry: dict, *, cleared: bool,
-                              situation_: dict | None = None) -> None:
+                              situation_: dict | None = None, chain: dict | None = None) -> None:
     """Record the PPL-0024 perimeter-targeted die action under its own identity.
 
     PPL-0024 is pin-capacity limited and sets an explicit die from the IO placer's
@@ -1225,6 +1301,7 @@ def _record_pin_perimeter_fix(entry: dict, *, cleared: bool,
     }
     if situation_:
         row["situation"] = situation_
+    row.update(_chain_fields(proj, chain, row.get("violation_class")))
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
 
@@ -1344,7 +1421,7 @@ def _raise_synth_memory_cap(entry: dict, bits: int = _SYNTH_MEM_BITS_RETRY) -> b
 
 
 def _record_synth_mem_fix(entry: dict, *, cleared: bool,
-                          situation_: dict | None = None) -> None:
+                          situation_: dict | None = None, chain: dict | None = None) -> None:
     """Record the SYNTH_MEMORY_MAX_BITS raise as a fix_log row so the next _ingest
     projects it into fix_events -> a Tier-3 'synth_memory_relax' recipe -- the synth
     memory-cap recovery becomes VISIBLE to learning (a cross-design prior keyed to the
@@ -1369,6 +1446,7 @@ def _record_synth_mem_fix(entry: dict, *, cleared: bool,
     }
     if situation_:
         row["situation"] = situation_
+    row.update(_chain_fields(proj, chain, row.get("violation_class")))
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
 
@@ -1387,32 +1465,72 @@ def _memory_family(strategy_id) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", str(strategy_id or "")).strip("_").upper()
 
 
+def _place_abort_memory_source() -> str | None:
+    """Which executable memory serves the place-abort hook: TEHM (R2G_MEMORY_BACKEND=tehm)
+    or the SOURCE recipe library (R2G_RECIPE_FILE, unless R2G_RECIPE_SUSPENDED). A shared
+    entry, not a TEHM privilege (failure-patterns "Memory candidate broke the executor
+    contract", follow-up 2026-10-17): the arms keep their own retrieval and ranking."""
+    if os.environ.get("R2G_MEMORY_BACKEND", "legacy").strip().lower() == "tehm":
+        return "tehm"
+    if os.environ.get("R2G_RECIPE_FILE") and os.environ.get("R2G_RECIPE_SUSPENDED") != "1":
+        return "recipe"
+    return None
+
+
+def _memory_technical_failure(entry: dict, kind: str, source: str, detail: str) -> None:
+    """Record a place-abort memory technical failure; _memory_recovery then stops the design."""
+    entry["_r2g_memory_technical"] = kind
+    print(f"[loop] memory {source} technical failure ({kind}): {detail}", file=sys.stderr)
+    try:
+        import technical_failure
+        technical_failure.record(entry["project_path"], kind, source="engineer_loop",
+                                 detail=f"{source}: {detail}", check="orfs_stage")
+    except Exception as rec_exc:           # recording must never mask the original stop
+        print(f"[loop] could not record technical failure: {rec_exc}", file=sys.stderr)
+
+
 def _pick_memory_strategy(entry: dict, stage: str) -> tuple[dict | None, dict | None]:
-    """(strategy, situation) of the first usable TEHM rule for this backend abort."""
-    if (os.environ.get("R2G_MEMORY_BACKEND", "legacy").strip().lower() != "tehm"
-            or entry.get("kind") == "ab_arm" or entry.get("_r2g_memory_tried")):
+    """(strategy, situation) of the first usable executable-memory candidate for this
+    backend abort. TEHM and RECIPE share this entry, the contract gate, the knob policy and
+    the already-in-effect check; TEHM vetoes apply to TEHM only (RECIPE has no veto
+    knowledge by design). An invalid candidate or a crashed consultation is a technical
+    failure, never a silent "no memory"."""
+    source = _place_abort_memory_source()
+    if source is None or entry.get("kind") == "ab_arm" or entry.get("_r2g_memory_tried"):
         return None, None
     entry["_r2g_memory_tried"] = True          # once per design visit (survives the retry)
     proj = Path(entry["project_path"])
     cfg = _config_snapshot(entry)
     try:
         import knob_policy
-        from runtime_router import signoff_strategies, signoff_vetoes
+        from candidate_contract import contract_errors
         sit = situation.from_project(proj, "orfs_stage", stage)
-        try:
-            import severity
-            cur_sev = severity.from_project(proj, "orfs_stage", stage)
-        except Exception:
-            cur_sev = None
-        strategies = signoff_strategies(
-            project_dir=proj, check="orfs_stage", design_id=cfg.get("DESIGN_NAME"),
-            platform=cfg.get("PLATFORM"), cfg=cfg, reports={}, situation=sit, severity=cur_sev)
-        vetoed = {_memory_family(k) for k in signoff_vetoes(situation=sit)}
-    except Exception as exc:                   # fail-closed: escalate as before
-        print(f"[loop] memory consultation skipped: {type(exc).__name__}: {exc}",
-              file=sys.stderr)
+        vetoed = set()
+        if source == "tehm":
+            from runtime_router import signoff_strategies, signoff_vetoes
+            try:
+                import severity
+                cur_sev = severity.from_project(proj, "orfs_stage", stage)
+            except Exception:
+                cur_sev = None
+            strategies = signoff_strategies(
+                project_dir=proj, check="orfs_stage", design_id=cfg.get("DESIGN_NAME"),
+                platform=cfg.get("PLATFORM"), cfg=cfg, reports={}, situation=sit, severity=cur_sev)
+            vetoed = {_memory_family(k) for k in signoff_vetoes(situation=sit)}
+        else:
+            if str(MEMORY_ROOT / "scripts") not in sys.path:
+                sys.path.insert(0, str(MEMORY_ROOT / "scripts"))
+            from t2a_adapters import recipe_strategies
+            strategies = recipe_strategies(os.environ["R2G_RECIPE_FILE"], sit, cfg)
+    except Exception as exc:                   # fail-closed, and surfaced
+        _memory_technical_failure(entry, "consultation_crash", source, f"{type(exc).__name__}: {exc}")
         return None, None
     for st in strategies:
+        errors = contract_errors(st) + ([st["contract_error"]] if st.get("contract_error") else [])
+        if errors:
+            _memory_technical_failure(entry, "invalid_candidate", source,
+                                      f"{st.get('id')}: {'; '.join(errors)}")
+            return None, sit
         edits = st.get("config_edits") or {}
         why = None
         if _memory_family(st.get("transformation_family") or st.get("id")) in vetoed:
@@ -1447,7 +1565,7 @@ def _apply_memory_edits(entry: dict, edits: dict) -> None:
 
 
 def _record_memory_fix(entry: dict, strategy: dict, stage: str, *, cleared: bool,
-                       situation_: dict | None) -> None:
+                       situation_: dict | None, chain: dict | None = None) -> None:
     """fix_log row for a memory-rule recovery (same contract as _record_resize_fix:
     honest stage-completion outcome, before=1 after=0|1, effect fields)."""
     proj = Path(entry["project_path"])
@@ -1473,6 +1591,7 @@ def _record_memory_fix(entry: dict, strategy: dict, stage: str, *, cleared: bool
     }
     if situation_:
         row["situation"] = situation_
+    row.update(_chain_fields(proj, chain, row.get("violation_class")))
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
 
@@ -1481,18 +1600,22 @@ def _memory_recovery(led, entry: dict, conn, stage: str) -> str | None:
     """B6: try ONE memory rule before escalating a backend residual at ``stage``.
     Returns the retry's process_one result, or None to escalate as before."""
     strategy, sit = _pick_memory_strategy(entry, stage)
+    if entry.get("_r2g_memory_technical"):
+        led.set_state(entry["design"], "escalated", reason="technical_failure")
+        return "technical_failure"
     if strategy is None:
         return None
-    print(f"[loop] memory {'composition' if strategy.get('source') == 'tehm_compose' else 'rule'} "
+    print(f"[loop] memory {strategy.get('source') or 'rule'} "
           f"{strategy.get('rule_id')} before escalation: "
           f"{strategy.get('config_edits')}", file=sys.stderr)
     before = _config_snapshot(entry)
     _apply_memory_edits(entry, strategy["config_edits"])
     entry["_r2g_config_effect"] = _config_effect(before, _config_snapshot(entry))
     led.set_state(entry["design"], "fixing")
-    result = process_one(led, entry, conn, _resized=True)
+    with _chain_action(entry) as chain:
+        result = process_one(led, entry, conn, _resized=True)
     _record_memory_fix(entry, strategy, stage, cleared=(_fail_stage(entry) != stage),
-                       situation_=sit)
+                       situation_=sit, chain=chain)
     _ingest(entry)
     return result
 
@@ -1694,14 +1817,15 @@ def process_one(led: Ledger, entry: dict, conn, *,
             entry["_r2g_config_effect"] = _config_effect(
                 repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
-            result = process_one(led, entry, conn, _resized=True)
+            with _chain_action(entry) as chain:
+                result = process_one(led, entry, conn, _resized=True)
             # Record the die-resize as a learnable fix attempt so the recovery is
             # not invisible to the loop (2026-06-23 audit, bug #6). The retry's
             # returned terminal status is the honest outcome (clean -> the resize
             # cleared the abort); re-ingest projects the appended fix_log row into a
             # fix_event (idempotent UPSERT on the retry's run row — same ppa.json
             # mtime -> same run_id).
-            _record_resize_fix(entry, cleared=(result == "clean"), situation_=pre_sit)
+            _record_resize_fix(entry, cleared=(result == "clean"), situation_=pre_sit, chain=chain)
             _ingest(entry)
             return result
         # FLW-0024 on an ALREADY auto-sized die (CORE_UTILIZATION=N, so the resize above is
@@ -1717,9 +1841,10 @@ def process_one(led: Ledger, entry: dict, conn, *,
             entry["_r2g_config_effect"] = _config_effect(
                 repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
-            result = process_one(led, entry, conn, _resized=_resized,
-                                 _place_relief=_place_relief + 1)
-            _record_resize_fix(entry, cleared=(result == "clean"), situation_=pre_sit)
+            with _chain_action(entry) as chain:
+                result = process_one(led, entry, conn, _resized=_resized,
+                                     _place_relief=_place_relief + 1)
+            _record_resize_fix(entry, cleared=(result == "clean"), situation_=pre_sit, chain=chain)
             _ingest(entry)
             return result
         # PPL-0024 (IO pins exceed die perimeter): the die is too small in PERIMETER for
@@ -1735,8 +1860,9 @@ def process_one(led: Ledger, entry: dict, conn, *,
             entry["_r2g_config_effect"] = _config_effect(
                 repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
-            result = process_one(led, entry, conn, _resized=True)
-            _record_pin_perimeter_fix(entry, cleared=(result == "clean"), situation_=pre_sit)
+            with _chain_action(entry) as chain:
+                result = process_one(led, entry, conn, _resized=True)
+            _record_pin_perimeter_fix(entry, cleared=(result == "clean"), situation_=pre_sit, chain=chain)
             _ingest(entry)
             return result
         # Synth memory-cap (Yosys refuses to infer a memory larger than the default
@@ -1761,7 +1887,8 @@ def process_one(led: Ledger, entry: dict, conn, *,
             entry["_r2g_config_effect"] = _config_effect(
                 repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
-            result = process_one(led, entry, conn, _resized=True)
+            with _chain_action(entry) as chain:
+                result = process_one(led, entry, conn, _resized=True)
             # The synth fix's verdict is whether the SYNTH abort cleared (the re-flow got
             # PAST synth), NOT whether the whole flow reached clean. Raising the cap expands
             # the RAM to flip-flops, so a memcap design can clear synth yet over-pack at
@@ -1769,7 +1896,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
             # failure as the synth fix FAILING (false negative learning that teaches the loop
             # synth_memory_relax does not work when it does). _fail_stage reflects the retry.
             synth_cleared = _fail_stage(entry) != "synth"
-            _record_synth_mem_fix(entry, cleared=synth_cleared, situation_=pre_sit)
+            _record_synth_mem_fix(entry, cleared=synth_cleared, situation_=pre_sit, chain=chain)
             _ingest(entry)
             return result
         # PDN-0185 (floorplan pdngen: die too NARROW for met4/met5 power straps): a tiny
@@ -1786,8 +1913,9 @@ def process_one(led: Ledger, entry: dict, conn, *,
             entry["_r2g_config_effect"] = _config_effect(
                 repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
-            result = process_one(led, entry, conn, _resized=True)
-            _record_pdn_fix(entry, cleared=(result == "clean"), situation_=pre_sit)
+            with _chain_action(entry) as chain:
+                result = process_one(led, entry, conn, _resized=True)
+            _record_pdn_fix(entry, cleared=(result == "clean"), situation_=pre_sit, chain=chain)
             _ingest(entry)
             return result
         reason, notes = "unseen_crash", f"run_orfs rc={rc}"
@@ -1796,6 +1924,8 @@ def process_one(led: Ledger, entry: dict, conn, *,
             led.set_state(design, "fixing")
             fix_rc = _run_fix({**entry, "check": "route"})
             _ingest(entry)
+            if _technical_stop(led, conn, entry, fix_rc):
+                return "technical_failure"
             if fix_rc == 0:
                 # Route abort cleared -> the fix's re-flow built a FRESH GDS, but "the
                 # flow completes" is a strictly WEAKER contract than the platform's
@@ -1908,6 +2038,8 @@ def process_one(led: Ledger, entry: dict, conn, *,
     led.set_state(design, "fixing")
     fix_rc = _run_fix(entry)
     _ingest(entry)
+    if _technical_stop(led, conn, entry, fix_rc):
+        return "technical_failure"
     post_fix_status = _signoff_status(entry)
     if fix_rc == 0 and _all_signoff_clean(post_fix_status):
         _mark_clean(led, conn, design, "signoff fix cleared residual")
@@ -1916,12 +2048,17 @@ def process_one(led: Ledger, entry: dict, conn, *,
     # DRC/LVS/route/RCX are clean, but timing is still violated. Do not fabricate
     # clean from the local checker return code; give the timing catalog its own
     # bounded repair turn, then require the full global vector to be clean.
+    # Unconstrained timing (no constrained path) is a task configuration error: no timing
+    # repair can constrain it, so it escalates (timing_unconstrained) instead of spending a
+    # repair turn (failure-patterns "Unconstrained timing passed strict acceptance").
     if (entry.get("kind") != "ab_arm"
-            and post_fix_status.get("timing") not in ("clean", "clean_beol", "skipped")
+            and post_fix_status.get("timing") not in ("clean", "clean_beol", "skipped", "unconstrained")
             and _physical_signoff_clean(post_fix_status)):
         timing_entry = {**entry, "check": "timing"}
         timing_rc = _run_fix(timing_entry)
         _ingest(timing_entry)
+        if _technical_stop(led, conn, entry, timing_rc):
+            return "technical_failure"
         post_fix_status = _signoff_status(entry)
         if timing_rc == 0 and _all_signoff_clean(post_fix_status):
             _mark_clean(led, conn, design, "timing repair passed full signoff recheck")
@@ -1966,6 +2103,8 @@ def _signoff_escalation_reason(residual: dict) -> str:
     DRC comes back stuck")."""
     if any(v == "stuck" for v in (residual or {}).values()):
         return "signoff_stuck_scan"
+    if (residual or {}).get("timing") == "unconstrained":
+        return "timing_unconstrained"
     return "catalog_exhausted"
 
 

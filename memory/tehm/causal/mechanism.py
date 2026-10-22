@@ -105,6 +105,10 @@ def _validate_delta_payload(delta: dict) -> ObservationDelta:
         newly_observed_failures=newly_observed,
         experiment_kind=experiment_kind,
         utility_verdict=utility_verdict,
+        # P1b / D2: the rollback marker is part of the content address (omitted when UNKNOWN);
+        # dropping it here made every marked transition fail its id check (never crystallised)
+        rolled_back=delta.get("rolled_back", "UNKNOWN"),
+        rollback_reason=delta.get("rollback_reason"),
     )
     typed.validate()
     return typed
@@ -263,6 +267,12 @@ def load_transition_facts(conn: sqlite3.Connection, transition_id: str) -> Trans
     profile = payload.get("compatibility_profile")
     if not profile:
         profile = profile_from_graph(_graph_from_manifest(source_state["artifacts"]))
+    # ORFS episodes can end in a synthetic "none" summary. That summary's
+    # episode family is not the mechanism of every preceding repair step.
+    # Use measured failure identity for the flow-domain shadow graph; never
+    # infer a failure from the chosen action or upgrade its evidence level.
+    if row["source_domain"] == "flow.signoff":
+        mechanism_family, profile = orfs_signature(payload.get("situation") or {})
     return TransitionFacts(
         transition_id=transition_id,
         action=action,
@@ -276,6 +286,14 @@ def load_transition_facts(conn: sqlite3.Connection, transition_id: str) -> Trans
         compatibility_profile=str(profile) if profile else None,
         lineage_id=row["lineage_id"],
     )
+
+
+def orfs_signature(situation: dict) -> tuple[str, str | None]:
+    check = situation.get("check")
+    kind = situation.get("violation_class") or situation.get("error_code")
+    platform = situation.get("platform")
+    family = "flow.signoff:%s:%s" % (check or "UNKNOWN", kind or "UNKNOWN")
+    return family, ("orfs:" + platform if isinstance(platform, str) and platform else None)
 
 
 def _graph_from_manifest(manifest: dict) -> dict:

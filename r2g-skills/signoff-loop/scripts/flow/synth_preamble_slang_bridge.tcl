@@ -29,7 +29,7 @@ if {!$needs_slang} {
   # the canonical RTLIL reader directly.
   source "$::env(R2G_ORFS_CANONICAL_SCRIPTS_DIR)/synth_preamble.tcl"
 } else {
-  set slang_args [list --single-unit -D SYNTHESIS]
+  set slang_args [list --single-unit -D SYNTHESIS --top $::env(DESIGN_NAME)]
   if {[info exists ::env(VERILOG_INCLUDE_DIRS)] && $::env(VERILOG_INCLUDE_DIRS) ne ""} {
     foreach dir $::env(VERILOG_INCLUDE_DIRS) {
       lappend slang_args -I $dir
@@ -54,4 +54,18 @@ if {!$needs_slang} {
   # Tcl environment mutation is process-local and does not alter config or RTL.
   set ::env(VERILOG_FILES) $bridge_rtlil
   source "$::env(R2G_ORFS_CANONICAL_SCRIPTS_DIR)/synth_preamble.tcl"
+}
+
+# synth_canonicalize.tcl calls this after the preamble. Some ORFS revisions
+# choose the reader by SYNTH_HDL_FRONTEND rather than file extension, so simply
+# replacing VERILOG_FILES would feed the RTLIL checkpoint back into Slang.
+# Keep the standard-cell setup and use the canonical checkpoint reader.
+proc read_design_sources { } {
+  source "$::env(SCRIPTS_DIR)/synth_stdcells.tcl"
+  foreach source_file $::env(VERILOG_FILES) {
+    if {[file extension $source_file] ni {".rtlil" ".json"}} {
+      error "Slang bridge expected an elaborated checkpoint: $source_file"
+    }
+    read_checkpoint $source_file
+  }
 }

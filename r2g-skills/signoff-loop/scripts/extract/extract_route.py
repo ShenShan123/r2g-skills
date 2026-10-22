@@ -143,6 +143,8 @@ def extract(project_root: Path) -> dict:
         "route_stage_status": route_status,
         "stage": "route",
         "backend_run": run_dir.name,
+        "run_tag": run_dir.name,
+        "provenance": report_io.run_provenance(project_root, run_dir),
     }
 
 

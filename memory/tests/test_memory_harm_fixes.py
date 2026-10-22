@@ -19,11 +19,13 @@ def _store(outcomes, sources):
     """outcomes: {transition_id: outcome}; sources: {rule_id: [{transition_id: {hole: value}}]}"""
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
-    c.execute("CREATE TABLE tehm_transitions (transition_id TEXT, outcome TEXT)")
+    c.execute("CREATE TABLE tehm_transitions (transition_id TEXT, outcome TEXT, "
+              "verifier_json TEXT DEFAULT '{\"oracle_complete\": true}', "
+              "observation_delta_json TEXT DEFAULT '{\"experiment_kind\": \"REPAIR\", \"first_divergence\": {\"before\": 4, \"after\": 6}, \"rolled_back\": \"false\"}', provenance_json TEXT DEFAULT '{}')")
     c.execute("CREATE TABLE tehm_rule_sources (rule_id TEXT, episode_id TEXT, source_substitution_json TEXT)")
     c.execute("CREATE TABLE tehm_episode_steps (episode_id TEXT, transition_id TEXT)")
     for t, o in outcomes.items():
-        c.execute("INSERT INTO tehm_transitions VALUES (?,?)", (t, o))
+        c.execute("INSERT INTO tehm_transitions (transition_id, outcome) VALUES (?,?)", (t, o))
     for rule, subs_list in sources.items():
         for i, subs in enumerate(subs_list):
             ep = f"{rule}_ep{i}"
@@ -46,11 +48,13 @@ def test_f1_counts_only_the_rules_own_applications():
     # each source episode is [the failure the rule repaired, the rule's PASS]: not net-zero evidence
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
-    c.execute("CREATE TABLE tehm_transitions (transition_id TEXT, outcome TEXT)")
+    c.execute("CREATE TABLE tehm_transitions (transition_id TEXT, outcome TEXT, "
+              "verifier_json TEXT DEFAULT '{\"oracle_complete\": true}', "
+              "observation_delta_json TEXT DEFAULT '{\"experiment_kind\": \"REPAIR\", \"first_divergence\": {\"before\": 4, \"after\": 6}, \"rolled_back\": \"false\"}', provenance_json TEXT DEFAULT '{}')")
     c.execute("CREATE TABLE tehm_rule_sources (rule_id TEXT, episode_id TEXT, source_substitution_json TEXT)")
     c.execute("CREATE TABLE tehm_episode_steps (episode_id TEXT, transition_id TEXT)")
     for ep, fail, ok in (("e1", "f1", "p1"), ("e2", "f2", "p2")):
-        c.executemany("INSERT INTO tehm_transitions VALUES (?,?)", [(fail, "FAIL"), (ok, "PASS")])
+        c.executemany("INSERT INTO tehm_transitions (transition_id, outcome) VALUES (?,?)", [(fail, "FAIL"), (ok, "PASS")])
         c.executemany("INSERT INTO tehm_episode_steps VALUES (?,?)", [(ep, fail), (ep, ok)])
         c.execute("INSERT INTO tehm_rule_sources VALUES ('r',?,?)", (ep, json.dumps({ok: {"$H0": "13-30"}})))
     assert tb._source_outcome_profile(c, "r")["harmful"] == 2               # whole episodes

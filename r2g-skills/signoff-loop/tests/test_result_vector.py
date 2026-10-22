@@ -215,6 +215,34 @@ def _replay_env(bindir):
                 R2G_CHECK_TIMING=str(bindir / "noop.sh"))
 
 
+def test_aborted_catalogue_flow_restores_config_evidence_and_pointer(tmp_path):
+    """DPL-0036 cannot become the baseline restored after a later LLM trial."""
+    proj = _replay_project(tmp_path)
+    pointer = proj / 'backend/.r2g_signoff_run'
+    pointer.write_text(json.dumps({'run_tag': 'RUN_A', 'run_dir': str(proj / 'backend/RUN_A')}))
+    before_config = (proj / 'constraints/config.mk').read_bytes()
+    before_pointer = pointer.read_bytes()
+    bindir = _replay_stubs(tmp_path)
+    _stub(bindir / 'run_orfs.sh',
+          'mkdir -p "$1/backend/RUN_B"\n'
+          'echo "[ERROR DPL-0036] Detailed placement failed." > "$1/backend/RUN_B/flow.log"\n'
+          'echo \'{"stage":"place","status":2}\' > "$1/backend/RUN_B/stage_log.jsonl"\n'
+          'echo \'{"run_tag":"RUN_B"}\' > "$1/backend/.r2g_signoff_run"\n'
+          'echo \'{"status":"fail","total_violations":99}\' > "$1/reports/drc.json"\n'
+          'exit 2')
+    result = subprocess.run(['bash', str(FIX_SIGNOFF), str(proj), 'sky130hs', '--check', 'drc'],
+                            env=_replay_env(bindir), capture_output=True, text=True, timeout=180)
+    assert (proj / 'constraints/config.mk').read_bytes() == before_config, result.stdout + result.stderr
+    assert pointer.read_bytes() == before_pointer
+    assert (proj / 'reports/drc.json').read_bytes() == (proj / 'reports/.rv_accepted/drc.json').read_bytes()
+    rows = [json.loads(x) for x in (proj / 'reports/fix_log.jsonl').read_text().splitlines()]
+    failed = next(r for r in rows if r['strategy'] == 'density_relief')
+    assert failed['verdict'] == 'rerun_failed_rc2'
+    assert failed['rolled_back'] is True and failed['rollback_reason'] == 'rerun_failed_rc2'
+    assert failed['rerun_failure']['error_code'] == 'DPL-0036'
+    assert (proj / 'backend/RUN_B/flow.log').exists()
+
+
 def test_replay_sky130hs_density_relief_is_regression_not_win(tmp_path):
     """Acceptance (remediation plan RMD3-P0-01): replaying the sky130hs SHA-256
     transition — target DRC 10->8 while route 0->32 — must yield verdict

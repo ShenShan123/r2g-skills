@@ -126,7 +126,15 @@ def crystallize_all(conn: sqlite3.Connection, *, min_group_size: int = 2,
                 compatibility_profile=compatibility_profile, episode_of=episode_of,
                 lineage_of=lineage_of, min_group_size=min_group_size,
                 validity_config=validity_config, created_at=created_at,
-                dry_run=dry_run))
+                dry_run=True))
+    # P1c (real-corpus X1): two effect groups can crystallize the SAME content-addressed rule with different
+    # validity. Persisting each in turn made the stored row (validity AND sources) the last write, while
+    # enrolment read the first -- order-dependent, and a crash when the last was below the lifecycle minimum.
+    # One rule per id, chosen deterministically: the most conservative validity, then the smallest merge trace.
+    rules = _one_rule_per_id(rules)
+    if not dry_run:
+        for rule in rules:
+            _persist_rule(conn, rule, commit=False)
     # Phase D amendment D-A2: rules over the knob SUBSET that differently-shaped
     # verified flow/signoff fixes share (a full rebuild only; never targeted).
     if effect_keys is None and group_keys is None:
@@ -208,6 +216,28 @@ def _crystallize_group(conn, members: list[dict], *, internal_key: str,
     return rule
 
 
+# most conservative first: a rule any producing group judges unfaithful or degenerate is never enrolled
+_CONSERVATIVE_ORDER = ("REJECT_UNFAITHFUL", "REJECT_DEGENERATE", "INSTANCE_MEMORY", "CANDIDATE",
+                       "UNSTABLE_CANDIDATE", "PROVISIONAL_VALID", "VALIDATED")
+
+
+def _one_rule_per_id(rules: list[dict]) -> list[dict]:
+    """Collapse candidates sharing a rule id to one, independent of group order; first-seen order is kept."""
+    rank = {v: i for i, v in enumerate(_CONSERVATIVE_ORDER)}
+    best: dict[str, dict] = {}
+    order: list[str] = []
+    for r in rules:
+        rid = r["rule_id"]
+        if rid not in best:
+            best[rid] = r
+            order.append(rid)
+            continue
+        key = lambda x: (rank.get(x.get("validity_status"), -1), str(x.get("merge_trace_digest")))
+        if key(r) < key(best[rid]):
+            best[rid] = r
+    return [best[rid] for rid in order]
+
+
 _STAGE_ORDER = ("synth", "floorplan", "place", "cts", "route", "finish")
 
 
@@ -271,7 +301,10 @@ def _load_transitions(conn: sqlite3.Connection, *, campaign_id: str = "live"):
         "FROM tehm_transitions t "
         "WHERE EXISTS (SELECT 1 FROM tehm_dataset_membership dm "
         "WHERE dm.transition_id=t.transition_id AND dm.campaign_id=? "
-        "AND dm.split='training' AND dm.learner_eligible=1)", (campaign_id,)).fetchall()
+        "AND dm.split='training' AND dm.learner_eligible=1) "
+        # P1c (X1): a defined order -- anti-unification names holes in member order, so insertion order
+        # gave the SAME rule different content addresses in batched and one-shot builds
+        "ORDER BY t.transition_id", (campaign_id,)).fetchall()
     transitions = [
         {
             "transition_id": r["transition_id"],
@@ -308,10 +341,17 @@ def _load_transitions(conn: sqlite3.Connection, *, campaign_id: str = "live"):
     lineage_of: dict[str, str] = {}
     for r in conn.execute("SELECT state_id, lineage_id FROM tehm_states"):
         lineage_of[r["state_id"]] = r["lineage_id"] or "?"
+    # P1c (X1): a transition appears in every prefix episode of its session; map it to the LONGEST episode
+    # containing it (the session's complete chain; ties by episode id) -- the last row of a table scan
+    # depended on capture order.
     episode_of: dict[str, str] = {}
     for r in conn.execute(
-            "SELECT transition_id, episode_id FROM tehm_episode_steps"):
-        episode_of[r["transition_id"]] = r["episode_id"]
+            """SELECT s.transition_id AS transition_id, s.episode_id AS episode_id
+                 FROM tehm_episode_steps s
+                 JOIN (SELECT episode_id, count(*) AS n FROM tehm_episode_steps GROUP BY episode_id) e
+                   ON e.episode_id = s.episode_id
+                ORDER BY s.transition_id, e.n DESC, s.episode_id"""):
+        episode_of.setdefault(r["transition_id"], r["episode_id"])
     return transitions, lineage_of, episode_of, tuple(invalid_transition_ids)
 
 

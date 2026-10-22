@@ -50,12 +50,15 @@ def transition_id(*, source_state_id: str, target_state_id: str, action: dict,
 
 
 def episode_id(*, domain: str, initial_state_id: str, mechanism_family: str | None,
-               lineage_id: str | None, ordered_transition_ids: list[str]) -> str:
-    return _content_digest(
-        {"domain": domain, "init": initial_state_id, "family": mechanism_family,
-         "lineage": lineage_id, "steps": ordered_transition_ids},
-        prefix="episode",
-    )
+               lineage_id: str | None, ordered_transition_ids: list[str],
+               session_key: str | None = None) -> str:
+    # P1c: the capture session key scopes the episode when given (two sessions whose steps have
+    # identical content are two episodes); absent, the id is unchanged (older episodes, other adapters)
+    payload = {"domain": domain, "init": initial_state_id, "family": mechanism_family,
+               "lineage": lineage_id, "steps": ordered_transition_ids}
+    if session_key is not None:
+        payload["session"] = session_key
+    return _content_digest(payload, prefix="episode")
 
 
 def rule_id(*, domain: str, before_pattern: dict, after_pattern: dict,

@@ -30,7 +30,7 @@ def _row(**kw):
     row = {"fix_session_id": "s", "iter": 1, "check": "drc", "strategy": "density_relief",
            "violation_class": "li.3", "from_stage": "floorplan", "before": 4, "after": 0,
            "verdict": "cleared", "config_delta": {"CORE_UTILIZATION": "8"},
-           "config_before": {"CORE_UTILIZATION": "12"}, "situation": dict(SIT)}
+           "config_before": {"CORE_UTILIZATION": "12"}, "situation": dict(SIT), "rolled_back": False}
     row.update(kw)
     return row
 
@@ -46,6 +46,10 @@ def _transition(row, design, tid):
 
 # -- B1 ------------------------------------------------------------------------
 
+def _diag(rc, code, run="RUN_new", stage="place"):
+    return {"rc": rc, "run": run, "stage": stage, "error_code": code}
+
+
 def test_measured_outcome_matrix():
     assert measured_outcome(_row())["verdict"] == "PASS"
     part = measured_outcome(_row(after=2, verdict="applied"))
@@ -58,17 +62,41 @@ def test_measured_outcome_matrix():
                                  global_regressions=["route:0->32"]))["verdict"] == "FAIL"
     # unmeasured iterations stay non-crystallisable
     for bad in (_row(verdict="stop_residual", strategy="none"),
-                _row(verdict="apply_failed"), _row(verdict="rerun_failed_rc2"),
-                _row(before=None, after=None)):
+                _row(verdict="apply_failed"), _row(before=None, after=None),
+                # P1b / D2: no-evidence verdicts (budget / accounting / inconclusive / timeouts)
+                _row(verdict="budget_exhausted"), _row(verdict="accounting_error"),
+                _row(verdict="inconclusive_nonpromotable", after=0),
+                _row(verdict="rerun_failed_rc124"), _row(verdict="memory_rerun_failed_rc137")):
         assert measured_outcome(bad) is None
+    # P1b (user review 2026-10-09): a failed rerun is negative evidence ONLY with a diagnosed,
+    # deterministic infeasibility of the run the rerun created; otherwise UNKNOWN (event kept)
+    for unknown in (_row(verdict="rerun_failed_rc2"),                                  # legacy: no diagnosis
+                    _row(verdict="rerun_failed_rc127", rerun_failure=_diag(127, None)),  # missing tool
+                    _row(verdict="rerun_failed_rc2", rerun_failure=_diag(2, None)),      # unexplained crash
+                    _row(verdict="rerun_failed_rc2", rerun_failure=_diag(2, "GRT-0246")),  # platform install
+                    _row(verdict="rerun_failed_rc2", rerun_failure={**_diag(2, "DPL-0036"), "run": None,
+                                                                    "stale_run": "RUN_old"}),  # no new run
+                    _row(verdict="memory_rerun_failed_rc137", rerun_failure=_diag(137, "DPL-0036"))):  # SIGKILL
+        assert measured_outcome(unknown) is None
+    for crash in (_row(verdict="rerun_failed_rc2", rerun_failure=_diag(2, "DPL-0036")),
+                  _row(verdict="memory_rerun_failed_rc2", rerun_failure=_diag(2, "DPL-0036"))):
+        m = measured_outcome(crash)
+        assert m["verdict"] == "FAIL" and m["flow_failed"] == "rc2:DPL-0036" and m["after"] == m["before"]
 
 
 def test_adapter_marks_only_measured_rows_oracle_complete():
     ok = _transition(_row(), "a", "t1")
     assert ok["verifier"]["oracle_complete"] is True and ok["verifier"]["verdict"] == "PASS"
     assert ok["action"]["payload"]["situation"] == SIT
-    bad = _transition(_row(verdict="rerun_failed_rc2", after=None), "a", "t2")
-    assert bad["verifier"]["oracle_complete"] is False
+    bad = _transition(_row(verdict="budget_exhausted", after=4), "a", "t2")
+    assert bad["verifier"]["oracle_complete"] is False and bad["verifier"]["verdict"] == "UNKNOWN"
+    crash = _transition(_row(verdict="rerun_failed_rc2", after=None, rerun_failure=_diag(2, "DPL-0036")), "a", "t2b")
+    assert crash["verifier"]["oracle_complete"] is True
+    assert "flow_rerun_failed:rc2:DPL-0036" in crash["observation_delta"]["created_regressions"]
+    assert crash["verifier"]["rerun_failure"]["reason"] == "infeasible:DPL-0036"
+    legacy = _transition(_row(verdict="rerun_failed_rc2", after=None), "a", "t2c")
+    assert legacy["verifier"]["oracle_complete"] is False and legacy["verifier"]["verdict"] == "UNKNOWN"
+    assert legacy["verifier"]["rerun_failure"]["reason"] == "no_diagnosis_recorded"   # event kept
     reg = _transition(_row(after=6, verdict="regression"), "a", "t3")
     assert reg["verifier"]["target_regression"] is True
     assert "drc_target_regression:4->6" in reg["observation_delta"]["created_regressions"]
@@ -269,10 +297,16 @@ def test_stage_fix_is_measured_by_stage_completion():
                  config_delta={}, config_before={})
     ok = measured_outcome(_row(**route, before=None, after="0", verdict="cleared"))
     assert ok["verdict"] == "PASS" and ok["before"] == 1 and ok["after"] == 0
-    bad = measured_outcome(_row(**route, before=None, after=None, verdict="rerun_failed_rc124"))
-    assert bad["verdict"] == "FAIL"
-    # a DRC re-run that failed is still unmeasured (no DRC count was produced)
-    assert measured_outcome(_row(after=None, verdict="rerun_failed_rc2")) is None
+    bad = measured_outcome(_row(**route, before=None, after=None, verdict="rerun_failed_still_congested",
+                                rerun_failure=_diag(2, "GRT-0116", stage="route")))
+    assert bad["verdict"] == "FAIL"                      # still congested (diagnosed): measured, no improvement
+    # undiagnosed (legacy row, or a crash without a congestion error) -> UNKNOWN
+    assert measured_outcome(_row(**route, before=None, after=None, verdict="rerun_failed_still_congested")) is None
+    # P1b / D2: a stage TIMEOUT depends on the limit and host load -> no evidence, not a failure
+    assert measured_outcome(_row(**route, before=None, after=None, verdict="rerun_failed_rc124")) is None
+    # a DRC re-run whose flow failed is a verified failure of the action (flow regression)
+    assert measured_outcome(_row(after=None, verdict="rerun_failed_rc2",
+                                 rerun_failure=_diag(2, "PDN-0185")))["flow_failed"] == "rc2:PDN-0185"
     t = _transition(_row(**route, before=None, after="0", verdict="cleared"), "a", "t1")
     assert t["verifier"]["oracle_complete"] is True
     assert t["observation_delta"]["failing_tests"] == {"before": 1, "after": 0}

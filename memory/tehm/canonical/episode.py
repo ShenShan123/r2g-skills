@@ -59,6 +59,7 @@ class CanonicalEpisode:
     provenance: dict = field(default_factory=dict)
     schema_version: str = SCHEMA_VERSION
     ordered_transition_ids: list = field(default_factory=list)
+    session_key: str | None = None    # P1c: scopes the content address to one capture session
 
     @property
     def episode_id(self) -> str:
@@ -68,6 +69,7 @@ class CanonicalEpisode:
             mechanism_family=self.mechanism_family,
             lineage_id=self.lineage_id,
             ordered_transition_ids=self.ordered_transition_ids,
+            session_key=self.session_key,
         )
 
     def validate(self) -> None:

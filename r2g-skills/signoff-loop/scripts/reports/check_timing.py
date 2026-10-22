@@ -21,6 +21,7 @@ Exit codes:
   2 — usage error or missing data
 """
 import json
+import hashlib
 import math
 import re
 import sys
@@ -83,6 +84,24 @@ def read_clock_period(project: Path) -> float | None:
     sdc_text = sdc_file.read_text(encoding='utf-8', errors='ignore')
     m = re.search(r'set\s+clk_period\s+([\d.]+)', sdc_text)
     return float(m.group(1)) if m else None
+
+
+def ppa_binding(project: Path, ppa: dict, raw: bytes) -> dict:
+    """Name the input actually read, never the signoff pointer or newest run.
+
+    Missing/contradictory identity stays unknown. This is input attribution,
+    not a claim that a newer flow or a complete acceptance succeeded.
+    """
+    rd = Path(ppa['run_dir']) if ppa.get('run_dir') else None
+    tag = None
+    if rd and rd.is_dir() and rd.resolve().parent == (project / 'backend').resolve():
+        candidates = {v for v in (rd.name, ppa.get('run_tag'),
+                                  (ppa.get('provenance') or {}).get('run_tag')) if v}
+        if len(candidates) == 1:
+            tag = rd.name
+    return {'run_tag': tag, 'provenance': {'run_tag': tag, 'run_dir': str(rd) if tag else None,
+            'source': 'ppa_run_dir' if tag else 'unknown',
+            'ppa_sha256': hashlib.sha256(raw).hexdigest()}}
 
 
 def read_core_utilization(project: Path) -> float | None:
@@ -330,7 +349,8 @@ def main():
         sys.exit(2)
 
     try:
-        ppa = json.loads(ppa_file.read_text(encoding='utf-8', errors='ignore'))
+        ppa_raw = ppa_file.read_bytes()
+        ppa = json.loads(ppa_raw)
     except json.JSONDecodeError as e:
         print(f'ERROR: failed to parse {ppa_file}: {e}', file=sys.stderr)
         sys.exit(2)
@@ -342,10 +362,12 @@ def main():
     hold_wns = timing.get('hold_wns')
     hold_tns = timing.get('hold_tns')
     drv = drv_summary(timing)
+    binding = ppa_binding(project, ppa, ppa_raw)
 
     # Handle missing WNS
     if wns is None or not isinstance(wns, (int, float)):
         result = {
+            **binding,
             'tier': 'unknown', 'wns': None, 'tns': None,
             'drv': drv,
             'wns_tier': 'unknown', 'tns_tier': 'unknown',
@@ -384,6 +406,7 @@ def main():
     tns_display = f'{tns:.4f}' if isinstance(tns_raw, (int, float)) else 'N/A'
 
     result = {
+        **binding,
         'wns': wns,
         'tns': tns_raw,
         # diagnose_signoff_fix._timing_plan keys on `wns_ns`/`clock_period_ns`

@@ -105,6 +105,7 @@ def propagate_hierarchical_power_ports(
             "modules_seen": 0,
             "modules_powered": [],
             "child_instances_connected": 0,
+            "modules_power_declarations_promoted": [],
             "positional_child_instances_skipped": 0,
             "changed": False,
             "reason": "no_modules",
@@ -145,6 +146,7 @@ def propagate_hierarchical_power_ports(
     edits: list[tuple[int, int, str]] = []
     module_header_edits: dict[str, tuple[int, int, str]] = {}
     declarations_added: list[str] = []
+    declarations_promoted: list[str] = []
     for m in modules:
         name = m.group("name")
         if name not in powered:
@@ -162,9 +164,21 @@ def propagate_hierarchical_power_ports(
         if new_header != header:
             module_header_edits[name] = (m.start("header"), m.end("header"), new_header)
         body = m.group("body")
+        # ORFS can already declare child supplies as internal wires. Adding
+        # their names to the non-ANSI header is not enough: Netgen still sees
+        # internal child nodes, not ports that connect to the parent's rails.
+        # Upgrade only literal supply declarations in powered children; keep
+        # top-level interface/internal-net choices and every signal untouched.
+        if name not in top_names:
+            supply_wires = list(re.finditer(r"(?m)(?:(?<=;)|^)(\s*)wire\s+(VDD|VSS)\s*;", body))
+            if supply_wires:
+                declarations_promoted.append(name)
+            for wire in supply_wires:
+                edits.append((m.start("body") + wire.start(), m.start("body") + wire.end(),
+                              wire.group(1) + "inout " + wire.group(2) + ";"))
         decl_missing = [
             supply for supply in ("VDD", "VSS")
-            if not re.search(rf"(?m)^\s*(?:wire|input|output|inout)\s+{supply}\s*;", body)
+            if not re.search(rf"(?m)(?:^|;)\s*(?:wire|input|output|inout)\s+{supply}\s*;", body)
         ]
         if decl_missing:
             declarations_added.append(name)
@@ -185,8 +199,8 @@ def propagate_hierarchical_power_ports(
     if child_types:
         child_pattern = "|".join(re.escape(name) for name in child_types)
         instance_re = re.compile(
-            rf"(?ms)^(?P<indent>\s*)(?P<type>{child_pattern})\s+"
-            r"(?P<instance>[^\s(]+)\s*\((?P<body>.*?)\);"
+            rf"(?ms)^(?P<indent>\s*)(?P<type>{child_pattern})(?P<type_sep>\s+)"
+            r"(?P<instance>[^\s(]+)(?P<instance_sep>\s*)\((?P<body>.*?)\);"
         )
 
         def connect(match: re.Match[str]) -> str:
@@ -203,8 +217,11 @@ def propagate_hierarchical_power_ports(
                 for supply in ("VDD", "VSS") if supply not in present
             )
             connected += 1
-            return (f"{match.group('indent')}{match.group('type')} "
-                    f"{match.group('instance')} ({body}{additions});")
+            # Preserve the source's token separators. In particular, Netgen's
+            # escaped-name tokenizer consumes the first terminating space;
+            # collapsing OpenROAD's two spaces merges module/instance tokens.
+            return (f"{match.group('indent')}{match.group('type')}{match.group('type_sep')}"
+                    f"{match.group('instance')}{match.group('instance_sep')}({body}{additions});")
 
         verilog = instance_re.sub(connect, verilog)
 
@@ -213,6 +230,7 @@ def propagate_hierarchical_power_ports(
         "modules_seen": len(modules),
         "modules_powered": sorted(powered),
         "modules_declarations_added": declarations_added,
+        "modules_power_declarations_promoted": declarations_promoted,
         "child_instances_connected": connected,
         "positional_child_instances_skipped": skipped,
         "changed": changed,
@@ -222,6 +240,39 @@ def propagate_hierarchical_power_ports(
 
 def _sha(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
+
+
+def canonicalize_child_port_identifiers(verilog: str, top_module: str) -> tuple[str, dict]:
+    """Alpha-rename bracket-bearing escaped child ports, not public pins.
+
+    Netgen's Verilog reader interprets these opaque names as bit/range syntax
+    when connecting parent named pins (e.g. scalar \\CO[15], vector \\Y[32:1]).
+    Keep widths, connections, devices, supplies and the top interface intact.
+    Return the complete reversible name map; collisions/public names fail closed.
+    """
+    modules=list(MODULE_RE.finditer(verilog))
+    pattern=re.compile(r'(?m)^\s*(?:input|output|inout)\s*(?:\[[^\]\n]+\]\s*)?'
+                       r'\\([A-Za-z_$][\w$]*\[\d+(?::\d+)?\])\s*;')
+    targets=sorted({p.group(1) for m in modules if m.group('name')!=top_module
+                    for p in pattern.finditer(m.group('body'))})
+    if not targets:return verilog,{}
+    top=next((m for m in modules if m.group('name')==top_module),None)
+    if top is None:raise ValueError('Cannot resolve public top interface')
+    mapping={}
+    for name in targets:
+        escaped=re.compile(r'\\'+re.escape(name)+r'(?=[\s,;)])')
+        if escaped.search(top.group('header')):
+            raise ValueError('Cannot canonicalize a public interface identifier: '+name)
+        alias='r2g_escaped_port_'+hashlib.sha256(name.encode()).hexdigest()
+        if re.search(r'(?<![\w$])'+alias+r'(?![\w$])',verilog):
+            raise ValueError('Child port canonicalization identifier collision')
+        verilog=escaped.sub(alias,verilog)
+        # Escaped names need a terminating space before a bit select. Once
+        # ordinary, attach the select: Netgen otherwise reads the entire bus
+        # as a scalar-cell connection and creates disconnected dummy pins.
+        verilog=re.sub(r'(?<![\w$])'+alias+r'\s+(?=\[)',alias,verilog)
+        mapping[name]=alias
+    return verilog,mapping
 
 
 def _write(path: Path, text: str) -> None:

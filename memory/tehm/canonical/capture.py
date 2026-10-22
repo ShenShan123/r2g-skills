@@ -14,6 +14,7 @@ and whose oracles are executable.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass, field
 from functools import wraps
@@ -71,6 +72,9 @@ class ExecutionRecord:
     lineage_id: str | None = None
     repository_ref: str | None = None
     episode: dict | None = None
+    # P1c: identity scope / content digest / raw record, stored on the transition's provenance (never part of
+    # the transition's content address). Adapter-specific; capture copies it verbatim.
+    provenance: dict | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "ExecutionRecord":
@@ -93,6 +97,8 @@ class ExecutionRecord:
         if "episode" in data and data["episode"] is not None \
                 and type(data["episode"]) is not dict:
             raise ExecutionRecordError("ExecutionRecord.episode must be a mapping or None")
+        if data.get("provenance") is not None and type(data["provenance"]) is not dict:
+            raise ExecutionRecordError("ExecutionRecord.provenance must be a mapping or None")
         record = cls(
             record_id=data.get("record_id") or "",
             domain=data["domain"],
@@ -106,6 +112,7 @@ class ExecutionRecord:
             lineage_id=data.get("lineage_id"),
             repository_ref=data.get("repository_ref"),
             episode=data["episode"] if data.get("episode") else None,
+            provenance=data.get("provenance") or None,
         )
         record.validate()
         return record
@@ -311,6 +318,8 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
     }
     if run_id:
         transition_provenance["run_id"] = str(run_id)
+    for key, value in (record.provenance or {}).items():
+        transition_provenance.setdefault(key, value)
     transition = CanonicalTransition(
         source_state_id=before_state.state_id,
         target_state_id=after_state.state_id,
@@ -347,20 +356,34 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
                 terminal_status=head["terminal_status"],
                 trajectory_summary_json=tehm_db.read_json(head["trajectory_summary_json"]),
                 provenance={"record_id": record.record_id, "session_id": session_id},
+                session_key=session_id,
                 ordered_transition_ids=head_steps,
             )
         else:
-            ordered = head_steps + [transition.transition_id]
-            outcomes = head_outcomes + [outcome]
+            # P1c (X1 on SOURCE-v1): the chain is ordered by the record's position in its session, not by
+            # arrival, so an episode is the same whatever order (or batch) its steps are captured in. The
+            # initial state follows the lowest position, the terminal state/status the highest.
+            indexed = _session_steps_indexed(conn, head["episode_id"])
+            new_index = int(ep.get("step_index", 0))
+            if new_index in {i for i, _, _ in indexed}:
+                new_index = max((i for i, _, _ in indexed), default=-1) + 1   # collision: append (as before)
+            merged = sorted(indexed + [(new_index, transition.transition_id, outcome)])
+            ordered = [tid for _, tid, _ in merged]
+            outcomes = [o for _, _, o in merged]
+            is_first = merged[0][1] == transition.transition_id and merged[0][0] == new_index
+            is_last = merged[-1][1] == transition.transition_id and merged[-1][0] == new_index
             episode = CanonicalEpisode(
                 domain=record.domain,
-                initial_state_id=head["initial_state_id"],
-                mechanism_family=ep.get("mechanism_family") or head["mechanism_family"],
+                initial_state_id=before_state.state_id if is_first else head["initial_state_id"],
+                # the family of the highest-position step (as a capture in session order would leave it)
+                mechanism_family=((ep.get("mechanism_family") or head["mechanism_family"]) if is_last
+                                  else head["mechanism_family"]),
                 lineage_id=ep.get("lineage_id") or record.lineage_id,
-                terminal_state_id=after_state.state_id,
-                terminal_status=ep.get("terminal_status", "OPEN"),
+                terminal_state_id=after_state.state_id if is_last else head["terminal_state_id"],
+                terminal_status=(ep.get("terminal_status", "OPEN") if is_last else head["terminal_status"]),
                 trajectory_summary_json=trajectory_summary(outcomes),
                 provenance={"record_id": record.record_id, "session_id": session_id},
+                session_key=session_id,
                 ordered_transition_ids=ordered,
             )
             _carry_forward_steps(conn, head["episode_id"], episode.episode_id)
@@ -374,6 +397,7 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
             terminal_status=ep.get("terminal_status", "OPEN"),
             trajectory_summary_json=trajectory_summary([outcome]),
             provenance={"record_id": record.record_id, "session_id": session_id},
+            session_key=session_id,
             ordered_transition_ids=[transition.transition_id],
         )
 
@@ -422,6 +446,13 @@ def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
                :primary_effect_key, :outcome, :created_regressions_json,
                :newly_observed_json, :provenance_json, :schema_version)""",
         transition_row)
+    # P1c: every physical attempt is kept, even when its transition content already exists
+    tehm_db.ensure_attempts_table(conn)
+    conn.execute(
+        "INSERT OR IGNORE INTO tehm_attempts (record_id, transition_id, record_digest, provenance_json, "
+        "materialized_at) VALUES (?, ?, ?, ?, ?)",
+        (record.record_id, transition_row["transition_id"], (record.provenance or {}).get("record_digest"),
+         json.dumps(transition_provenance, sort_keys=True), materialized_at))
 
     episode_row = episode.to_row()
     _assert_existing_row_equivalent(
@@ -613,6 +644,16 @@ def _session_transitions(conn: sqlite3.Connection, episode_id: str) -> tuple[lis
            WHERE s.episode_id = ? AND s.branch_id = 'main'
            ORDER BY s.step_index""", (episode_id,)).fetchall()
     return [r["tid"] for r in rows], [r["outcome"] for r in rows]
+
+
+def _session_steps_indexed(conn: sqlite3.Connection, episode_id: str) -> list:
+    """[(step_index, transition_id, outcome)] of one episode's main branch, by step index."""
+    return [(int(r["step_index"]), r["tid"], r["outcome"]) for r in conn.execute(
+        """SELECT s.step_index AS step_index, t.transition_id AS tid, t.outcome AS outcome
+           FROM tehm_episode_steps s
+           JOIN tehm_transitions t ON t.transition_id = s.transition_id
+           WHERE s.episode_id = ? AND s.branch_id = 'main'
+           ORDER BY s.step_index""", (episode_id,)).fetchall()]
 
 
 def _carry_forward_steps(conn: sqlite3.Connection, from_episode: str, to_episode: str) -> None:

@@ -27,6 +27,27 @@ ARTIFACT_KINDS = frozenset({
 SCHEMA_VERSION = "artifact-v1"
 
 
+
+
+def _atomic_write(dest: Path, data: bytes) -> None:
+    """Write via a temp file in the same directory, then rename: an interrupted write never leaves a
+    partial file at ``dest`` (a later put would otherwise skip the corrupt blob as already present)."""
+    import os
+    import tempfile
+    fd, tmp = tempfile.mkstemp(dir=dest.parent, prefix=".tmp-" + dest.name[:16])
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, dest)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
 class ArtifactStore:
     """Content-addressed artifact store rooted at ``root`` (default <memory>/artifacts)."""
 
@@ -53,7 +74,7 @@ class ArtifactStore:
         dest = self._blobs / rel
         if not dest.exists():
             dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(data)
+            _atomic_write(dest, data)
         manifest = {
             "digest": digest,
             "kind": kind,
@@ -106,8 +127,8 @@ class ArtifactStore:
         if not self._manifests:
             return
         self._manifests.mkdir(parents=True, exist_ok=True)
-        (self._manifests / f"{digest.split(':', 1)[1]}.json").write_text(
-            json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+        _atomic_write(self._manifests / f"{digest.split(':', 1)[1]}.json",
+                      (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode())
 
     def delete_root(self) -> None:
         """Remove the whole store tree (used by tests / rebuild)."""

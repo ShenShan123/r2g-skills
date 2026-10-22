@@ -564,6 +564,7 @@ class TehmMemoryBackend:
                     activation_id=result.activation_id,
                     created_regressions=result.created_regressions,
                     commit=False)
+            tehm_db.bump_watermark(conn)            # P1b / D3: a committed write batch
             conn.execute(f"RELEASE SAVEPOINT {savepoint}")
             savepoint_active = False
             if not had_outer_transaction:
@@ -610,34 +611,64 @@ class TehmMemoryBackend:
                     continue
                 scope = str((rule.get("before_pattern") or {}).get(
                     "target_check") or "signoff")
-                source_profile = _source_outcome_profile(conn, rule_id)
+                # P1b: the SAME evidence count and admission rule as the runtime gate
+                # (tehm.evidence): canonical own units; rebuild never grants or revokes
+                # production authority (promoted is left untouched).
+                from tehm import evidence
+                source_profile = {**evidence.rule_evidence(conn, rule_id), "caliber": evidence.caliber()}
                 current = get_status(conn, rule_id=rule_id, target_scope=scope)
+                ok = evidence.admissible(source_profile, current["status"] if current else None)
                 if current is None:
                     enter_shadow(
                         conn, rule_id=rule_id, target_scope=scope,
                         provenance={"authority": "backend_rebuild",
-                                    "source_outcomes": source_profile},
+                                    "source_evidence": source_profile},
                         commit=False)
-                    if (not source_profile["observed"] or
-                            source_profile["positive"] > 0):
+                    if ok:
                         set_status(
                             conn, rule_id=rule_id, target_scope=scope,
                             status="candidate",
                             provenance={"authority": "backend_rebuild",
-                                        "source_outcomes": source_profile},
+                                        "source_evidence": source_profile},
                             commit=False)
                         entered += 1
-                elif (current["status"] == "candidate" and
-                      source_profile["observed"] and
-                      source_profile["positive"] == 0):
+                elif current["status"] == "candidate" and not ok:
                     set_status(
                         conn, rule_id=rule_id, target_scope=scope,
                         status="shadow",
                         provenance={"authority": "backend_rebuild",
-                                    "reason": "no_positive_source_outcome",
-                                    "source_outcomes": source_profile},
+                                    "reason": "not_admissible_by_own_evidence",
+                                    "source_evidence": source_profile},
                         commit=False)
+                elif (current["status"] in ("retired", "quarantined")
+                      and (current.get("provenance") or {}).get("authority") == "crystallize_all"):
+                    # P1c (X1 on SOURCE-v1): a rule a rebuild retired ("not_rebuilt_in_campaign") or quarantined
+                    # ("revalidated_below_lifecycle_threshold") and that a later rebuild produces again with
+                    # admissible validity re-enters -- otherwise online growth loses it for good while a
+                    # one-shot build keeps it. Retirements by any other authority are never touched.
+                    set_status(
+                        conn, rule_id=rule_id, target_scope=scope, status="shadow",
+                        provenance={"authority": "backend_rebuild", "reason": "reproduced_by_rebuild",
+                                    "previous": current["status"], "source_evidence": source_profile},
+                        commit=False)
+                    if ok:
+                        set_status(
+                            conn, rule_id=rule_id, target_scope=scope, status="candidate",
+                            provenance={"authority": "backend_rebuild", "reason": "admissible_by_own_evidence",
+                                        "source_evidence": source_profile},
+                            commit=False)
+                        entered += 1
+                elif current["status"] == "shadow" and ok:
+                    set_status(
+                        conn, rule_id=rule_id, target_scope=scope,
+                        status="candidate",
+                        provenance={"authority": "backend_rebuild",
+                                    "reason": "admissible_by_own_evidence",
+                                    "source_evidence": source_profile},
+                        commit=False)
+                    entered += 1
             ok, report = tehm_honesty.run_all(conn, self._store, self.db_path)
+            tehm_db.bump_watermark(conn)        # P1b / D3: a committed rebuild is a new store version
             conn.execute(f"RELEASE SAVEPOINT {savepoint}")
             savepoint_active = False
             if not had_outer_transaction:
@@ -743,32 +774,24 @@ def _hole_witnesses(conn, rule_id: str, bound: dict | None = None) -> dict[str, 
     transition's value for that hole is the same (e.g. the same violation class). Before this,
     every source transition voted, including NEUTRAL/REGRESSION ones and other classes
     (rule_d3dcee0e mixed an li.3 and an m3.2 delta into one median)."""
-    verified = {r[0] for r in conn.execute(
-        "SELECT transition_id FROM tehm_transitions WHERE outcome IN ('PASS','PARTIAL')")}
+    from tehm.evidence import positive_rule_substitutions
     categorical = {h: str(v) for h, v in (bound or {}).items()
                    if v is not None and _num(v) is None}
     out: dict[str, list] = {}
-    for (raw,) in conn.execute(
-            "SELECT source_substitution_json FROM tehm_rule_sources WHERE rule_id=?",
-            (rule_id,)):
-        for transition_id, subs in (tehm_db.read_json(raw) or {}).items():
-            if transition_id not in verified:
-                continue
-            subs = subs or {}
-            if any(h in subs and str(subs[h]) != v for h, v in categorical.items()):
-                continue
-            for hole, value in subs.items():
-                out.setdefault(hole, []).append(value)
+    for subs in positive_rule_substitutions(conn,rule_id):
+        if any(h not in subs or str(subs[h])!=v for h,v in categorical.items()):
+            continue
+        for hole,value in subs.items():
+            out.setdefault(hole,[]).append(value)
     return out
 
 
 def _trial_admissible(conn, rule_id: str, lifecycle_status: str | None) -> bool:
-    """F1: a promoted rule always; an unpromoted one only if its observed source outcomes are net
-    positive (more PASS/PARTIAL than FAIL/REGRESSION). Unobserved candidates stay admissible."""
-    if lifecycle_status == "promoted":
-        return True
-    profile = _source_outcome_profile(conn, rule_id, own_only=True)
-    return not profile["observed"] or profile["positive"] > profile["harmful"]
+    """Runtime trial admission: the SAME evidence count and rule as rebuild (tehm.evidence, P1b).
+    Canonical own units only; UNKNOWN never a failure, NEUTRAL / no improvement never a success,
+    a rolled-back result never positive; a promoted rule stays admissible."""
+    from tehm import evidence
+    return evidence.admissible(evidence.rule_evidence(conn, rule_id), lifecycle_status)
 
 
 def _situation_holes(rule: dict, situation: dict | None) -> dict:

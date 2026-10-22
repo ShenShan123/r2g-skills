@@ -149,6 +149,28 @@ def test_run_flow_invalidates_stale_signoff_reports(tmp_path, monkeypatch):
             f"{chk}.json was NOT invalidated before re-flow (stale-clean short-circuit risk)"
 
 
+def test_recovery_reflows_do_not_inherit_initial_component(tmp_path, monkeypatch):
+    proj = tmp_path / 'proj'
+    (proj / 'reports').mkdir(parents=True)
+    seen = []
+    class Result:
+        returncode = 0
+    def fake_run(*args, **kwargs):
+        seen.append(kwargs['env']['R2G_BUDGET_COMPONENT'])
+        return Result()
+    monkeypatch.setattr(engineer_loop.subprocess, 'run', fake_run)
+    monkeypatch.setenv('R2G_BUDGET_COMPONENT', 'initial')
+    entry = {'project_path': str(proj), 'platform': 'sky130hd'}
+    engineer_loop._run_flow(entry)
+    backend = proj / 'backend/RUN_1'
+    backend.mkdir(parents=True)
+    (backend / 'stage_log.jsonl').write_text('{}\n')
+    engineer_loop._run_flow(entry)
+    monkeypatch.setenv('R2G_BUDGET_COMPONENT', 'memory')
+    engineer_loop._run_flow(entry)
+    assert seen == ['initial', 'recovery', 'memory']
+
+
 def test_process_one_fix_path_then_escalate(tmp_path, monkeypatch):
     """Violations + fix loop fails to clear -> escalated, loop continues."""
     import knowledge_db

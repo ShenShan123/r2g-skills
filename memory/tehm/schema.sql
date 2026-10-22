@@ -52,6 +52,16 @@ CREATE INDEX IF NOT EXISTS idx_transitions_src ON tehm_transitions(source_state_
 CREATE INDEX IF NOT EXISTS idx_transitions_dst ON tehm_transitions(target_state_id);
 CREATE INDEX IF NOT EXISTS idx_transitions_outcome ON tehm_transitions(outcome);
 
+-- P1c: one row per physical attempt (see tehm/db.py ATTEMPTS_DDL; older stores create it on first write)
+CREATE TABLE IF NOT EXISTS tehm_attempts (
+    record_id        TEXT PRIMARY KEY,
+    transition_id    TEXT NOT NULL,
+    record_digest    TEXT,
+    provenance_json  TEXT NOT NULL,
+    materialized_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_attempts_transition ON tehm_attempts(transition_id);
+
 CREATE TABLE IF NOT EXISTS tehm_episodes (
     episode_id              TEXT PRIMARY KEY,
     domain                  TEXT NOT NULL,

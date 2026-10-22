@@ -30,6 +30,7 @@ HARMFUL_OUTCOMES = frozenset({"FAIL", "REGRESSION"})
 ORIGINAL_FAILURE_STATES = ("REMOVED", "PRESENT", "UNKNOWN")
 EXPERIMENT_KINDS = ("REPAIR", "OBSERVATION", "UNKNOWN")
 UTILITY_VERDICTS = ("PARETO_SAFE", "HARMFUL", "NEUTRAL", "UNKNOWN")
+ROLLBACK_STATES = ("true", "false", "UNKNOWN")
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,11 @@ class ObservationDelta:
     # not evidence that a failure was repaired.
     experiment_kind: str = "UNKNOWN"       # REPAIR | OBSERVATION | UNKNOWN
     utility_verdict: str = "UNKNOWN"       # physical/Pareto result, separate from oracle
+    # P1b / D2 rollback traceability, bound to this action instance: "true" | "false" | "UNKNOWN"
+    # (legacy records without the marker stay UNKNOWN). Serialised only when known, so legacy
+    # transitions keep their content-hash identity.
+    rolled_back: str = "UNKNOWN"
+    rollback_reason: str | None = None
 
     def validate(self) -> None:
         if type(self.original_failure) is not str:
@@ -114,6 +120,10 @@ class ObservationDelta:
             raise ValueError(
                 f"utility_verdict must be one of {UTILITY_VERDICTS}, "
                 f"got {self.utility_verdict!r}")
+        if self.rolled_back not in ROLLBACK_STATES:
+            raise ValueError(f"rolled_back must be one of {ROLLBACK_STATES}, got {self.rolled_back!r}")
+        if self.rollback_reason is not None and type(self.rollback_reason) is not str:
+            raise ValueError("rollback_reason must be a string or None")
 
     def to_dict(self) -> dict:
         return {
@@ -124,6 +134,8 @@ class ObservationDelta:
             "newly_observed_failures": list(self.newly_observed_failures),
             "experiment_kind": self.experiment_kind,
             "utility_verdict": self.utility_verdict,
+            **({"rolled_back": self.rolled_back, "rollback_reason": self.rollback_reason}
+               if self.rolled_back != "UNKNOWN" else {}),
         }
 
     @classmethod
@@ -149,6 +161,8 @@ class ObservationDelta:
             newly_observed_failures=data.get("newly_observed_failures", []),
             experiment_kind=data.get("experiment_kind", "UNKNOWN"),
             utility_verdict=data.get("utility_verdict", "UNKNOWN"),
+            rolled_back=data.get("rolled_back", "UNKNOWN"),
+            rollback_reason=data.get("rollback_reason"),
         )
         obj.validate()
         return obj

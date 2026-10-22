@@ -575,6 +575,7 @@ tail -n 25 "$NETGEN_LOG" 2>/dev/null || true
 # Parse results
 LVS_RESULT="unknown"
 MATCH_STATUS="unknown"
+LVS_REASON=""
 if [[ -f "$NETGEN_LOG" ]]; then
   # Parser diagnostics invalidate the comparison itself.  Older Netgen builds
   # can continue after malformed escaped identifiers and emit a plausible
@@ -582,6 +583,7 @@ if [[ -f "$NETGEN_LOG" ]]; then
   if grep -qiE "Expected to find (instance pin block|end of instance)|Error:  No match in call for pin|has no pins" "$NETGEN_LOG" 2>/dev/null; then
     LVS_RESULT="error"
     MATCH_STATUS="unknown"
+    LVS_REASON="netgen_parser_error"
     [[ "$LVS_STATUS" -ne 0 ]] || LVS_STATUS=2
   elif grep -qi "property errors" "$NETGEN_LOG" 2>/dev/null; then
     LVS_RESULT="mismatch"
@@ -595,8 +597,17 @@ if [[ -f "$NETGEN_LOG" ]]; then
   fi
 fi
 
+# A definitive top-level failure takes precedence over successful child-cell
+# comparisons in the log. Never weaken parser-error handling or hide pin errors.
+if [[ -f "$NETGEN_REPORT" && "$LVS_RESULT" != "error" ]] && \
+   grep -qiE '^Final result:.*(failed|not match|mismatch)' "$NETGEN_REPORT"; then
+  LVS_RESULT="mismatch"
+  MATCH_STATUS="mismatch"
+  LVS_REASON="native_terminal_failure"
+fi
+
 # Also check the report file
-if [[ -f "$NETGEN_REPORT" ]] && [[ "$MATCH_STATUS" == "unknown" ]]; then
+if [[ -f "$NETGEN_REPORT" && "$MATCH_STATUS" == "unknown" && "$LVS_RESULT" != "error" ]]; then
   if grep -qi "property errors" "$NETGEN_REPORT" 2>/dev/null; then
     LVS_RESULT="mismatch"
     MATCH_STATUS="mismatch"
@@ -654,6 +665,7 @@ cat > "$LVS_DIR/netgen_lvs_result.json" << JSON_EOF
   "design": "$DESIGN_NAME",
   "platform": "$PLATFORM",
   "status": "$LVS_RESULT",
+  "reason": "$LVS_REASON",
   "match": "$MATCH_STATUS",
   "mismatch_class": "$MISMATCH_CLASS",
   "extracted_spice": "$EXTRACTED_SPICE",

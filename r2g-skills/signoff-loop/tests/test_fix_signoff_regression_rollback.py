@@ -170,6 +170,22 @@ def test_rejected_repair_restores_config_reports_and_run_pointer(tmp_path):
     assert audit["regressions"]
 
 
+def test_rejected_repair_and_crash_reconciliation_restore_sdc(tmp_path):
+    proj=_project(tmp_path)
+    sdc=proj/'constraints/constraint.sdc';sdc.write_text('set clk_period 10\n')
+    env=_regressing_harness(tmp_path,proj)
+    runner=Path(env['R2G_RUN_ORFS'])
+    runner.write_text(runner.read_text()+f'\nprintf "set clk_period 12\\n" > "{sdc}"\n')
+    _run(proj,env)
+    assert sdc.read_text()=='set clk_period 10\n'
+    sdc.write_text('set clk_period 99\n')
+    (proj/'constraints/config.mk').write_text('export CORE_UTILIZATION = 99\n')
+    (proj/'reports/.rv_rollback_pending').write_text('')
+    _run(proj,env)
+    assert sdc.read_text()=='set clk_period 10\n'
+    assert 'CORE_UTILIZATION = 30' in (proj/'constraints/config.mk').read_text()
+
+
 def test_interrupted_rollback_reconciles_to_the_accepted_state(tmp_path):
     """A crash between the marker and its removal leaves a MIXED bundle; the next
     entry must complete the restore, never expose the mix."""

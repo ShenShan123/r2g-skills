@@ -90,6 +90,47 @@ def ensure_schema(conn: sqlite3.Connection, schema_path: Path | None = None) -> 
         )
 
 
+WATERMARK_KEY = "commit_watermark"
+
+# P1c: one row per PHYSICAL attempt. Transitions are content-addressed, so two attempts with identical
+# measured content share one transition row (INSERT OR IGNORE keeps the first witness); the attempt
+# table keeps every attempt, its identity scope and its content digest. Created on first write (no
+# schema-version bump: older read-only stores keep opening); readers fall back to transition provenance.
+ATTEMPTS_DDL = """CREATE TABLE IF NOT EXISTS tehm_attempts (
+    record_id        TEXT PRIMARY KEY,
+    transition_id    TEXT NOT NULL,
+    record_digest    TEXT,
+    provenance_json  TEXT NOT NULL,
+    materialized_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_attempts_transition ON tehm_attempts(transition_id);"""
+
+
+def ensure_attempts_table(conn: sqlite3.Connection) -> None:
+    conn.executescript(ATTEMPTS_DDL) if not conn.in_transaction else [
+        conn.execute(stmt) for stmt in ATTEMPTS_DDL.split(";") if stmt.strip()]
+
+
+def has_attempts(conn: sqlite3.Connection) -> bool:
+    return _table_exists(conn, "tehm_attempts")
+
+
+def read_watermark(conn: sqlite3.Connection) -> int:
+    """Monotonic store version: +1 per committed write batch (ingest, rebuild, activation). A snapshot
+    records it, so a task can name exactly which committed state it reads (P1b / D3)."""
+    if not _table_exists(conn, "tehm_meta"):
+        return 0
+    row = conn.execute("SELECT value FROM tehm_meta WHERE key=?", (WATERMARK_KEY,)).fetchone()
+    return int(row[0]) if row and row[0] is not None else 0
+
+
+def bump_watermark(conn: sqlite3.Connection) -> int:
+    """Increment the watermark INSIDE the caller's open transaction (it commits with the batch)."""
+    new = read_watermark(conn) + 1
+    conn.execute("INSERT OR REPLACE INTO tehm_meta(key, value) VALUES (?, ?)", (WATERMARK_KEY, str(new)))
+    return new
+
+
 def count_rows(conn: sqlite3.Connection, table: str) -> int:
     row = conn.execute(f'SELECT COUNT(*) AS n FROM "{table}"').fetchone()
     return int(row["n"]) if row else 0

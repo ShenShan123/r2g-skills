@@ -49,6 +49,40 @@ echo "Netlists do not match."
 """
 
 
+@pytest.mark.parametrize('report_text', ['Netlists do not match. FAIL', 'Circuits match uniquely. PASS'])
+def test_parser_error_cannot_be_overridden_by_report(tmp_path, report_text):
+    # Netgen can continue after a parse error and write a misleading comparison.
+    # Neither a plausible mismatch nor a purported pass is design evidence.
+    netgen = """#!/usr/bin/env bash
+tcl="${@: -1}"
+out=$(sed -n 's/^lvs .* "\\(.*\\)"$/\\1/p' "$tcl")
+echo '{report_text}' > "$out"
+echo 'Expected to find instance pin block but got "32"'
+exit 0
+""".replace('{report_text}', report_text)
+    skill, orfs, pdk, bindir, proj = _setup(tmp_path, OK_MAGIC, netgen)
+    r = _run(tmp_path, skill, orfs, pdk, bindir, proj)
+    assert r.returncode != 0, r.stdout + r.stderr
+    result = json.loads((proj / 'lvs/netgen_lvs_result.json').read_text())
+    assert (result['status'], result['match']) == ('error', 'unknown')
+    assert result['reason'] == 'netgen_parser_error'
+    assert result['mismatch_class'] == ''
+
+
+def test_terminal_pin_failure_overrides_intermediate_match(tmp_path):
+    netgen = '''#!/usr/bin/env bash
+tcl="${@: -1}"
+out=$(sed -n 's/^lvs .* "\\(.*\\)"$/\\1/p' "$tcl")
+echo 'Final result: Top level cell failed pin matching.' > "$out"
+echo 'Circuits match uniquely.'
+exit 0
+'''
+    skill, orfs, pdk, bindir, proj = _setup(tmp_path, OK_MAGIC, netgen)
+    _run(tmp_path, skill, orfs, pdk, bindir, proj)
+    result = json.loads((proj / 'lvs/netgen_lvs_result.json').read_text())
+    assert result['status'] == 'mismatch' and result['match'] == 'mismatch'
+
+
 def test_writer_crash_is_not_executed_never_mismatch(tmp_path: Path) -> None:
     skill, orfs, pdk, bindir, proj = _setup(tmp_path, OK_MAGIC, NETGEN_MUST_NOT_RUN,
                                             CRASHING_OPENROAD)

@@ -7,7 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from power_verilog_from_spice import propagate_hierarchical_power_ports
+from power_verilog_from_spice import propagate_hierarchical_power_ports, canonicalize_child_port_identifiers
 
 
 def _sha(text: str) -> str:
@@ -31,6 +31,7 @@ def main() -> int:
 
     source = args.verilog.read_text()
     output, stats = propagate_hierarchical_power_ports(source)
+    output, port_map = canonicalize_child_port_identifiers(output,args.top_module)
     receipt = {
         "schema": "r2g.normalize_power_connectivity.v1",
         "source": str(args.verilog.resolve()),
@@ -38,6 +39,7 @@ def main() -> int:
         "output": str(args.output.resolve()),
         "output_sha256": _sha(output),
         "top_module": args.top_module,
+        "child_port_identifier_mapping": port_map,
         **stats,
     }
     _write(args.output, output)

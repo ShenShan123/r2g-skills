@@ -910,7 +910,54 @@ def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
         plan = _route_plan(route or {}, cfg, excl)
     else:
         plan = _lvs_plan(lvs or {}, cfg, excl)
-    return _rank_plan_strategies(plan, recipes)
+    return _rank_plan_strategies(_quarantine_invalid(plan, "catalogue"), recipes)
+
+
+def _quarantine_invalid(plan: dict, source: str) -> dict:
+    """Move auto-applicable strategies that violate the executor contract out of the plan
+    and into plan['technical_failures'] (an invalid candidate is never ranked, selected or
+    executed, and never read as an ordinary "no strategy" stop). Idempotent."""
+    from candidate_contract import contract_errors
+    kept, invalid = [], []
+    for s in plan.get("strategies") or []:
+        errors = contract_errors(s) if (not isinstance(s, dict) or s.get("auto_apply")) else []
+        if errors:
+            invalid.append({"id": s.get("id") if isinstance(s, dict) else None, "errors": errors})
+        else:
+            kept.append(s)
+    if invalid:
+        print(f"{source} candidate(s) INVALID: {invalid}", file=sys.stderr)
+        plan["strategies"] = kept
+        plan.setdefault("technical_failures", []).append(
+            {"kind": "invalid_candidate", "source": source, "candidates": invalid})
+    return plan
+
+
+def _next_decision(plan: dict, rank_first: str | None = None) -> tuple:
+    """The --next protocol line: (id, rerun_from, recheck), ("STOP", status, reason), or
+    ("TECHNICAL", kind, detail). A recorded technical failure or a chosen strategy that
+    violates the executor contract is reported, never executed (2026-10-17)."""
+    from candidate_contract import contract_errors, describe
+    failures = plan.get("technical_failures") or []
+    if failures:
+        first = failures[0]
+        detail = describe(first["candidates"]) if first.get("candidates") else str(first.get("detail", ""))
+        return ("TECHNICAL", first["kind"], (first.get("source", "?") + ": " + detail).replace("\t", " ")[:900])
+    # Every auto-applicable candidate in the plan (catalogue included; memory candidates were
+    # already gated) is checked BEFORE selection, so a malformed one surfaces instead of being
+    # skipped or crashing the selector.
+    invalid = [{"id": s.get("id") if isinstance(s, dict) else None, "errors": contract_errors(s)}
+               for s in plan.get("strategies") or []
+               if not isinstance(s, dict) or (s.get("auto_apply") and contract_errors(s))]
+    if invalid:
+        return ("TECHNICAL", "invalid_candidate", "plan: " + describe(invalid))
+    auto = _live_auto_strategy(plan, rank_first=rank_first)
+    if auto is None:
+        return ("STOP", str(plan.get("status")), plan.get("residual_reason") or "no_auto_strategy")
+    errors = contract_errors(auto)
+    if errors:
+        return ("TECHNICAL", "invalid_candidate", describe([{"id": auto.get("id"), "errors": errors}]))
+    return (auto["id"], auto.get("rerun_from") or "", auto["recheck"])
 
 
 def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | None:
@@ -1101,6 +1148,57 @@ def _apply_repair_action_policy(plan: dict) -> dict:
             "repair action policy blocked every applicable strategy"
             + (f": {error}" if error else "")
         )
+    return plan
+
+
+def _task_action_failure(strategy: dict, project: Path, cfg_text: str) -> str | None:
+    """Check evaluator-owned task bounds before ANY deterministic/memory edit.
+
+    This is independent of the general hard-knob policy and lifecycle gates.
+    A registered task owns its immutable SDC even if the catalogue or an A/B
+    override would otherwise allow clock relaxation. Ungoverned Fmax is unchanged.
+    """
+    raw=os.environ.get('R2G_TASK_MANIFEST')
+    if not raw:
+        return None
+    try:
+        scripts=Path(__file__).resolve().parents[4]/'memory/scripts'
+        if str(scripts) not in sys.path:
+            sys.path.insert(0,str(scripts))
+        import t2a_envelope as envelope
+        manifest=json.loads(Path(raw).read_text())
+        if not isinstance(manifest,dict) or not isinstance(manifest.get('initial_config'),dict):
+            raise ValueError('task manifest has no initial_config object')
+        if ((strategy.get('sdc_edits') or strategy.get('sdc'))
+                and 'constraints/constraint.sdc' in (manifest.get('immutable') or {}).get('files',{})):
+            return 'task freezes constraints/constraint.sdc; SDC edits are forbidden'
+        if strategy.get('env') or strategy.get('env_flags'):
+            return 'task-bound strategies cannot edit the execution environment'
+        proposed=envelope.effective_config(apply_edits(cfg_text,strategy.get('config_edits') or {}))
+        checked=envelope.check_config(manifest,proposed,project=project,env=os.environ)
+        if not checked['ok']:
+            return 'task constraint violation: '+json.dumps(checked['violations'],sort_keys=True)
+    except (OSError,ValueError,TypeError,AttributeError,ImportError) as exc:
+        return 'task policy unavailable: '+str(exc)
+    return None
+
+
+def _apply_task_action_policy(plan: dict, project: Path, cfg_text: str) -> dict:
+    if not os.environ.get('R2G_TASK_MANIFEST'):
+        return plan
+    kept=[];rejected=[]
+    for strategy in plan.get('strategies') or []:
+        reason=_task_action_failure(strategy,project,cfg_text)
+        if reason:
+            rejected.append({'strategy':strategy.get('id'),'reason':reason})
+        else:
+            kept.append(strategy)
+    plan['strategies']=kept
+    plan['task_policy_rejections']=rejected
+    plan['task_policy_gate_ok']=not any(r['reason'].startswith('task policy unavailable:') for r in rejected)
+    if rejected and not kept:
+        plan['status']='residual'
+        plan['residual_reason']='task policy blocked every applicable strategy'
     return plan
 
 
@@ -1461,16 +1559,66 @@ def _family(strategy_id: str | None) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", str(strategy_id or "")).strip("_").upper()
 
 
-def _gate_memory_strategies(strategies: list, cfg: dict, exclude: set) -> list:
+def _apply_tehm_v2(plan: dict, proj: Path, check: str, cfg: dict, drc, route, tcheck, situation) -> dict:
+    """Apply the frozen TEHM-v2 policy (R2G_TEHM_V2_POLICY) to plan['strategies'].
+
+    Policy file: {"schema": "tehm-v2-policy-v1", "mechanisms": {name: bool}, "index": path,
+    "index_sha256": hex, "task_ip_family": str|null}. The index hash must match (fail closed).
+    The episode's executed actions come from this project's fix_log.jsonl."""
+    import hashlib
+    _mem = Path(__file__).resolve().parents[4] / "memory"
+    if str(_mem) not in sys.path:
+        sys.path.insert(0, str(_mem))
+    from tehm_v2 import policy as _P, state as _S
+    pol = json.loads(Path(os.environ["R2G_TEHM_V2_POLICY"]).read_text())
+    if pol.get("schema") != "tehm-v2-policy-v1" or set(pol.get("mechanisms") or {}) != set(_P.MECHANISMS):
+        raise ValueError("invalid TEHM-v2 policy file")
+    raw = Path(pol["index"]).read_bytes()
+    if hashlib.sha256(raw).hexdigest() != pol.get("index_sha256"):
+        raise ValueError("TEHM-v2 evidence index hash mismatch")
+    index = json.loads(raw)
+    rows = []
+    log = proj / "reports" / "fix_log.jsonl"
+    if log.exists():
+        for line in log.read_text().splitlines():
+            try:
+                rows.append(json.loads(line))
+            except ValueError:
+                continue
+    st = _S.from_reports(check, situation, drc, route, tcheck, cfg)
+    ordered, decisions = _P.decide(plan.get("strategies") or [], st, index, _P.episode_rows(rows),
+                                   pol["mechanisms"], {pol["task_ip_family"]} if pol.get("task_ip_family") else set())
+    plan["strategies"] = ordered
+    plan["tehm_v2"] = {"state": {k: st[k] for k in ("failures", "signature", "timing_unconstrained")},
+                       "mechanisms": pol["mechanisms"], "decisions": decisions}
+    for d in decisions:
+        if d["decision"] == "rejected":
+            print(f"TEHM-v2 rejected {d['id']} [{d['mechanism']}]: {d['reason']}", file=sys.stderr)
+    return plan
+
+
+def _gate_memory_strategies(strategies: list, cfg: dict, exclude: set,
+                            invalid: list | None = None) -> list:
     """B4 (R2G memory redesign 2026-10-01): a memory (TEHM) strategy passes the same
     exclusion as the catalogue (already tried this session), is dropped when its edits
     are already in effect, and every edit must pass the hard knob policy
-    (knowledge/knob_policy.py). Each drop is logged with its reason."""
+    (knowledge/knob_policy.py). Each drop is logged with its reason.
+
+    A candidate that violates the executor contract (knowledge/candidate_contract.py) is
+    NOT an ordinary drop: it goes to ``invalid`` and the caller reports a technical failure
+    (failure-patterns "Memory candidate broke the executor contract", 2026-10-17)."""
     import knob_policy
+    from candidate_contract import contract_errors
     kept = []
     for st in strategies or []:
         sid = st.get("id")
         why = None
+        errors = contract_errors(st) + ([st["contract_error"]] if st.get("contract_error") else [])
+        if errors:
+            print(f"memory candidate {sid} INVALID: {'; '.join(errors)}", file=sys.stderr)
+            if invalid is not None:
+                invalid.append({"id": sid, "errors": errors})
+            continue
         if sid in exclude:
             why = "already tried (exclude)"
         elif _applied(cfg, st.get("config_edits") or {}):
@@ -1867,7 +2015,12 @@ def main(argv=None) -> int:
     plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes,
                       tcheck=tcheck, route=route, fmax_mode=_is_fmax_mode(proj),
                       fmax_winner=_fmax_winner(proj))
-    if args.check == "drc" and "pin_side_rebalance" not in exclude:
+    plan = _quarantine_invalid(plan, "catalogue")
+    # A memory candidate cannot reopen a check that the shared planner already
+    # considers complete. In particular, DRC 0 -> 0 is not a repair opportunity.
+    # UNKNOWN/residual states are deliberately NOT treated as completed.
+    completed_check = plan.get("status") in ("clean", "clean_beol", "skipped")
+    if not completed_check and args.check == "drc" and "pin_side_rebalance" not in exclude:
         pin_strategy = _edge_localized_pin_strategy(proj, drc, cfg)
         if pin_strategy is not None:
             plan.setdefault("strategies", []).append(pin_strategy)
@@ -1877,7 +2030,7 @@ def main(argv=None) -> int:
     _apply_repair_action_policy(plan)
     _rank_plan_strategies(plan, recipes, pooled=pooled)
     # Backend-routed TEHM authority, ahead of the shared cold-start catalog.
-    if memory_backend == "tehm":
+    if memory_backend == "tehm" and not completed_check:
         try:
             # <repo>/r2g-skills/signoff-loop/scripts/reports/ -> parents[4] = <repo>.
             # parents[3] (r2g-skills/) silently disabled TEHM consultation since the
@@ -1899,8 +2052,24 @@ def main(argv=None) -> int:
                 design_id=cfg.get("DESIGN_NAME"), platform=plat, cfg=cfg,
                 reports={"drc": drc, "lvs": lvs, "timing": tcheck,
                          "route": route}, situation=_sit, severity=_cur_sev)
-            _tehm_st = _gate_memory_strategies(_tehm_st, cfg, exclude)
+            _invalid = []
+            _tehm_st = _gate_memory_strategies(_tehm_st, cfg, exclude, _invalid)
+            if _invalid:
+                plan.setdefault("technical_failures", []).append(
+                    {"kind": "invalid_candidate", "source": "tehm", "candidates": _invalid})
             _vetoes = signoff_vetoes(situation=_sit)
+            priority_file = os.environ.get('R2G_TEHM_PRIORITY_FILE')
+            if priority_file:
+                if str(_MEM / 'scripts') not in sys.path:sys.path.insert(0,str(_MEM / 'scripts'))
+                from t2a_mechanisms import load_policy,prioritize,quality_context
+                priority=load_policy(priority_file)
+                if not priority['cost_priority']:raise ValueError('Priority file is not enabled')
+                task_manifest=json.loads(Path(os.environ['R2G_TASK_MANIFEST']).read_text())
+                first,deferred=prioritize(_tehm_st,_sit,priority['priority_samples'],quality_context(task_manifest))
+                plan['strategies']=first+list(plan.get('strategies') or [])+deferred
+                plan['tehm_task_priority']=[{'id':s['id'],**s['task_priority_evidence']} for s in first+deferred]
+                print(f'TEHM earned priority: {len(first)} first, {len(deferred)} deferred',file=sys.stderr)
+                _tehm_st=[]  # already inserted at the explicitly earned positions
             if _tehm_st:
                 plan["strategies"] = list(_tehm_st) + list(plan.get("strategies") or [])
                 print(f"TEHM consultation: {len(_tehm_st)} tehm_rule strategy(ies) "
@@ -1908,8 +2077,35 @@ def main(argv=None) -> int:
             if _vetoes:
                 plan["strategies"] = _apply_vetoes(plan.get("strategies") or [], _vetoes)
         except Exception as _exc:
-            print(f"WARNING: TEHM consultation skipped (fail-closed): {_exc}",
+            # A crashed consultation is a TECHNICAL failure, never a silent fall-back to the
+            # catalogue (that would score a broken memory arm as an ordinary repair attempt).
+            print(f"ERROR: TEHM consultation crashed: {type(_exc).__name__}: {_exc}",
                   file=sys.stderr)
+            plan.setdefault("technical_failures", []).append(
+                {"kind": "consultation_crash", "source": "tehm",
+                 "detail": f"{type(_exc).__name__}: {_exc}"})
+    # Table 2's simple SOURCE recipe control: deliberately no TEHM induction,
+    # composition or veto knowledge; share the executor, hard-knob gates and rollback.
+    recipe_file = os.environ.get("R2G_RECIPE_FILE")
+    if recipe_file:
+        if memory_backend != "none":
+            raise ValueError("SOURCE recipes must not be combined with another memory backend")
+        if not completed_check and os.environ.get("R2G_RECIPE_SUSPENDED") != "1":
+            _scripts = Path(__file__).resolve().parents[4] / "memory/scripts"
+            if str(_scripts) not in sys.path:
+                sys.path.insert(0, str(_scripts))
+            from t2a_adapters import recipe_strategies
+            _sit = _current_situation(proj, args.check, drc, lvs)
+            if _sit is None:
+                raise ValueError("Cannot classify the SOURCE recipe consultation")
+            _invalid = []
+            _recipe_st = _gate_memory_strategies(recipe_strategies(recipe_file, _sit, cfg, exclude), cfg, exclude,
+                                                 _invalid)
+            if _invalid:
+                plan.setdefault("technical_failures", []).append(
+                    {"kind": "invalid_candidate", "source": "recipe", "candidates": _invalid})
+            plan["strategies"] = _recipe_st + list(plan.get("strategies") or [])
+            plan["recipe_consultation"] = [s["id"] for s in _recipe_st]
     if (memory_backend == "legacy" and args.check == "route" and
             len(plan.get("strategies", [])) > 1):
         # P1-2 self-announcing guard (recipe-lifecycle audit 2026-07-14): the live route
@@ -1937,13 +2133,32 @@ def main(argv=None) -> int:
         "platform": plat,
     }
     _prioritize_geometric_pin_strategy(plan)
+    # TEHM-v2 (memory/tehm_v2): typed matching, applicability, evidence ranking and repeat
+    # control over the TEHM arm's plan only, from a frozen policy + evidence index. NB and
+    # RECIPE never pass here; nothing is executed or learned by this step.
+    if memory_backend == "tehm" and os.environ.get("R2G_TEHM_V2_POLICY") and not completed_check:
+        try:
+            _apply_tehm_v2(plan, proj, args.check, cfg, drc, route, tcheck,
+                           _current_situation(proj, args.check, drc, lvs))
+        except Exception as _exc:
+            print(f"ERROR: TEHM-v2 policy failed: {type(_exc).__name__}: {_exc}", file=sys.stderr)
+            plan.setdefault("technical_failures", []).append(
+                {"kind": "consultation_crash", "source": "tehm_v2", "detail": f"{type(_exc).__name__}: {_exc}"})
 
     if args.rank_first:
         head = [s for s in plan["strategies"] if s["id"] == args.rank_first]
         rest = [s for s in plan["strategies"] if s["id"] != args.rank_first]
         plan["strategies"] = head + rest
 
+    # After ALL catalogue/TEHM/recipe insertion and ranking; no arm bypasses the
+    # frozen task, and --rank-first does not confer authority to change it.
+    _apply_task_action_policy(plan,proj,cfg_text)
+
     if args.apply:
+        if completed_check:
+            print(f"ERROR: check '{args.check}' is already {plan['status']}; no repair to apply",
+                  file=sys.stderr)
+            return 2
         strat = next((s for s in plan["strategies"] if s["id"] == args.apply), None)
         if strat is None:
             # Strategy may be filtered out because it was already applied (idempotent
@@ -1960,6 +2175,7 @@ def main(argv=None) -> int:
         policy, policy_error = _load_repair_action_policy()
         policy_failure = policy_error or (
             _strategy_policy_failure(strat, policy) if policy is not None else None)
+        policy_failure = policy_failure or _task_action_failure(strat,proj,cfg_text)
         if policy_failure:
             print(json.dumps({"status": "action_policy_blocked", "applied": None,
                               "strategy": strat["id"], "reason": policy_failure}))
@@ -2095,7 +2311,7 @@ def main(argv=None) -> int:
                # Pre-fix values of the edited knobs: the parametric (delta) form of
                # this fix for memory (R2G memory redesign B2).
                "config_before": {k: cfg.get(k) for k in strat["config_edits"]}}
-        if strat.get("source") in ("tehm_rule", "tehm_compose"):
+        if strat.get("source") in ("tehm_rule", "tehm_compose", "recipe"):
             # D-A1 attribution: log the fix under its rule's family, with the rule id
             # and whether this application is a candidate trial.
             out.update(memory_rule=strat.get("rule_id"),
@@ -2103,6 +2319,8 @@ def main(argv=None) -> int:
                        memory_trial=bool(strat.get("memory_trial")),
                        witness_selected=strat.get("witness_selected") or [],
                        memory_mechanisms=strat.get("mechanisms") or [])   # Phase H attribution
+            if 'task_priority_evidence' in strat:
+                out['task_priority_evidence']=strat['task_priority_evidence']
         if sdc_edits:
             out["sdc_edits"] = sdc_edits
         print(json.dumps(out))
@@ -2129,12 +2347,7 @@ def main(argv=None) -> int:
         return 0
 
     if args.next:
-        auto = _live_auto_strategy(plan, rank_first=args.rank_first)
-        if auto is None:
-            reason = plan.get("residual_reason") or "no_auto_strategy"
-            print(f"STOP\t{plan['status']}\t{reason}")
-        else:
-            print(f"{auto['id']}\t{auto.get('rerun_from') or ''}\t{auto['recheck']}")
+        print("\t".join(_next_decision(plan, args.rank_first)))
         return 0
 
     print(json.dumps(plan, indent=2))

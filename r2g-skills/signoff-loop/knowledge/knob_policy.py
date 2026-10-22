@@ -34,6 +34,21 @@ KNOB_BOUNDS: dict[str, tuple[float, float] | None] = {
     "MIN_ROUTING_LAYER": None,
     "MAX_ROUTING_LAYER": None,
 }
+# Enum knobs of the common catalogue (t2a task contracts publish them; failure-patterns
+# "T2a contract/executor knob mismatch", 2026-10-16). One table: memory and LLM edits
+# share these values, and memory/scripts/t2a_task_manifests.allowlist publishes them.
+KNOB_ENUMS: dict[str, tuple[str, ...]] = {
+    "ABC_AREA": ("0", "1"),
+    "SYNTH_HIERARCHICAL": ("0", "1"),
+    "ENABLE_PLACE_REPAIR_TIMING": ("0", "1"),
+    "SETUP_SLACK_MARGIN": ("0", "0.2"),
+    "ABC_CLOCK_PERIOD_IN_PS": ("8000",),
+    "SKIP_ANTENNA_REPAIR": ("0", "1"),
+    "MAX_REPAIR_ANTENNAS_ITER_GRT": ("10",),
+    "MAX_REPAIR_ANTENNAS_ITER_DRT": ("10",),
+    "R2G_ROUTE_SLEW_MARGIN": ("10", "20", "40"),
+    "R2G_ROUTE_CAP_MARGIN": ("10", "20", "40"),
+}
 # A knob a fix REMOVES (drop DIE_AREA so ORFS auto-sizes the die). Same literal as
 # memory/contracts.CONFIG_UNSET (tests/test_memory_gates.py pins the equality).
 UNSET = "<unset>"
@@ -43,13 +58,15 @@ _LAYER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 
 def edit_violation(knob: str, value) -> str | None:
     """Why ``knob = value`` is not an allowed memory/LLM edit, or None if it is."""
-    if knob not in KNOB_BOUNDS:
+    if knob not in KNOB_BOUNDS and knob not in KNOB_ENUMS:
         return f"{knob} is not a whitelisted knob"
     if value is None or str(value).strip() == "":
         return f"{knob} has an empty value"
     if str(value) == UNSET:
         return None                       # removing a whitelisted knob is allowed
     text = str(value).strip()
+    if knob in KNOB_ENUMS:
+        return None if text in KNOB_ENUMS[knob] else f"{knob}={text!r} is not one of {list(KNOB_ENUMS[knob])}"
     bounds = KNOB_BOUNDS[knob]
     if knob in ("DIE_AREA", "CORE_AREA"):
         return None if _AREA_RE.match(text) else f"{knob}={text!r} is not 'x0 y0 x1 y1'"

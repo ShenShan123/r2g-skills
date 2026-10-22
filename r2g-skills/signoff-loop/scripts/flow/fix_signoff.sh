@@ -199,6 +199,14 @@ if v is None and ("tier" in d or "wns" in d or "wns_ns" in d):
 print("" if v is None else v)' "$1" 2>/dev/null || echo ""
 }
 
+_timing_unconstrained() {  # timing_check.json says no path is constrained
+  python3 -c 'import json,sys
+try: d=json.load(open(sys.argv[1]))
+except Exception: sys.exit(1)
+w=d.get("wns", d.get("wns_ns"))
+sys.exit(0 if d.get("tier")=="unconstrained" or (isinstance(w,(int,float)) and w>=1e30) else 1)' "$1" 2>/dev/null
+}
+
 _layout_digest() {  # sha256 of the newest backend 6_final.def ("" when none)
   # Pilot P1-1: the physical-effect fingerprint compared around a fix reflow. A
   # byte-identical DEF after the rerun means the strategy had NO layout effect,
@@ -243,6 +251,13 @@ _snapshot_accepted_bundle() {
   if [[ -f "$PROJECT_DIR/backend/.r2g_signoff_run" ]]; then
     cp -f "$PROJECT_DIR/backend/.r2g_signoff_run" "$_ACCEPTED_DIR/.r2g_signoff_run" 2>/dev/null || true
   fi
+  # SDC belongs to the same transaction as config + evidence. Persist the
+  # existence bit as well, so crash reconciliation cannot retain a new file.
+  cp -f "$PROJECT_DIR/constraints/config.mk" "$_ACCEPTED_DIR/config.mk" || return 1
+  if [[ -f "$PROJECT_DIR/constraints/constraint.sdc" ]]; then
+    cp -f "$PROJECT_DIR/constraints/constraint.sdc" "$_ACCEPTED_DIR/constraint.sdc" || return 1
+  fi
+  : > "$_ACCEPTED_DIR/.sdc_snapshot_owned"
   # Manifest of what the snapshot owns, so restore knows which files must be
   # DELETED (a report the rejected run created that the accepted run never had).
   ( cd "$_ACCEPTED_DIR" 2>/dev/null && ls -A ) > "$_ACCEPTED_DIR.manifest" 2>/dev/null || true
@@ -257,14 +272,45 @@ _snapshot_accepted_bundle() {
 # suspended for the rest of this fix session, so the catalogue proceeds as in the baseline.
 # Catalogue strategies are untouched (the no-memory arm behaves exactly as before).
 _MEMFAIL=0
-_is_memory_strategy() { [[ "$1" == tehm_* ]]; }
+_is_memory_strategy() { [[ "$1" == tehm_* || "$1" == recipe_* ]]; }
+_rerun_diag() {  # $1 = rerun rc, $2 = epoch the rerun started.
+  # {"rc", "run", "stage", "error_code"} of the failed rerun, read BEFORE any rollback so the fix-log row
+  # keeps the diagnostic evidence (P1b: a rerun error counts against an action only with a recognised
+  # infeasibility code, else it is UNKNOWN evidence). Only a backend run CREATED by this rerun is read:
+  # a rerun that died before creating its run dir must not inherit the previous run's error code.
+  python3 - "$PROJECT_DIR" "$1" "$2" "$SCRIPT_DIR/../../knowledge" <<'PYEOF' 2>/dev/null || echo "{\"rc\": $1, \"run\": null, \"stage\": null, \"error_code\": null, \"diag_error\": true}"
+import json, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[4])
+import situation
+run = situation._newest_run(Path(sys.argv[1]))
+out = {"rc": int(sys.argv[2]), "run": None, "stage": None, "error_code": None}
+if run is not None and run.stat().st_mtime >= float(sys.argv[3]):
+    f = situation.backend_facts(sys.argv[1])
+    out.update(run=run.name, stage=f.get("stage"), error_code=f.get("error_code"))
+else:
+    out["stale_run"] = run.name if run is not None else None
+print(json.dumps(out))
+PYEOF
+}
 _memory_rollback() {  # restore the pre-step config AND evidence bundle (called inside fix_one: $cfg_backup)
   [[ -n "${cfg_backup:-}" && -f "$cfg_backup" ]] && cp -f "$cfg_backup" "$PROJECT_DIR/constraints/config.mk"
-  _restore_accepted_bundle || true
+  if [[ "${_SDC_BACKUP_FRESH:-0}" == "1" ]]; then
+    if [[ -f "$sdc_backup" ]]; then
+      cp -f "$sdc_backup" "$PROJECT_DIR/constraints/constraint.sdc"
+    else
+      rm -f "$PROJECT_DIR/constraints/constraint.sdc"
+    fi
+  fi
+  [[ "${_BUNDLE_FRESH:-0}" == "1" ]] && { _restore_accepted_bundle || true; }
+  return 0
 }
 _memory_step_failed() {  # $1 = check, $2 = strategy, $3 = why
   _MEMFAIL=$((_MEMFAIL+1))
   echo "[$1] memory step $2 failed ($3); rolled back, catalogue budget kept ($_MEMFAIL/${R2G_MEMORY_FAIL_BUDGET:-2})"
+  if (( _MEMFAIL >= ${R2G_MEMORY_FAIL_BUDGET:-2} )); then
+    [[ -n "${R2G_RECIPE_FILE:-}" ]] && export R2G_RECIPE_SUSPENDED=1
+  fi
   if (( _MEMFAIL >= ${R2G_MEMORY_FAIL_BUDGET:-2} )) && [[ "${R2G_MEMORY_BACKEND:-}" != "none" ]]; then
     export R2G_MEMORY_BACKEND=none
     echo "[$1] memory suspended for the rest of this fix session after $_MEMFAIL failed memory steps; catalogue continues"
@@ -290,6 +336,16 @@ _restore_accepted_bundle() {  # returns 1 when there is no snapshot to restore
       mv -f "$PROJECT_DIR/backend/.r2g_signoff_run.rvtmp" "$PROJECT_DIR/backend/.r2g_signoff_run" 2>/dev/null || true
   else
     rm -f "$PROJECT_DIR/backend/.r2g_signoff_run" 2>/dev/null || true
+  fi
+  if [[ -f "$_ACCEPTED_DIR/.sdc_snapshot_owned" ]]; then
+    cp -f "$_ACCEPTED_DIR/config.mk" "$PROJECT_DIR/constraints/config.mk.rvtmp" && \
+      mv -f "$PROJECT_DIR/constraints/config.mk.rvtmp" "$PROJECT_DIR/constraints/config.mk" || return 1
+    if [[ -f "$_ACCEPTED_DIR/constraint.sdc" ]]; then
+      cp -f "$_ACCEPTED_DIR/constraint.sdc" "$PROJECT_DIR/constraints/constraint.sdc.rvtmp" && \
+        mv -f "$PROJECT_DIR/constraints/constraint.sdc.rvtmp" "$PROJECT_DIR/constraints/constraint.sdc" || return 1
+    else
+      rm -f "$PROJECT_DIR/constraints/constraint.sdc"
+    fi
   fi
   rm -f "$_ROLLBACK_MARK" 2>/dev/null || true
   return 0
@@ -387,6 +443,60 @@ except Exception: preds={}
 print(json.dumps(preds))' "$1" "$PROJECT_DIR"
 }
 
+# Chain log v1 (T2 design draft §8d; failure-patterns "History annotator cited a row field
+# that no on-disk row has", 2026-10-17). Every row names its action_id (<session>#<n>), the
+# session's previous action (parent_action), the run it acted on (pre_run_tag: the active run
+# when the step began), the run it produced (post_run_tag: the one backend/RUN_* whose
+# r2g_action.json, written by run_orfs at creation, names this action) and its re-check bound
+# to the graded run (step_check, captured BEFORE a rollback restores the reports). Each value
+# is captured when it is true; a missing value is null, never inferred later.
+_active_run_tag() {
+  # The target report owns the pre-action signal. A route abort has no completed
+  # layout/signoff pointer; that pointer can also lag behind a new timing rerun.
+  # Do not infer an action link from directory order or fall back on a conflicting pin.
+  python3 -c 'import json,sys,pathlib
+p=pathlib.Path(sys.argv[1]); check=sys.argv[2]
+name="timing_check" if check=="timing" else check
+try: r=json.loads((p/"reports"/(name+".json")).read_text())
+except Exception: r={}
+tags={v for v in (r.get("run_tag"),r.get("backend_run"),(r.get("provenance") or {}).get("run_tag")) if isinstance(v,str) and v}
+tag=next(iter(tags)) if len(tags)==1 else None
+print(tag if tag and pathlib.Path(tag).name==tag and (p/"backend"/tag).is_dir() else "")' "$PROJECT_DIR" "${1:-}"
+}
+_next_action_id() {  # "<session>#<n>" for the next row of this session in the log
+  python3 -c 'import json,sys
+n=0
+try:
+    for l in open(sys.argv[1]):
+        try: n += json.loads(l).get("fix_session_id") == sys.argv[2]
+        except Exception: pass
+except OSError: pass
+print("%s#%d" % (sys.argv[2], n + 1))' "$LOG" "$FIX_SESSION_ID"
+}
+_step_check() {  # check report count : JSON of this step's re-check, bound to the graded run
+  python3 - "$1" "$2" "$3" "$PROJECT_DIR" <<'PYEOF' 2>/dev/null || echo ""
+import hashlib, json, os, sys
+check, report, count, proj = sys.argv[1:5]
+try:
+    raw = open(report, "rb").read(); rep = json.loads(raw)
+except Exception:
+    raw, rep = None, {}
+try: active = json.load(open(os.path.join(proj, "backend", ".r2g_signoff_run"))).get("run_tag")
+except Exception: active = None
+owners={v for v in (rep.get("run_tag"), rep.get("backend_run"),
+                    (rep.get("provenance") or {}).get("run_tag")) if isinstance(v,str) and v}
+owner=next(iter(owners)) if len(owners)==1 else None
+if owner and (os.path.basename(owner)!=owner or not os.path.isdir(os.path.join(proj,"backend",owner))):
+    owner=None
+print(json.dumps({"check": check, "report": os.path.relpath(report, proj),
+                  "report_sha256": hashlib.sha256(raw).hexdigest() if raw is not None else None,
+                  "status": rep.get("status") if isinstance(rep, dict) else None, "count": count or None,
+                  "report_run_tag": owner,
+                  "binding_error": "conflicting_report_owners" if len(owners)>1 else (None if owner else "owner_unknown"),
+                  "active_run_tag": active}, sort_keys=True))
+PYEOF
+}
+
 _log_iter() {  # check iter strategy before after verdict from_stage vclass before_cats config_delta [global_regressions]
   python3 -c 'import json,sys,os
 check,it,strategy,before,after,verdict,from_stage=sys.argv[1:8]
@@ -447,12 +557,49 @@ o=dict(check=check,iter=int(it),strategy=strategy,
        config_delta=config_delta, env_flags=json.dumps(env_flags,sort_keys=True),
        predicates=preds, global_regressions=global_regs, ts=ts)
 if isinstance(situation,dict): o["situation"]=situation
+# P1b / D2: rollback traceability, bound to this action instance (R2G_LOG_ROLLBACK="true:<reason>" at
+# the rollback sites; any other row of this writer was not rolled back).
+_rb=(os.environ.get("R2G_LOG_ROLLBACK") or "false").split(":",1)
+o["rolled_back"]=(_rb[0]=="true")
+o["rollback_reason"]=(_rb[1] if o["rolled_back"] and len(_rb)>1 else None)
+# P1b: diagnostic evidence of a failed rerun (rc, failing stage, ORFS error code), read before rollback
+try: _rf=json.loads(os.environ.get("R2G_LOG_RERUN_FAILURE") or "null")
+except Exception: _rf=None
+if isinstance(_rf,dict): o["rerun_failure"]=_rf
 try: config_before=json.loads(os.environ.get("R2G_LOG_CONFIG_BEFORE") or "{}")
 except Exception: config_before={}
 if isinstance(config_before,dict) and config_before: o["config_before"]=config_before
 try: memory=json.loads(os.environ.get("R2G_LOG_MEMORY") or "{}")
 except Exception: memory={}
 if isinstance(memory,dict): o.update({k:v for k,v in memory.items() if v is not None})
+# Chain log v1 (see _active_run_tag above): explicit action -> run links, never inferred.
+_sess=[]
+try:
+    for _l in open(logp):
+        try:
+            _r=json.loads(_l)
+            if _r.get("fix_session_id")==sid: _sess.append(_r)
+        except Exception: pass
+except OSError: pass
+aid=os.environ.get("R2G_LOG_ACTION_ID") or "%s#%d"%(sid,len(_sess)+1)
+o["chain_version"]=1
+o["action_id"]=aid
+o["parent_action"]=(_sess[-1].get("action_id") if _sess else None)
+o["pre_run_tag"]=os.environ.get("R2G_LOG_PRE_RUN") or None
+_own=[]
+import glob as _glob
+for _m in _glob.glob(os.path.join(proj,"backend","RUN_*","r2g_action.json")):
+    try:
+        if json.load(open(_m)).get("action_id")==aid: _own.append(os.path.basename(os.path.dirname(_m)))
+    except Exception: pass
+o["post_run_tag"]=(_own[0] if len(_own)==1 else None)
+if len(_own)>1: o["post_run_ambiguous"]=sorted(_own)
+try: _sc=json.loads(os.environ.get("R2G_LOG_STEP_CHECK") or "null")
+except Exception: _sc=None
+if isinstance(_sc,dict) and o["post_run_tag"]:
+    # A pointer is diagnostic context, not evidence of what an untagged report graded.
+    _sc["graded_post_run"]=(_sc.get("report_run_tag")==o["post_run_tag"])
+o["step_check"]=_sc if isinstance(_sc,dict) else None
 # Graded severity (Phase G0): before = the pre-fix snapshot; after = the report/log now.
 try:
     sys.path.insert(0, os.environ.get("R2G_KNOWLEDGE_DIR",""))
@@ -498,6 +645,50 @@ except Exception:
 PYEOF
 }
 
+_budget_ok() { [[ "${_BUDGET_EXHAUSTED:-0}" != "1" ]]; }  # P1a: no further check once the shared budget is spent
+# Technical failures (failure-patterns "Memory candidate broke the executor contract, and
+# the failure was suppressed", 2026-10-17): an invalid candidate or a crashed diagnose is
+# NOT an ordinary residual. fix_one returns 3, the failure is appended to
+# reports/technical_failures.jsonl, no further check runs, and the session exits 4 so the
+# loop and the episode stop instead of continuing to later repair turns.
+_TECHNICAL_FAIL=0
+_technical_failure() {  # $1 check, $2 iter, $3 kind, $4 detail
+  python3 "$KNOWLEDGE_DIR/technical_failure.py" record "$PROJECT_DIR" --kind "$3" \
+    --source fix_signoff --detail "$4" --check "$1" --iter "$2" \
+    || echo "[$1] ERROR: could not record technical failure ($3)" >&2
+  echo "[$1] TECHNICAL FAILURE ($3): $4" >&2
+}
+# Ordinary failures keep the old semantics (the next check still runs); a technical failure
+# (fix_one rc 3) stops the session. Never a blanket `|| true` over a technical failure.
+_run_fix() {
+  [[ "$_TECHNICAL_FAIL" == "1" ]] && return 0
+  local rc=0
+  fix_one "$1" || rc=$?
+  [[ "$rc" == "3" ]] && _TECHNICAL_FAIL=1
+  return 0
+}
+_LEDGER="$SCRIPT_DIR/resource_ledger.py"
+_checker() {  # $1 = drc|lvs: the signoff checker, bounded by the attempt deadline under a shared budget (P1a).
+  # Returns the checker's rc; 75 = no time left / stopped at the deadline, 76 = accounting error.
+  local which="$1" cmd rc=0 left="" t0=$SECONDS
+  [[ "$which" == "drc" ]] && cmd="$RUN_DRC" || cmd="$RUN_LVS"
+  if [[ -n "${R2G_BUDGET_FILE:-}" && -f "$_LEDGER" ]]; then
+    left="$(python3 "$_LEDGER" remaining "$PROJECT_DIR" | python3 -c 'import json,sys
+v=json.load(sys.stdin).get("deadline_epoch"); print("" if v is None else int(v))')" || return 76
+  fi
+  if [[ -n "$left" ]]; then
+    R2G_CHECKER_DEADLINE="$left" "$cmd" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || rc=$?
+  else
+    "$cmd" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || rc=$?
+  fi
+  # ledger the verification run (wall time; checker CPU time is not reported: UNKNOWN)
+  if [[ -f "$_LEDGER" && "${R2G_LEDGER_DISABLE:-0}" != "1" ]]; then
+    python3 "$_LEDGER" event "$PROJECT_DIR" --type checker_run --json \
+      "{\"check\": \"$which\", \"rc\": $rc, \"wall_s\": $((SECONDS - t0)), \"cpu_s\": \"UNKNOWN\"}" >/dev/null 2>&1 \
+      || { [[ -n "${R2G_BUDGET_FILE:-}" ]] && return 76; }
+  fi
+  return $rc
+}
 _ensure_baseline() {  # $1 = drc|lvs : RUN the signoff tool once if there is no real
   # baseline. A design freshly produced by run_orfs has NO Magic-DRC / Netgen-LVS
   # report yet, so _run_extract yields status "unknown"; diagnose then STOPs and the
@@ -525,8 +716,12 @@ except Exception: print("")' "$report" 2>/dev/null)"
   [[ -n "$newest_gds" && ( ! -f "$report" || "$newest_gds" -nt "$report" ) ]] && stale=1
   if [[ -z "$st" || "$st" == "unknown" || "$stale" == "1" ]]; then
     echo "[$check] (re)establish baseline signoff (status='${st:-missing}', stale_vs_gds=$stale) — running $check"
-    if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || true
-    else "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || true; fi
+    local crc=0
+    _checker "$check" || crc=$?
+    if [[ $crc -eq 75 || $crc -eq 76 ]]; then
+      echo "[$check] shared budget: baseline $check not graded (rc=$crc); stopping the fix session" >&2
+      _BUDGET_EXHAUSTED=1; return 0
+    fi
     _run_extract "$check" || true
   fi
 }
@@ -539,8 +734,19 @@ fix_one() {  # $1 = drc|lvs|route|timing
   # reports/timing.json — point _count/_run_extract at the real file.
   [[ "$check" == "timing" ]] && report="$REPORTS/timing_check.json"
   _ensure_baseline "$check"
+  _budget_ok || { _log_iter "$check" 0 "none" "" "" "budget_exhausted_baseline" "" "" "{}" "{}"; return 1; }
   [[ -f "$report" ]] || _run_extract "$check"
   before="$(_count "$report")"
+  # Unconstrained timing (no constrained path, WNS >= 1e30: e.g. the SDC clock names a port
+  # the design does not have) is a configuration error no repair can fix. Record it and stop;
+  # the final gate reports the residual (failure-patterns "Unconstrained timing passed strict
+  # acceptance", 2026-10-18).
+  if [[ "$check" == "timing" ]] && _timing_unconstrained "$report"; then
+    export R2G_LOG_ACTION_ID="$(_next_action_id)" R2G_LOG_PRE_RUN="$(_active_run_tag)" R2G_LOG_STEP_CHECK=""
+    _log_iter "$check" 1 "none" "" "" "stop_timing_unconstrained" "" "" "{}" "{}"
+    echo "[$check] timing is UNCONSTRAINED (no constrained path): SDC/clock configuration error; no repair attempted"
+    return 0
+  fi
   # Antenna non-convergence memory (failure-patterns.md #36): a prior session
   # already proved the antenna strategies don't move this design's residual —
   # exclude them up front instead of silently burning the same diode+reroute
@@ -582,21 +788,48 @@ except Exception: print("")' "$antenna_marker")"
       --check "$check" --vclass "${before_vclass:-$([[ $check == route ]] && echo route)}" 2>/dev/null || true)"
     export R2G_LOG_CONFIG_BEFORE=""   # set from --apply below; never leaks across iterations
     export R2G_LOG_MEMORY=""          # memory-rule attribution from --apply (D-A1), same lifetime
+    # Chain log v1: this iteration's action id and the run it starts from, captured now;
+    # the re-check is captured after grading, before any rollback (never at log time).
+    export R2G_LOG_ACTION_ID="$(_next_action_id)"
+    export R2G_LOG_PRE_RUN="$(_active_run_tag "$check")"
+    export R2G_LOG_STEP_CHECK=""
     local all_excl="${tried}${R2G_FIX_EXCLUDE:+${tried:+,}$R2G_FIX_EXCLUDE}"
+    local diag_rc=0
     line="$("$DIAGNOSE" "$PROJECT_DIR" --check "$check" --exclude "$all_excl" \
-            ${R2G_FIX_RANK_FIRST:+--rank-first "$R2G_FIX_RANK_FIRST"} --next)"
+            ${R2G_FIX_RANK_FIRST:+--rank-first "$R2G_FIX_RANK_FIRST"} --next)" || diag_rc=$?
+    if [[ "$diag_rc" != "0" || -z "$line" ]]; then
+      _technical_failure "$check" "$it" diagnose_crash "diagnose --next exited $diag_rc with ${#line} bytes of output"
+      _log_iter "$check" "$it" "none" "$before" "$before" "technical_diagnose_crash" "" "$before_vclass" "$before_cats" "{}"
+      return 3
+    fi
     # Split on tab WITHOUT collapsing empty middle fields. `read` with a
     # whitespace IFS (tab) would merge consecutive tabs, dropping an empty
     # rerun_from column and shifting recheck into rerun; map tabs to a
     # non-whitespace unit-separator first so empty fields are preserved.
     IFS=$'\x1f' read -r sid rerun recheck <<<"${line//$'\t'/$'\x1f'}"
-    [[ -n "$sid" ]] || { echo "[$check] ERROR: diagnose returned empty output; aborting" >&2; return 1; }
+    if [[ "$sid" == "TECHNICAL" ]]; then
+      _technical_failure "$check" "$it" "$rerun" "${recheck:-}"
+      _log_iter "$check" "$it" "none" "$before" "$before" "technical_${rerun}" "" "$before_vclass" "$before_cats" "{}"
+      return 3
+    fi
     if [[ "$sid" == "STOP" ]]; then
       _log_iter "$check" "$it" "none" "$before" "$before" "stop_${rerun}" "" "$before_vclass" "$before_cats" "{}"
       echo "[$check] stop: $rerun ${recheck:-}"; return 0
     fi
     echo "[$check] iter $it: applying $sid (rerun_from=${rerun:-none})"
     local rv_pre="$REPORTS/.rv_pre.json" cfg_backup="$REPORTS/.rv_cfg_backup.mk" global_regs="[]"
+    local sdc_backup="$REPORTS/.rv_sdc_backup.sdc"
+    # P1b: back up the pre-step config before EVERY step (a rollback of a step without a rerun must not
+    # restore a stale backup from an earlier iteration); the evidence bundle is snapshotted only with a
+    # rerun, and restored only when it was snapshotted in this same iteration (_BUNDLE_FRESH).
+    cp -f "$PROJECT_DIR/constraints/config.mk" "$cfg_backup" 2>/dev/null || true
+    rm -f "$sdc_backup"
+    _SDC_BACKUP_FRESH=0
+    if [[ -f "$PROJECT_DIR/constraints/constraint.sdc" ]]; then
+      cp -f "$PROJECT_DIR/constraints/constraint.sdc" "$sdc_backup" || return 1
+    fi
+    _SDC_BACKUP_FRESH=1
+    _BUNDLE_FRESH=0
     if [[ -n "$rerun" ]]; then
       # RMD3-P0-01 (failure-patterns.md #58): snapshot the ACCEPTED config and the
       # global result vector BEFORE the fix edit/reflow. A reflow can regress
@@ -609,7 +842,8 @@ except Exception: print("")' "$antenna_marker")"
       # RMD-HO-P1-04: the config edit is only PART of the accepted state. Snapshot
       # the whole evidence bundle (reports + the active-run pointer) so a rejected
       # repair can be rolled back transactionally, not just textually.
-      _snapshot_accepted_bundle
+      _snapshot_accepted_bundle || return 1
+      _BUNDLE_FRESH=1
     fi
     local apply_out cfg_delta="{}"
     # R2G_FIX_RANK_FIRST rides through to --apply too: the apply-time lifecycle
@@ -620,8 +854,9 @@ except Exception: print("")' "$antenna_marker")"
     # after a rollback and the chosen one is "not in current plan" (Phase R S2 on v3, R-A2).
     if ! apply_out="$("$DIAGNOSE" "$PROJECT_DIR" --check "$check" --exclude "$all_excl" \
           ${R2G_FIX_RANK_FIRST:+--rank-first "$R2G_FIX_RANK_FIRST"} --apply "$sid")"; then
+      _memory_rollback
       echo "[$check] apply '$sid' failed; aborting" >&2
-      _log_iter "$check" "$it" "$sid" "$before" "$before" "apply_failed" "$rerun" "$before_vclass" "$before_cats" "{}"; return 1
+      R2G_LOG_ROLLBACK="true:apply_failed" _log_iter "$check" "$it" "$sid" "$before" "$before" "apply_failed" "$rerun" "$before_vclass" "$before_cats" "{}"; return 1
     fi
     cfg_delta="$(python3 -c 'import json,sys
 try: print(json.dumps(json.loads(sys.stdin.read()).get("config_edits") or {}))
@@ -636,7 +871,7 @@ except Exception: print("{}")' <<<"$apply_out")"
     export R2G_LOG_MEMORY="$(python3 -c 'import json,sys
 try:
     d=json.loads(sys.stdin.read())
-    keys=("memory_rule","strategy_family","memory_trial","witness_selected","memory_mechanisms")
+    keys=("memory_rule","strategy_family","memory_trial","witness_selected","memory_mechanisms","task_priority_evidence")
     print(json.dumps({k:d[k] for k in keys if d.get("memory_rule") and k in d}))
 except Exception: print("{}")' <<<"$apply_out")"
     # Gap 3+4: stamp symptom_id on each knob row; chain iteration 2+ to the first
@@ -666,15 +901,34 @@ except Exception: print("{}")' <<<"$apply_out")"
       # (failure-patterns.md #38 / codex #3) — the strategy is already journaled
       # to journal.sqlite above, but a reviewer reading backend/RUN_*/ sees why.
       local rerun_reason="signoff fix: strategy=$sid rerun_from=${rerun:-full} (config edit)"
+      # Shared total budget (P1a): memory trials and catalogue steps are charged to the SAME cap.
+      local budget_component=catalogue
+      _is_memory_strategy "$sid" && budget_component=memory
+      local _rerun_t0; _rerun_t0="$(date +%s)"
       if [[ "${R2G_FIX_FULL_REFLOW:-0}" == "1" ]]; then
-        R2G_RERUN_REASON="$rerun_reason (full reflow)" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || rc=$?
+        R2G_ACTION_ID="$R2G_LOG_ACTION_ID" R2G_BUDGET_COMPONENT="$budget_component" R2G_RERUN_REASON="$rerun_reason (full reflow)" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || rc=$?
       else
-        FROM_STAGE="$rerun" R2G_RERUN_REASON="$rerun_reason" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || rc=$?
+        R2G_ACTION_ID="$R2G_LOG_ACTION_ID" R2G_BUDGET_COMPONENT="$budget_component" FROM_STAGE="$rerun" R2G_RERUN_REASON="$rerun_reason" "$RUN_ORFS" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || rc=$?
       fi
+      if [[ $rc -eq 75 || $rc -eq 76 ]]; then
+        # Shared budget (resource_ledger.py): 75 = exhausted (the flow was refused, or stopped at
+        # the attempt deadline); 76 = accounting error with a budget configured. Either way:
+        # restore the pre-step state, record it, and stop the whole fix session. Never a failed
+        # rerun or a failed memory step; the two causes are logged separately.
+        local why=budget_exhausted
+        [[ $rc -eq 76 ]] && why=accounting_error
+        _memory_rollback
+        R2G_LOG_ROLLBACK="true:$why" _log_iter "$check" "$it" "$sid" "$before" "$before" "$why" "$rerun" "$before_vclass" "$before_cats" "{}"
+        echo "[$check] shared budget: $why before/during $sid; stopping the fix session" >&2
+        _BUDGET_EXHAUSTED=1
+        return 1
+      fi
+      local _rf=""
+      [[ $rc -ne 0 ]] && _rf="$(_rerun_diag "$rc" "$_rerun_t0")"
       if [[ $rc -ne 0 ]] && _is_memory_strategy "$sid"; then
         # memory containment: a memory step whose rerun fails is rolled back, never aborts the check
         _memory_rollback
-        _log_iter "$check" "$it" "$sid" "$before" "$before" "memory_rerun_failed_rc$rc" "$rerun" "$before_vclass" "$before_cats" "{}"
+        R2G_LOG_RERUN_FAILURE="$_rf" R2G_LOG_ROLLBACK="true:rerun_failed_rc$rc" _log_iter "$check" "$it" "$sid" "$before" "$before" "memory_rerun_failed_rc$rc" "$rerun" "$before_vclass" "$before_cats" "{}"
         _memory_step_failed "$check" "$sid" "rerun failed rc=$rc"
         continue
       fi
@@ -688,7 +942,8 @@ except Exception: print("{}")' <<<"$apply_out")"
         echo "[$check] rerun still fails (rc=$rc); continuing the relief ladder" >&2
         _run_extract route || true
         after="$(_count "$report")"
-        _log_iter "$check" "$it" "$sid" "$before" "${after:-$before}" "rerun_failed_still_congested" "$rerun" "$before_vclass" "$before_cats" "{}"
+        export R2G_LOG_STEP_CHECK="$(_step_check "$check" "$report" "$after")"
+        R2G_LOG_RERUN_FAILURE="$_rf" _log_iter "$check" "$it" "$sid" "$before" "${after:-$before}" "rerun_failed_still_congested" "$rerun" "$before_vclass" "$before_cats" "{}"
         noimp=$((noimp+1))
         if (( it >= BASE_ITERS && noimp >= 2 )); then
           echo "[$check] $noimp non-improving past base $BASE_ITERS; stopping"; return 1
@@ -696,8 +951,15 @@ except Exception: print("{}")' <<<"$apply_out")"
         continue
       fi
       if [[ $rc -ne 0 ]]; then
-        echo "[$check] run_orfs failed (rc=$rc); aborting this check" >&2
-        _log_iter "$check" "$it" "$sid" "$before" "$before" "rerun_failed_rc$rc" "$rerun" "$before_vclass" "$before_cats" "{}"
+        # A failed catalogue rerun is not an accepted state either. Leaving its
+        # edit installed poisoned the next check and the later LLM rollback
+        # baseline (TM0 riscv_core/u19: util 27 + padding 4 fails DPL-0036).
+        # Restore the same pre-step transaction used for memory candidates;
+        # retain the failed RUN and its diagnostic/actual cost. The explicit
+        # route-relief continuation above remains a separate measured policy.
+        _memory_rollback
+        echo "[$check] run_orfs failed (rc=$rc); rolled back; aborting this check" >&2
+        R2G_LOG_RERUN_FAILURE="$_rf" R2G_LOG_ROLLBACK="true:rerun_failed_rc$rc" _log_iter "$check" "$it" "$sid" "$before" "$before" "rerun_failed_rc$rc" "$rerun" "$before_vclass" "$before_cats" "$cfg_delta"
         return 1
       fi
       post_layout="$(_layout_digest)"
@@ -713,13 +975,14 @@ except Exception: print("{}")' <<<"$apply_out")"
     if [[ -n "$rerun" && ( "$check" == "drc" || "$check" == "lvs" ) && \
           -n "$pre_layout" && "$pre_layout" == "$post_layout" ]]; then
       verdict="recipe_no_effect"; after="$before"
-      if _is_memory_strategy "$sid"; then _memory_rollback; _memory_step_failed "$check" "$sid" "no layout effect"
+      local rb_mark=false
+      if _is_memory_strategy "$sid"; then _memory_rollback; _memory_step_failed "$check" "$sid" "no layout effect"; rb_mark="true:no_effect"
       else noimp=$((noimp+1)); fi
       local is_antenna_iter=0
       [[ "$sid" == antenna* || "$before_vclass" == *[Aa]ntenna* ]] && is_antenna_iter=1
       (( is_antenna_iter )) && antenna_noimp=$((antenna_noimp+1))
       (( is_antenna_iter && antenna_noimp >= 2 )) && verdict="antenna_nonconverged"
-      _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats" "$cfg_delta"
+      R2G_LOG_ROLLBACK="$rb_mark" _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats" "$cfg_delta"
       echo "[$check] iter $it: layout unchanged (sha256 ${pre_layout:0:12}…) after $sid — $verdict; skipping signoff re-run"
       if [[ "$verdict" == "antenna_nonconverged" ]]; then
         _write_antenna_marker "$antenna_marker" "$after" "$it" "$tried"
@@ -735,10 +998,24 @@ except Exception: print("{}")' <<<"$apply_out")"
     # route/timing: the rerun (run_orfs from floorplan/synth) IS the check — there
     # is no separate signoff tool. extract_route reads the backend route stage;
     # _run_extract timing re-measures the reflowed ppa.json via check_timing.py.
-    if [[ "$check" == "drc" ]]; then "$RUN_DRC" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || true
-    elif [[ "$check" == "lvs" ]]; then "$RUN_LVS" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" || true; fi
+    if [[ "$check" == "drc" || "$check" == "lvs" ]]; then
+      local crc=0
+      _checker "$check" || crc=$?
+      if [[ $crc -eq 75 || $crc -eq 76 ]]; then
+        # The repair flow ran but cannot be graded within the shared budget: it is unverified, so
+        # restore the pre-step state and stop (logged separately: exhausted vs accounting error).
+        local why=budget_exhausted
+        [[ $crc -eq 76 ]] && why=accounting_error
+        _memory_rollback
+        R2G_LOG_ROLLBACK="true:$why" _log_iter "$check" "$it" "$sid" "$before" "$before" "$why" "$rerun" "$before_vclass" "$before_cats" "{}"
+        echo "[$check] shared budget: $why grading $sid; stopping the fix session" >&2
+        _BUDGET_EXHAUSTED=1
+        return 1
+      fi
+    fi
     _run_extract "$check"
     after="$(_count "$report")"
+    export R2G_LOG_STEP_CHECK="$(_step_check "$check" "$report" "$after")"
     if [[ -n "$rerun" ]]; then
       # RMD3-P0-01: post-reflow global vector + the ONE comparator. Only signals
       # measured FRESH on both sides can fire (route/orfs/timing are always
@@ -777,7 +1054,7 @@ print(json.dumps(regs))' "$global_regs" "$check" "$before" "$after")"
       # last two, the restored config described one run while every downstream
       # consumer read the REJECTED run's evidence.
       bundle_restored=0
-      _restore_accepted_bundle && bundle_restored=1
+      [[ "${_BUNDLE_FRESH:-0}" == "1" ]] && _restore_accepted_bundle && bundle_restored=1
       # The target check's own count belongs to the restored baseline again.
       after_rollback="$(_count "$report")"
       python3 - "$REPORTS" "$it" "$sid" "$global_regs" "$bundle_restored" <<'PYEOF' 2>/dev/null || true
@@ -803,7 +1080,7 @@ print(json.dumps({"strategy":sys.argv[1],"reason":"global_regression",
       # The ledger records what the ATTEMPT measured ($after) — the rejected
       # run's count is the negative evidence. The project's ACTIVE state is the
       # restored baseline ($after_rollback).
-      _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats" "$cfg_delta" "$global_regs"
+      R2G_LOG_ROLLBACK="true:regression" _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats" "$cfg_delta" "$global_regs"
       echo "[$check] iter $it: $before -> ${after:-?} but GLOBAL REGRESSION $global_regs" \
            "— rolled back to the accepted run (config + reports + run pointer;" \
            "bundle_restored=$bundle_restored, active count=${after_rollback:-?}); recorded as regression"
@@ -825,6 +1102,7 @@ print(json.dumps({"strategy":sys.argv[1],"reason":"global_regression",
       continue
     fi
     verdict="applied"
+    local rb_mark=false
     # Is THIS iteration antenna-scoped? Drives the CONSECUTIVE antenna-noimp
     # counter below (failure-patterns.md #38).
     local is_antenna_iter=0
@@ -832,6 +1110,7 @@ print(json.dumps({"strategy":sys.argv[1],"reason":"global_regression",
     if [[ -n "$before" ]] && python3 -c "import sys;sys.exit(0 if float('$after')>=float('$before') else 1)" 2>/dev/null; then
       verdict="no_improvement"
       if _is_memory_strategy "$sid"; then
+        rb_mark="true:no_improvement"
         _memory_rollback                      # memory edits persist only when they improve
         _memory_step_failed "$check" "$sid" "no improvement"
       else
@@ -846,7 +1125,11 @@ print(json.dumps({"strategy":sys.argv[1],"reason":"global_regression",
       # (the cumulative-vs-consecutive over-abort, failure-patterns.md #38).
       (( is_antenna_iter )) && antenna_noimp=0
     fi
-    [[ "$after" == "0" ]] && verdict="cleared"
+    [[ "$after" == "0" && "$rb_mark" != true:* ]] && verdict="cleared"
+    # 0 -> 0: there was nothing measured to repair, so nothing was cleared (failure-patterns
+    # "Unconstrained timing passed strict acceptance": utilization_reduce logged `cleared`
+    # with before=0 after=0 on an unconstrained design). Ingested as inconclusive.
+    [[ "$before" == "0" && "$after" == "0" ]] && verdict="no_target"
     # Antenna non-convergence auto-exit (failure-patterns.md #36): each antenna
     # strategy already drives up to MAX_REPAIR_ANTENNAS_ITER_DRT diode+reroute
     # rounds INSIDE ORFS with no improvement check of its own, and OpenROAD's
@@ -857,7 +1140,7 @@ print(json.dumps({"strategy":sys.argv[1],"reason":"global_regression",
     if [[ "$verdict" == "no_improvement" ]] && (( is_antenna_iter )); then
       (( antenna_noimp >= 2 )) && verdict="antenna_nonconverged"
     fi
-    _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats" "$cfg_delta"
+    R2G_LOG_ROLLBACK="$rb_mark" _log_iter "$check" "$it" "$sid" "$before" "$after" "$verdict" "$rerun" "$before_vclass" "$before_cats" "$cfg_delta"
     echo "[$check] iter $it: $before -> $after ($verdict)"
     if [[ "$after" == "0" ]]; then
       # A clean check invalidates any recorded antenna non-convergence.
@@ -897,23 +1180,24 @@ _reconcile_pending_rollback
 _capture_vector "$REPORTS/.rv_session_start.json" "$CHECK"
 # route is the backend-abort check: fix BEFORE signoff (a route abort never reaches
 # drc/lvs). It is its own --check value (not part of "both").
-[[ "$CHECK" == "route" ]] && fix_one route || true
+
+[[ "$CHECK" == "route" ]] && _run_fix route || true
 # timing is its own check (NOT part of "both"): the rerun (run_orfs from synth)
 # IS the check; check_timing.py re-measures the reflowed ppa.json.
-[[ "$CHECK" == "timing" ]] && fix_one timing || true
-[[ "$CHECK" == "drc" || "$CHECK" == "both" ]] && fix_one drc || true
-[[ "$CHECK" == "lvs" || "$CHECK" == "both" ]] && fix_one lvs || true
+[[ "$CHECK" == "timing" ]] && _budget_ok && _run_fix timing || true
+[[ "$CHECK" == "drc" || "$CHECK" == "both" ]] && _budget_ok && _run_fix drc || true
+[[ "$CHECK" == "lvs" || "$CHECK" == "both" ]] && _budget_ok && _run_fix lvs || true
 # An LVS repair that re-flows (lvs_port_feedthrough_buffer reruns from place) leaves
 # drc.json describing a layout that no longer exists: the manifest then refuses the
 # design (two runs bound / no DRC status). Re-grade DRC on the new layout (fix_one's
 # baseline is staleness-aware and may repair), then re-grade LVS once if that in turn
 # re-flowed. Bounded: one extra pass, no LVS repair in it (2026-10-01, P0-2e).
-if [[ "$CHECK" == "both" ]]; then
+if [[ "$CHECK" == "both" ]] && _budget_ok && [[ "$_TECHNICAL_FAIL" == "0" ]]; then
   _gds_now="$(ls -t "$PROJECT_DIR"/backend/RUN_*/final/*.gds 2>/dev/null | head -1 || true)"
   if [[ -n "$_gds_now" && ( ! -f "$REPORTS/drc.json" || "$_gds_now" -nt "$REPORTS/drc.json" ) ]]; then
     echo "[drc] layout re-flowed after DRC was graded (LVS repair) — re-grading DRC"
-    fix_one drc || true
-    _ensure_baseline lvs
+    _run_fix drc
+    [[ "$_TECHNICAL_FAIL" == "0" ]] && _ensure_baseline lvs
   fi
 fi
 
@@ -970,6 +1254,13 @@ try:
 except Exception:
     pass
 PYEOF
+
+# A technical failure overrides the clean/residual verdict: the session did not run the
+# intended repair path, so neither "clean" nor "residual" would be true (exit 4).
+if [[ "$_TECHNICAL_FAIL" == "1" ]]; then
+  echo "[fix] technical failure recorded in reports/technical_failures.jsonl; session stopped (exit 4)" >&2
+  exit 4
+fi
 
 # exit 0 if final state clean, else 2 if a residual remains. For --check route we
 # judge ONLY route.json (a route fix never produces drc/lvs; a stale route.json

@@ -37,7 +37,7 @@ def _fix(strategy, before, after, verdict, sit, util_before="12", util_after="8"
     return {"check": "drc", "strategy": strategy, "violation_class": sit["violation_class"],
             "from_stage": "floorplan", "before": before, "after": after, "verdict": verdict,
             "config_delta": {"CORE_UTILIZATION": util_after},
-            "config_before": {"CORE_UTILIZATION": util_before}, "situation": sit}
+            "config_before": {"CORE_UTILIZATION": util_before}, "situation": sit, "rolled_back": False}
 
 
 @pytest.fixture
@@ -128,7 +128,7 @@ def test_knob_subset_rule_from_differently_shaped_fixes(tmp_path):
         return {"check": "orfs_stage", "strategy": "llm_edit:" + ",".join(sorted(edits)),
                 "violation_class": "route", "from_stage": "floorplan", "before": 1, "after": 0,
                 "verdict": "cleared", "config_delta": edits, "config_before": before,
-                "situation": route}
+                "situation": route, "rolled_back": False}
     b = TehmMemoryBackend(db_path=tmp_path / "tehm.sqlite", artifact_root=tmp_path / "art",
                           trial_candidates=True)
     b.ingest_project(_project(tmp_path, "chacha", [fix(

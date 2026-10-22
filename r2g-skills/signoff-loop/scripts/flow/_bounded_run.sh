@@ -51,6 +51,18 @@ r2g_bounded_run() {
   local timeout_s="$1" grace_s="$2" log="$3"
   shift 3
   local pid pgid rc timed_out=0 deadline kdeadline tries rss
+  # Shared budget (P1a, resource_ledger.py): R2G_CHECKER_DEADLINE (epoch seconds) bounds this
+  # checker step by the attempt deadline less the kill grace. No time left -> not started, 75;
+  # a step cut by the deadline (not by its own timeout) -> 75, never 124.
+  local deadline_bound=0
+  if [[ -n "${R2G_CHECKER_DEADLINE:-}" ]]; then
+    local _left=$(( R2G_CHECKER_DEADLINE - $(date +%s) - grace_s ))
+    if (( _left <= 0 )); then
+      echo "r2g_bounded_run: attempt deadline reached (shared budget); checker not started" >"$log"
+      return 75
+    fi
+    if (( _left < timeout_s )); then timeout_s=$_left; deadline_bound=1; fi
+  fi
 
   setsid "$@" >"$log" 2>&1 </dev/null &
   pid=$!
@@ -112,6 +124,7 @@ r2g_bounded_run() {
   _R2G_BOUNDED_SID=""
 
   if [[ "$timed_out" == "1" ]]; then
+    (( deadline_bound )) && return 75
     return 124
   fi
   return "$rc"

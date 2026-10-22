@@ -24,6 +24,7 @@ Honesty notes:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -53,15 +54,13 @@ def capture_rows(conn, store, rows: list[dict]) -> int:
     by_design: dict[tuple, list] = {}
     for r in rows:
         by_design.setdefault((r["design"], r["platform"]), []).append(r)
-    n = 0
+    records = []
     for (design, platform), rs in sorted(by_design.items(), key=lambda kv: str(kv[0])):
         evidence = {"project": Path("/rows") / str(design), "config": {
             "DESIGN_NAME": design, "PLATFORM": platform}, "reports": {}, "stage_log": [],
             "fix_log": rs}
-        for record in build_execution_records(evidence):
-            capture(conn, store, record)
-            n += 1
-    return n
+        records.extend(build_execution_records(evidence))
+    return len(_capture_batch(conn, store, records))
 
 
 def capture_r2g_project(conn, store, project: Path,
@@ -73,11 +72,87 @@ def capture_r2g_project(conn, store, project: Path,
     transition, and nothing is fabricated).
     """
     evidence = collect_execution_evidence(project)
-    records = build_execution_records(evidence)
-    receipts = []
-    for record in records:
-        receipts.append(capture(conn, store, record, materialized_at=materialized_at))
-    return receipts
+    return _capture_batch(conn, store, build_execution_records(evidence), materialized_at=materialized_at)
+
+
+class CaptureConflict(ValueError):
+    """Different content under the same capture identity (P1c exit condition, user review 2026-10-09): the
+    import is aborted (all or nothing), never silently skipped. ``conflicts``: [(record_id, [fields])]."""
+
+    def __init__(self, conflicts):
+        self.conflicts = list(conflicts)
+        super().__init__("capture conflict: different content under the same identity: " + "; ".join(
+            "%s differs in %s" % (rid, ",".join(fields) or "?") for rid, fields in self.conflicts))
+
+
+def _canonical(obj) -> str:
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def record_identity(*, design, platform, session, check, iteration, ts) -> tuple[str, dict]:
+    """(record_id, scope) of one physical attempt: (design, platform, fix session, check, iteration, log time).
+    Equal session / iteration names in different designs or runs never merge; the strategy label is not part
+    of it, so a relabelled copy is the same attempt (and a content conflict if anything differs)."""
+    scope = {"design": design, "platform": platform, "session": session, "check": check,
+             "iter": iteration, "ts": ts}
+    h = hashlib.sha256(_canonical(scope).encode()).hexdigest()[:16]
+    return f"r2g:{design}:{session}:{check}:iter{iteration}:{h}", scope
+
+
+def _stored_records(conn, record_id: str) -> list[dict]:
+    """Provenance of the attempts (or, in older stores, transitions) already captured for ``record_id``."""
+    from tehm import db as tehm_db
+    if tehm_db.has_attempts(conn):
+        rows = [json.loads(p or "{}") for (p,) in conn.execute(
+            "SELECT provenance_json FROM tehm_attempts WHERE record_id=?", (record_id,))]
+        if rows:
+            return rows
+    return [json.loads(p or "{}") for (p,) in conn.execute(
+        "SELECT provenance_json FROM tehm_transitions WHERE json_extract(provenance_json, '$.record_id')=?",
+        (record_id,))]
+
+
+def _differing_fields(a: dict | None, b: dict | None) -> list[str]:
+    if not isinstance(a, dict) or not isinstance(b, dict):
+        return ["record"]
+    return sorted(k for k in set(a) | set(b) if _canonical(a.get(k)) != _canonical(b.get(k)))
+
+
+def _capture_batch(conn, store, records, *, materialized_at=None) -> list[CaptureReceipt]:
+    """Capture a batch of records in ONE transaction: all or nothing (an interrupted ingest leaves no
+    partial evidence), and the store watermark bumped with the batch. A record whose identity is already
+    captured with the SAME content digest is skipped (re-import adds nothing); the same identity with
+    DIFFERENT content -- stored, or earlier in this batch -- raises CaptureConflict and rolls back."""
+    from tehm import db as tehm_db
+    own = not conn.in_transaction
+    if own:
+        conn.execute("BEGIN IMMEDIATE")
+    try:
+        receipts, conflicts, seen = [], [], {}
+        for r in records:
+            prov = r.provenance or {}
+            digest = prov.get("record_digest")
+            prior = seen.get(r.record_id)
+            stored = _stored_records(conn, r.record_id) if prior is None else [prior]
+            if stored:
+                same = [p for p in stored if p.get("record_digest") == digest and digest]
+                if len(same) != len(stored):
+                    other = next(p for p in stored if p.get("record_digest") != digest or not digest)
+                    conflicts.append((r.record_id, _differing_fields(other.get("record_row"), prov.get("record_row"))))
+                continue                                  # same identity, same content: already captured
+            seen[r.record_id] = prov
+            receipts.append(capture(conn, store, r, materialized_at=materialized_at))
+        if conflicts:
+            raise CaptureConflict(conflicts)
+        if receipts:
+            tehm_db.bump_watermark(conn)
+        if own:
+            conn.commit()
+        return receipts
+    except BaseException:
+        if own:
+            conn.rollback()
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +293,9 @@ def _iter_record(*, project, config, reports, row, prev_cumulative, design_name,
     if measured and measured["target_regression"]:
         global_regressions = list(global_regressions) + [
             f"{check}_target_regression:{measured['before']:g}->{measured['after']:g}"]
+    if measured and measured.get("flow_failed"):
+        global_regressions = list(global_regressions) + ["flow_rerun_failed:" + measured["flow_failed"]]
+    rolled_back, rollback_reason = row_rollback(row)
     delta = {
         "original_failure": original_failure,
         "first_divergence": {"before": before_count, "after": after_count},
@@ -232,12 +310,14 @@ def _iter_record(*, project, config, reports, row, prev_cumulative, design_name,
         "experiment_kind": ("REPAIR" if original_failure in {"REMOVED", "PRESENT"}
                             else "OBSERVATION"),
         "utility_verdict": "UNKNOWN",
+        "rolled_back": rolled_back,
+        "rollback_reason": rollback_reason,
     }
 
     oracle_type = _ORACLE_TYPE.get(check, "UNKNOWN")
     verification = {
         "verdict": (measured["verdict"] if measured
-                    else _verifier_verdict(verdict, after_status)),
+                    else _verifier_verdict(verdict, after_status, row)),
         # B1 (R2G memory redesign 2026-10-01): only a MEASURED recheck — numeric
         # before/after counts of an applied fix — is a complete oracle. Unmeasured
         # rows (stop/apply/rerun failures, missing counts) stay non-crystallisable.
@@ -249,6 +329,9 @@ def _iter_record(*, project, config, reports, row, prev_cumulative, design_name,
         "obligation_coverage": _obligation_coverage(after_reports),
         "evidence_refs": [c for c in SIGNOFF_CHECKS if c in after_reports],
     }
+    rerun_failure = rerun_failure_attribution(row)
+    if rerun_failure is not None:
+        verification["rerun_failure"] = rerun_failure    # the failure event + its attribution, kept
 
     rerun_from = row.get("from_stage") or None
     situation = row.get("situation") if isinstance(row.get("situation"), dict) else None
@@ -303,8 +386,13 @@ def _iter_record(*, project, config, reports, row, prev_cumulative, design_name,
         "artifacts": {},
     }
 
+    iteration = int(row["iter"]) if str(row.get("iter", "")).strip().lstrip("-").isdigit() else step_index
+    record_id, scope = record_identity(design=design_name, platform=platform, session=session_id,
+                                       check=row.get("check"), iteration=iteration, ts=row.get("ts"))
     return ExecutionRecord(
-        record_id=f"r2g:{session_id}:iter{step_index}:{_normalize_family(strategy).lower()}",
+        record_id=record_id,
+        provenance={"record_scope": scope, "record_digest": "sha256:" + hashlib.sha256(
+            _canonical(row).encode()).hexdigest(), "record_row": row},
         domain="flow.signoff",
         project_id=design_name,
         design_id=design_name,
@@ -316,7 +404,9 @@ def _iter_record(*, project, config, reports, row, prev_cumulative, design_name,
         observation_delta=delta,
         verification=verification,
         episode={
-            "episode_id": session_id,
+            # P1c: the session key is scoped like the record identity, so equal session names in different
+            # designs or platforms never accumulate into one episode
+            "episode_id": f"{design_name}:{platform}:{session_id}",
             "mechanism_family": _normalize_family(strategy),
             "lineage_id": design_name,
             "step_index": step_index,
@@ -333,6 +423,81 @@ def _iter_record(*, project, config, reports, row, prev_cumulative, design_name,
 _STAGE_CHECKS = ("orfs_stage", "route")
 # fix_log verdicts of an iteration whose fix never produced a measured recheck.
 _UNMEASURED_PREFIXES = ("stop_", "apply_failed", "rerun_failed")
+# P1b / D2 (protocol v1 section 8.2): verdicts that are NOT a measured property of the action --
+# a budget refusal or accounting error (the step was refused or could not be graded) or an
+# inconclusive record. They are UNKNOWN evidence: never positive, never negative.
+_NO_EVIDENCE_PREFIXES = ("budget_exhausted", "accounting_error", "inconclusive")
+_RERUN_RC = re.compile(r"rerun_failed_rc(\d+)$")
+# P1b (user review 2026-10-09): a failed rerun counts against the ACTION only with diagnostic evidence
+# that the edited configuration is infeasible -- a deterministic ORFS infeasibility error of the run the
+# rerun created (failure-patterns.md). Everything else is UNKNOWN evidence, the failure event and its
+# cost kept: a timeout (rc 124: it depends on the time limit and host load), a SIGKILL (rc 137: the
+# cause is not established), a missing tool (rc 127), an unrecognised or absent error code, a rerun that
+# created no run, and legacy rows that recorded no diagnosis. GRT-0246 (no antenna diode model) is a
+# platform-install fault, not an action failure, so it is deliberately absent.
+ACTION_INFEASIBILITY_CODES = {
+    "FLW-0024": "place density exceeds 1.0",
+    "GPL-0053": "target density exceeds the maximum",
+    "DPL-0036": "detailed placement failed",
+    "DPL-0038": "utilization exceeds 100%, impossible to legalize",
+    "PPL-0024": "IO pins exceed the available die-perimeter positions",
+    "PDN-0185": "insufficient width for the PDN straps",
+    "PDN-0179": "unable to repair all PDN channels",
+    "GRT-0116": "global routing finished with congestion",
+}
+
+
+def rerun_failure_attribution(row: dict) -> dict | None:
+    """None unless the row records a failed rerun; else {"attribution": "action" | "unknown", "reason",
+    "rc", "run", "stage", "error_code"} from the row's recorded diagnosis (``rerun_failure``)."""
+    verdict = str(row.get("verdict") or "")
+    m = _RERUN_RC.search(verdict)
+    if not m and verdict != "rerun_failed_still_congested":
+        return None
+    diag = row.get("rerun_failure") if isinstance(row.get("rerun_failure"), dict) else None
+    rc = m.group(1) if m else (str(diag.get("rc")) if diag and diag.get("rc") is not None else None)
+    code = (diag or {}).get("error_code")
+    out = {"attribution": "unknown", "rc": rc, "run": (diag or {}).get("run"),
+           "stage": (diag or {}).get("stage"), "error_code": code}
+    if rc == "124":
+        out["reason"] = "timeout_rc124"
+    elif rc == "137":
+        out["reason"] = "killed_rc137"
+    elif diag is None:
+        out["reason"] = "no_diagnosis_recorded"
+    elif not diag.get("run"):
+        out["reason"] = "no_run_created"
+    elif not code:
+        out["reason"] = "no_error_code"
+    elif code not in ACTION_INFEASIBILITY_CODES:
+        out["reason"] = "unrecognised_error_code"
+    else:
+        out.update(attribution="action", reason="infeasible:" + code)
+    return out
+
+
+def no_evidence_verdict(verdict: str) -> bool:
+    """Verdict-only part of ``no_evidence_row`` (refusals, accounting errors, inconclusive records)."""
+    return verdict.startswith(_NO_EVIDENCE_PREFIXES)
+
+
+def no_evidence_row(row: dict) -> bool:
+    """The row is UNKNOWN evidence: a refused / ungraded step, or a failed rerun not attributed to the action."""
+    if no_evidence_verdict(str(row.get("verdict") or "")):
+        return True
+    a = rerun_failure_attribution(row)
+    return bool(a and a["attribution"] == "unknown")
+
+
+def row_rollback(row: dict) -> tuple[str, str | None]:
+    """("true", reason) / ("false", None) from the fix-log row; ("UNKNOWN", None) when the row has no
+    marker (legacy records are never assumed not rolled back)."""
+    rb = row.get("rolled_back")
+    if rb is True:
+        return "true", str(row.get("rollback_reason") or "unspecified")
+    if rb is False:
+        return "false", None
+    return "UNKNOWN", None
 
 
 def measured_outcome(row: dict) -> dict | None:
@@ -345,9 +510,16 @@ def measured_outcome(row: dict) -> dict | None:
     place recovery is measured by stage completion.
     """
     verdict = str(row.get("verdict") or "")
-    if not verdict or str(row.get("strategy") or "none") == "none":
+    if not verdict or str(row.get("strategy") or "none") == "none" or no_evidence_row(row):
         return None
     before, after = _num(row.get("before")), _num(row.get("after"))
+    crash = _RERUN_RC.search(verdict)
+    if crash and row.get("check") not in _STAGE_CHECKS and before is not None:
+        # the edited flow failed with a diagnosed infeasibility (no_evidence_row passed) on a
+        # drc/lvs/timing fix: a verified failure of the action, recorded as a regression of the flow.
+        code = rerun_failure_attribution(row)["error_code"]
+        return {"verdict": "FAIL", "original_failure": "PRESENT", "before": before, "after": before,
+                "target_regression": False, "flow_failed": "rc%s:%s" % (crash.group(1), code)}
     if row.get("check") in _STAGE_CHECKS:
         # Stage-completion oracle (card B1): the fix ran BECAUSE the stage aborted
         # (fix_signoff logs a route abort with before=null), and a re-run that
@@ -439,13 +611,15 @@ def _original_failure(verdict: str, after_count) -> str:
     return "UNKNOWN"
 
 
-def _verifier_verdict(verdict: str, after_status: str) -> str:
+def _verifier_verdict(verdict: str, after_status: str, row: dict | None = None) -> str:
     """Map a fix-log verdict to the transition verifier verdict.
 
     Only true clears / true failures / regressions claim PASS/FAIL; a partial
     improvement (``applied`` / ``no_improvement`` with residual violations) is
     honestly UNKNOWN — it is neither a pass nor a failure (H3).
     """
+    if no_evidence_verdict(verdict) or (row is not None and no_evidence_row(row)):
+        return "UNKNOWN"
     if verdict in CLEAN_VERDICTS or after_status in CLEAN_STATUSES:
         return "PASS"
     if verdict == "regression":

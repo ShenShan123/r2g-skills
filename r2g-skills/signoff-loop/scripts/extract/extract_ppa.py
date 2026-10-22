@@ -371,6 +371,9 @@ def main():
         },
         'geometry': {},
         'run_dir': reports.get('run_dir'),
+        'run_tag': Path(reports['run_dir']).name if reports.get('run_dir') else None,
+        'provenance': (report_io.run_provenance(project_root, reports['run_dir'])
+                       if reports.get('run_dir') else {'source': 'none', 'run_tag': None}),
     }
 
     # ORFS stage progress / failed stage (top-level so the campaign driver can

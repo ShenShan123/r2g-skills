@@ -246,3 +246,25 @@ def test_run_orfs_invalidates_resumed_stage():
     # the invalidation must sit AFTER the FROM_STAGE validity guard (a garbage
     # stage name must never reach make)
     assert src.index("does not match any stage") < src.index('clean_$FROM_STAGE')
+
+
+def _downstream_clean_targets(from_stage, tmp_path):
+    """Run run_orfs.sh's resume-clean loop with a stub make; return the targets it cleans."""
+    import subprocess
+    src = RUN_ORFS.read_text(encoding="utf-8")
+    start = src.index("_r2g_downstream=0")
+    end = src.index("done", start) + len("done")
+    script = ("make() { echo \"TARGET ${@: -1}\"; }\n"
+              f"FROM_STAGE={from_stage}; BACKEND_DIR={tmp_path}; RERUN_REASON=t; FLOW_DIR=f; "
+              "ORFS_DESIGN_DIR=d; FLOW_VARIANT=v\n" + src[start:end] + "\n")
+    out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout
+    return [l.split()[1] for l in out.splitlines() if l.startswith("TARGET ")]
+
+
+def test_run_orfs_resume_cleans_every_downstream_stage(tmp_path):
+    """failure-patterns #61: a rerun from stage S must also clean every later stage, so an
+    early abort can never carry the previous flow's route/finish files into its run dir."""
+    assert _downstream_clean_targets("floorplan", tmp_path) == [
+        "clean_floorplan", "clean_place", "clean_cts", "clean_route", "clean_finish"]
+    assert _downstream_clean_targets("route", tmp_path) == ["clean_route", "clean_finish"]
+    assert _downstream_clean_targets("finish", tmp_path) == ["clean_finish"]

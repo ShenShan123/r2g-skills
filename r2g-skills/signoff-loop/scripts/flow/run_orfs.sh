@@ -105,6 +105,17 @@ _r2g_new_backend_dir() {  # base -> echoes "<dir>\t<RUN_TAG>" for a freshly-CREA
   done
   return 1
 }
+_r2g_record_action() {  # backend_dir run_tag : write <run>/r2g_action.json when R2G_ACTION_ID is set
+  # Chain log v1 (T2 design draft §8d, user 2026-10-17): the action that launched this run is
+  # written BY THE RUN, at creation, so the action -> run link is explicit and survives a crash
+  # or a kill (run-meta.json is only written at the end). Absent id -> no file, never a guess.
+  [[ -n "${R2G_ACTION_ID:-}" ]] || return 0
+  python3 -c 'import json,sys,time
+json.dump({"action_id": sys.argv[2], "run_tag": sys.argv[3], "written_at": int(time.time())},
+          open(sys.argv[1], "w"))' "$1/r2g_action.json" "$R2G_ACTION_ID" "$2" 2>/dev/null \
+    || echo "WARN: could not record the launching action ($R2G_ACTION_ID) in $1" >&2
+  return 0
+}
 # The workspace lock helpers are shared with the signoff checkers, which restage
 # into the same workspace (_restage_for_signoff.sh).
 # shellcheck source=/dev/null
@@ -288,7 +299,10 @@ if [[ "$R2G_SYNTH_FRONTEND" == "slang" ]]; then
     echo "ERROR: SYNTH_HDL_FRONTEND=slang but bridge is missing: $R2G_SLANG_BRIDGE" >&2
     exit 69
   fi
-  if ! "$YOSYS_EXE" -m slang -p 'help read_slang' 2>&1 | grep -q 'Slang-based SystemVerilog frontend'; then
+  # Both legacy yosys-slang and current sv-elab help formats are supported.
+  # Capture all output first: grep -q in a pipe can SIGPIPE a valid Yosys.
+  if ! R2G_SLANG_HELP=$("$YOSYS_EXE" -m slang -p 'help read_slang' 2>&1) ||
+     ! grep -Eq 'Slang-based SystemVerilog frontend|^[[:space:]]*read_slang \[options\]' <<< "$R2G_SLANG_HELP"; then
     echo "ERROR: SYNTH_HDL_FRONTEND=slang requires a Yosys read_slang plugin: $YOSYS_EXE" >&2
     exit 69
   fi
@@ -336,12 +350,48 @@ else
   echo "WARNING: config.mk missing VERILOG_FILES" >&2
 fi
 
+# Shared total budget (P1a; resource_ledger.py, protocol v1 sections 7.2/10): every flow is
+# admitted against ONE cap per attempt, whoever launches it (initial flow, catalogue repair,
+# memory trial, LLM repair); the caller tags R2G_BUDGET_COMPONENT. Refusal = exit 75 and no
+# flow. Without R2G_BUDGET_FILE the ledger only records; with one, a ledger error fails closed.
+_R2G_LEDGER="$FLOW_SCRIPTS_DIR/resource_ledger.py"
+if [[ -f "$_R2G_LEDGER" && "${R2G_LEDGER_DISABLE:-0}" != "1" ]]; then
+  _lrc=0
+  python3 "$_R2G_LEDGER" admit "$PROJECT_DIR" --resource flows --amount 1 --ref "${FROM_STAGE:-full}" || _lrc=$?
+  if [[ $_lrc -eq 75 ]]; then
+    echo "ERROR: shared budget exhausted; flow not launched (resource_ledger.py)" >&2
+    exit 75
+  elif [[ $_lrc -ne 0 ]]; then
+    if [[ -n "${R2G_BUDGET_FILE:-}" ]]; then
+      echo "ERROR: resource ledger accounting error (rc=$_lrc) with a budget configured; refusing to run unbudgeted" >&2
+      exit 76   # accounting error: neither exhaustion (75) nor permission
+    fi
+    echo "WARNING: resource ledger failed (rc=$_lrc); this flow is not ledgered" >&2
+  fi
+  # Record the outcome on EVERY exit path after admission (a charged flow always gets a flow_run).
+  _r2g_ledger_end() {
+    local rc=$?
+    python3 "$_R2G_LEDGER" flow-run "$PROJECT_DIR" --run-dir "${BACKEND_DIR:-}" --rc "$rc" \
+      || echo "WARNING: could not ledger the flow_run event" >&2
+    return $rc
+  }
+  trap _r2g_ledger_end EXIT
+  # The attempt's wall-time deadline bounds every stage below (not only this launch).
+  _R2G_DEADLINE=""
+  if [[ -n "${R2G_BUDGET_FILE:-}" ]]; then
+    _R2G_DEADLINE="$(python3 "$_R2G_LEDGER" remaining "$PROJECT_DIR" \
+      | python3 -c 'import json,sys; d=json.load(sys.stdin).get("deadline_epoch"); print("" if d is None else int(d))')" \
+      || { echo "ERROR: could not read the attempt deadline from the ledger" >&2; exit 76; }
+  fi
+fi
+
 # Create this run's unique backend dir + collision-resistant RUN_TAG (full-pipeline
 # Issue 9). The helper mkdir's a fresh dir, regenerating the PID/random suffix on the
 # (vanishingly rare) collision, so two same-second runs never share one dir.
 _bd_pair="$(_r2g_new_backend_dir "$PROJECT_DIR/backend")" \
   || { echo "ERROR: could not create a unique backend RUN dir under $PROJECT_DIR/backend" >&2; exit 1; }
 BACKEND_DIR="${_bd_pair%%$'\t'*}"; RUN_TAG="${_bd_pair#*$'\t'}"; unset _bd_pair
+_r2g_record_action "$BACKEND_DIR" "$RUN_TAG"
 echo "Starting ORFS run: $RUN_TAG"
 echo "Design: $DESIGN_NAME"
 echo "ORFS workspace nickname: $DESIGN_NICKNAME"
@@ -364,7 +414,19 @@ fi
 
 if [[ -z "$FROM_STAGE" ]]; then
   echo "Cleaning previous ORFS state for variant=$FLOW_VARIANT ..."
-  make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" clean_all 2>&1 | tail -5 || echo "WARNING: clean_all returned non-zero (may be first run)" >&2
+  _r2g_clean_rc=0
+  make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" clean_all 2>&1 | tail -5 || _r2g_clean_rc=$?
+  _r2g_clean_status=PASS
+  [[ $_r2g_clean_rc -eq 0 ]] || _r2g_clean_status=FAIL
+  printf '{"from_stage":"","clean_all_rc":%d,"status":"%s"}\n' \
+    "$_r2g_clean_rc" "$_r2g_clean_status" > "$BACKEND_DIR/cleanup.json"
+  if [[ $_r2g_clean_rc -ne 0 ]]; then
+    if [[ -n "${R2G_TASK_MANIFEST:-}" ]]; then
+      echo "ERROR: clean_all failed; strict task workspace cannot be certified fresh" >&2
+      exit 76
+    fi
+    echo "WARNING: clean_all returned non-zero (may be first run)" >&2
+  fi
 else
   echo "Skipping clean_all (resuming from stage: $FROM_STAGE)"
 fi
@@ -374,6 +436,14 @@ fi
 # Timeout and CPU limit support
 ORFS_TIMEOUT="${ORFS_TIMEOUT:-7200}"
 MAKE_CMD="make -f \"$FLOW_DIR/Makefile\" DESIGN_CONFIG=\"$ORFS_DESIGN_DIR/config.mk\" FLOW_VARIANT=\"$FLOW_VARIANT\""
+
+# Formal T2a runs require an execution-bound configuration receipt, not merely
+# a parser's prediction of Make precedence. All arms use this identical query.
+if [[ -n "${R2G_TASK_MANIFEST:-}" ]]; then
+  python3 "$FLOW_SCRIPTS_DIR/t2a_effective_config.py" --project "$PROJECT_DIR" --backend "$BACKEND_DIR" \
+    --flow "$FLOW_DIR" --design-config "$ORFS_DESIGN_DIR/config.mk" --variant "$FLOW_VARIANT" \
+    || { echo "ERROR: task-envelope effective configuration could not be verified" >&2; exit 76; }
+fi
 
 # Allow config.mk to opt into PLACE_FAST / ROUTE_FAST without requiring the
 # caller to set the env var. A line like `export ROUTE_FAST = 1` in
@@ -530,10 +600,20 @@ if [[ -n "$FROM_STAGE" ]]; then
     exit "$_RESUME_RC"
   fi
   if [[ "$_RESUME_NO_CLEAN" != "1" ]]; then
-    echo "Invalidating resumed stage: make clean_$FROM_STAGE — reason: $RERUN_REASON (earlier stages reused)" \
-      | tee -a "$BACKEND_DIR/flow.log"
-    make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" "clean_$FROM_STAGE" 2>&1 | tail -3 \
-      || echo "WARNING: clean_$FROM_STAGE returned non-zero (stage may have no artifacts yet)" >&2
+    # Clean the resumed stage AND every later stage (failure-patterns #61, 2026-10-18): cleaning
+    # only clean_$FROM_STAGE left the previous flow's downstream results/logs/reports in the
+    # shared ORFS workspace whenever this rerun aborted early, and the collect step below then
+    # copied them (fresh mtimes) into this run's backend dir -- e.g. an old 6_report.json and
+    # 6_final.* inside a run that aborted at global route.
+    _r2g_downstream=0
+    for _r2g_st in synth floorplan place cts route finish; do
+      [[ "$_r2g_st" == "$FROM_STAGE" ]] && _r2g_downstream=1
+      [[ $_r2g_downstream -eq 1 ]] || continue
+      echo "Invalidating resumed/downstream stage: make clean_$_r2g_st (from clean_$FROM_STAGE) — reason: $RERUN_REASON (earlier stages reused)" \
+        | tee -a "$BACKEND_DIR/flow.log"
+      make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" "clean_$_r2g_st" 2>&1 | tail -3 \
+        || echo "WARNING: clean_$_r2g_st returned non-zero (stage may have no artifacts yet)" >&2
+    done
   else
     echo "Resuming FROM_STAGE=$FROM_STAGE (R2G_RESUME_NO_CLEAN=1: pure crash-resume, no clean) — reason: $RERUN_REASON" \
       | tee -a "$BACKEND_DIR/flow.log"
@@ -576,9 +656,25 @@ run_stage() {
     done
     [[ -n "$_stage_env" ]] && echo "Route-stage repair_design margins: $_stage_env"
   fi
-  timeout --signal=TERM --kill-after=60 "$ORFS_TIMEOUT" \
-    bash -c "$_stage_env$MAKE_CMD $stage" 2>&1 | tee -a "$BACKEND_DIR/flow.log"
-  STAGE_STATUS=${PIPESTATUS[0]}
+  # Shared budget (P1a): bound the stage by the attempt's deadline, less the 60 s kill grace,
+  # so a flow admitted near the end cannot run on into the final-acceptance reserve.
+  local _stage_to="$ORFS_TIMEOUT" _deadline_bound=0
+  if [[ -n "${_R2G_DEADLINE:-}" ]]; then
+    local _left=$(( _R2G_DEADLINE - $(date +%s) - 60 ))
+    if (( _left < _stage_to )); then _stage_to=$_left; _deadline_bound=1; fi
+  fi
+  if (( _stage_to <= 0 )); then
+    echo "Attempt deadline reached (shared budget): stage '$stage' not started" | tee -a "$BACKEND_DIR/flow.log"
+    STAGE_STATUS=75
+  else
+    timeout --signal=TERM --kill-after=60 "$_stage_to" \
+      bash -c "$_stage_env$MAKE_CMD $stage" 2>&1 | tee -a "$BACKEND_DIR/flow.log"
+    STAGE_STATUS=${PIPESTATUS[0]}
+    if (( _deadline_bound )) && [[ $STAGE_STATUS -eq 124 || $STAGE_STATUS -eq 137 ]]; then
+      echo "Stage '$stage' stopped at the attempt deadline (shared budget)" | tee -a "$BACKEND_DIR/flow.log"
+      STAGE_STATUS=75
+    fi
+  fi
   set -e -o pipefail
 
   local stage_end

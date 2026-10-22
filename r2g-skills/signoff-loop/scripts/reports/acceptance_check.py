@@ -40,6 +40,9 @@ def _clock_period(sdc: Path):
     return float(m.group(1)) if m else None
 
 
+UNCONSTRAINED_WNS = 1e30   # check_timing.py classifies WNS > 1e+30 as 'unconstrained'
+
+
 def evaluate(project: Path, expected_clock: float | None) -> dict:
     rep = project / "reports"
     gate = _load(rep / "signoff_gate.json") or {}
@@ -65,8 +68,16 @@ def evaluate(project: Path, expected_clock: float | None) -> dict:
         {"status": (route or {}).get("status"), "violations": (route or {}).get("total_violations")})
     put("A5_antenna", None if not g else gs("antenna") == "clean", {"antenna": gs("antenna")})
     sw, st, hw, ht = ((_num((t or {}).get(k)) for k in ("setup_wns", "setup_tns", "hold_wns", "hold_tns")))
-    put("A6_setup", None if sw is None or st is None else (sw >= 0 and st == 0), {"setup_wns": sw, "setup_tns": st})
-    put("A7_hold", None if hw is None or ht is None else (hw >= 0 and ht == 0), {"hold_wns": hw, "hold_tns": ht})
+    # Unconstrained timing (WNS >= 1e30: no constrained path, e.g. an SDC clock on a port the
+    # design does not have) is a configuration FAILURE, never a met constraint
+    # (failure-patterns "Unconstrained timing passed strict acceptance", 2026-10-18).
+    for name, w, tn, keys in (("A6_setup", sw, st, ("setup_wns", "setup_tns")),
+                              ("A7_hold", hw, ht, ("hold_wns", "hold_tns"))):
+        detail = {keys[0]: w, keys[1]: tn}
+        if w is not None and w >= UNCONSTRAINED_WNS:
+            put(name, False, {**detail, "reason": "timing_unconstrained"})
+        else:
+            put(name, None if w is None or tn is None else (w >= 0 and tn == 0), detail)
     cap, slew = _num((t or {}).get("max_cap_violations")), _num((t or {}).get("max_slew_violations"))
     put("A8_drv_limits", None if cap is None or slew is None else (cap == 0 and slew == 0),
         {"max_cap_violations": cap, "max_slew_violations": slew})
