@@ -1,0 +1,170 @@
+"""`r2g` command line.
+
+  r2g config  [--provider P --model M --base-url U --key-env VAR --set-key]
+  r2g check-model           one request with a tool: endpoint, key, tool calling
+  r2g selftest              run the counter8 example end to end
+  r2g run PATH|--example NAME ...   submit a job and follow it
+  r2g status [JOB]
+  r2g ui [--port N] [--host H]
+  r2g chat                  terminal chat with the agent
+  r2g mcp                   MCP server on stdio
+"""
+from __future__ import annotations
+
+import argparse
+import getpass
+import json
+import sys
+import time
+
+from . import __version__, config
+
+
+def _runtime():
+    from .server import STATE, init_runtime
+    init_runtime()
+    return STATE
+
+
+def _follow(store, jid: str) -> dict:
+    after = 0
+    while True:
+        for e in store.events(jid, after=after):
+            after = e["id"]
+            mark = {"ok": "✓", "fail": "✗", "warn": "!", "start": "·"}.get(e["kind"], " ")
+            print("%s %s %-10s %s" % (time.strftime("%H:%M:%S", time.localtime(e["ts"])), mark,
+                                      (e["design"] or "job")[:10], e["message"]), flush=True)
+        j = store.job(jid)
+        if j["status"] not in ("running", "pending"):
+            return j
+        time.sleep(2)
+
+
+def cmd_config(a) -> int:
+    cfg = config.load()
+    for k in ("provider", "model", "base_url"):
+        v = getattr(a, k)
+        if v is not None:
+            setattr(cfg.model, k, v)
+    if a.key_env is not None:
+        cfg.model.api_key_env = a.key_env
+    if a.workers:
+        cfg.workers = a.workers
+    if a.cores:
+        cfg.cores_per_design = a.cores
+    if a.no_ingest:
+        cfg.ingest = False
+    config.save(cfg)
+    if a.set_key:
+        config.store_api_key(cfg.model.provider, getpass.getpass("API key（不回显）: "))
+    print(json.dumps(config.public_view(cfg)["model_resolved"], ensure_ascii=False, indent=1))
+    print("配置文件：%s" % config.config_path())
+    return 0
+
+
+def cmd_check_model(a) -> int:
+    _runtime()
+    from .server import test_model
+    r = test_model()
+    print(json.dumps(r, ensure_ascii=False, indent=1))
+    return 0 if r.get("ok") else 1
+
+
+def cmd_run(a) -> int:
+    st = _runtime()
+    from . import tools
+    designs = [{"example": e} for e in (a.example or [])] + [{"path": p} for p in (a.paths or [])]
+    r = tools.start_job(designs, platform=a.platform)
+    if "error" in r:
+        print("错误：", r["error"])
+        return 2
+    print("任务 %s 已提交" % r["job_id"])
+    j = _follow(tools.RT.store, r["job_id"])
+    print(json.dumps(j.get("result"), ensure_ascii=False))
+    return 0 if (j.get("result") or {}).get("passed") else 1
+
+
+def cmd_selftest(a) -> int:
+    a.example, a.paths = ["counter8"], []
+    print("自检：用内置示例 counter8 跑完整流程（综合 → 布局布线 → 签核 → 转图 → 校验），约 3–5 分钟")
+    return cmd_run(a)
+
+
+def cmd_status(a) -> int:
+    _runtime()
+    from . import tools
+    if a.job:
+        print(json.dumps(tools.job_status(a.job), ensure_ascii=False, indent=1))
+    else:
+        print(json.dumps(tools.list_jobs(20), ensure_ascii=False, indent=1))
+    return 0
+
+
+def cmd_ui(a) -> int:
+    import uvicorn
+    cfg = config.load()
+    host, port = a.host or cfg.host, a.port or cfg.port
+    print("r2g 界面：http://%s:%d   （远程机器请用 ssh -L %d:127.0.0.1:%d 转发）" % (host, port, port, port))
+    uvicorn.run("r2g_agent.server:app", host=host, port=port, log_level="warning")
+    return 0
+
+
+def cmd_chat(a) -> int:
+    st = _runtime()
+    from .agent_loop import run_turn
+    from .llm import make_adapter
+    adapter = make_adapter(st["cfg"].model)
+    sid = st["sessions"].create()
+    print("r2g 对话（Ctrl-D 退出）")
+    while True:
+        try:
+            text = input("\n你> ").strip()
+        except EOFError:
+            return 0
+        if not text:
+            continue
+        print("r2g> ", end="", flush=True)
+        for ev in run_turn(adapter, st["sessions"], sid, text):
+            if ev["type"] == "text":
+                print(ev["delta"], end="", flush=True)
+            elif ev["type"] == "tool_call":
+                print("\n  [调用 %s %s]" % (ev["name"], json.dumps(ev["arguments"], ensure_ascii=False)[:120]), flush=True)
+            elif ev["type"] == "error":
+                print("\n  [错误] %s" % ev["message"])
+        print()
+
+
+def cmd_mcp(a) -> int:
+    import anyio
+    _runtime()
+    from .mcp_server import serve
+    anyio.run(serve)
+    return 0
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="r2g", description="r2g agent %s" % __version__)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    c = sub.add_parser("config", help="设置模型与算力")
+    c.add_argument("--provider"); c.add_argument("--model"); c.add_argument("--base-url")
+    c.add_argument("--key-env"); c.add_argument("--set-key", action="store_true")
+    c.add_argument("--workers", type=int); c.add_argument("--cores", type=int)
+    c.add_argument("--no-ingest", action="store_true", help="不把运行写入知识库（开发用）")
+    c.set_defaults(fn=cmd_config)
+    sub.add_parser("check-model", help="测试模型连通与工具调用").set_defaults(fn=cmd_check_model)
+    s = sub.add_parser("selftest", help="用内置示例跑一遍完整流程")
+    s.add_argument("--platform", default="nangate45"); s.set_defaults(fn=cmd_selftest)
+    r = sub.add_parser("run", help="提交任务并跟踪")
+    r.add_argument("paths", nargs="*"); r.add_argument("--example", action="append")
+    r.add_argument("--platform", default="nangate45"); r.set_defaults(fn=cmd_run)
+    t = sub.add_parser("status"); t.add_argument("job", nargs="?"); t.set_defaults(fn=cmd_status)
+    u = sub.add_parser("ui", help="启动本地网页界面")
+    u.add_argument("--port", type=int); u.add_argument("--host"); u.set_defaults(fn=cmd_ui)
+    sub.add_parser("chat", help="终端对话").set_defaults(fn=cmd_chat)
+    sub.add_parser("mcp", help="以 MCP 服务器方式运行（stdio）").set_defaults(fn=cmd_mcp)
+    a = ap.parse_args(argv)
+    return a.fn(a)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

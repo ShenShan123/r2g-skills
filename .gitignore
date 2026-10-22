@@ -317,3 +317,7 @@ experiments/BASELINE_PARAMETERS.md
 experiments/R2G_CONTRIBUTIONS.md
 docs/experiments/
 docs/superpowers/plans/
+
+# r2g agent: build products and local installs
+agent/*.egg-info/
+webui/node_modules/
