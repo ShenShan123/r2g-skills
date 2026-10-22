@@ -72,6 +72,12 @@ flow() {
   local src=$RUNS/$nm W=$OUT/$rung/$nm
   rm -rf "$W"; mkdir -p "$W/work/signoff_fix" "$W/runs/$nm"
   cp "$src/constraint.sdc" "$src/config.mk" "$W/work/"
+  # A frontend-repaired source (sv_frontend_repair.sh) reads the slang output
+  # at /work/_sv/<top>_slang.v, which lives in that repair's own work dir, one
+  # level above its runs/. Carry it over, or the flow has no RTL to read.
+  if grep -q '/work/_sv/' "$W/work/config.mk"; then
+    cp -r "$(dirname "$RUNS")/work/_sv" "$W/work/" || { echo "sv_source_missing"; return 1; }
+  fi
   local dn
   dn=$(grep -oP '(?<=^export DESIGN_NAME = ).*' "$W/work/config.mk" | tr -d ' ')
   local mounts=(-v "$W/work":/work:Z

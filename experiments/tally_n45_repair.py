@@ -65,12 +65,14 @@ def main() -> int:
     # Designs the baseline cannot synthesise count ONLY from their formula-spec
     # re-runs (hdr_drop_spec, sv_frontend_spec); the earlier platform-default
     # runs of the same recipes are superseded and deliberately not read.
-    for recipe in ("skip_incr", "hdr_drop_spec", "aldff", "m1wide", "strip_attr", "dontuse_oai221x4", "case_rename", "no_rcx", "dontuse_ant"):
+    for recipe in ("skip_incr", "hdr_drop_spec", "aldff", "m1wide", "strip_attr", "dontuse_oai221x4", "case_rename", "no_rcx", "dontuse_ant",
+                   "readmem_abs_spec"):
         for so in (D / "knob_ab" / recipe).glob("*/signoff.json"):
             for k, r in load_signoff(so).items():
                 if dual(r):
                     rep.setdefault(k, recipe)
     for root, label in (("sv_frontend_spec", "sv_frontend"),
+                        ("sv_frontend_spec2", "sv_frontend"),
                         ("sv_frontend_spec_ant", "sv_frontend+antenna")):
         for so in (D / root).glob("*/signoff.json"):
             for k, r in load_signoff(so).items():
@@ -90,23 +92,36 @@ def main() -> int:
                  if k in devk and k not in baseline and k not in stratum}
     pending = {k: v for k, v in r2g_extra.items() if k not in spec}
     r2g_extra = {k: v for k, v in r2g_extra.items() if k in spec}
-    # Repairs of designs that fail AT SYNTHESIS are set aside for now (user,
-    # 2026-10-21): the headline gap counts back-end flow and sign-off repairs
-    # only. The failure stage decides, not where the fix is applied -- the
-    # OAI221_X4 dont-use acts in synthesis but repairs a sign-off DRC violation.
-    SYNTH_STAGE = {"aldff", "strip_attr", "hdr_drop_spec", "sv_frontend", "sv_frontend+antenna"}
-    synth_side = {k: v for k, v in r2g_extra.items() if v in SYNTH_STAGE}
-    r2g_extra = {k: v for k, v in r2g_extra.items() if v not in SYNTH_STAGE}
+    # Repairs of designs that fail AT SYNTHESIS were set aside on 2026-10-21
+    # and count since 2026-10-22 (user): they are r2g contributions like any
+    # other, reported as their own line. The failure stage decides, not where
+    # the fix is applied -- the OAI221_X4 dont-use acts in synthesis but repairs
+    # a sign-off DRC violation, so it stays a back-end repair. A frontend-repaired
+    # design that then needed the antenna ladder is labelled as both.
+    SYNTH_STAGE = {"aldff", "strip_attr", "hdr_drop_spec", "sv_frontend", "sv_frontend+antenna",
+                   "readmem_abs_spec"}
+    synth_fail = set()
+    for f in (D / "rerun_nangate45_20261018/runs").glob("*/result.json"):
+        fc = json.loads(f.read_text()).get("failure_class") or ""
+        if fc in ("1_1_yosys_canonicalize_error", "1_2_yosys_error", "parse_error"):
+            synth_fail.add(short(f.parent.name))
+    for k, v in list(r2g_extra.items()):
+        if k in synth_fail and v.startswith("antenna@"):
+            r2g_extra[k] = "frontend+" + v
+    synth_side = {k: v for k, v in r2g_extra.items()
+                  if v in SYNTH_STAGE or v.startswith("frontend+")}
+    back_side = {k: v for k, v in r2g_extra.items() if k not in synth_side}
 
     print("dev %d 份" % len(devk))
     print("  冻结基线双清            %4d" % len(b_frozen))
     print("  + 器具修复救回（两臂同用） %4d   -> 基线 %d" % (len(b_app), len(baseline)))
     print("  + r2g 修复臂额外双清      %4d   -> r2g %d" % (len(r2g_extra), len(baseline) + len(r2g_extra)))
     from collections import Counter
-    for k, v in Counter(r2g_extra.values()).most_common():
-        print("        %-16s %3d" % (k, v))
+    for title, part in (("后端/签核修复", back_side), ("前端（综合失败）修复", synth_side)):
+        print("      %s %d" % (title, len(part)))
+        for k, v in Counter(part.values()).most_common():
+            print("        %-22s %3d" % (k, v))
     print("  差距（r2g - 基线）        %+4d" % len(r2g_extra))
-    print("  暂不计：综合阶段失败的修复成功 %d 份  %s" % (len(synth_side), dict(Counter(synth_side.values()))))
     print("  待按公式规格重跑的 r2g 成功 %3d   %s" % (len(pending), dict(Counter(pending.values()))))
     print("  单独一层：驱动缺陷救回（不进比较） %d 份，其中双清 %d"
           % (len(stratum), sum(1 for k in stratum if dual(rescued_other[k]))))
