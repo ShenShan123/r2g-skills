@@ -104,6 +104,12 @@ def check_one(ing: dict, d: Path, image: str) -> list[tuple[str, str, str]]:
     got = sha_prefix(p)
     if got is None:
         rows.append(("MISSING", str(p), sev_missing))
+    elif ing.get("symbol") and ("def %s(" % ing["symbol"]) not in p.read_text(errors="replace"):
+        # A code ingredient is declared as file + function. The path used to
+        # carry both ("orfs_spec.py write_config()"), which no file is named, so
+        # every run printed "!! 缺" above a closing "全部配料齐备" -- a control
+        # that reports missing and passes at once teaches the reader to skip it.
+        rows.append(("MISSING", "%s 里没有 %s()" % (path, ing["symbol"]), sev_missing))
     elif want and not got.startswith(want[:len(got)]):
         rows.append(("CHANGED", "%s: %s != 声明的 %s" % (path, got, want), "WARN"))
     else:

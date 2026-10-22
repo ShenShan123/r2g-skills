@@ -98,6 +98,7 @@ def lvs_bound(cells: int, timeout: int) -> int:
 DECK = None  # set in main()
 
 
+
 def check(kind: str, proj: Path, top: str, variant: str, timeout: int,
           cells: int = 0):
     """Run r2g's run_drc.sh / run_lvs.sh in the container."""
@@ -105,6 +106,35 @@ def check(kind: str, proj: Path, top: str, variant: str, timeout: int,
     if kind == "drc" and DECK is not None:
         _deck_mount = ["-v", f"{DECK}:/r2g_toolchain/OpenROAD-flow-scripts/"
                              f"flow/platforms/{PLAT}/drc/FreePDK45.lydrc:ro,Z"]
+    # R2G_LVS_KLAYOUT_DIR: run the LVS step (only) with another KLayout build,
+    # mounted read-only, its bin/klayout wrapper bound over /usr/bin/klayout.
+    # A PATH / KLAYOUT_CMD override is NOT enough: the skill's env.local.sh pins
+    # KLAYOUT_CMD=/usr/bin/klayout, and the first validation run silently used
+    # 0.30.7 that way. The version is read back from each LVS log (lvs_klayout). DRC keeps the image's
+    # own klayout, whose verdicts the frozen baseline already rests on. Used to
+    # test whether 0.30.10+ clears 0.30.7's comparer crash (sort_circuit
+    # SIGSEGV) and symmetric-matcher false mismatches -- a CHECKER change, so if
+    # adopted it must re-judge both arms, after equivalence on the designs
+    # 0.30.7 could judge.
+    _kl_mount, _kl_prefix = [], ""
+    _kl = os.environ.get("R2G_LVS_KLAYOUT_DIR", "")
+    if kind == "lvs" and _kl:
+        _kl_mount = ["-v", f"{_kl}:/opt/klnew:ro,Z",
+                     "-v", f"{_kl}/bin/klayout:/usr/bin/klayout:ro,Z"]
+        _kl_prefix = 'echo "R2G_LVS_KLAYOUT=$(/usr/bin/klayout -v)"; '
+    # R2G_LVS_DECK: an experimental LVS deck bound over the platform's (LVS only),
+    # with its knobs passed through. R2G_LVS_NOXREF=1 makes the noxref variant
+    # compare without a cross-reference and write its verdict to R2G_LVS_MARK
+    # (<projroot>/_marks/<run>), read back below as lvs_noxref.
+    _lvs_exp = []
+    if kind == "lvs" and os.environ.get("R2G_LVS_DECK"):
+        _lvs_exp = ["-v", f"{os.environ['R2G_LVS_DECK']}:/r2g_toolchain/"
+                          f"OpenROAD-flow-scripts/flow/platforms/{PLAT}/lvs/"
+                          f"FreePDK45.lylvs:ro,Z",
+                    "-e", f"R2G_LVS_MARK={proj.parent}/_marks/{variant}"]
+        for _k in ("R2G_LVS_NOXREF", "LVS_MAX_DEPTH", "LVS_MAX_BRANCH_COMPLEXITY"):
+            if os.environ.get(_k):
+                _lvs_exp += ["-e", f"{_k}={os.environ[_k]}"]
     inner = timeout if kind == "drc" else lvs_bound(cells, timeout)
     _bound = (["-e", f"DRC_TIMEOUT={os.environ.get('R2G_DRC_TIMEOUT', inner)}"]
               if kind == "drc" else
@@ -114,10 +144,11 @@ def check(kind: str, proj: Path, top: str, variant: str, timeout: int,
     return subprocess.run(
         ["podman", "run", "--rm", "-v", f"{R2G}:/r2g:ro,Z",
          "-v", f"{proj.parent}:{proj.parent}:Z", "-e", "NUM_CORES=4",
-         *_bound, *_deck_mount, IMAGE,
+         *_bound, *_deck_mount, *_kl_mount, *_lvs_exp, IMAGE,
          "bash", "-lc",
          # these scripts `find` under the ORFS logs dir and abort under `set -e`
          # when it is missing, so create the tree their restage writes into
+         f"{_kl_prefix}"
          f"mkdir -p $ORFS_ROOT/flow/logs/{PLAT}/{top}/{variant} "
          f"$ORFS_ROOT/flow/reports/{PLAT}/{top}/{variant} "
          f"$ORFS_ROOT/flow/objects/{PLAT}/{top}/{variant}; "
@@ -143,6 +174,9 @@ def one(run_dir: Path, projroot: Path, timeout: int) -> dict:
 
     t0 = time.time()
     proj = projroot / run_dir.name
+    if os.environ.get("R2G_LVS_DECK"):
+        (projroot / "_marks").mkdir(parents=True, exist_ok=True)
+        (projroot / "_marks" / run_dir.name).unlink(missing_ok=True)
     if not stage(run_dir, proj, top):
         out["drc_status"] = out["lvs_status"] = "no_gds"
         shutil.rmtree(proj, ignore_errors=True)
@@ -190,6 +224,12 @@ def one(run_dir: Path, projroot: Path, timeout: int) -> dict:
                   int(res.get("cells") or 0))
         log = (r.stdout or "") + (r.stderr or "")
         (run_dir / "lvs_signoff.log").write_text(log[-20000:])
+        _mk = projroot / "_marks" / run_dir.name
+        if _mk.is_file():
+            out["lvs_noxref"] = _mk.read_text().strip()
+        _m = re.search(r"R2G_LVS_KLAYOUT=(.+)", log)
+        if _m:
+            out["lvs_klayout"] = _m.group(1).strip()
         # Order matters: the refusal cases first, so a run r2g DECLINED to grade
         # never reads as a verdict about the layout.
         if "would rebuild physical stages" in log:
@@ -305,6 +345,13 @@ def main() -> None:
     print(f"{time.strftime('%H:%M:%S')} 生效配置: deck={DECK.name if DECK else 'STOCK'} "
           f"sha={_sha}  DRC内层={os.environ.get('R2G_DRC_TIMEOUT', args.timeout)}s  "
           f"LVS内层=max(按规模,{args.timeout})s  外层=内层+{OUTER_GRACE_S}s", flush=True)
+    if os.environ.get("R2G_LVS_KLAYOUT_DIR"):
+        _v = subprocess.run(["podman", "run", "--rm", "-v",
+                             f"{os.environ['R2G_LVS_KLAYOUT_DIR']}:/opt/klnew:ro,Z", IMAGE,
+                             "bash", "-lc", "/opt/klnew/bin/klayout -v"],
+                            capture_output=True, text=True).stdout.strip()
+        print(f"{time.strftime('%H:%M:%S')} LVS 用的 klayout: {_v}（DRC 仍用镜像自带）"
+              "", flush=True)
 
     if not (R2G / "scripts" / "flow" / "run_lvs.sh").is_file():
         sys.exit(f"r2g signoff-loop not found at {R2G}")

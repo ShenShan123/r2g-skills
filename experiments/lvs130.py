@@ -111,11 +111,23 @@ def one(run_dir: Path, projroot: Path, timeout: int, platform: str) -> dict:
                  "-v", f"{projroot}:{projroot}:Z",
                  "-v", f"{CONDA}:{CONDA}:ro,Z",
                  "-e", "NUM_CORES=4",
+                 # The INNER bounds, passed explicitly. run_netgen_lvs.sh bounds
+                 # magic extraction and netgen EACH by NETGEN_TIMEOUT, default
+                 # 3600, and the powered netlist by 900 -- so without these the
+                 # campaign's 6 h was only the outer bound and every LVS was
+                 # really capped at 1 h (the nangate45 2-hour-DRC mistake again,
+                 # 2026-10-21, failure-patterns #61 "bound shorter than runtime").
+                 "-e", f"NETGEN_TIMEOUT={timeout}",
+                 "-e", f"R2G_POWERED_NETLIST_TIMEOUT={timeout}",
                  "-e", f"MAGIC_EXE={CONDA}/bin/magic",
                  "-e", f"NETGEN_EXE={CONDA}/bin/netgen",
                  "-e", f"PDK_ROOT={CONDA}/share/pdk",
                  IMAGE, "bash", "-lc", inner],
-                capture_output=True, text=True, timeout=timeout)
+                # outer = the TOTAL budget: 6 h for the whole LVS, as nangate45's
+                # signoff45.py gives it (inner + 900). Not 2x per step -- reaper2.sh
+                # removes any container older than GRACE_MIN (390 min), so a longer
+                # outer bound would let the reaper, not this script, end the run.
+                capture_output=True, text=True, timeout=timeout + 900)
             log = (r.stdout or "") + (r.stderr or "")
         except subprocess.TimeoutExpired:
             _kill(tag)
@@ -131,6 +143,10 @@ def one(run_dir: Path, projroot: Path, timeout: int, platform: str) -> dict:
         v = verdict(log)
         if v:
             out["lvs_status"] = v
+        elif re.search(r"timed out after \d+s", log):
+            # an INNER bound fired: no verdict because the checker ran out of
+            # time, which is a timeout -- not a checker error
+            out["lvs_status"] = "timeout"
         elif (m := re.search(r"R2G_FAIL=(\S+)", log)):
             out["lvs_status"] = f"failed_{m.group(1)}"
         else:
@@ -140,6 +156,12 @@ def one(run_dir: Path, projroot: Path, timeout: int, platform: str) -> dict:
                 out["lvs_status"] = f"error_{j.get('reason', 'unknown')}"
             except Exception:                                    # noqa: BLE001
                 out["lvs_status"] = "no_verdict"
+            # The netgen step prints no marker when ITS bound fires (only magic
+            # extraction does), so judge by the clock as well: no verdict after
+            # the step bound has been spent is a timeout, not a checker error.
+            if ("timeout" in out["lvs_status"].lower()
+                    or time.time() - t0 >= timeout - 60):
+                out["lvs_status"] = "timeout"
         for art in ("lvs/netgen_lvs.rpt",):
             f = proj / art
             if f.is_file():
@@ -194,7 +216,12 @@ def main() -> None:
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
 
-    projroot = Path(args.projroot); projroot.mkdir(parents=True, exist_ok=True)
+    # podman rejects a relative bind-mount source; resolve here so a hand launch
+    # cannot turn into a batch of bogus failures (signoff45.py, 2026-10-21)
+    args.runs = str(Path(args.runs).resolve())
+    projroot = Path(args.projroot).resolve(); projroot.mkdir(parents=True, exist_ok=True)
+    print(f"{time.strftime('%H:%M:%S')} 生效配置: platform={args.platform}  "
+          f"NETGEN_TIMEOUT(每步)={args.timeout}s  外层(总)={args.timeout + 900}s", flush=True)
     todo = []
     for d in sorted(Path(args.runs).iterdir()):
         f = d / "result.json"

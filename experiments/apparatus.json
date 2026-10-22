@@ -92,7 +92,7 @@
       "path": "spec/spec_{nangate45,sky130hd,gf180}.json",
       "sha256": {
         "spec_nangate45.json": "ffe6dd0ee5b7f9c4",
-        "spec_sky130hd.json": "2f926db0dbc93d12",
+        "spec_sky130hd.json": "54147ad16e350f8a",
         "spec_gf180.json": "51a7ae7933de3938",
         "area_allowance.json": "769a24478b3df547",
         "platform_digests.json": "d9815fd0ca8e4b31"
@@ -105,7 +105,9 @@
         "2026-10-21: regenerated with the pin floor, core = max(area, pins/(4k), pdn). Moves nangate45 8 / sky130hd 10 / gf180 1 designs; none had read dual-clean. The nangate45 baseline ran on the previous tables (spec_pre_pinfloor_20261020_2109/), and exactly one dev design moves under the new ones -- C02939__multi_kernel_relu, which had failed with PPL-0024 -- so it alone is re-run. sky130hd and gf180 run on the new tables from the start.",
         "2026-10-21 13:25: pin counts also taken from PPL-0024 logs (the pilot's, then the frozen re-run's) for designs that never wrote a DEF -- the very designs the floor is for. Moves nangate45 +47 / sky130hd +29 / gf180 +3; in nangate45 dev 24 more, none previously passing. All 25 dev PPL-0024 failures are now pin_floored and are re-run.",
         "2026-10-21 15:12: nangate45 only. (1) Per-design die correction from each design's own PPL-0024 refusal in the pin-floor re-run (positions/perimeter measured 1.666-1.783 over 68 logs vs the derived 1.80): exactly the 6 designs still 0.2-0.6% short move, no other field of any existing entry changes. (2) 13 NEW entries sized from the repair arm's own synthesis (size_source=repair_arm_synth_stat) for designs the baseline cannot synthesise at all, so a repair-arm win is judged under the same period/die formula as its peers.",
-        "2026-10-21 18:50: hierarchical synth_stat reports were sized from their FIRST section (a submodule). Now the top's own section. nangate45 dev: exactly the 2 jsilicon designs change (area x1.47, x1.87; die 50->60, 50->67; period 1.0->1.6) -- both had failed placement at 111% utilization. Two held-out entries change too (one from a 36 um die to 174 um)."
+        "2026-10-21 18:50: hierarchical synth_stat reports were sized from their FIRST section (a submodule). Now the top's own section. nangate45 dev: exactly the 2 jsilicon designs change (area x1.47, x1.87; die 50->60, 50->67; period 1.0->1.6) -- both had failed placement at 111% utilization. Two held-out entries change too (one from a 36 um die to 174 um).",
+        "2026-10-22: sky130hd regenerated BEFORE its baseline with the hierarchical fix (size from the top module's synth_stat section) and --extra-pin-log-root rerun_nangate45_20261018/runs (the source of its 10 rerun_ppl_log pin counts -- omitting it zeroed them and un-floored C01139). Exactly 4 entries move, all top-module resizes: C00114/C00195 jsilicon, C01922 tang-nano rng, C02133 zirh (period 1.8 -> 16.0). Old table kept as spec_sky130hd.pre_topsize_20261022.json.",
+        "2026-10-22 (later): sky130hd IO_POS_PER_UM 1.087 -> 0.90, MEASURED from 28 PPL-0024 messages (positions / core perimeter 0.912-0.923); the derived value let the smoke run's pin-floored C01139 fail PPL-0024 again. Also reads the smoke run's PPL logs (--extra-pin-log-root rerun_sky130hd_smoke130_1022/runs). Exactly 49 entries move and every one is a pin-floored die (39 already floored grow, 10 newly floored); 0 other entries change. Previous table kept as spec_sky130hd.pre_k090_20261022.json."
       ]
     },
     {
@@ -119,7 +121,7 @@
       "why": "Six hours per design for the flow and for sign-off. The pilot used 7200 for sign-off, so a verdict earned only by the longer bound is ours and not like-for-like with the pilot -- which is why it is declared here rather than left implicit.",
       "equivalence": "Applied to both arms. A design that still times out is NOT clean; no verdict is not a pass.",
       "fail_if_missing": "A shorter bound silently costs verdicts: 88 nangate45 designs lost one to the 7200 default.",
-      "enforced_by": "signoff45.py passes DRC_TIMEOUT=--timeout and LVS_TIMEOUT=max(run_lvs.sh size table, --timeout) into the container, with the outer subprocess bound 900s above, and classifies the checker's own 'timed out after' as timeout. Before 2026-10-21 --timeout was the outer bound only and the inner DRC bound stayed at run_drc.sh's 7200 default."
+      "enforced_by": "signoff45.py passes DRC_TIMEOUT=--timeout and LVS_TIMEOUT=max(run_lvs.sh size table, --timeout) into the container, with the outer subprocess bound 900s above, and classifies the checker's own 'timed out after' as timeout. Before 2026-10-21 --timeout was the outer bound only and the inner DRC bound stayed at run_drc.sh's 7200 default. sky130hd/gf180: signoff_pass.py passes DRC_TIMEOUT=--timeout (outer +900); lvs130.py passes NETGEN_TIMEOUT and R2G_POWERED_NETLIST_TIMEOUT=--timeout with the outer bound --timeout+900 as the TOTAL (below reaper2.sh's 390-min age rule), and files an inner bound or a spent budget as timeout. Before 2026-10-22 lvs130.py passed no inner bound, so run_netgen_lvs.sh capped magic and netgen at its 3600 default."
     },
     {
       "id": "antenna-ratio-repair",
@@ -142,10 +144,11 @@
       "id": "driver-file-list-hygiene",
       "layer": "apparatus",
       "platform": "all",
-      "path": "experiments/orfs_spec.py write_config()",
+      "path": "orfs_spec.py",
       "why": "Three defects of this driver's config generation, not of any RTL: (1) make splits paths on whitespace and has no quoting, so a source dir with a space became two nonexistent files (34 nangate45 dev designs never reached yosys); (2) a file both listed and `include`d by another listed file was read twice -> 'Re-definition of module' (15); (3) $readmem memory images (.hex/.mem/.init/.list...) listed as sources were parsed as HDL -> 'unexpected TOK_CONSTVAL' (9). Fixed by symlinking make-hostile paths through the work dir, dropping a listed file that another listed file includes ONLY when it defines a module and has no include guard, and dropping memory-image suffixes (a blacklist: a whitelist dropped a HardFloat `.vi` include from a passing design).",
       "equivalence": "Regression gate over all 1249 dev designs: 58 configs change (34+15+9), all of them designs that failed; 0 passing designs change; 1191 byte-identical.",
-      "fail_if_missing": "The 58 designs fail before synthesis, in both arms."
+      "fail_if_missing": "The 58 designs fail before synthesis, in both arms.",
+      "symbol": "write_config"
     }
   ]
 }

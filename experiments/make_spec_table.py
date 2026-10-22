@@ -74,7 +74,17 @@ PDN_FLOOR_UM = {"nangate45": 32.0, "gf180": 110.0, "sky130hd": 32.0}
 # Both observed PPL-0024 failures confirm it -- nangate45 reported 1642
 # positions on a 228 um core (k=1.80 -> pitch 0.278, LEF says 0.28) and gf180
 # 4924 on 1377 (k=0.894 -> pitch 0.56, LEF says 0.56).
-IO_POS_PER_UM = {"nangate45": 1.80, "gf180": 0.894, "sky130hd": 1.0 / (2 * 0.46)}
+#
+# sky130hd is MEASURED, not derived (2026-10-22). Its 1/(2*0.46)=1.087 came from
+# the met2 pitch and was never checked against a sky130hd failure -- the two
+# confirmations above are nangate45 and gf180. On sky130hd the frozen-spec smoke
+# run's C01139 still hit PPL-0024 on its pin-floored die (976 positions on a
+# 267 um core), and all 28 PPL-0024 messages in the pilot + smoke logs give
+# positions / core perimeter = 0.912-0.923 (0.913 on every design above 1000
+# pins), i.e. 16% fewer positions than the derivation, so every pin-floored die
+# came out too small. 0.90 = the measured minimum with the same ~1% margin as
+# nangate45's per-design correction (need_side * 1.01).
+IO_POS_PER_UM = {"nangate45": 1.80, "gf180": 0.894, "sky130hd": 0.90}
 CORE_INSET_UM = 2.0
 PILOT_ROOT = {"nangate45": "n45_full", "gf180": "gf180_full",
               "sky130hd": "full_out"}

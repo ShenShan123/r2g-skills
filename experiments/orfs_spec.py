@@ -561,8 +561,17 @@ def harvest(work: Path, dest: Path) -> None:
                     # 5_route.odb and 6_final.odb are ~90 MB each here, so the
                     # whole corpus costs about 500 GB of a 35 TB volume.
                     "5_route.odb", "6_final.odb",
+                    # The post-PLACEMENT database, kept from 2026-10-22: the
+                    # downstream dataset needs placement-stage DEF, route-stage
+                    # DEF and the reports (GCell congestion is re-derived by a
+                    # global route FROM the placement), and the pilot, which did
+                    # not keep it, can only supply it by re-running to place.
+                    # Kept as ODB and converted on demand, for the reason given
+                    # below. It does not change what is built or judged.
+                    "3_place.odb",
                     # NOT kept, on purpose (2026-10-17): the per-stage ODBs
-                    # 2_floorplan / 3_place / 4_cts and 1_2_yosys.v. They would
+                    # 2_floorplan / 4_cts and 1_2_yosys.v (3_place since 2026-10-22,
+                    # see above). They would
                     # only serve def-graph's four-stage dataset and
                     # rtl-acquire's netlist_graph.pt, and the graph experiments
                     # run on their OWN corpus -- this corpus never feeds them.

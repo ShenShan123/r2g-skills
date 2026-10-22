@@ -25,7 +25,7 @@
 set -uo pipefail
 D=/proj/workarea/yangao
 LOG=$D/rerun_baseline.log
-STAMP=$(date '+%Y%m%d')
+STAMP=${STAMP:-$(date '+%Y%m%d')}     # override for a smoke run, so it cannot share the real run's dir
 WORKERS=${WORKERS:-12}
 UTIL=${UTIL:-50}
 # PER-DESIGN, not per-stage: orfs_spec.py runs one container per design over

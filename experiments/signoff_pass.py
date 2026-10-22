@@ -288,7 +288,10 @@ def main() -> None:
 
     if not (R2G / "scripts" / "flow" / "run_drc.sh").is_file():
         sys.exit(f"r2g signoff-loop not found at {R2G}")
-    projroot = Path(args.projroot); projroot.mkdir(parents=True, exist_ok=True)
+    args.runs = str(Path(args.runs).resolve())
+    projroot = Path(args.projroot).resolve(); projroot.mkdir(parents=True, exist_ok=True)
+    print(f"{time.strftime('%H:%M:%S')} 生效配置: platform={args.platform}  "
+          f"DRC_TIMEOUT(内层)={args.timeout}s  外层={args.timeout + 900}s", flush=True)
 
     todo = []
     for d in sorted(Path(args.runs).iterdir()):
