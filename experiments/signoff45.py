@@ -291,6 +291,12 @@ def main() -> None:
                          "lives here rather than in whoever remembers to pass it.")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
+    # podman rejects a relative bind-mount source ("invalid container path ...,
+    # must be an absolute path"), and that failure surfaced as drc_failed /
+    # lvs_failed on every design of a batch -- a launch mistake recorded as a
+    # verdict. Resolve both paths here so a relative argument cannot do that.
+    args.projroot = str(Path(args.projroot).resolve())
+    args.runs = str(Path(args.runs).resolve())
     global DECK
     DECK = resolve_deck()
     import hashlib
