@@ -284,14 +284,28 @@ def pin_required_core(platform: str, npins: int) -> float:
     return 0.0 if not k or npins <= 0 else npins / (k * 4.0)
 
 
+# Area of the buffer global_place.tcl's buffer_ports puts on EVERY IO port, from
+# the platform LEF. The allowance is a single multiplier on cell area, but port
+# buffers scale with the PIN count, so a small design with many pins outgrows
+# it: on the sky130hd frozen baseline C00148 writeback_mux (1010 um2, 133 pins)
+# received 131 sky130_fd_sc_hd__clkdlybuf4s50_1 (3.68 x 2.72 um) = 1311 um2 of
+# buffers and failed GPL-0301 at 104% utilization, C00220 at 113%. The term is a
+# max() with the allowance, so it only moves dies where the buffers exceed it.
+# nangate45 is absent on purpose: its baseline ran without it and no nangate45
+# design failed GPL-0301; gf180 must be measured before its baseline.
+PORT_BUFFER_UM2 = {"sky130hd": 10.0096}
+
+
 def die_for(platform: str, cell_area_um2: float,
             npins: int = 0) -> tuple[float, float, bool]:
     """(die_side, core_side, pin_floored) in um.
 
-    core = max(area_derived, pin_required, pdn_floor). The pin term is applied
+    core = max(area_derived, pin_required, pdn_floor), area_derived from
+    max(area * allowance, area + pins * port_buffer). The pin terms are applied
     only where a pin count is known; see pin_counts() for why that is sound.
     """
-    eff = cell_area_um2 * area_allowance(platform)
+    eff = max(cell_area_um2 * area_allowance(platform),
+              cell_area_um2 + npins * PORT_BUFFER_UM2.get(platform, 0.0))
     derived = math.sqrt(eff / UTILIZATION) if eff > 0 else 0.0
     need = pin_required_core(platform, npins)
     core = max(derived, need, PDN_FLOOR_UM[platform])
