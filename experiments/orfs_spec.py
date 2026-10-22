@@ -506,8 +506,12 @@ def read_metrics(work: Path, res: Result) -> None:
         break
     for stat in (work / "reports").rglob("synth_stat.txt"):
         stat_text = stat.read_text(errors="replace")
-        m = re.search(r"^\s*(\d+)\s+(\S+)\s+\d+\s+\S+\s+cells\s*$",
-                      stat_text, re.M)
+        # A hierarchical report has one section per module and the first is a
+        # SUBMODULE; start the search at the top's own section (its line counts
+        # the whole hierarchy). Flat reports have one section either way.
+        _top_at = stat_text.find("=== %s ===" % stat.parts[-3])
+        m = re.compile(r"^\s*(\d+)\s+(\S+)\s+\d+\s+\S+\s+cells\s*$",
+                       re.M).search(stat_text, max(_top_at, 0))
         if m:
             try:
                 res.area_um2 = float(m.group(2))

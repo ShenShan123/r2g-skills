@@ -214,6 +214,27 @@ def load_ppl_corrections(roots: list[str]) -> None:
                     float(m.group(3)), int(m.group(1)), int(m.group(2)))
 
 
+def top_section_size(run_dir: Path):
+    """(cells, area) from the top module's section of a hierarchical
+    synth_stat.txt, or None for a flat report (one section, already right)."""
+    for st in run_dir.glob("reports/*/*/*/synth_stat.txt"):
+        t = st.read_text(errors="replace")
+        if t.count("=== ") < 2:
+            return None
+        top = st.parts[-3]
+        i = t.find("=== %s ===" % top)
+        if i < 0:
+            return None
+        m = re.compile(r"^\s*(\d+)\s+(\S+)\s+\d+\s+\S+\s+cells\s*$", re.M).search(t, i)
+        if not m:
+            return None
+        try:
+            return int(m.group(1)), float(m.group(2))
+        except ValueError:
+            return None
+    return None
+
+
 def load_baseline_sizes(roots: list[str], into: dict | None = None) -> None:
     """Read synth_stat.txt exactly as orfs_spec.py's harvest does, so the
     fallback is the same quantity as the pilot's, not an approximation. The
@@ -281,6 +302,17 @@ def build(platform: str, pilot_dir: Path) -> tuple[dict, dict]:
             continue
         cells, area = d.get("cells"), d.get("area_um2")
         size_src = "pilot_synth_stat"
+        # orfs_spec.py's harvest took the FIRST `<n> <area> ... cells` line of
+        # synth_stat.txt. A hierarchical report lists one section per module
+        # and the first is a SUBMODULE, so the die of such a design was sized
+        # from part of it: the two nangate45 dev designs with hierarchical
+        # reports (jsilicon tt_um_Jsilicon, FSM) got 1/1.87 and 1/1.47 of their
+        # area and failed placement at 111% utilization. Read the top's own
+        # section instead -- its line counts everything below it.
+        top_size = top_section_size(Path(f).parent)
+        if top_size and (not area or abs(top_size[1] - float(area)) > 1e-6):
+            cells, area = top_size
+            size_src = "pilot_synth_stat_top"
         # A design the pilot never synthesised has no pilot size. Before
         # 2026-10-21 that meant no spec at all and the platform default period
         # (2.0 ns on nangate45, unfrozen die) -- harmless while every such

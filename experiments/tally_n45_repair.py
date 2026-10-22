@@ -51,6 +51,7 @@ def main() -> int:
     # rather than re-run under a formula spec at no benefit to the gap.
     app = load_signoff(D / "ppl_fix_n45" / "signoff.json")
     app.update(load_signoff(D / "ppl_fix2_n45" / "signoff.json"))   # per-design PPL correction
+    app.update(load_signoff(D / "hier_fix_n45" / "signoff.json"))   # hierarchical synth_stat sizing
     rescued_other = {}
     for b in ("apparatus_fix_n45", "datafile_fix_n45"):
         rescued_other.update(load_signoff(D / b / "signoff.json"))
