@@ -95,7 +95,7 @@ def main() -> int:
     # re-runs (hdr_drop_spec, sv_frontend_spec); the earlier platform-default
     # runs of the same recipes are superseded and deliberately not read.
     for recipe in ("skip_incr", "hdr_drop_spec", "aldff", "m1wide", "strip_attr", "dontuse_oai221x4", "case_rename", "no_rcx", "dontuse_ant",
-                   "readmem_abs_spec"):
+                   "readmem_abs_spec", "datafile_fetch_spec"):
         for so in (D / "knob_ab" / recipe).glob("*/signoff.json"):
             for k, r in load_signoff(so).items():
                 if dual(r):
@@ -128,7 +128,7 @@ def main() -> int:
     # a sign-off DRC violation, so it stays a back-end repair. A frontend-repaired
     # design that then needed the antenna ladder is labelled as both.
     SYNTH_STAGE = {"aldff", "strip_attr", "hdr_drop_spec", "sv_frontend", "sv_frontend+antenna",
-                   "readmem_abs_spec"}
+                   "readmem_abs_spec", "datafile_fetch_spec"}
     synth_fail = set()
     for f in (D / "rerun_nangate45_20261018/runs").glob("*/result.json"):
         fc = json.loads(f.read_text()).get("failure_class") or ""

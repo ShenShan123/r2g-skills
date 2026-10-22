@@ -24,8 +24,9 @@ IMAGE=localhost/r2g-orfs:26Q3
 CORES=${CORES:-4}
 rm -rf "$W"; mkdir -p "$W/work" "$W/runs/$RUN"
 cp "$SRC/config.mk" "$SRC/constraint.sdc" "$W/work/"
-# EXTRA_FILES="<host path> ...": copied into the work dir (seen as /work/<name>)
-for f in ${EXTRA_FILES:-}; do cp "$f" "$W/work/"; done
+# EXTRA_FILES="<host path> ...": copied into the work dir (seen as /work/<name>);
+# a directory is copied whole (frontend/fetch_datafiles.py's /work/_fe overlay)
+for f in ${EXTRA_FILES:-}; do cp -r "$f" "$W/work/"; done
 # SPEC_TABLE=<spec json>: apply this design's frozen period and die exactly as
 # orfs_spec.py does for a design WITH an entry -- `set _per` in the SDC (the
 # uncertainty and I/O delays derive from it), DIE_AREA/CORE_AREA in config.mk,
