@@ -31,18 +31,40 @@ def dual(r: dict) -> bool:
     return r.get("drc_status") == "clean" and r.get("lvs_status") == "clean"
 
 
-def load_signoff(p: Path) -> dict:
+# LVS fallback (lvs45/lvs45_fallback.sh, 2026-10-22): where KLayout's comparer
+# gave NO verdict (lvs_failed), the Netgen comparison of the same KLayout-
+# extracted netlists supplies one. Applied by run directory, to every arm alike,
+# and never to a row KLayout did judge. --no-lvs-fallback shows the tally
+# without it.
+FALLBACK = {}
+if "--no-lvs-fallback" not in sys.argv and (D / "lvs_netgen/fallback_verdicts.json").is_file():
+    FALLBACK = json.loads((D / "lvs_netgen/fallback_verdicts.json").read_text())
+FALLBACK_USED = []
+
+
+def load_signoff(p: Path, runs: Path | None = None) -> dict:
     if not p.is_file():
         return {}
     rows = json.loads(p.read_text())
     rows = rows if isinstance(rows, list) else rows.get("designs", [])
     import re
-    return {short(re.sub(r"^\d+__", "", r.get("design", ""))): r for r in rows}
+    import os
+    runs = runs or p.parent / "runs"
+    out = {}
+    for r in rows:
+        if r.get("lvs_status") == "lvs_failed":
+            fb = FALLBACK.get(os.path.realpath(runs / r.get("design", "")))
+            if fb and fb["verdict"] in ("match", "mismatch"):
+                r = dict(r, lvs_status="clean" if fb["verdict"] == "match" else "mismatch",
+                         lvs_by="netgen_fallback")
+                FALLBACK_USED.append((str(p.relative_to(D)), r["design"], fb["verdict"]))
+        out[short(re.sub(r"^\d+__", "", r.get("design", "")))] = r
+    return out
 
 
 def main() -> int:
     base = load_signoff(D / "rerun_nangate45_20261018/signoff.json")
-    timeout = load_signoff(D / "timeout_rerun.json")       # apparatus: 6h bound
+    timeout = load_signoff(D / "timeout_rerun.json", D / "_timeout_rerun_sel")  # apparatus: 6h bound
     # Apparatus rescues that enter BOTH arms. Only fixes that run under the
     # frozen formula spec count here (the pin floor batch has spec entries).
     # Designs rescued from driver defects ran at the platform default period
@@ -62,6 +84,13 @@ def main() -> int:
         v = json.loads(f.read_text())
         if v.get("cleared_at"):
             rep[short(v["design"])] = "antenna@" + v["cleared_at"]
+    # A rung whose DRC came back clean but whose LVS had no KLayout verdict did
+    # not clear the ladder at the time; with the fallback verdict it may.
+    for rung in ("r1", "r2", "r3"):
+        for so in sorted((D / "r2g_repair_n45" / rung).glob("*/signoff.json")):
+            for k, r in load_signoff(so).items():
+                if dual(r):
+                    rep.setdefault(k, "antenna@" + rung)
     # Designs the baseline cannot synthesise count ONLY from their formula-spec
     # re-runs (hdr_drop_spec, sv_frontend_spec); the earlier platform-default
     # runs of the same recipes are superseded and deliberately not read.
@@ -123,6 +152,10 @@ def main() -> int:
             print("        %-22s %3d" % (k, v))
     print("  差距（r2g - 基线）        %+4d" % len(r2g_extra))
     print("  待按公式规格重跑的 r2g 成功 %3d   %s" % (len(pending), dict(Counter(pending.values()))))
+    if FALLBACK_USED:
+        from collections import Counter as _C
+        print("  LVS 后备判决（KLayout 无判决处由 Netgen 比对，两臂同规则）: %d 处  %s"
+              % (len(FALLBACK_USED), dict(_C(v for _, _, v in FALLBACK_USED))))
     print("  单独一层：驱动缺陷救回（不进比较） %d 份，其中双清 %d"
           % (len(stratum), sum(1 for k in stratum if dual(rescued_other[k]))))
     if "-v" in sys.argv:
