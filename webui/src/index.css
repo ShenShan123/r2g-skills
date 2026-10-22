@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens. Dark is the default; light is a full redefinition, not a filter. */
+:root, :root[data-theme="dark"] {
+  --bg: 11 15 23;  --panel: 17 23 34;  --panel2: 24 32 46;  --line: 38 49 68;
+  --fg: 230 236 245;  --muted: 148 163 184;  --faint: 92 106 128;
+  --accent: 34 211 238;  --accent2: 167 139 250;
+  --ok: 52 211 153;  --bad: 251 113 133;  --warn: 251 191 36;  --run: 96 165 250;
+  --on-accent: 6 18 28;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: 246 248 251;  --panel: 255 255 255;  --panel2: 241 245 249;  --line: 222 228 237;
+  --fg: 15 23 42;  --muted: 71 85 105;  --faint: 148 163 184;
+  --accent: 8 145 178;  --accent2: 124 58 237;
+  --ok: 5 150 105;  --bad: 225 29 72;  --warn: 202 138 4;  --run: 37 99 235;
+  --on-accent: 255 255 255;
+  color-scheme: light;
+}
+html, body, #root { height: 100%; }
+body { @apply bg-bg text-fg font-sans antialiased; }
+::selection { background: rgb(var(--accent) / 0.3); }
+* { scrollbar-width: thin; scrollbar-color: rgb(var(--line)) transparent; }
+
+@layer components {
+  .card { @apply bg-panel border border-line rounded-2xl shadow-card; }
+  .btn { @apply inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition
+         disabled:opacity-50 disabled:cursor-not-allowed; }
+  .btn-primary { @apply btn bg-accent text-onaccent hover:brightness-110; }
+  .btn-ghost { @apply btn border border-line text-fg hover:bg-panel2; }
+  .input { @apply w-full rounded-xl border border-line bg-panel2 px-3 py-2 text-sm outline-none
+           focus:border-accent focus:ring-2 focus:ring-accent/20 placeholder:text-faint; }
+  .label { @apply text-xs font-medium uppercase tracking-wider text-muted; }
+  .chip { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium; }
+}
+.prose-r2g p { margin: 0.4em 0; line-height: 1.7; }
+.prose-r2g ul, .prose-r2g ol { margin: 0.4em 0 0.4em 1.3em; }
+.prose-r2g ul { list-style: disc; } .prose-r2g ol { list-style: decimal; }
+.prose-r2g code { @apply font-mono text-[0.85em] rounded bg-panel2 px-1 py-0.5; }
+.prose-r2g pre { @apply font-mono text-xs rounded-xl bg-panel2 p-3 overflow-x-auto my-2; }
+.prose-r2g table { @apply my-2 text-sm border-collapse; }
+.prose-r2g th, .prose-r2g td { @apply border border-line px-2.5 py-1 text-left; }
+.prose-r2g th { @apply bg-panel2; }
+.prose-r2g strong { @apply text-fg font-semibold; }
+.prose-r2g a { @apply text-accent underline; }
