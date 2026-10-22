@@ -30,6 +30,10 @@ def terminal_status(final):
     """A failed restoration/unknown check is never an ordinary repair failure."""
     acceptance=final.get('acceptance') or {}
     checks=acceptance.get('checks') or {}
+    # A producer/provenance failure cannot be repaired with design knobs and
+    # is not evidence that the repair method failed. Preserve it as technical.
+    if checks.get('A11_provenance')=='fail' or final.get('verification_stop') in (75,76,-9,124,137):
+        return 'UNVERIFIED_OR_SAFETY_STOP'
     if (final.get('execution_recovery') not in (None,'VERIFIED')
             or (final.get('envelope') or {}).get('status')=='UNVERIFIED'
             or acceptance.get('unknown') or set(checks)!=set(ACCEPTANCE_CHECKS)

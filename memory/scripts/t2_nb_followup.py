@@ -88,6 +88,7 @@ def raw_units(nb,registry):
                 'status','reason','applied','flow_launched','flow_rc','rolled_back','comparison','usage')}
                 for r in e.get('repair_turns',[])]}
         initial_manifest=p/'manifest.json';inputs[str(initial_manifest)]=sha(initial_manifest)
+        platform=load(initial_manifest)['platform']
         inputs[str(p/'episode.json')]=sha(p/'episode.json')
         led=p/'reports/resource_ledger.jsonl';inputs[str(led)]=sha(led)
         entries=[]
@@ -103,11 +104,11 @@ def raw_units(nb,registry):
             'fix_session_id':session,'iter':0,'ts':str(e['started'])},None,'summary'))
         for i,(raw,ref,kind) in enumerate(entries):
             u={'unit_id':'nb8:'+hid+':'+kind+':'+hashlib.sha256(json.dumps(raw,sort_keys=True).encode()).hexdigest()[:20],
-                'identity':{'design':hid,'platform':'sky130hd','ts':str(raw.get('ts',e['started']))},
+                'identity':{'design':hid,'platform':platform,'ts':str(raw.get('ts',e['started']))},
                 'raw_row':raw,'action':{'strategy':raw.get('strategy'),'from_stage':raw.get('from_stage')},
                 'provenance':{'sources':[ref] if ref else []},'source_handoff_id':hid,
                 'episode_trace_id':session,'episode_status':e['status'],
-                'lineage':{'design':hid,'platform':'sky130hd','project':p.name,'session':session}}
+                'lineage':{'design':hid,'platform':platform,'project':p.name,'session':session}}
             if kind=='summary':u['episode_context']=trace
             units.append(u)
     if len({u['unit_id'] for u in units})!=len(units):raise ValueError('duplicate raw unit identity')

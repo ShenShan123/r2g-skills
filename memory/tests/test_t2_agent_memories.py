@@ -75,7 +75,9 @@ def test_native_retrieval_preserves_method_specific_selection(tmp_path,monkeypat
 
 
 def test_all_eight_arms_and_eight_disjoint_slots_without_lc_overlap():
-    assert set(F.ARMS)==set(D.ARMS)-{'NB'} and len(F.ARMS)==8
+    # Legacy eight-design packages keep ReMe; only the new main controller
+    # registers its replacement AdaMEM. Supporting a port does not launch it.
+    assert set(F.ARMS)==set(D.ARMS)-{'NB','ADAMEM'} and len(F.ARMS)==8
     cpus=[c for slot in F.SLOTS for c in slot]
     assert len(cpus)==128==len(set(cpus))
     assert not set(cpus)&(set(range(74,82))|set(range(170,178)))

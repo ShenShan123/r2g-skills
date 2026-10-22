@@ -76,6 +76,27 @@ def filter_history(units,target,registry):
     return keep,drop
 
 
+def completed_geometry_proof(run,data):
+    """Prove 2_1 completed even if a later floorplan substage (e.g. PDN) failed.
+
+    This authorises an INITIAL AREA REFERENCE only, never flow/signoff success.
+    No guessed dimensions, repaired run or changed area cap is used.
+    """
+    run=Path(run)
+    paths=[run/'logs/2_1_floorplan.log',run/'results/2_1_floorplan.odb',
+           run/'results/2_1_floorplan.sdc']
+    if any(not p.is_file() or p.stat().st_size==0 for p in paths):
+        raise ValueError('initial reference: floorplan substage artifacts missing')
+    log=paths[0].read_text()
+    if (data.get('floorplan__flow__errors__count')!=0 or '[ERROR ' in log
+            or re.search(r'^Error:',log,re.M) or not re.search(r'^Elapsed time:.*CPU time:',log,re.M)
+            or not re.search(r'^write_db .*[/ ]2_1_floorplan\.odb\s*$',log,re.M)
+            or not re.search(r'^write_sdc .*[/ ]2_1_floorplan\.sdc\s*$',log,re.M)):
+        raise ValueError('initial reference: floorplan substage completion unproven')
+    return {'stage':'2_1_floorplan','whole_floorplan_passed':False,
+            'files':{str(p):sha(p) for p in paths}}
+
+
 def resolve_area_reference(manifest):
     """Derive the predeclared area reference from NB's first flow, before any repair.
 
@@ -96,14 +117,22 @@ def resolve_area_reference(manifest):
             or b.get('manifest_sha256')!=sha(p/'manifest.json')):
         raise ValueError('initial reference: input binding invalid')
     stages=[json.loads(s) for s in (r/'stage_log.jsonl').read_text().splitlines() if s.strip()]
+    data=load(report)
+    partial=None
     if not any(s.get('stage')=='floorplan' and s.get('status')==0 for s in stages):
-        raise ValueError('initial reference: floorplan not successfully measured')
-    data=load(report);areas={k:data.get(v) for k,v in FLOOR_KEYS.items()}
+        # The first geometry substage precedes PDN and is the specified reference.
+        # Require a measured native floorplan failure, not a killed/unknown run.
+        if (not stages or stages[-1].get('stage')!='floorplan' or stages[-1].get('status')!=2
+                or any(s.get('status')!=0 for s in stages[:-1])):
+            raise ValueError('initial reference: floorplan not successfully measured')
+        partial=completed_geometry_proof(r,data)
+    areas={k:data.get(v) for k,v in FLOOR_KEYS.items()}
     if any(isinstance(v,bool) or not isinstance(v,(int,float)) or not math.isfinite(v) or v<=0 for v in areas.values()):
         raise ValueError('initial reference: area metrics missing/invalid')
     receipt={'policy':REFERENCE_POLICY,'run':str(r),'manifest_sha256':sha(p/'manifest.json'),
              'initial_config_sha256':manifest['initial_config_sha256'],'areas':areas,
              'report':str(report),'report_sha256':sha(report),'execution_binding_sha256':sha(binding)}
+    if partial:receipt['partial_floorplan_proof']=partial
     target=p/'reports/initial-area-reference.json'
     if target.exists():
         if load(target)!=receipt:

@@ -136,3 +136,22 @@ def test_clean_lvs_still_reports_and_preserves_log(tmp_path):
     assert "Netlists match" in (proj / "lvs" / "lvs_run.log").read_text()
     # Provenance sidecar still written (RMD-P0-02).
     assert (proj / "lvs" / "lvs_provenance.json").is_file()
+
+
+def test_lvs_never_restreams_gds_when_make_prerequisite_forces_it(tmp_path):
+    makefile='''RESULTS_DIR := $(WORK_HOME)/results/nangate45/demo/$(FLOW_VARIANT)
+.PHONY: force lvs
+force:
+$(RESULTS_DIR)/6_final.gds: force
+\t@echo regenerated-foreign-layout > $@
+lvs: $(RESULTS_DIR)/6_final.gds
+\t@echo "Netlists match"
+'''
+    skill,orfs,proj=_setup(tmp_path,makefile)
+    r=_run_lvs(tmp_path,skill,orfs,proj,extra_env={'LVS_TIMEOUT':'60'})
+    assert r.returncode==0, r.stdout+'\n'+r.stderr
+    gds=proj/'.orfs-work/results/nangate45/demo/proj/6_final.gds'
+    # Legacy test runs use FLOW_DIR instead of a project-local WORK_HOME.
+    if not gds.exists():gds=orfs/'flow/results/nangate45/demo/proj/6_final.gds'
+    assert gds.read_text()=='content-of-6_final.gds'
+    assert 'layout_changed_under_signoff' not in (proj/'lvs/lvs_result.json').read_text() if (proj/'lvs/lvs_result.json').exists() else True

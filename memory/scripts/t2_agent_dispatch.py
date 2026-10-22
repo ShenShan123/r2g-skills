@@ -15,7 +15,7 @@ import time
 from typing import Any, Callable
 
 VERSION = 'agent-selected-total-online-three-v2'
-ARMS = ('NB', 'RET', 'RECIPE', 'EXPEL', 'AWM', 'AMEM', 'TM0', 'REME', 'REASONINGBANK')
+ARMS = ('NB', 'RET', 'RECIPE', 'EXPEL', 'AWM', 'AMEM', 'TM0', 'REME', 'REASONINGBANK', 'ADAMEM')
 PURPOSES = {'planning', 'repair', 'memory_adaptation', 'query', 'rerank', 'judge'}
 
 

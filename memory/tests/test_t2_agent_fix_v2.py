@@ -100,7 +100,11 @@ def test_every_arm_can_select_single_public_tool_through_same_executor(tmp_path,
         assert component=='catalogue';native_apply()
         return {'status':'RETAINED','rolled_back':False,'verdict':{'accepted':True}}
     monkeypatch.setattr(R,'execute_candidate',execute)
-    memory=None if arm=='NB' else SimpleNamespace(agent_context=lambda *a:'bounded experience')
+    memory=None if arm=='NB' else SimpleNamespace(agent_context=lambda *a:'bounded experience',
+        # Isolate the shared executor: this policy deliberately chooses the
+        # direct-action path. Native AdaMEM synthesis is exercised separately.
+        decide=lambda messages,gateway,prefix:gateway.call(messages,prefix,
+            purpose='planning',candidate_generating=True))
     result=R.run(h,tmp_path,arm,env,'unused',{'accepted':False},lambda p:None,memory)
     assert len(calls)==1 and applied==['density@1'] and result['last']['accepted']
     assert 'available_deterministic_tools' in calls[0][-1]['content']
@@ -191,6 +195,8 @@ def test_real_request_serializer_metering_and_consumption_for_all_arms(ep,monkey
     receipts=[]
     class Context:
         def __init__(self):self.queries=0
+        def decide(self,messages,gateway,prefix):
+            return gateway.call(messages,prefix,purpose='planning',candidate_generating=True)
         def agent_context(self,obs,gateway):
             if arm=='AMEM':
                 self.queries+=1

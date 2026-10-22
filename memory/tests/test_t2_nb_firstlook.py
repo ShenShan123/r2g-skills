@@ -102,6 +102,53 @@ def test_existing_reference_receipt_cannot_be_tampered(op,tmp_path):
     with pytest.raises(ValueError,match='reference receipt'):op.resolve_area_reference(m)
 
 
+def partial_floorplan_fixture(op,tmp_path):
+    p,r,m=project_fixture(op,tmp_path)
+    (r/'stage_log.jsonl').write_text('{"stage":"synth","status":0}\n{"stage":"floorplan","status":2}\n')
+    data=op.load(r/'logs/2_1_floorplan.json');data['floorplan__flow__errors__count']=0
+    op.save(r/'logs/2_1_floorplan.json',data)
+    (r/'results').mkdir()
+    for ext in ('odb','sdc'):(r/'results'/('2_1_floorplan.'+ext)).write_text('native '+ext)
+    (r/'logs/2_1_floorplan.log').write_text(
+        'write_db /work/2_1_floorplan.odb\nwrite_sdc -no_timestamp /work/2_1_floorplan.sdc\n'
+        'Elapsed time: 0:00.40[h:]min:sec. CPU time: user 0.30 sys 0.10 (102%).\n')
+    return p,r,m
+
+
+def test_completed_initial_geometry_survives_later_pdn_failure(op,tmp_path):
+    p,r,m=partial_floorplan_fixture(op,tmp_path)
+    original=op.sha(p/'manifest.json')
+    out=op.resolve_area_reference(m)
+    assert out['area']['core']['ref']==101
+    receipt=op.load(p/'reports/initial-area-reference.json')
+    assert receipt['partial_floorplan_proof']['stage']=='2_1_floorplan'
+    assert receipt['partial_floorplan_proof']['whole_floorplan_passed'] is False
+    assert op.sha(p/'manifest.json')==original
+
+
+@pytest.mark.parametrize('bad',['missing_odb','missing_sdc','missing_log','error_count','log_error','no_completion','wrong_output'])
+def test_partial_geometry_does_not_accept_unproven_substage(op,tmp_path,bad):
+    p,r,m=partial_floorplan_fixture(op,tmp_path)
+    if bad.startswith('missing_'):
+        rel={'missing_odb':'results/2_1_floorplan.odb','missing_sdc':'results/2_1_floorplan.sdc',
+             'missing_log':'logs/2_1_floorplan.log'}[bad];(r/rel).unlink()
+    elif bad=='error_count':
+        d=op.load(r/'logs/2_1_floorplan.json');d['floorplan__flow__errors__count']=1;op.save(r/'logs/2_1_floorplan.json',d)
+    else:
+        log=r/'logs/2_1_floorplan.log';text=log.read_text()
+        if bad=='log_error':text+='[ERROR IFP-0001] failed\n'
+        if bad=='no_completion':text=text.split('Elapsed time:')[0]
+        if bad=='wrong_output':text=text.replace('2_1_floorplan.odb','1_synth.odb')
+        log.write_text(text)
+    with pytest.raises(ValueError,match='floorplan'):op.resolve_area_reference(m)
+
+
+def test_partial_geometry_receipt_binds_native_outputs(op,tmp_path):
+    p,r,m=partial_floorplan_fixture(op,tmp_path);op.resolve_area_reference(m)
+    (r/'results/2_1_floorplan.odb').write_text('changed')
+    with pytest.raises(ValueError,match='receipt changed'):op.resolve_area_reference(m)
+
+
 def test_four_slots_do_not_overlap_learning_curve(op):
     cpus=[n for s in op.SLOTS for n in s]
     assert len(op.SLOTS)==4 and len(cpus)==len(set(cpus))

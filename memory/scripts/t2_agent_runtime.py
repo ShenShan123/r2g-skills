@@ -226,8 +226,13 @@ def run(H,project,arm,env,key,initial,mark_engineer_restore,memory=None):
             'experience_present':bool(context),
             'requests_remaining':gateway.remaining()})
         try:
-            content,usage=gateway.call(messages,project/f'agent-decision-{sequence}',
-                                       purpose='planning',candidate_generating=True)
+            if arm=='ADAMEM':
+                # Native three-stage decision, using exactly the SAME gateway.
+                # All other arms retain the existing single-decision boundary.
+                content,usage=memory.decide(messages,gateway,project/f'agent-decision-{sequence}')
+            else:
+                content,usage=gateway.call(messages,project/f'agent-decision-{sequence}',
+                                           purpose='planning',candidate_generating=True)
         except D.OnlineAllowanceSpent:stop_reason='online_allowance_spent';break
         if memory is not None and hasattr(memory,'consume'):
             memory.consume(messages,project/f'agent-decision-{sequence}')

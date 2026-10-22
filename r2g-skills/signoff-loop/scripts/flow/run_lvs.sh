@@ -255,6 +255,19 @@ LVS_GDS_SHA_PRE="$(sha256sum "$GDS_FILE" 2>/dev/null | cut -d' ' -f1 || true)"
 LVS_DIGEST_SET_PRE="$(_r2g_lvs_digest_set)"
 LVS_STARTED_AT="$(date -Iseconds)"
 
+# LVS may generate CDL and its comparison database, but it is not a physical
+# implementation step.  In ORFS, `make lvs` can still re-stream 6_final.gds
+# through order-only/forced prerequisites even when the earlier `make -q`
+# probe said that the frozen targets were current.  Explicitly make existing
+# physical inputs opaque leaves of THIS make invocation. Do not disable the
+# independent before/after digest postcondition below.
+_LVS_FROZEN_MAKE_ARGS=()
+for _artifact in 5_route.odb 6_final.def 6_final.odb 6_final.gds 6_final.v 6_final.sdc 6_final.spef; do
+  if [[ -f "$RESULTS_DIR/$_artifact" ]]; then
+    _LVS_FROZEN_MAKE_ARGS+=(--assume-old="$RESULTS_DIR/$_artifact")
+  fi
+done
+
 # RMD2-P0-01 (2026-07-24, extended from run_drc.sh): the old
 # `setsid timeout … make lvs | tee` had BOTH known liveness defects — `setsid`
 # made timeout a group leader and silently disabled its tree-kill (#40), and
@@ -270,7 +283,7 @@ LVS_STATUS=0
 for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
   set +e +o pipefail
   r2g_bounded_run "$LVS_TIMEOUT" "${LVS_KILL_GRACE:-60}" "$LVS_RUN_LOG" \
-    make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" "${_CDL_MAKE_ARGS[@]}" lvs
+    make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" "${_LVS_FROZEN_MAKE_ARGS[@]}" "${_CDL_MAKE_ARGS[@]}" lvs
   LVS_STATUS=$?
   set -e -o pipefail
   # Output goes straight to the log (no pipe reader can outlive the checker) —

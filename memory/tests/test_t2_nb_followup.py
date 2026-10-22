@@ -124,11 +124,12 @@ def test_nb_llm_and_clean_initial_are_kept_without_fabricating_fix_evidence(tmp_
     for i,row in enumerate(F.load(nb/'registration.json')['plan']):
         hid=f'C{i:05d}';reg[hid]={'task':row['task'],'handoff_id':hid,'verified_ip_key':hid,'core_rtl_hashes':[hid]}
         p=nb/'episodes'/(row['task'].replace('/','__')+'__NB__r1')
-        F.save(p/'manifest.json',{'initial_config':{'CORE_UTILIZATION':'20'}})
+        F.save(p/'manifest.json',{'platform':'nangate45','initial_config':{'CORE_UTILIZATION':'20'}})
         e=F.load(p/'episode.json');e.update(started=1,resources={},repair_turns=[{'proposal':'{"CORE_UTILIZATION":15}','rolled_back':True}])
         F.save(p/'episode.json',e);(p/'reports').mkdir()
         (p/'reports/resource_ledger.jsonl').write_text('{"type":"repair_candidate","proposal":"raw proposal","rolled_back":true}\n')
     units,inputs=F.raw_units(nb,reg)
+    assert all(u['identity']['platform']=='nangate45' and u['lineage']['platform']=='nangate45' for u in units)
     assert len(units)==16
     kept,dropped=F.N.filter_history(units,'C00000',reg)
     assert len(kept)==14 and len(dropped)==2

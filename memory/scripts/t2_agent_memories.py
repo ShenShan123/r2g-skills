@@ -375,4 +375,7 @@ class Memory:
 
 
 def make_memory(H,project,arm,root,env):
+    if arm=='ADAMEM':
+        from t2_adamem import AdaMemory
+        return AdaMemory(H,project,root,env)
     return None if arm=='NB' else Memory(H,project,arm,root,env)

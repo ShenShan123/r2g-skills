@@ -1,0 +1,14 @@
+AdaMEM adaptation attribution
+
+Upstream: https://github.com/yunx-z/AdaMEM
+Pinned revision: 4ea93e239f8dbec2fa6013a28bc8555419037e12
+Upstream license: Apache License 2.0 (see AdaMEM-LICENSE).
+
+memory/scripts/t2_adamem.py is an EDA-domain port of the upstream HIGH
+step-retrieval and transient strategy/refinement procedure. It uses the shared
+metered R2G gateway and CPU embedding broker instead of the upstream model and
+environment stack. It does not include Step-MFT, and is not an exact
+reproduction of the upstream experimental setting. The upstream SDK, datasets,
+model weights and source checkout are not included in this publication.
+
+This attribution does not change the license of unrelated repository files.

@@ -62,8 +62,11 @@ def allowlist(config):
     for key,bounds in KNOB_BOUNDS.items():
         out[key]=({'type':'number','min':bounds[0],'max':bounds[1]} if bounds is not None
                   else {'type':'rectangle'})
+    platform=config.get('PLATFORM','sky130hd')
+    layers=([f'metal{i}' for i in range(2,11)] if platform=='nangate45'
+            else ['met1','met2','met3','met4','met5'])
     for key in ('MIN_ROUTING_LAYER','MAX_ROUTING_LAYER'):
-        out[key]={'type':'enum','values':['met1','met2','met3','met4','met5']}
+        out[key]={'type':'enum','values':list(layers)}
     # Existing common catalogue actions, not extra privileges for memory/LLM.
     # One table with knob_policy: these are executable by memory and LLM edits alike.
     for key,values in KNOB_ENUMS.items():
