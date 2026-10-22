@@ -63,7 +63,7 @@ def main() -> int:
     # Designs the baseline cannot synthesise count ONLY from their formula-spec
     # re-runs (hdr_drop_spec, sv_frontend_spec); the earlier platform-default
     # runs of the same recipes are superseded and deliberately not read.
-    for recipe in ("skip_incr", "hdr_drop_spec", "aldff", "m1wide", "strip_attr", "dontuse_oai221x4", "case_rename", "no_rcx"):
+    for recipe in ("skip_incr", "hdr_drop_spec", "aldff", "m1wide", "strip_attr", "dontuse_oai221x4", "case_rename", "no_rcx", "dontuse_ant"):
         for so in (D / "knob_ab" / recipe).glob("*/signoff.json"):
             for k, r in load_signoff(so).items():
                 if dual(r):
