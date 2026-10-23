@@ -10,6 +10,7 @@ Design doc: docs/superpowers/plans/r2g-skills-bootstrap-2026-07-08.md.
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -120,13 +121,15 @@ def test_graph_builds_cpu_torch_venv(tmp_path):
     assert f"{tmp_path}/pyenvs/r2g-graph" in out            # honors R2G_PREFIX
 
 
-def test_core_nosudo_uses_conda_no_build():
-    # On a machine with an ORFS checkout the clone is skipped; the no-sudo binary
-    # path is conda openroad/yosys, and it must NEVER build from source.
-    out = _run("install_core.sh", "--dry-run", "--force").stdout
-    assert CONDA_CH in out
-    assert "openroad" in out and "yosys" in out
-    assert "build_openroad" not in out          # no-sudo default never builds
+def test_core_nosudo_uses_bundle_no_build():
+    # The no-sudo binary path is the sha256-pinned toolchain bundle plus ORFS at
+    # the bundle's validated commit -- never conda (frozen at yosys 0.38), and it
+    # must NEVER build from source.
+    r = _run("install_core.sh", "--dry-run", "--force")
+    pin = json.loads((Path(__file__).resolve().parents[1] / "references" / "toolchain_bundle.json").read_text())
+    assert pin["orfs_commit"] in r.stdout
+    assert CONDA_CH not in r.stdout
+    assert "build_openroad" not in r.stdout     # no-sudo default never builds
 
 
 def test_core_build_flag_builds_from_source():

@@ -164,14 +164,16 @@ eval_tier() {
   TIER_STATUS="OPT"; TIER_ACTION=""
   case "$tier" in
     core)
-      if [[ -n "$(d ORFS_ROOT)" && -n "$(d OPENROAD_EXE)" && -n "$(d YOSYS_EXE)" ]]; then
+      # a read-only ORFS (another user's /opt checkout) does not satisfy core:
+      # ORFS writes into flow/, so the first run would die on Permission denied
+      if [[ -n "$(d ORFS_ROOT)" && ( ! -d "$(d ORFS_ROOT)/flow" || -w "$(d ORFS_ROOT)/flow" ) && -n "$(d OPENROAD_EXE)" && -n "$(d YOSYS_EXE)" ]]; then
         TIER_STATUS="OK"; TIER_ACTION="present"
       else
         TIER_STATUS="MISS"
         if [[ "$SUDO" == "1" ]]; then
           TIER_ACTION="clone ORFS + build_openroad.sh --local (~30min; needs --yes)"
         else
-          TIER_ACTION="clone ORFS (no build) + '$_conda_bin' -n $CONDA_ENV openroad yosys"
+          TIER_ACTION="download the r2g toolchain bundle (openroad+yosys, ~100 MB, sha256-pinned) + shallow ORFS at the validated commit"
         fi
       fi ;;
     frontend)
@@ -362,7 +364,7 @@ done
 
 # ---- pin env.local.sh --------------------------------------------------------
 # Pin what THIS run installed, not what autodetection happens to find first: the
-# core tier records its chosen ORFS + conda binaries, and the graph tier's venv
+# core tier records its chosen ORFS + bundle binaries, and the graph tier's venv
 # is pinned once it exists (it used to be installed and then left unpinned, so
 # every graph stage SKIPped on a freshly provisioned machine).
 if [[ -n "${BIGV:-}" && -f "$BIGV/.r2g-install/core.env" ]]; then

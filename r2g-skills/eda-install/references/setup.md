@@ -32,7 +32,7 @@ Every key is always emitted (empty value == absent); diagnostics go to stderr.
 
 | Tier | Need | Satisfied when | No-sudo action |
 | --- | --- | --- | --- |
-| `core` | required | `ORFS_ROOT` + `OPENROAD_EXE` + `YOSYS_EXE` | clone ORFS (no build) + conda `openroad yosys` |
+| `core` | required | `ORFS_ROOT` (writable) + `OPENROAD_EXE` + `YOSYS_EXE` | r2g toolchain bundle (sha256-pinned release asset) + shallow ORFS at the validated commit |
 | `frontend` | required | `IVERILOG_EXE` + `VVP_EXE` | conda `iverilog verilator` |
 | `sky130` | optional | `MAGIC_EXE` + `NETGEN_EXE` | conda `magic netgen` |
 | `klayout` | optional | `KLAYOUT_CMD` (system OK) | dedicated `klayout` env; prefers system klayout, fails soft |

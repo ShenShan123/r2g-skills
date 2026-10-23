@@ -117,7 +117,7 @@ def test_plan_provisioned_all_ok(tmp_path):
     assert "no-sudo" in out
 
 
-def test_plan_bare_nosudo_uses_conda_no_build(tmp_path):
+def test_plan_bare_nosudo_uses_bundle_no_build(tmp_path):
     _out, rows = _plan(tmp_path, _BARE_NOSUDO)
     # required tiers are MISSing, optional tiers are installable (OPT)
     assert rows["core"][0] == "MISS"
@@ -125,9 +125,10 @@ def test_plan_bare_nosudo_uses_conda_no_build(tmp_path):
     assert rows["sky130"][0] == "OPT"
     assert rows["pdk"][0] == "OPT"
     assert rows["graph"][0] == "OPT"
-    # no-sudo → conda binaries, ORFS cloned but NOT built
-    assert "conda" in rows["core"][2]
-    assert "no build" in rows["core"][2]
+    # no-sudo → the pinned toolchain bundle, ORFS fetched but NOT built (conda's
+    # openroad/yosys are frozen at 2024-02 and cannot run a current ORFS)
+    assert "bundle" in rows["core"][2]
+    assert "validated commit" in rows["core"][2]
     assert "build_openroad" not in rows["core"][2]
 
 

@@ -1,6 +1,6 @@
 ---
 name: eda-install
-description: Detect a machine's environment and install + verify the open-source EDA toolchain that the signoff-loop and def-graph skills need — OpenROAD-flow-scripts (openroad/yosys), iverilog, KLayout, Magic, Netgen, OpenSTA, the sky130A PDK, and the torch+torch_geometric graph venv. Use when setting up a new machine, when `check_env.sh` reports missing tools, when the user asks to install/bootstrap/provision the EDA tools or "set up the environment", or when a flow fails because a tool or PDK is absent. Without root it automatically installs a no-sudo path (pre-built conda litex-hub binaries + a venv on a big volume). Produces references/env.local.sh so a bootstrapped toolchain is auto-discovered by the flow skills.
+description: Detect a machine's environment and install + verify the open-source EDA toolchain that the signoff-loop and def-graph skills need — OpenROAD-flow-scripts (openroad/yosys), iverilog, KLayout, Magic, Netgen, OpenSTA, the sky130A PDK, and the torch+torch_geometric graph venv. Use when setting up a new machine, when `check_env.sh` reports missing tools, when the user asks to install/bootstrap/provision the EDA tools or "set up the environment", or when a flow fails because a tool or PDK is absent. Without root it automatically installs a no-sudo path (the pinned r2g openroad+yosys bundle, conda litex-hub for the other tools, and a venv — all on a big volume). Produces references/env.local.sh so a bootstrapped toolchain is auto-discovered by the flow skills.
 metadata:
   requires:
     bins: [bash]
@@ -78,15 +78,16 @@ every tier routes through **pre-built conda `litex-hub` packages + a venv**, all
 
 | Tool(s) | No-sudo channel |
 | --- | --- |
-| openroad, yosys, iverilog, verilator, klayout, magic, netgen, opensta | conda `litex-hub` (all `--override-channels -c litex-hub -c conda-forge` — the ToS-gate workaround) |
-| ORFS flow + platforms | `git clone --recursive` — **no build**; `env.local.sh` points `OPENROAD_EXE`/`YOSYS_EXE` at the conda binaries |
+| openroad, yosys (+ sta) | the **r2g toolchain bundle** — the exact source build every r2g dataset was made with, relocatable, ~100 MB, a GitHub release asset pinned by URL + sha256 in `references/toolchain_bundle.json` (built by `scripts/setup/make_toolchain_bundle.sh`); needs host glibc ≥ 2.35. **Not conda:** litex-hub froze openroad/yosys in Feb 2024 (yosys 0.38) and conda-forge has no openroad, so conda binaries + a current ORFS cannot synthesize (fresh-user test, 2026-10-23) |
+| iverilog, verilator, klayout, magic, netgen | conda `litex-hub` (all `--override-channels -c litex-hub -c conda-forge` — the ToS-gate workaround) |
+| ORFS flow + platforms | shallow fetch of **the commit the bundle was validated with** (no submodules, no build); a read-only system checkout never counts as installed |
 | sky130A PDK | conda `open_pdks.sky130a` → the big volume (never `volare` — proxy/rate-limit caveat) |
 | torch / torch_geometric / pandas | `python3 -m venv` + pip (CPU wheels) |
 
 "No sudo" means *download pre-built binaries into a user-writable prefix* — not *compile in userspace*.
 With root, `core`/`frontend` may instead build ORFS from source (`--yes`-gated, ~30 min); every other
 tier is already root-free. What cannot be self-healed (conda/network blocked, no ≥15 GB volume, a
-GLIBC too old for the conda binaries) **escalates with a clear HINT — never a silent failure.**
+GLIBC older than the bundle's floor — use `--build`) **escalates with a clear HINT — never a silent failure.**
 
 ## Flags
 

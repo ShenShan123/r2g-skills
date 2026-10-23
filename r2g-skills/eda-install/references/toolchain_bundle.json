@@ -1,0 +1,10 @@
+{
+ "name": "r2g-toolchain-openroad-26Q3-318-g6b9d7fb806-yosys-0.64",
+ "url": "https://github.com/ShenShan123/r2g-skills/releases/download/toolchain-2026.10/r2g-toolchain-openroad-26Q3-318-g6b9d7fb806-yosys-0.64.tar.gz",
+ "sha256": "67601a58dbe4fad893dcdc8216bf13b830ee4a8e83b63b4be605211a62bce632",
+ "orfs_commit": "a5ff7ef7dac4338e6e5fad7710b85fc6c8f3503c",
+ "glibc_min": "2.35",
+ "openroad": "26Q3-318-g6b9d7fb806",
+ "yosys": "0.64",
+ "built_by": "scripts/setup/make_toolchain_bundle.sh"
+}
