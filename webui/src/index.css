@@ -3,20 +3,20 @@
 @tailwind utilities;
 
 /* Design tokens. Dark is the default; light is a full redefinition, not a filter. */
-:root, :root[data-theme="dark"] {
+:root[data-theme="dark"] {
   --bg: 11 15 23;  --panel: 17 23 34;  --panel2: 24 32 46;  --line: 38 49 68;
   --fg: 230 236 245;  --muted: 148 163 184;  --faint: 92 106 128;
   --accent: 34 211 238;  --accent2: 167 139 250;
   --ok: 52 211 153;  --bad: 251 113 133;  --warn: 251 191 36;  --run: 96 165 250;
-  --on-accent: 6 18 28;
+  --on-accent: 6 18 28;  --side: 17 23 34;  --shadow: 0 0 0;
   color-scheme: dark;
 }
-:root[data-theme="light"] {
-  --bg: 246 248 251;  --panel: 255 255 255;  --panel2: 241 245 249;  --line: 222 228 237;
+:root, :root[data-theme="light"] {
+  --bg: 255 255 255;  --panel: 255 255 255;  --panel2: 245 247 250;  --line: 229 233 240;  --side: 248 249 251;
   --fg: 15 23 42;  --muted: 71 85 105;  --faint: 148 163 184;
   --accent: 8 145 178;  --accent2: 124 58 237;
   --ok: 5 150 105;  --bad: 225 29 72;  --warn: 202 138 4;  --run: 37 99 235;
-  --on-accent: 255 255 255;
+  --on-accent: 255 255 255;  --shadow: 15 23 42;
   color-scheme: light;
 }
 html, body, #root { height: 100%; }

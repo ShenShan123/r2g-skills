@@ -33,9 +33,9 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-6xl px-10 py-10">
-      <section className="relative overflow-hidden rounded-3xl border border-line bg-panel p-10">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-accent/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-72 w-72 rounded-full bg-accent2/15 blur-3xl" />
+      <section className="relative overflow-hidden rounded-3xl border border-line bg-panel2/60 p-10 dark:bg-panel">
+        <div className="pointer-events-none absolute -right-24 -top-24 hidden h-80 w-80 rounded-full bg-accent/20 blur-3xl dark:block" />
+        <div className="pointer-events-none absolute -bottom-32 left-1/3 hidden h-72 w-72 rounded-full bg-accent2/15 blur-3xl dark:block" />
         <div className="relative">
           <span className="chip bg-accent/15 text-accent">开源 EDA · 自主 agent</span>
           <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight">

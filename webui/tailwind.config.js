@@ -6,7 +6,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: v("bg"), panel: v("panel"), panel2: v("panel2"), line: v("line"),
+        bg: v("bg"), side: v("side"), panel: v("panel"), panel2: v("panel2"), line: v("line"),
         fg: v("fg"), muted: v("muted"), faint: v("faint"),
         accent: v("accent"), accent2: v("accent2"),
         onaccent: v("on-accent"), ok: v("ok"), bad: v("bad"), warn: v("warn"), run: v("run"),
@@ -15,7 +15,7 @@ export default {
         sans: ['Inter', '"PingFang SC"', '"Microsoft YaHei"', '"Noto Sans CJK SC"', "system-ui", "sans-serif"],
         mono: ['"JetBrains Mono"', '"SFMono-Regular"', "Menlo", "Consolas", "monospace"],
       },
-      boxShadow: { card: "0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px -12px rgb(0 0 0 / 0.45)" },
+      boxShadow: { card: "0 1px 2px rgb(var(--shadow) / 0.05), 0 4px 16px -8px rgb(var(--shadow) / 0.12)" },
       keyframes: { pulse2: { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.35 } } },
       animation: { pulse2: "pulse2 1.4s ease-in-out infinite" },
     },

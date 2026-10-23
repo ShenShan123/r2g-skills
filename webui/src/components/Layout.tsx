@@ -13,18 +13,18 @@ const NAV = [
 
 export default function Layout() {
   const [theme, setTheme] = useState<string>(() => {
-    try { return localStorage.getItem("r2g-theme") || "dark"; } catch { return "dark"; }
+    try { return localStorage.getItem("r2g-theme-v2") || "light"; } catch { return "light"; }
   });
   const [model, setModel] = useState<any>(null);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    try { localStorage.setItem("r2g-theme", theme); } catch { /* private mode */ }
+    try { localStorage.setItem("r2g-theme-v2", theme); } catch { /* private mode */ }
   }, [theme]);
   useEffect(() => { api.config().then((c) => setModel(c.model_resolved)).catch(() => {}); }, []);
 
   return (
     <div className="flex h-full">
-      <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-panel/60 px-3 py-5">
+      <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-side px-3 py-5">
         <div className="flex items-center gap-2.5 px-2">
           <Logo />
           <div>
