@@ -286,7 +286,14 @@ class Pipeline:
         res = read_json(vj).get("results") or []
         n_ok = sum(1 for r in res if r.get("ok"))
         if rc != 0 or not res or n_ok != len(res):
-            self._fail(jid, name, "verify", "数据集校验未通过：%d/%d" % (n_ok, len(res)))
+            # name the failing checks: "288/295" alone tells nobody whether it is a
+            # stale input, a broken label or a physically extreme but genuine value
+            bad = [r.get("check") for r in res if not r.get("ok")]
+            self.store.set_design(jid, name, detail={"verify": {"passed": n_ok, "total": len(res),
+                                                                "failed_checks": bad[:20]}})
+            self._fail(jid, name, "verify", "数据集校验未通过：%d/%d，未通过项：%s"
+                       % (n_ok, len(res), "；".join(bad[:5]) + ("……" if len(bad) > 5 else "")),
+                       {"failed_checks": bad[:20]})
             return
         self._ok(jid, name, "verify", "数据集校验通过：%d/%d 项" % (n_ok, len(res)),
                  {"checks": len(res)})
