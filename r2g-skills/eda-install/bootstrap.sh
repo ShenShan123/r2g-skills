@@ -172,7 +172,7 @@ eval_tier() {
         TIER_STATUS="MISS"
         # bootstrap never passes --build, so with or without root the action is
         # the bundle; say so (the plan used to promise a source build under sudo)
-        TIER_ACTION="download the r2g toolchain bundle (openroad+yosys, ~100 MB, sha256-pinned) + shallow ORFS at the validated commit"
+        TIER_ACTION="download the r2g toolchain bundle (openroad+yosys+klayout, ~220 MB, sha256-pinned) + shallow ORFS at the validated commit"
         [[ "$SUDO" == "1" ]] && TIER_ACTION="$TIER_ACTION (a source build is install_core.sh --build)"
       fi ;;
     frontend)

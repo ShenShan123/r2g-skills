@@ -2,11 +2,32 @@
 """
 Render a GDS file to a PNG preview image using KLayout batch mode.
 """
+import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
 import textwrap
+
+
+def _klayout_cmd():
+    """KLAYOUT_CMD, else the skill's pinned env.local.sh, else PATH.
+
+    A bare 'klayout' only worked where a system KLayout happened to be on PATH;
+    a no-root install gets KLayout from the toolchain bundle, pinned in
+    env.local.sh, so the preview failed there (2026-10-23).
+    """
+    if os.environ.get("KLAYOUT_CMD"):
+        return os.environ["KLAYOUT_CMD"]
+    pin = Path(__file__).resolve().parents[2] / "references" / "env.local.sh"
+    try:
+        m = re.search(r'^export KLAYOUT_CMD="?([^"\n]+)"?$', pin.read_text(), re.M)
+        if m and os.access(m.group(1), os.X_OK):
+            return m.group(1)
+    except OSError:
+        pass
+    return "klayout"
 
 
 def main():
@@ -39,7 +60,7 @@ def main():
 
     try:
         subprocess.run([
-            'klayout', '-b', '-nc', '-r', script_path
+            _klayout_cmd(), '-b', '-nc', '-r', script_path
         ], check=True)
     finally:
         Path(script_path).unlink(missing_ok=True)

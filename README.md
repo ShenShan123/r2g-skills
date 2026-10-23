@@ -9,7 +9,7 @@ Kimi、智谱 GLM、豆包、OpenAI、Gemini、Claude 或本地 Ollama，配置�
 
 ## 一键安装
 
-需要一台 Linux 机器（不需要 root 权限）和约 15 GB 磁盘空间。
+需要一台 x86_64 Linux 机器（Ubuntu 22.04 及以上、Debian 12 及以上等 glibc ≥ 2.35 的发行版；不需要 root 权限）、约 10 GB 磁盘空间，以及能访问 GitHub 的网络。全新机器上安装约需 30 分钟。
 
 ```bash
 git clone https://github.com/ShenShan123/r2g-skills.git
@@ -17,8 +17,9 @@ cd r2g-skills
 bash install.sh
 ```
 
-`install.sh` 会依次：检查机器 → 安装 EDA 工具链（OpenROAD-flow-scripts、Yosys、KLayout、
-图数据集用的 PyTorch 环境；已经装好的会被识别并跳过）→ 验证 nangate45 平台可用 → 安装 agent →
+`install.sh` 会依次：检查机器 → 安装 EDA 工具链（下载生成所有 r2g 数据集所用的同一套 OpenROAD、Yosys、
+KLayout 预编译包并校验 sha256，固定版本的 OpenROAD-flow-scripts，以及图数据集用的 PyTorch 环境；
+已经装好的会被识别并跳过）→ 验证 nangate45 平台可用 → 安装 agent →
 把 `r2g` 命令放进 `~/.local/bin` → 让你选择模型并填写 API 密钥（只保存在本机）→ 可选地跑一次自检
 （内置示例 counter8 从 RTL 到图数据集，约 3–5 分钟）。
 

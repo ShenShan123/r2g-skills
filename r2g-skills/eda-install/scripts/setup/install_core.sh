@@ -2,7 +2,7 @@
 # Tier: core (required) — OpenROAD-flow-scripts + the openroad & yosys binaries.
 #
 # Default (no root): download the r2g toolchain bundle -- the exact OpenROAD +
-# Yosys build every r2g dataset was produced with, relocatable, ~100 MB -- verify
+# Yosys build every r2g dataset was produced with, relocatable, ~220 MB -- verify
 # its sha256, unpack it, and shallow-clone ORFS at the commit that build was
 # validated against (references/toolchain_bundle.json pins all three). Needs a
 # host glibc >= the bundle's floor (2.35: Ubuntu 22.04+, Debian 12+).
@@ -49,7 +49,7 @@ if [[ "$BUILD" == "1" ]]; then
   run bash "$_orfs/etc/DependencyInstaller.sh"
   run bash "$_orfs/build_openroad.sh" --local || die "build_openroad.sh failed"
   log "ORFS built from source at $_orfs (openroad+yosys under tools/install/)"
-  OR_EXE=""; YS_EXE=""; STA=""          # under tools/install: _env.sh finds them
+  OR_EXE=""; YS_EXE=""; STA=""; KL=""   # under tools/install: _env.sh finds them
 else
   [[ -f "$PIN_JSON" ]] || die "missing $PIN_JSON (which toolchain bundle to install)"
   url="$(_pin url)"; sha="$(_pin sha256)"; name="$(_pin name)"
@@ -70,7 +70,7 @@ else
     tgz="$_bigv/downloads/$name.tar.gz"
     if [[ ! -f "$tgz" ]] || ! echo "$sha  $tgz" | sha256sum -c --status; then
       have_cmd curl || die "curl required to download the toolchain bundle"
-      log "downloading the toolchain bundle (~100 MB): $url"
+      log "downloading the toolchain bundle (~220 MB): $url"
       [[ "$DRY" == "1" ]] || curl -fL --retry 3 -o "$tgz.part" "$url" || die "download failed: $url"
       [[ "$DRY" == "1" ]] || mv "$tgz.part" "$tgz"
     fi
@@ -82,9 +82,21 @@ else
     fi
   fi
   OR_EXE="$dest/openroad/bin/openroad"; YS_EXE="$dest/yosys/bin/yosys"; STA="$dest/openroad/bin/sta"
+  # KLayout rides in the bundle (nangate45 DRC/LVS need it; conda's recipe is
+  # unsatisfiable). A KLayout already on the system is kept -- it is the one
+  # the user chose -- otherwise the bundled one is used.
+  KL=""
+  if [[ -x "$dest/klayout/klayout" ]]; then
+    if [[ -n "${KLAYOUT_CMD:-}" && -x "${KLAYOUT_CMD:-}" ]]; then
+      log "keeping the system KLayout $KLAYOUT_CMD (the bundle also has one: $dest/klayout/klayout)"
+    else
+      KL="$dest/klayout/klayout"
+    fi
+  fi
   if [[ "$DRY" != "1" ]]; then
     "$OR_EXE" -version >/dev/null 2>&1 || die "bundled openroad does not start on this machine ($OR_EXE -version)"
     "$YS_EXE" -V >/dev/null 2>&1 || die "bundled yosys does not start on this machine ($YS_EXE -V)"
+    [[ -z "$KL" ]] || "$KL" -b -v >/dev/null 2>&1 || die "bundled klayout does not start on this machine ($KL -b -v)"
   fi
 
   # 2) ORFS flow/ at the commit this build was validated with (shallow, no
@@ -110,6 +122,7 @@ if [[ "$DRY" != "1" ]]; then
     [[ -n "$OR_EXE" ]] && echo "export OPENROAD_EXE=\"$OR_EXE\""
     [[ -n "$YS_EXE" ]] && echo "export YOSYS_EXE=\"$YS_EXE\""
     [[ -n "$STA" ]] && echo "export STA_EXE=\"$STA\""
+    [[ -n "$KL" ]] && echo "export KLAYOUT_CMD=\"$KL\""
   } > "$_bigv/.r2g-install/core.env"
   log "toolchain choice recorded for the pin step: $_bigv/.r2g-install/core.env"
 fi
