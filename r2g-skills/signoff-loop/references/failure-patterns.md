@@ -4391,6 +4391,25 @@ truth via `openroad -python` (odb counts, ITerm directions, placements), compare
 wirelength against `report_wire_length -net ... -detailed_route`, and diff per-cell slack
 against `report_checks`.
 
+### 0. Repaired layout paired with the PRE-repair SPEF (fix_signoff never re-ran RCX; 2026-10-22)
+
+- **Symptom:** a design that went through `fix_signoff.sh` builds graphs `status: ok`, but
+  `verify_graph_dataset.py` fails only the RC checks: coupling-edge count off by a few dozen
+  pairs, a few percent of ground caps and coupling labels mismatched against the SPEF
+  (array_mul, nangate45, after `deck_driven_antenna_diode`: 31970 vs 31994 pairs, 11/400 ground
+  caps). Nothing crashes and every report reads clean.
+- **Cause:** a fix iteration re-runs the flow, so the DEF changes (diodes, new nets), but no
+  step re-extracted parasitics. The canonical-evidence block at the end of `fix_signoff.sh`
+  re-ran `extract_rcx.py` over the OLD `rcx/6_final.spef` and stamped `rcx.json` "complete";
+  `tools/run_signoff.sh` caches RCX on that status; def-graph then joined the repaired DEF with
+  the pre-repair SPEF.
+- **Fix:** `fix_signoff.sh` re-runs `run_rcx.sh` before that block whenever `rcx/6_final.spef` is
+  missing or older than the latest run's `final/6_final.odb` (log in `reports/fix_rcx.log` --
+  NOT `fix_log.jsonl`, which is one JSON object per line). Re-verified: 294/295, every RC
+  check green.
+- **Guard:** the verifier's independent SPEF re-parse is what caught it; a repaired design
+  must never skip `verify_graph_dataset.py`.
+
 ### 1. Timing labels lost on EVERY register (STA-vs-ODB name-escaping join miss)
 
 - **Symptom:** `timing_features.csv` has `INF,0.0,in_sta_path=false` for all bus-named

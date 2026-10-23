@@ -81,23 +81,61 @@ def find_hdl(src: Path) -> list[Path]:
     return sorted(p for p in src.rglob("*") if p.suffix.lower() in HDL_SUFFIXES and p.is_file())
 
 
-def infer_top(files: list[Path]) -> str:
-    """The module no other module instantiates. Ambiguity is an error, not a guess."""
+def _strip_param_overrides(text: str) -> str:
+    """Remove every `#( ... )` group, parentheses balanced.
+
+    A non-greedy regex stops at the first `)`, so `sub #(.A(A), .B(B)) u0 (`
+    did not read as an instantiation and `sub` looked like a top module -- the
+    wrong top was then synthesised on its own and passed sign-off."""
+    out, i, n = [], 0, len(text)
+    while i < n:
+        if text[i] == "#":
+            j = i + 1
+            while j < n and text[j].isspace():
+                j += 1
+            if j < n and text[j] == "(":
+                depth, k = 0, j
+                while k < n:
+                    if text[k] == "(":
+                        depth += 1
+                    elif text[k] == ")":
+                        depth -= 1
+                        if depth == 0:
+                            break
+                    k += 1
+                out.append(" ")
+                i = k + 1
+                continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
+def infer_top(files: list[Path], hint: str | None = None) -> tuple[str, str]:
+    """(top, how). The module no other module instantiates.
+
+    If several are uninstantiated (e.g. an unused helper module in a library
+    file) and exactly one is named like `hint` (the folder), take it and say
+    so. Otherwise ambiguity is an error, never a guess."""
     defined, used = [], set()
     for f in files:
         if f.suffix.lower() in (".vh", ".svh"):
             continue
-        t = _strip_comments(f.read_text(errors="replace"))
+        t = _strip_param_overrides(_strip_comments(f.read_text(errors="replace")))
         defined += _MODULE_RE.findall(t)
         for body in re.split(r"\bmodule\b", t)[1:]:
             for typ, _inst in _INST_RE.findall(body.split("endmodule")[0]):
                 if typ not in _KEYWORDS:
                     used.add(typ)
     tops = [m for m in dict.fromkeys(defined) if m not in used]
-    if len(tops) != 1:
-        raise ValueError("cannot infer the top module (candidates: %s); give it explicitly"
-                         % (", ".join(tops) or "none"))
-    return tops[0]
+    if len(tops) == 1:
+        return tops[0], "自动识别（唯一未被例化的模块）"
+    if hint:
+        named = [m for m in tops if m.lower() == hint.lower()]
+        if len(named) == 1:
+            return named[0], "按文件夹名在候选 %s 中选定" % ", ".join(tops)
+    raise ValueError("cannot infer the top module (candidates: %s); give it explicitly"
+                     % (", ".join(tops) or "none"))
 
 
 def create(src: Path, project: Path, platform: str, top: str | None = None,
@@ -110,7 +148,9 @@ def create(src: Path, project: Path, platform: str, top: str | None = None,
     meta_file = src / "design.json" if src.is_dir() else None
     if top is None and meta_file and meta_file.is_file():
         top = json.loads(meta_file.read_text()).get("top")
-    top = top or infer_top(files)
+    how = "用户指定" if top else "design.json 指定" if (meta_file and meta_file.is_file() and json.loads(meta_file.read_text()).get("top")) else ""
+    if not top:
+        top, how = infer_top(files, hint=(src.name if src.is_dir() else src.stem))
     rtl = project / "rtl"
     if project.exists():
         shutil.rmtree(project)
@@ -128,6 +168,7 @@ def create(src: Path, project: Path, platform: str, top: str | None = None,
     meta = {
         "design_name": name or top,
         "top": top,
+        "top_source": how,
         "platform": platform,
         "source": str(src),
         "files": [str(p) for p in sources],
@@ -164,7 +205,9 @@ def _write_config(project: Path, meta: dict, sizing: dict | None) -> None:
         SDC_TEMPLATE.format(top=meta["top"], ports=CLOCK_PORTS, period=period))
 
 
-_STAT_RE = re.compile(r"^\s*(\d+)\s+([\d.]+)\s+\d+\s+[\d.]+\s+cells\s*$", re.M)
+_NUM = r"[\d.]+(?:[eE][+-]?\d+)?"
+# yosys prints large areas in scientific notation ("3359 6.25E+03 3359 6.25E+03 cells")
+_STAT_RE = re.compile(r"^\s*(\d+)\s+(%s|-)\s+\d+\s+(?:%s|-)\s+cells\s*$" % (_NUM, _NUM), re.M)
 
 
 def synth_size(synth_stat: Path, top: str) -> tuple[int, float]:
@@ -179,6 +222,12 @@ def synth_size(synth_stat: Path, top: str) -> tuple[int, float]:
         i = t.find("=== %s ===" % top)
         start = i if i >= 0 else 0
     m = _STAT_RE.search(t, start)
+    # the exact area is on the "Chip area for module" line; the table rounds it
+    exact = re.search(r"Chip area for (?:top )?module '\\?%s':\s*(%s)" % (re.escape(top), _NUM), t)
+    if m and exact:
+        return int(m.group(1)), float(exact.group(1))
+    if m and m.group(2) != "-":
+        return int(m.group(1)), float(m.group(2))
     if not m:
         m2 = re.search(r"Chip area for (?:top )?module '\\?%s':\s*([\d.]+)" % re.escape(top), t)
         cells = re.search(r"Number of cells:\s*(\d+)", t[start:])

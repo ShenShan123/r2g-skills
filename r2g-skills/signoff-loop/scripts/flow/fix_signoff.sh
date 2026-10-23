@@ -822,6 +822,23 @@ echo "Summary: $REPORTS/fix_summary.md"
 # signoff path even where ORFS route, SPEF, and full DRC existed. Read-only
 # extraction over existing artifacts + the binding signoff_manifest.json; never
 # affects this script's exit semantics.
+# Stale-SPEF guard (2026-10-22). A fix iteration re-runs the flow, so the
+# layout changes, but nothing re-extracted parasitics: extract_rcx below then
+# re-stamped the PRE-fix SPEF as "complete", run_signoff.sh's RCX cache trusted
+# that, and def-graph joined the repaired DEF with the old SPEF (array_mul after
+# deck_driven_antenna_diode: 24 coupling pairs and 11/400 ground caps off --
+# caught only by verify_graph_dataset). Re-run RCX whenever the SPEF is missing
+# or older than the final layout of the latest run.
+_latest_run="$(ls -td "$PROJECT_DIR"/backend/RUN_* 2>/dev/null | head -1)"
+_final_odb="$_latest_run/final/6_final.odb"
+_spef="$PROJECT_DIR/rcx/6_final.spef"
+if [[ -f "$_final_odb" ]] && { [[ ! -f "$_spef" ]] || [[ "$_spef" -ot "$_final_odb" ]]; }; then
+  # its own log: $LOG is fix_log.jsonl, one JSON object per line
+  _rcx_log="$REPORTS/fix_rcx.log"
+  echo "RCX stale or missing after fixes (SPEF older than $(basename "$_latest_run")) -- re-extracting" | tee -a "$_rcx_log"
+  "${R2G_RUN_RCX:-$SCRIPT_DIR/run_rcx.sh}" "$PROJECT_DIR" "$PLATFORM" ${FLOW_VARIANT:+"$FLOW_VARIANT"} \
+    >>"$_rcx_log" 2>&1 || echo "RCX re-extraction failed (rc=$?)" | tee -a "$_rcx_log"
+fi
 "$EXTRACT_ROUTE" "$PROJECT_DIR" "$REPORTS/route.json" >/dev/null 2>&1 || true
 "$EXTRACT_PPA" "$PROJECT_DIR" "$REPORTS/ppa.json" >/dev/null 2>&1 || true
 "$CHECK_TIMING" "$PROJECT_DIR" >/dev/null 2>&1 || true

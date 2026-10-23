@@ -61,7 +61,7 @@ def test_unsupported_platform():
 def test_infer_top(tmp_path):
     (tmp_path / "a.v").write_text("module leaf(input a, output b); assign b=a; endmodule\n")
     (tmp_path / "b.v").write_text("module top(input a, output b);\n  leaf u0 (.a(a), .b(b));\nendmodule\n")
-    assert project.infer_top(project.find_hdl(tmp_path)) == "top"
+    assert project.infer_top(project.find_hdl(tmp_path))[0] == "top"
     (tmp_path / "c.v").write_text("module other(input a); endmodule\n")
     with pytest.raises(ValueError):
         project.infer_top(project.find_hdl(tmp_path))
@@ -81,3 +81,29 @@ def test_create_and_size(tmp_path):
     assert "export DIE_AREA  = 0 0 36 36" in cfg and "CORE_UTILIZATION" not in cfg
     assert "set _per 1.0" in (pdir / "constraints" / "constraint.sdc").read_text()
     assert s["pins"] == 9
+
+
+def test_infer_top_sees_parameterised_instances(tmp_path):
+    # the I2C_module case: multi-parameter overrides used to hide the instance
+    (tmp_path / "m.v").write_text("module I2C_master #(parameter A=1)(input a); endmodule\n")
+    (tmp_path / "s.v").write_text("module I2C_slave(input a); endmodule\n")
+    (tmp_path / "t.v").write_text(
+        "module I2C_module(input a);\n"
+        "I2C_master #( .A(A), .B(f(1,2)), .C(3)) m1 (\n .a(a));\n"
+        "I2C_slave #(.X(1)) s1 (.a(a));\nendmodule\n")
+    assert project.infer_top(project.find_hdl(tmp_path))[0] == "I2C_module"
+
+
+def test_infer_top_folder_name_breaks_tie(tmp_path):
+    d = tmp_path / "array_mul"; d.mkdir()
+    (d / "a.sv").write_text("module array_mul(input a); endmodule\n")
+    (d / "p.sv").write_text("module csa_3_2(input a); endmodule\n")   # unused helper
+    top, how = project.infer_top(project.find_hdl(d), hint="array_mul")
+    assert top == "array_mul" and "文件夹名" in how
+
+
+def test_synth_size_scientific_notation(tmp_path):
+    (tmp_path / "s.txt").write_text(
+        "=== array_mul ===\n     3359 6.25E+03     3359 6.25E+03 cells\n"
+        "   Chip area for module '\\array_mul': 6247.276000\n")
+    assert project.synth_size(tmp_path / "s.txt", "array_mul") == (3359, 6247.276)

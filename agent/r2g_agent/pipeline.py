@@ -210,8 +210,10 @@ class Pipeline:
         # prepare
         self._stage(jid, name, "prepare")
         meta = proj.create(src, pdir, platform, top=top, name=name)
-        self._ok(jid, name, "prepare", "顶层模块 %s，%d 个源文件" % (meta["top"], len(meta["files"])),
-                 {"top": meta["top"]})
+        self._ok(jid, name, "prepare", "顶层模块 %s（%s），%d 个源文件"
+                 % (meta["top"], meta.get("top_source") or "指定", len(meta["files"])),
+                 {"top": meta["top"], "top_source": meta.get("top_source")})
+        self.store.set_design(jid, name, detail={"top": meta["top"], "top_source": meta.get("top_source")})
         # synth
         self._stage(jid, name, "synth")
         rc = self._sh(jid, name, "synth", ["bash", S + "/flow/run_orfs.sh", str(pdir), platform], pdir,
