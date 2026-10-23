@@ -175,6 +175,29 @@ def diagnose(job_id: str, design: str, check: str) -> dict:
     return {"check": check, "plan": plan}
 
 
+@tool("Read a design's RTL source as the job received it (the copy in the job's project), with line "
+      "numbers, to point at the exact line of a synthesis error. Only files inside that design's rtl/ "
+      "folder can be read.",
+      _obj({"job_id": {"type": "string"}, "design": {"type": "string"},
+            "file": {"type": "string", "description": "file name or path relative to rtl/; omit to list files"},
+            "start": {"type": "integer"}, "end": {"type": "integer"}}, ["job_id", "design"]))
+def read_rtl(job_id: str, design: str, file: str = "", start: int = 1, end: int = 200) -> dict:
+    d = RT.store.design(job_id, design)
+    if not d:
+        return {"error": "no such design in job"}
+    root = (Path(d["project"]) / "rtl").resolve()
+    files = sorted(str(p.relative_to(root)) for p in root.rglob("*") if p.is_file())
+    if not file:
+        return {"files": files}
+    p = (root / file).resolve()
+    if root not in p.parents or not p.is_file():          # no escaping the design's rtl/ folder
+        return {"error": "not a file of this design", "files": files[:50]}
+    lines = p.read_text(errors="replace").splitlines()
+    start = max(1, start); end = min(len(lines), max(start, end), start + 400)
+    return {"file": file, "total_lines": len(lines),
+            "text": "\n".join("%5d  %s" % (i, lines[i - 1]) for i in range(start, end + 1))}
+
+
 @tool("Look up the r2g knowledge base of known flow/sign-off failure patterns by keyword or error "
       "code (e.g. 'PDN-0185', 'antenna', 'PPL-0024'). Returns matching sections.",
       _obj({"query": {"type": "string"}}, ["query"]))

@@ -42,3 +42,19 @@ def test_step_budget(fake_adapter):
     ss = agent_loop.SessionStore()
     evs = list(agent_loop.run_turn(fake_adapter(loop), ss, ss.create(), "loop"))
     assert sum(e["type"] == "tool_call" for e in evs) == agent_loop.MAX_STEPS
+
+
+def test_read_rtl_is_confined_to_the_design(tmp_path):
+    from r2g_agent import tools
+    from r2g_agent.jobs import JobStore
+    st = JobStore()
+    tools.RT.store = st
+    proj = tmp_path / "p"
+    (proj / "rtl").mkdir(parents=True)
+    (proj / "rtl" / "a.v").write_text("module a;\nendmodule\n")
+    (tmp_path / "secret.txt").write_text("x")
+    jid = st.create_job("t", {}, [{"name": "a", "project": str(proj)}])
+    st.set_design(jid, "a", project=str(proj))
+    assert tools.read_rtl(jid, "a")["files"] == ["a.v"]
+    assert "    2  endmodule" in tools.read_rtl(jid, "a", "a.v")["text"]
+    assert "error" in tools.read_rtl(jid, "a", "../secret.txt")

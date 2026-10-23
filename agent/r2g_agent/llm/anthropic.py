@@ -79,6 +79,11 @@ class AnthropicAdapter:
         except httpx.HTTPError as e:
             yield {"type": "error", "message": "连接模型失败：%s" % e}
             return
+        except Exception as e:                                  # noqa: BLE001
+            # e.g. a SOCKS proxy in the environment without socksio installed:
+            # report it in the conversation instead of failing the request
+            yield {"type": "error", "message": "调用模型出错：%s: %s" % (type(e).__name__, e)}
+            return
         for i in sorted(blocks):
             b = blocks[i]
             if b["type"] == "tool_use":
