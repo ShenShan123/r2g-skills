@@ -76,7 +76,9 @@ else
     fi
     if [[ "$DRY" != "1" ]]; then
       echo "$sha  $tgz" | sha256sum -c --status || die "toolchain bundle sha256 mismatch (expected $sha) — refusing to install"
-      tar -C "$_bigv" -xzf "$tgz" || die "could not unpack $tgz"
+      # --no-same-owner: as root, tar would restore the packager's uid (and fails
+      # outright inside a user namespace); the files belong to whoever installs
+      tar --no-same-owner -C "$_bigv" -xzf "$tgz" || die "could not unpack $tgz"
     fi
   fi
   OR_EXE="$dest/openroad/bin/openroad"; YS_EXE="$dest/yosys/bin/yosys"; STA="$dest/openroad/bin/sta"

@@ -108,7 +108,7 @@ json.dump({"openroad": orv, "yosys": ysv, "orfs_commit": commit, "glibc_min": fl
                    "YOSYS_EXE": "yosys/bin/yosys"},
            "files": files}, open(os.path.join(b, "BUNDLE.json"), "w"), indent=1)
 EOF
-tar -C "$OUT" -czf "$OUT/$name.tar.gz" "$name"
+tar --owner=0 --group=0 --numeric-owner -C "$OUT" -czf "$OUT/$name.tar.gz" "$name"
 sha="$(sha256sum "$OUT/$name.tar.gz" | awk '{print $1}')"
 echo "$sha  $name.tar.gz" > "$OUT/$name.tar.gz.sha256"
 echo "bundle: $OUT/$name.tar.gz  ($(du -h "$OUT/$name.tar.gz" | cut -f1), sha256 $sha)"
