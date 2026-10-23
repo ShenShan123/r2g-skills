@@ -39,9 +39,11 @@ def test_chat_streams_events(monkeypatch, fake_adapter):
 def test_upload_keeps_only_hdl_and_sanitises(monkeypatch):
     c = _client(monkeypatch)
     files = [("files", ("../../evil.v", io.BytesIO(b"module m; endmodule"), "text/plain")),
-             ("files", ("notes.txt", io.BytesIO(b"x"), "text/plain"))]
+             ("files", ("rom.txt", io.BytesIO(b"00"), "text/plain")),
+             ("files", ("notes.pdf", io.BytesIO(b"x"), "application/pdf"))]
     r = c.post("/api/upload", files=files).json()
-    assert r["files"] == ["evil.v"]            # no path escape, non-HDL dropped
+    assert r["files"] == ["evil.v", "rom.txt"]   # no path escape; a $readmem image is kept
+    assert r["skipped"] == ["notes.pdf"]
 
 
 def test_bad_job_request(monkeypatch):

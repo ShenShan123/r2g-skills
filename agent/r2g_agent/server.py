@@ -17,7 +17,8 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__, agent_loop, config, tools
+from . import __version__, agent_loop, config, frontend, tools
+from . import project as rtl_project
 from .jobs import JobStore
 from .llm import make_adapter
 from .paths import PKG_DIR, r2g_home
@@ -254,11 +255,14 @@ async def upload(files: list[UploadFile] = File(...)):
     """RTL files from the browser -> a folder start_job can take as a path."""
     dest = r2g_home() / "uploads" / (time.strftime("%m%d%H%M%S") + "-" + uuid.uuid4().hex[:6])
     dest.mkdir(parents=True)
-    saved = []
+    saved, skipped = [], []
     for f in files:
         rel = Path(*[re.sub(r"[^A-Za-z0-9_.\-]", "_", part) for part in Path(f.filename or "x.v").parts
                      if part not in ("..", "/", "")])
-        if rel.suffix.lower() not in (".v", ".sv", ".vh", ".svh", ".hex", ".mem", ".bin"):
+        # HDL plus the data files $readmem reads (frontend.DATA_SUFFIXES), so a
+        # .txt/.mif ROM image is not dropped here and then reported missing
+        if rel.suffix.lower() not in rtl_project.HDL_SUFFIXES + frontend.DATA_SUFFIXES:
+            skipped.append(str(rel))
             continue
         out = dest / rel
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -268,7 +272,7 @@ async def upload(files: list[UploadFile] = File(...)):
     if not saved:
         shutil.rmtree(dest)
         raise HTTPException(400, "no Verilog/SystemVerilog files in the upload")
-    return {"path": str(dest), "files": saved}
+    return {"path": str(dest), "files": saved, "skipped": skipped}
 
 
 # --- UI ---------------------------------------------------------------------

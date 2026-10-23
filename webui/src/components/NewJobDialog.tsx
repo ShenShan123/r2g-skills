@@ -19,6 +19,9 @@ export default function NewJobDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => { dirInput.current?.setAttribute("webkitdirectory", ""); }, []);
 
   const hdl = files.filter((f) => /\.(s?v|s?vh)$/i.test(f.name));
+  // HDL plus the data files $readmem reads; everything else in the folder
+  // (.git, build output, docs) is never sent
+  const data = files.filter((f) => /\.(hex|mem|bin|txt|dat|coe|mif|init|rom|data)$/i.test(f.name));
   const toggle = (n: string) => { const s = new Set(picked); s.has(n) ? s.delete(n) : s.add(n); setPicked(s); };
 
   async function submit() {
@@ -26,7 +29,7 @@ export default function NewJobDialog({ onClose }: { onClose: () => void }) {
     try {
       const designs: any[] = [...picked].map((example) => ({ example }));
       if (hdl.length) {
-        const up = await api.upload(files);
+        const up = await api.upload([...hdl, ...data]);
         designs.push({ path: up.path, top: top || undefined, name: top || undefined });
       }
       if (!designs.length) throw new Error("请至少选择一个示例或上传 RTL");
@@ -73,6 +76,7 @@ export default function NewJobDialog({ onClose }: { onClose: () => void }) {
                 <span key={f.name} className="chip bg-panel2 text-muted"><FileCode2 size={12} />{f.name}</span>
               ))}
               {hdl.length > 8 && <span className="chip bg-panel2 text-muted">+{hdl.length - 8}</span>}
+              {data.length > 0 && <span className="chip bg-panel2 text-muted">数据文件 {data.length} 个</span>}
             </div>
             <input className="input" placeholder="顶层模块名（可留空，自动识别）" value={top} onChange={(e) => setTop(e.target.value)} />
           </div>
