@@ -77,8 +77,12 @@ if [[ $SKIP_TC -eq 0 ]]; then
     gp="$(sed -n 's/^export R2G_GRAPH_PYTHON="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$PIN" | head -1)"
     [[ -n "$gp" && -x "$gp" ]] && export R2G_GRAPH_PYTHON="$gp"
   fi
+  # under set -e a failing bootstrap used to end the script with no message at
+  # all (fresh-user test, 2026-10-23) -- say what failed and how to resume
   bash "$REPO/r2g-skills/eda-install/bootstrap.sh" $YES ${PREFIX:+--prefix "$PREFIX"} \
-       --tiers core,frontend,klayout,platform_rules,graph --strict-platforms nangate45
+       --tiers core,frontend,klayout,platform_rules,graph --strict-platforms nangate45 \
+    || die "EDA 工具链没有装完整（失败的那一项见上方 \"installer returned non-zero\" 附近的输出）。
+  已下载的内容会保留，修好后重新运行同一条 bash install.sh 命令即可接着装。"
 else
   say "2/7 跳过工具链安装（--skip-toolchain）"
 fi
