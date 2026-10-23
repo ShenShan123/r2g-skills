@@ -88,3 +88,92 @@ def test_the_hook_reads_its_net_list_from_beside_itself():
                         "deck_antenna_diodes.tcl")
     body = open(here).read()
     assert "info script" in body and "antenna_nets.txt" in body
+
+
+# --- rung r2: the net list ACCUMULATES across applications ---------------------
+
+def _deck_project(tmp_path, nets, monkeypatch):
+    """A project whose (stubbed) mapper reports `nets` for the latest verdict."""
+    (tmp_path / "drc").mkdir(exist_ok=True)
+    (tmp_path / "drc" / "6_drc.lyrdb").write_text("<report/>")
+    r = tmp_path / "backend" / "RUN_x" / "results"
+    r.mkdir(parents=True, exist_ok=True)
+    (r / "6_final.def").write_text("DESIGN t ;\n")
+
+    class _R:
+        returncode = 0
+
+    def fake_run(cmd, **kw):
+        out = cmd[cmd.index("--json-out") + 1]
+        with open(out, "w") as f:
+            json.dump({"nets": nets}, f)
+        return _R()
+    monkeypatch.setattr(d.subprocess, "run", fake_run)
+    return tmp_path
+
+
+def test_second_application_keeps_the_first_rounds_nets(tmp_path, monkeypatch):
+    """A residual-only second round dropped the first round's diodes and went
+    from 4 violations back to 203 on the repair arm; the union cleared it."""
+    p = _deck_project(tmp_path, ["n1", "n2", "n3"], monkeypatch)
+    ok, info = d._materialize_deck_antenna_diodes(p)
+    assert ok and "nets=3" in info
+    _deck_project(tmp_path, ["n3", "n4"], monkeypatch)          # residual verdict
+    ok, info = d._materialize_deck_antenna_diodes(p)
+    assert ok and "accumulated: 3 prior + 1 new" in info
+    nets = (p / "signoff_fix" / "antenna_nets.txt").read_text().split()
+    assert nets == ["n1", "n2", "n3", "n4"]
+
+
+def test_a_round_with_no_new_net_is_refused(tmp_path, monkeypatch):
+    """Re-running the same list cannot change the layout -- refuse, so the
+    ladder moves on to the next rung instead of spending an iteration."""
+    p = _deck_project(tmp_path, ["n1", "n2"], monkeypatch)
+    assert d._materialize_deck_antenna_diodes(p)[0]
+    _deck_project(tmp_path, ["n2"], monkeypatch)
+    ok, why = d._materialize_deck_antenna_diodes(p)
+    assert not ok and why == "deck_flags_no_net_beyond_the_accumulated_list"
+    assert (p / "signoff_fix" / "antenna_nets.txt").read_text().split() == ["n1", "n2"]
+
+
+# --- rung r3: the ROUTER's tech LEF at ratio 10, the grader untouched ----------
+
+def _fake_platform(tmp_path, lef_text, monkeypatch):
+    plat = tmp_path / "flow" / "platforms" / "nangate45"
+    (plat / "lef").mkdir(parents=True)
+    (plat / "config.mk").write_text(
+        "export TECH_LEF = $(PLATFORM_DIR)/lef/NangateOpenCellLibrary.tech.lef\n")
+    (plat / "lef" / "NangateOpenCellLibrary.tech.lef").write_text(lef_text)
+    monkeypatch.setattr(d, "_find_flow_dir", lambda: str(tmp_path / "flow"))
+    return plat
+
+
+def test_ratio_lef_rewrites_every_layer_rule(tmp_path, monkeypatch):
+    lef = "".join("LAYER metal%d\n  ANTENNAAREARATIO 300 ;\nEND metal%d\n" % (i, i)
+                  for i in range(1, 11))
+    plat = _fake_platform(tmp_path, lef, monkeypatch)
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    ok, info = d._materialize_antenna_ratio_lef(proj, CFG)
+    assert ok and "10 layer rules" in info
+    out = (proj / "signoff_fix" / "antenna_ratio10.tech.lef").read_text()
+    assert out.count("ANTENNAAREARATIO 10 ;") == 10 and "300" not in out
+    # the platform's own LEF -- and with it anything the grader could read -- is untouched
+    assert (plat / "lef" / "NangateOpenCellLibrary.tech.lef").read_text() == lef
+
+
+def test_ratio_lef_refuses_a_lef_with_nothing_to_tighten(tmp_path, monkeypatch):
+    """The stock nangate45 tech LEF ships no ANTENNAAREARATIO at all; a copy of
+    it would be a no-op recorded as evidence against the recipe."""
+    _fake_platform(tmp_path, "LAYER metal1\nEND metal1\n", monkeypatch)
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    ok, why = d._materialize_antenna_ratio_lef(proj, CFG)
+    assert not ok and why == "tech_lef_has_no_antenna_area_ratio"
+    assert not (proj / "signoff_fix").exists()
+
+
+def test_unusable_diode_blocks_the_ratio_rung(monkeypatch):
+    monkeypatch.setattr(d, "_antenna_precondition", lambda p: (False, "no diode"))
+    plan = d.build_plan(_antenna_drc(), {}, CFG, check="drc")
+    assert "antenna_ratio_overconstrain" not in [s["id"] for s in plan["strategies"]]

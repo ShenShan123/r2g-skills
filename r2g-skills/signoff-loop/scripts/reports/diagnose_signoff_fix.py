@@ -91,7 +91,10 @@ DIODE_FORCED_REPAIR_PLATFORMS = {"nangate45"}
 
 
 DIODE_INSERTING_STRATEGIES = frozenset({
-    "antenna_diode_repair", "antenna_diode_iters", "deck_driven_antenna_diode"})
+    "antenna_diode_repair", "antenna_diode_iters", "deck_driven_antenna_diode",
+    # repairs by making repair_antennas insert MORE ANTENNA_X1 diodes, so it is
+    # as dead as the others when the diode is unusable (GRT-0246)
+    "antenna_ratio_overconstrain"})
 
 
 def _inserts_diodes(strategy: dict) -> bool:
@@ -226,9 +229,82 @@ def _materialize_deck_antenna_diodes(proj):
         # The deck flagged antenna violations the DEF cannot attribute to a net.
         # Inserting on a guessed net is how the threshold strategies failed.
         return False, "deck_violations_mapped_to_zero_nets"
-    (out / "antenna_nets.txt").write_text("\n".join(nets) + "\n", encoding="utf-8")
+    # ACCUMULATE across applications (the repair arm's rung r2). A second
+    # application reads the verdict on the FIRST one's layout, so the deck now
+    # flags only the residual nets; a list rebuilt from those alone drops every
+    # diode the first round placed. Measured on the nangate45 repair arm: a
+    # residual-only second round went from 4 violations back to 203, while the
+    # union cleared the rung (r2: 6 more designs dual-clean). So the list only
+    # grows, and a round that maps no NEW net is refused -- re-running the same
+    # list cannot change the layout, and the ladder should move on.
+    prior_f = out / "antenna_nets.txt"
+    prior = []
+    if prior_f.exists():
+        prior = [n for n in prior_f.read_text(encoding="utf-8").split() if n]
+    union = list(dict.fromkeys(prior + nets))
+    if prior and len(union) == len(prior):
+        return False, "deck_flags_no_net_beyond_the_accumulated_list"
+    prior_f.write_text("\n".join(union) + "\n", encoding="utf-8")
     shutil.copyfile(hook_src, out / "deck_antenna_diodes.tcl")
+    if prior:
+        return True, (f"nets={len(union)} (accumulated: {len(prior)} prior + "
+                      f"{len(union) - len(prior)} new) from {lyrdbs[0].name}")
     return True, f"nets={len(nets)} from {lyrdbs[0].name}"
+
+
+ANTENNA_RATIO_REPAIR = 10
+
+
+def _platform_tech_lef(cfg):
+    """The platform's TECH_LEF as make would expand it, or None."""
+    flow_dir = _find_flow_dir()
+    plat = cfg.get("PLATFORM") or ""
+    if not flow_dir or not plat:
+        return None
+    pcfg = Path(flow_dir) / "platforms" / plat / "config.mk"
+    try:
+        vals = platform_config_values(pcfg.read_text(encoding="utf-8", errors="ignore"))
+    except OSError:
+        return None
+    tech = (vals.get("TECH_LEF") or "").replace("$(PLATFORM_DIR)", str(pcfg.parent))
+    return tech if tech and "$(" not in tech and Path(tech).is_file() else None
+
+
+def _antenna_ratio_inputs_present(cfg) -> bool:
+    """Selection-time twin of _deck_antenna_inputs_present: is there a per-layer
+    ratio to tighten? The stock nangate45 tech LEF has none (the antenna model
+    comes from tools/install_nangate45_antenna.sh), and offering the rung there
+    spent a driver iteration on a refusal."""
+    tech = _platform_tech_lef(cfg)
+    if not tech:
+        return False
+    try:
+        return "ANTENNAAREARATIO" in Path(tech).read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return False
+
+
+def _materialize_antenna_ratio_lef(proj, cfg):
+    """Write <project>/signoff_fix/antenna_ratio<N>.tech.lef: the platform's tech
+    LEF with every ANTENNAAREARATIO set to ANTENNA_RATIO_REPAIR (rung r3).
+
+    The ROUTER becomes stricter than the rule; the GRADER is untouched (the
+    KLayout deck carries its own 300:1 and never reads this LEF). Fail-closed:
+    nothing is written unless the platform LEF resolves and actually carries
+    per-layer ratios to tighten -- a copy with no ratio in it would be a no-op
+    recorded as evidence against the recipe.
+    """
+    tech = _platform_tech_lef(cfg)
+    if not tech:
+        return False, "platform_tech_lef_unresolved"
+    text = Path(tech).read_text(encoding="utf-8", errors="ignore")
+    new, n = re.subn(r"(ANTENNAAREARATIO\s+)[0-9.]+", rf"\g<1>{ANTENNA_RATIO_REPAIR}", text)
+    if n == 0:
+        return False, "tech_lef_has_no_antenna_area_ratio"
+    out = proj / "signoff_fix"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"antenna_ratio{ANTENNA_RATIO_REPAIR}.tech.lef").write_text(new, encoding="utf-8")
+    return True, f"ANTENNAAREARATIO -> {ANTENNA_RATIO_REPAIR} on {n} layer rules of {Path(tech).name}"
 
 
 def _antenna_catalog(cfg: dict) -> list:
@@ -261,6 +337,25 @@ def _antenna_catalog(cfg: dict) -> list:
              "config_edits": {"PRE_GLOBAL_ROUTE_TCL": "{PROJECT}/signoff_fix/deck_antenna_diodes.tcl"},
              "materialize": "deck_antenna_diodes",
              "rerun_from": "route", "recheck": "drc", "auto_apply": True},
+            {"id": "antenna_ratio_overconstrain",
+             "rationale": "Rung r3 of the nangate45 repair arm: give the ROUTER's tech LEF "
+                          "ANTENNAAREARATIO 10 (the grader keeps 300). With both at 300 the "
+                          "router reports 4 violating nets where the deck reports 208 on the "
+                          "same layout -- the models disagree inside the computation -- so "
+                          "over-constraining the router makes it repair until the deck's 300:1 "
+                          "holds with margin. The cost is real: validated on C00315 208 -> 0 "
+                          "antenna violations, LVS still matching, worst slack 0.2748 -> 0.2754, "
+                          "+11.9% instances, +3.4% cell area; cleared 10 designs the diode "
+                          "rungs could not. The fallback after the deck-driven diodes, not the "
+                          "plan. TECH_LEF is assigned by the platform config, so it is written "
+                          "as an override and read back.",
+             "config_edits": {"TECH_LEF": "{PROJECT}/signoff_fix/antenna_ratio%d.tech.lef"
+                                          % ANTENNA_RATIO_REPAIR},
+             "override_keys": ["TECH_LEF"],
+             "materialize": "antenna_ratio_lef",
+             # the tech LEF is read into the database at floorplan; later stages
+             # load that database, so a later rerun would keep the old ratio
+             "rerun_from": "floorplan", "recheck": "drc", "auto_apply": True},
             {"id": "antenna_diode_repair",
              "rationale": "Force antenna-diode insertion: the FreePDK45 KLayout deck credits "
                           "diodes, NOT jumpers, so SKIP_ANTENNA_REPAIR=1 disables OpenROAD's "
@@ -2037,8 +2132,10 @@ def main(argv=None) -> int:
     # Offering a strategy that provably cannot run is the same waste the
     # antenna-model precheck exists to prevent, one layer up.
     _unmaterializable = [s["id"] for s in plan.get("strategies", [])
-                         if s.get("materialize") == "deck_antenna_diodes"
-                         and not _deck_antenna_inputs_present(proj)]
+                         if (s.get("materialize") == "deck_antenna_diodes"
+                             and not _deck_antenna_inputs_present(proj))
+                         or (s.get("materialize") == "antenna_ratio_lef"
+                             and not _antenna_ratio_inputs_present(cfg))]
     if _unmaterializable:
         plan["strategies"] = [s for s in plan["strategies"]
                               if s["id"] not in _unmaterializable]
@@ -2146,6 +2243,16 @@ def main(argv=None) -> int:
         # zero-effect apply is never recorded as evidence against the recipe.
         if strat.get("materialize") == "deck_antenna_diodes":
             ok, info = _materialize_deck_antenna_diodes(proj)
+            if not ok:
+                print(json.dumps({"status": "precondition_failed", "applied": None,
+                                  "strategy": strat["id"], "unmet": [info]}))
+                return 4
+            strat = dict(strat)
+            strat["config_edits"] = {k: v.replace("{PROJECT}", str(proj))
+                                     for k, v in strat["config_edits"].items()}
+            strat["materialized"] = info
+        elif strat.get("materialize") == "antenna_ratio_lef":
+            ok, info = _materialize_antenna_ratio_lef(proj, cfg)
             if not ok:
                 print(json.dumps({"status": "precondition_failed", "applied": None,
                                   "strategy": strat["id"], "unmet": [info]}))

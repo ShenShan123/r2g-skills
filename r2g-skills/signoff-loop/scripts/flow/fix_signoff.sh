@@ -829,7 +829,9 @@ echo "Summary: $REPORTS/fix_summary.md"
 # deck_driven_antenna_diode: 24 coupling pairs and 11/400 ground caps off --
 # caught only by verify_graph_dataset). Re-run RCX whenever the SPEF is missing
 # or older than the final layout of the latest run.
-_latest_run="$(ls -td "$PROJECT_DIR"/backend/RUN_* 2>/dev/null | head -1)"
+# `|| true`: with no RUN_* yet, ls exits 2 and under pipefail that killed the
+# whole script with rc=2 (two driver tests caught it; a fresh project would too)
+_latest_run="$(ls -td "$PROJECT_DIR"/backend/RUN_* 2>/dev/null | head -1 || true)"
 _final_odb="$_latest_run/final/6_final.odb"
 _spef="$PROJECT_DIR/rcx/6_final.spef"
 if [[ -f "$_final_odb" ]] && { [[ ! -f "$_spef" ]] || [[ "$_spef" -ot "$_final_odb" ]]; }; then

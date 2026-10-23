@@ -17,6 +17,20 @@ deck), merges per-pin gate areas from `.macro.lef`, and gives the diode a usable
 `ANTENNADIFFAREA`. The KLayout signoff deck is never touched. See
 `failure-patterns.md` "Antenna DRC Violations" for the full root-cause.
 
+**The nangate45 antenna ladder** (2026-10-23, from the nangate45 repair arm: 122 designs
+made dual-clean, r1 106 / r2 6 / r3 10). Every rung changes what the ROUTER builds; the
+grader is never touched. `fix_signoff.sh` walks it one rung per iteration:
+
+| rung | strategy | what it does |
+| --- | --- | --- |
+| r1 | `deck_driven_antenna_diode` | a diode on each net the deck's lyrdb flags, mapped through the DEF |
+| r2 | the same strategy, applied again | the net list **accumulates**: the previous list plus whatever the new verdict still flags. A residual-only list drops r1's diodes (measured: 4 violations back to 203); a round that maps no new net is refused so the ladder moves on |
+| r3 | `antenna_ratio_overconstrain` | the router's tech LEF with `ANTENNAAREARATIO 10` (`signoff_fix/antenna_ratio10.tech.lef`, written as `override export TECH_LEF`, rerun from floorplan because the tech is read into the database there). Brute force: +11.9% instances on C00315 |
+
+Both r3 and the diode rungs are dropped at selection time when their inputs are absent
+(no lyrdb/DEF; no ratio in the platform tech LEF, i.e. the antenna model is not
+installed), so the driver never spends an iteration on a refusal.
+
 ---
 
 ## Scripts

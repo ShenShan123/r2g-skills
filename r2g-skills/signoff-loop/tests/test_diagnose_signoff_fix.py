@@ -53,8 +53,18 @@ def test_antenna_fail_nangate45_offers_diode_repair(monkeypatch):
     # deck-driven insertion took 7/7 subjects to zero. The old strategy stays as a
     # fallback rather than being deleted -- it is the one that works wherever the
     # two tools' criteria DO agree.
-    assert ids == ["deck_driven_antenna_diode", "antenna_diode_repair"]
-    deck, forced = plan["strategies"]
+    # antenna_ratio_overconstrain (rung r3 of the repair arm: router tech LEF at
+    # ANTENNAAREARATIO 10, grader untouched) sits between them -- it cleared 10
+    # designs the deck-driven diodes could not, where antenna_diode_repair is the
+    # measured no-op above.
+    assert ids == ["deck_driven_antenna_diode", "antenna_ratio_overconstrain",
+                   "antenna_diode_repair"]
+    deck, ratio, forced = plan["strategies"]
+    assert ratio["config_edits"] == {
+        "TECH_LEF": "{PROJECT}/signoff_fix/antenna_ratio10.tech.lef"}
+    assert ratio["override_keys"] == ["TECH_LEF"]
+    assert ratio["materialize"] == "antenna_ratio_lef"
+    assert ratio["rerun_from"] == "floorplan"
     # The deck-driven one carries a hook path with a {PROJECT} placeholder, because
     # build_plan is pure and the real path is only known at apply time.
     assert deck["config_edits"] == {
@@ -669,7 +679,7 @@ def test_antenna_precondition_unknown_fails_open(monkeypatch):
                         lambda p: (None, "cannot inspect (test)"))
     plan = d._drc_plan(dict(_ANT_FAIL), {"PLATFORM": "nangate45"}, set())
     assert [s["id"] for s in plan["strategies"]] == [
-        "deck_driven_antenna_diode", "antenna_diode_repair"]
+        "deck_driven_antenna_diode", "antenna_ratio_overconstrain", "antenna_diode_repair"]
 
 
 def test_antenna_precondition_keeps_density_relief_elsewhere(monkeypatch):
