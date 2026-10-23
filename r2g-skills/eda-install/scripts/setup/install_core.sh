@@ -41,7 +41,15 @@ fi
 # 1) ORFS checkout (git only, no build) — provides flow/ + platforms/.
 if [[ ! -f "$_orfs/flow/Makefile" ]]; then
   have_cmd git || die "git required to clone ORFS"
-  run git clone --recursive "$ORFS_URL" "$_orfs" || die "ORFS clone failed"
+  if [[ "$BUILD" == "1" ]]; then
+    run git clone --recursive "$ORFS_URL" "$_orfs" || die "ORFS clone failed"
+  else
+    # no-build: only flow/ (Makefile, scripts, platforms) is used -- the binaries
+    # come from conda. A --recursive clone pulled the OpenROAD and Yosys source
+    # trees and every submodule (> 4.5 GB, over an hour behind a proxy on the
+    # fresh-user test, 2026-10-23) for nothing.
+    run git clone --depth 1 "$ORFS_URL" "$_orfs" || die "ORFS clone failed"
+  fi
 elif [[ "$_how" == "cloned" ]]; then
   _how="reused (already cloned here)"
 fi
