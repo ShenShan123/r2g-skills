@@ -1,4 +1,82 @@
-# agent-r2g
+# r2g —— 从 RTL 到签核版图，再到可训练的数据集
+
+r2g 是一个开源 EDA 自主 agent：给它一批 Verilog，它在后台跑完综合、布局布线、DRC/LVS 签核；
+遇到失败自己读日志、诊断、选修法、重跑、复核；最后把**签核通过**的设计转成机器学习数据集
+（GNN **图数据集** 或 CNN **图像数据集**），逐项独立校验后交给你。模型由你选择：DeepSeek、通义千问、
+Kimi、智谱 GLM、豆包、OpenAI、Gemini、Claude 或本地 Ollama，配置即用。
+
+![首页](docs/agent/img/home.png)
+
+## 一键安装
+
+需要一台 Linux 机器（不需要 root 权限）和约 15 GB 磁盘空间。
+
+```bash
+git clone https://github.com/ShenShan123/r2g-skills.git
+cd r2g-skills
+bash install.sh
+```
+
+`install.sh` 会依次：检查机器 → 安装 EDA 工具链（OpenROAD-flow-scripts、Yosys、KLayout、
+图数据集用的 PyTorch 环境；已经装好的会被识别并跳过）→ 验证 nangate45 平台可用 → 安装 agent →
+把 `r2g` 命令放进 `~/.local/bin` → 让你选择模型并填写 API 密钥（只保存在本机）→ 可选地跑一次自检
+（内置示例 counter8 从 RTL 到图数据集，约 3–5 分钟）。
+
+常用参数：`--yes`（不逐项确认）、`--prefix DIR`（大文件放哪里）、`--skip-toolchain`（工具链已就绪）、
+`--provider deepseek --key-env DEEPSEEK_API_KEY`（不交互地配置模型）。完整说明：`bash install.sh --help`。
+
+## 使用
+
+```bash
+r2g ui        # 启动界面，浏览器打开 http://127.0.0.1:8770
+```
+
+在远程服务器上运行时，在自己电脑上执行 `ssh -N -L 8770:127.0.0.1:8770 用户@服务器`，再打开上面的地址。
+
+- **首页**：一键体验（3 个内置示例，约 3 分钟），选择输出图数据集或图像数据集。
+- **对话**：用自然语言下指令，例如“把 /data/rtl/my_cpu 跑一遍并转成图像数据集”。agent 调用的每一步工具
+  和真实结果都以步骤卡片展示。
+- **任务**：每个设计的进度、签核结论、自动修复记录、版图预览、日志，以及数据集下载。
+
+| 对话：agent 读日志和源码，精确定位 RTL 错误 | 任务：签核结论与图像数据集的各个通道 |
+|---|---|
+| ![对话](docs/agent/img/chat.png) | ![图像数据集](docs/agent/img/image_dataset.png) |
+
+命令行与其他客户端：
+
+```bash
+r2g config --provider qwen --set-key     # 更换模型
+r2g check-model                          # 测试模型连通与工具调用
+r2g run --example counter8               # 不经过对话，直接跑
+r2g status                               # 查看任务
+r2g chat                                 # 终端里对话
+r2g mcp                                  # 作为 MCP 服务器，接入 Claude Code、Cursor 等客户端
+```
+
+## 两种数据集
+
+| | 图数据集（graph） | 图像数据集（image） |
+|---|---|---|
+| 形式 | PyTorch Geometric：五种视图（b–f）+ 网表图，`HeteroData` | GCell 网格上的多通道数组（`.npz`，[x][y]）+ 预览图 |
+| 特征 | 单元、线网、引脚的几何与电气特征 | 单元密度、宏单元区域、RUDY、引脚 RUDY、引脚密度 —— **只取自放置后的版图**，不含布线信息 |
+| 标签 | 拥塞、线长、时序、IR drop、RC 寄生参数 | 拥塞、IR drop |
+| 校验 | `tools/verify_graph_dataset.py`（数百项） | `verify_images.py`（17 项，含与图数据集拥塞标签的逐单元对齐） |
+
+## 结论为什么可信
+
+- **模型负责判断，代码负责判定。** 通过与否只由 DRC/LVS 和数据集校验器决定；模型调用的工具里没有任何
+  一个能宣布“通过”。检查器崩溃或超时不算通过。
+- **只收签核通过的设计。** 数据集构建前有签核门，版图与报告按内容摘要绑定，换了版图旧报告就失效。
+- **每个数据集都经过独立复算。** 校验程序不复用生成代码，自行解析 DEF/LEF/SPEF 重新计算并比对。
+- **失败分得清。** agent 区分“你的 RTL 有问题”和“工具/流程问题”，并引用真实的报错码。
+
+当前版本支持 **nangate45**（45 nm）平台；sky130hd、gf180 正在适配。设计文档：
+[`docs/agent/AGENT_DESIGN.md`](docs/agent/AGENT_DESIGN.md)。
+
+---
+
+# 作为 Claude Code 技能使用
+
 
 A Claude Code skill that drives an open-source RTL-to-GDS flow — from natural-language spec (or existing RTL) through synthesis, place-and-route, and full signoff (DRC, LVS, RCX) — using Yosys, OpenROAD-flow-scripts, KLayout, and OpenRCX.
 
@@ -26,8 +104,8 @@ Install the `r2g-skills` skills (`eda-install` to set up the toolchain, `rtl-acq
 ## Install the skill
 
 ```bash
-git clone https://github.com/ShenShan123/agent-r2g.git
-cd agent-r2g
+git clone https://github.com/ShenShan123/r2g-skills.git
+cd r2g-skills
 bash r2g-skills/install.sh --user   # installs eda-install + rtl-acquire + signoff-loop + def-graph into ~/.claude/skills/
 ```
 

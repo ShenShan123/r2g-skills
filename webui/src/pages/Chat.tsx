@@ -10,7 +10,7 @@ type Msg = { role: "user" | "assistant"; parts: Part[]; error?: string };
 const TOOL_LABEL: Record<string, string> = {
   list_examples: "查看内置示例", start_job: "提交任务", job_status: "查询任务进度", list_jobs: "列出任务",
   design_detail: "查看设计详情", read_log: "读取日志", diagnose: "请修复引擎诊断", knowledge_lookup: "查询故障知识库",
-  cancel_job: "取消任务", dataset_info: "查询数据集", check_environment: "检查工具链",
+  cancel_job: "取消任务", dataset_info: "查询数据集", check_environment: "检查工具链", read_rtl: "读取源码",
 };
 const SUGGEST = [
   "跑一下三个内置示例并转成图数据集",
