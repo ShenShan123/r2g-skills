@@ -64,7 +64,8 @@ for c in "${R2G_PYTHON:-}" python3.13 python3.12 python3.11 python3.10 python3 /
 done
 [[ -n "$PY" ]] || die "找不到能创建虚拟环境的 Python 3.10+（需要 venv 和 ensurepip 模块）。可用 R2G_PYTHON=/path/to/python3 指定。"
 ok "Python $("$PY" -c 'import platform; print(platform.python_version())') ($PY)"
-FREE_GB=$(df -Pk "${PREFIX:-$HOME}" | awk 'NR==2{print int($4/1048576)}')
+[[ -n "$PREFIX" ]] && mkdir -p "$PREFIX"
+FREE_GB=$(df -Pk "${PREFIX:-$HOME}" 2>/dev/null | awk 'NR==2{print int($4/1048576)}' || true)
 ok "磁盘可用约 ${FREE_GB} GB（工具链约需 15 GB）"
 
 # ---- 2. toolchain -------------------------------------------------------------
