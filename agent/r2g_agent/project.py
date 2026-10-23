@@ -19,7 +19,7 @@ import re
 import shutil
 from pathlib import Path
 
-from . import platforms
+from . import frontend, platforms
 
 HDL_SUFFIXES = (".v", ".sv", ".vh", ".svh")
 
@@ -164,7 +164,9 @@ def create(src: Path, project: Path, platform: str, top: str | None = None,
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(f, dst)
         copied.append(dst)
-    sources = [p for p in copied if p.suffix.lower() in (".v", ".sv")]
+    sources, fixes, missing = frontend.fix_sources(copied, base, rtl)
+    if not sources:
+        raise ValueError("no compilable Verilog/SystemVerilog source under %s" % src)
     inc_dirs = sorted({str(p.parent) for p in copied})
     meta = {
         "design_name": name or top,
@@ -174,6 +176,9 @@ def create(src: Path, project: Path, platform: str, top: str | None = None,
         "source": str(src),
         "files": [str(p) for p in sources],
         "include_dirs": inc_dirs,
+        "frontend_fixes": fixes,
+        "missing_data_files": missing,
+        "synth_hooks": [],
         "status": "created",
     }
     _write_config(project, meta, sizing=None)
@@ -193,6 +198,9 @@ def _write_config(project: Path, meta: dict, sizing: dict | None) -> None:
         "export ABC_AREA = 1",
         "export SYNTH_MEMORY_MAX_BITS = 131072",
     ]
+    if meta.get("synth_hooks"):
+        lines.append("export SYNTH_CANONICALIZE_TCL = %s"
+                     % frontend.write_synth_hook(project, meta["synth_hooks"]))
     if sizing:
         d, i = sizing["die_side_um"], sizing["core_inset_um"]
         lines += ["export DIE_AREA  = 0 0 %g %g" % (d, d),
@@ -253,6 +261,15 @@ def count_io_bits(netlist: Path, top: str) -> int:
         width = abs(int(hi) - int(lo)) + 1 if hi else 1
         n += width * len([x for x in names.split(",") if x.strip()])
     return n
+
+
+def add_synth_hooks(project: Path, recipe_ids: list[str]) -> dict:
+    """Record synthesis-failure recipes and rewrite the synthesis config with them."""
+    meta = json.loads((project / "metadata.json").read_text())
+    meta["synth_hooks"] = list(dict.fromkeys(meta.get("synth_hooks", []) + recipe_ids))
+    _write_config(project, meta, sizing=None)
+    (project / "metadata.json").write_text(json.dumps(meta, indent=2))
+    return meta
 
 
 def apply_sizing(project: Path, synth_stat: Path, netlist: Path) -> dict:

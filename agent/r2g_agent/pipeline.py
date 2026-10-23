@@ -28,6 +28,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from . import frontend
 from . import project as proj
 from .jobs import CANCELLED, FAILED, PASSED, RUNNING, JobStore
 from .paths import defgraph_scripts, r2g_home, repo_root, signoff_scripts, skills_dir, tools_dir
@@ -249,16 +250,40 @@ class Pipeline:
         self._ok(jid, name, "prepare", "顶层模块 %s（%s），%d 个源文件"
                  % (meta["top"], meta.get("top_source") or "指定", len(meta["files"])),
                  {"top": meta["top"], "top_source": meta.get("top_source")})
-        self.store.set_design(jid, name, detail={"top": meta["top"], "top_source": meta.get("top_source")})
-        # synth
+        self.store.set_design(jid, name, detail={"top": meta["top"], "top_source": meta.get("top_source"),
+                                                 "frontend_fixes": meta["frontend_fixes"]})
+        for fx in meta["frontend_fixes"]:
+            self._ok(jid, name, "prepare", "前端修复：%s（%s）" % (fx["detail"], fx["file"]), fx)
+        for m in meta["missing_data_files"]:
+            self._fail_soft(jid, name, "prepare", "缺少数据文件：%s 里的 $readmem 读取 %s，%s；请补传这个文件"
+                            % (m["file"], m["reference"], m["reason"]), m)
+        # synth, then at most one re-run per frontend recipe whose signature is in the log
         self._stage(jid, name, "synth")
-        rc = self._sh(jid, name, "synth", ["bash", S + "/flow/run_orfs.sh", str(pdir), platform], pdir,
-                      env={"ORFS_STAGES": "synth"})
-        run = latest_run(pdir)
-        stat = run / "reports_orfs" / "synth_stat.txt" if run else None
-        if rc != 0 or not stat or not stat.is_file():
-            self._fail(jid, name, "synth", "综合失败（rc=%s）" % rc, {"log_tail": self._tail(pdir, "synth")})
-            return
+        tried: list[str] = []
+        while True:
+            rc = self._sh(jid, name, "synth", ["bash", S + "/flow/run_orfs.sh", str(pdir), platform], pdir,
+                          env={"ORFS_STAGES": "synth"})
+            run = latest_run(pdir)
+            stat = run / "reports_orfs" / "synth_stat.txt" if run else None
+            if rc == 0 and stat and stat.is_file():
+                break
+            hits = frontend.match_synth_failure(self._synth_log_text(pdir, run),
+                                                run / "results" / "1_2_yosys.v" if run else None, tried)
+            if not hits:
+                msg = "综合失败（rc=%s）" % rc
+                if meta["missing_data_files"]:
+                    msg += "：缺少数据文件 %s" % "、".join(m["reference"] for m in meta["missing_data_files"])
+                self._fail(jid, name, "synth", msg, {"log_tail": self._tail(pdir, "synth"),
+                                                     "frontend_tried": tried})
+                return
+            tried += [h["id"] for h in hits]
+            meta = proj.add_synth_hooks(pdir, [h["id"] for h in hits])
+            for h in hits:
+                fx = {"recipe": h["id"], "file": "constraints/frontend_fix.tcl", "detail": h["label"]}
+                meta["frontend_fixes"].append(fx)
+                self._ok(jid, name, "synth", "前端修复：%s，重新综合" % h["label"], fx)
+            (pdir / "metadata.json").write_text(json.dumps(meta, indent=2))
+            self.store.set_design(jid, name, detail={"frontend_fixes": meta["frontend_fixes"]})
         # size
         self._stage(jid, name, "size")
         sizing = proj.apply_sizing(pdir, stat, run / "results" / "1_2_yosys.v")
@@ -391,6 +416,18 @@ class Pipeline:
             raise
         except Exception:                                         # noqa: BLE001
             pass
+
+    @staticmethod
+    def _synth_log_text(pdir: Path, run: Path | None) -> str:
+        """The agent's synth log plus every ORFS log of the run (yosys writes its
+        warnings there, not to stdout)."""
+        parts = []
+        for p in [pdir / "agent_logs" / "synth.log"] + (sorted((run / "logs").rglob("*.log")) if run else []):
+            try:
+                parts.append(p.read_text(errors="replace"))
+            except OSError:
+                pass
+        return "\n".join(parts)
 
     @staticmethod
     def _tail(pdir: Path, stage: str, n: int = 40) -> str:

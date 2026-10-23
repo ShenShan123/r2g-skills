@@ -46,6 +46,33 @@
 - Flatten dependencies
 - Replace unsupported simulation-only code with synthesizable alternatives
 
+### Frontend recipes (validated on the nangate45 repair arm, 2026-10-21/22)
+
+Four synthesis failures with a fixed cause and a fix that changes no logic. The
+Designs column lists those the recipe took dual-clean under the frozen spec; the
+ones in parentheses got through synthesis with it and then failed later in the
+flow (C03391/C03782 hit the stage bound; C00339 ended with 28 DRC violations
+and an LVS mismatch, not yet diagnosed). The agent applies them
+automatically (`agent/r2g_agent/frontend.py`) and records every one in
+`metadata.json` `frontend_fixes`.
+
+| Recipe | Signature | Fix | Designs |
+|---|---|---|---|
+| `header_not_source` | `syntax error, unexpected TOK_INITIAL` (or any loose statement) in a file another source `` `include``s (in the corpus, a `.vh` the file list compiled) | drop it from `VERILOG_FILES`, keep its dir on `VERILOG_INCLUDE_DIRS` (applied at project creation) | C01292, C02831 (C03391, C03782) |
+| `readmem_absolute` | `can not open file ... for $readmem`, or the data file listed as a source (`syntax error, unexpected TOK_CONSTVAL` in a `.hex`) | yosys runs in the ORFS flow dir, so a relative path in `$readmem` -- literal, or the parameter default it names -- resolves to nothing; rewrite it to the absolute path of the copied data file (applied at project creation; a file absent from the upload is reported, never invented) | C00303 (C00339) |
+| `aldff_to_dffsr` | `unmapped internal cell of type $_ALDFFE_PNP_` then `Found N problems in 'check -assert'` | `SYNTH_CANONICALIZE_TCL = orfs_hooks/aldff_to_dffsr.tcl`: `simplemap` + `dfflegalize` turn only the async-load flops into set/reset flops + gating, which `dfflibmap` maps (DFFRS) | C01169, C03509 |
+| `strip_vendor_attr` | `[ERROR STA-0171] .../1_2_yosys.v line N, syntax error` with `altera_attribute` in that netlist | `SYNTH_CANONICALIZE_TCL = orfs_hooks/strip_vendor_attr.tcl`: unset `altera_attribute` (an embedded Quartus SDC statement OpenSTA's reader rejects) | C02098 |
+
+The two `SYNTH_CANONICALIZE_TCL` recipes fire only on their signature, after a
+failed synthesis, and synthesis is re-run once per recipe; `strip_vendor_attr`
+also requires the attribute in the netlist, so a STA-0171 on another construct
+is not touched. A design needing both gets one hook that sources both.
+
+Not ported: SystemVerilog the Yosys frontend cannot parse (the `sv_frontend`
+arm needs a slang plugin built for the bundled yosys 0.64), and fetching a data
+file the RTL names but the repository never shipped (`datafile_fetch`, which
+needs the upstream repo; for an uploaded design the agent asks for the file).
+
 ## ORFS Backend Issues
 
 **Symptoms:**

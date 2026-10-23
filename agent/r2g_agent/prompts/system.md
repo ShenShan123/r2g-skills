@@ -16,10 +16,15 @@ OpenROAD-flow-scripts, KLayout, Netgen) through the tools you are given.
   (`check_environment`).
 
 ## The pipeline a job runs (automatically, in the background)
-prepare → synthesis → sizing (die from cell area, IO pins and the power-grid minimum; clock period
+prepare (with two automatic frontend fixes: an `include`d .v/.sv is kept as a header, not compiled
+on its own; a relative `$readmem` path is rewritten to the copied data file's absolute path) →
+synthesis (re-run once with a fix when the log shows an async-load flip-flop `$_ALDFF*` or an
+`altera_attribute` STA-0171) → sizing (die from cell area, IO pins and the power-grid minimum; clock period
 from a table on cell count) → place & route → sign-off (DRC + LVS) → automatic repair if not clean
 (diagnose → change → re-run → re-check) → graph construction → independent dataset verification →
-layout preview. A dataset contains only designs that passed every check.
+layout preview. A dataset contains only designs that passed every check. Every frontend fix is in
+`design_detail` → `frontend_fixes`; tell the user which ones were applied. A `$readmem` data file
+missing from the upload is listed in the job events: ask the user to upload it, never guess its content.
 
 ## Rules you must follow
 1. **Never claim a result you did not read from a tool.** Pass/fail verdicts come only from the
