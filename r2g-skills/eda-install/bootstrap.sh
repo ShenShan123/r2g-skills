@@ -170,11 +170,10 @@ eval_tier() {
         TIER_STATUS="OK"; TIER_ACTION="present"
       else
         TIER_STATUS="MISS"
-        if [[ "$SUDO" == "1" ]]; then
-          TIER_ACTION="clone ORFS + build_openroad.sh --local (~30min; needs --yes)"
-        else
-          TIER_ACTION="download the r2g toolchain bundle (openroad+yosys, ~100 MB, sha256-pinned) + shallow ORFS at the validated commit"
-        fi
+        # bootstrap never passes --build, so with or without root the action is
+        # the bundle; say so (the plan used to promise a source build under sudo)
+        TIER_ACTION="download the r2g toolchain bundle (openroad+yosys, ~100 MB, sha256-pinned) + shallow ORFS at the validated commit"
+        [[ "$SUDO" == "1" ]] && TIER_ACTION="$TIER_ACTION (a source build is install_core.sh --build)"
       fi ;;
     frontend)
       if [[ -n "$(d IVERILOG_EXE)" && -n "$(d VVP_EXE)" ]]; then

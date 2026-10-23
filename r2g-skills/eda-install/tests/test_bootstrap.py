@@ -132,10 +132,10 @@ def test_plan_bare_nosudo_uses_bundle_no_build(tmp_path):
     assert "build_openroad" not in rows["core"][2]
 
 
-def test_plan_bare_sudo_offers_source_build(tmp_path):
+def test_plan_bare_sudo_still_bundles_and_names_the_build_option(tmp_path):
     out, rows = _plan(tmp_path, _BARE_SUDO)
     assert rows["core"][0] == "MISS"
-    assert "build_openroad" in rows["core"][2]
+    assert "bundle" in rows["core"][2] and "--build" in rows["core"][2]
     assert "sudo=yes" in out
 
 
