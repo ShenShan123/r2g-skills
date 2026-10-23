@@ -78,7 +78,7 @@ if [[ $SKIP_TC -eq 0 ]]; then
     [[ -n "$gp" && -x "$gp" ]] && export R2G_GRAPH_PYTHON="$gp"
   fi
   bash "$REPO/r2g-skills/eda-install/bootstrap.sh" $YES ${PREFIX:+--prefix "$PREFIX"} \
-       --tiers core,frontend,klayout,graph --strict-platforms nangate45
+       --tiers core,frontend,klayout,platform_rules,graph --strict-platforms nangate45
 else
   say "2/7 跳过工具链安装（--skip-toolchain）"
 fi
@@ -86,7 +86,10 @@ fi
 # ---- 3. verify ----------------------------------------------------------------
 say "3/7 验证 nangate45 平台"
 CHK="$(bash "$REPO/r2g-skills/signoff-loop/scripts/flow/check_env.sh" --platform nangate45 2>&1 || true)"
-if echo "$CHK" | grep -qE "nangate45[[:space:]].*STRICT-READY|nangate45.*strict_signoff_ready"; then
+# exact: a line STARTING with the platform, second column STRICT-READY. A loose
+# pattern matched "MISS strict capability: nangate45 (... strict_signoff_ready ...)"
+# and passed an incomplete platform (fresh-user test, 2026-10-22).
+if echo "$CHK" | grep -qE "^nangate45[[:space:]]+STRICT-READY"; then
   ok "nangate45：综合、布局布线、DRC、LVS、RCX 全部可用"
 else
   echo "$CHK" | tail -25

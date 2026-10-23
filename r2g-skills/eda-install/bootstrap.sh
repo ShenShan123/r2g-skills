@@ -347,6 +347,20 @@ for t in "${SELECTED[@]}"; do
 done
 
 # ---- pin env.local.sh --------------------------------------------------------
+# Pin what THIS run installed, not what autodetection happens to find first: the
+# core tier records its chosen ORFS + conda binaries, and the graph tier's venv
+# is pinned once it exists (it used to be installed and then left unpinned, so
+# every graph stage SKIPped on a freshly provisioned machine).
+if [[ -n "${BIGV:-}" && -f "$BIGV/.r2g-install/core.env" ]]; then
+  # shellcheck source=/dev/null
+  source "$BIGV/.r2g-install/core.env"
+  echo "[pin] using the core tier's choice: ORFS_ROOT=$ORFS_ROOT"
+fi
+if [[ -z "$graph_python" && -n "${BIGV:-}" && -x "$BIGV/$GRAPH_VENV_SUBPATH/bin/python" ]]; then
+  graph_python="$BIGV/$GRAPH_VENV_SUBPATH/bin/python"
+  GP_FLAG=(--graph-python "$graph_python")
+  echo "[pin] graph venv: $graph_python"
+fi
 if [[ -x "$SETUP_DIR/write_env_local.sh" || -f "$SETUP_DIR/write_env_local.sh" ]]; then
   echo
   echo "== pinning references/env.local.sh (both skills) =="
