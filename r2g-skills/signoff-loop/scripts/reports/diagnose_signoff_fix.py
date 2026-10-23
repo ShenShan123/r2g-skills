@@ -92,6 +92,7 @@ DIODE_FORCED_REPAIR_PLATFORMS = {"nangate45"}
 
 DIODE_INSERTING_STRATEGIES = frozenset({
     "antenna_diode_repair", "antenna_diode_iters", "deck_driven_antenna_diode",
+    "deck_driven_antenna_diode_accumulate",
     # repairs by making repair_antennas insert MORE ANTENNA_X1 diodes, so it is
     # as dead as the others when the diode is unusable (GRT-0246)
     "antenna_ratio_overconstrain"})
@@ -182,6 +183,36 @@ def _deck_antenna_inputs_present(proj) -> bool:
                 and any(Path(proj).glob("backend/RUN_*/results/6_final.def")))
     except OSError:
         return False
+
+
+def _unmaterializable_ids(strategies, proj, cfg) -> list:
+    """Strategies whose inputs this project cannot produce, decided at SELECTION.
+
+    deck-driven diodes need the deck's lyrdb + a DEF; the accumulate rung also
+    needs the net list a first round wrote (it is otherwise identical to r1, and
+    the driver never re-selects a tried id, so without this gate the ladder
+    could not reach it); the ratio rung needs a platform tech LEF that carries
+    a per-layer ratio to tighten.
+    """
+    out = []
+    for s in strategies:
+        m = s.get("materialize")
+        if m == "deck_antenna_diodes":
+            if not _deck_antenna_inputs_present(proj):
+                out.append(s["id"])
+            elif (s["id"] == "deck_driven_antenna_diode_accumulate"
+                  and not (Path(proj) / "signoff_fix" / "antenna_nets.txt").exists()):
+                out.append(s["id"])
+        elif m == "antenna_ratio_lef" and not _antenna_ratio_inputs_present(cfg):
+            out.append(s["id"])
+    return out
+
+
+def _drop_unmaterializable(plan, proj, cfg) -> None:
+    ids = _unmaterializable_ids(plan.get("strategies", []), proj, cfg)
+    if ids:
+        plan["strategies"] = [s for s in plan["strategies"] if s["id"] not in ids]
+        plan["unmaterializable"] = ids
 
 
 def _materialize_deck_antenna_diodes(proj):
@@ -337,6 +368,17 @@ def _antenna_catalog(cfg: dict) -> list:
              "config_edits": {"PRE_GLOBAL_ROUTE_TCL": "{PROJECT}/signoff_fix/deck_antenna_diodes.tcl"},
              "materialize": "deck_antenna_diodes",
              "rerun_from": "route", "recheck": "drc", "auto_apply": True},
+            {"id": "deck_driven_antenna_diode_accumulate",
+             "rationale": "Rung r2 of the nangate45 repair arm: the deck-driven diodes again, "
+                          "with the net list ACCUMULATED -- the first round's nets plus whatever "
+                          "the deck still flags on the first round's layout. A residual-only "
+                          "second round dropped the first round's diodes (measured 4 -> 203 "
+                          "violations); the union cleared 6 designs. Its own id because the "
+                          "driver never re-selects a strategy it already tried, and offered only "
+                          "once a first round has written its net list.",
+             "config_edits": {"PRE_GLOBAL_ROUTE_TCL": "{PROJECT}/signoff_fix/deck_antenna_diodes.tcl"},
+             "materialize": "deck_antenna_diodes",
+             "rerun_from": "route", "recheck": "drc", "auto_apply": True},
             {"id": "antenna_ratio_overconstrain",
              "rationale": "Rung r3 of the nangate45 repair arm: give the ROUTER's tech LEF "
                           "ANTENNAAREARATIO 10 (the grader keeps 300). With both at 300 the "
@@ -353,9 +395,12 @@ def _antenna_catalog(cfg: dict) -> list:
                                           % ANTENNA_RATIO_REPAIR},
              "override_keys": ["TECH_LEF"],
              "materialize": "antenna_ratio_lef",
-             # the tech LEF is read into the database at floorplan; later stages
-             # load that database, so a later rerun would keep the old ratio
-             "rerun_from": "floorplan", "recheck": "drc", "auto_apply": True},
+             # synth, not floorplan: 1_synth.odb (the synth stage's artifact) is
+             # where the tech LEF enters the database, so the new LEF must rebuild
+             # it. A floorplan rerun rebuilt it anyway, and the stage-lineage check
+             # then rightly refused the run (reused synth bytes changed): on C03155
+             # 38 -> 0 violations, rolled back as complete->partial (2026-10-23).
+             "rerun_from": "synth", "recheck": "drc", "auto_apply": True},
             {"id": "antenna_diode_repair",
              "rationale": "Force antenna-diode insertion: the FreePDK45 KLayout deck credits "
                           "diodes, NOT jumpers, so SKIP_ANTENNA_REPAIR=1 disables OpenROAD's "
@@ -2131,15 +2176,7 @@ def main(argv=None) -> int:
     # attempt budget and kept the run from ever reaching its residual verdict.
     # Offering a strategy that provably cannot run is the same waste the
     # antenna-model precheck exists to prevent, one layer up.
-    _unmaterializable = [s["id"] for s in plan.get("strategies", [])
-                         if (s.get("materialize") == "deck_antenna_diodes"
-                             and not _deck_antenna_inputs_present(proj))
-                         or (s.get("materialize") == "antenna_ratio_lef"
-                             and not _antenna_ratio_inputs_present(cfg))]
-    if _unmaterializable:
-        plan["strategies"] = [s for s in plan["strategies"]
-                              if s["id"] not in _unmaterializable]
-        plan["unmaterializable"] = _unmaterializable
+    _drop_unmaterializable(plan, proj, cfg)
 
     _annotate_live_gates(plan, proj, check=args.check, sid=_sid,
                          design_class=design_class, platform=plat)

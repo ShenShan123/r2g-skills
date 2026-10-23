@@ -177,3 +177,30 @@ def test_unusable_diode_blocks_the_ratio_rung(monkeypatch):
     monkeypatch.setattr(d, "_antenna_precondition", lambda p: (False, "no diode"))
     plan = d.build_plan(_antenna_drc(), {}, CFG, check="drc")
     assert "antenna_ratio_overconstrain" not in [s["id"] for s in plan["strategies"]]
+
+
+
+def test_accumulate_rung_waits_for_a_first_round(tmp_path, monkeypatch):
+    """r2 is offered only after r1 wrote its net list: the driver never re-selects
+    a tried strategy, so without its own id r2 could not run at all -- the ladder
+    stopped after r1 on C03155 (622 -> 38) with 'no_auto_strategy'."""
+    monkeypatch.setattr(d, "_antenna_precondition", lambda p: (True, "fixture"))
+    monkeypatch.setattr(d, "_antenna_ratio_inputs_present", lambda cfg: True)
+    proj = tmp_path / "proj"
+    (proj / "drc").mkdir(parents=True)
+    (proj / "drc" / "6_drc.lyrdb").write_text("<report/>")
+    r = proj / "backend" / "RUN_x" / "results"
+    r.mkdir(parents=True)
+    (r / "6_final.def").write_text("DESIGN t ;\n")
+    plan = d.build_plan(_antenna_drc(), {}, CFG, check="drc")
+    d._drop_unmaterializable(plan, proj, CFG)
+    ids = [s["id"] for s in plan["strategies"]]
+    assert ids[:2] == ["deck_driven_antenna_diode", "antenna_ratio_overconstrain"]
+    assert plan["unmaterializable"] == ["deck_driven_antenna_diode_accumulate"]
+    (proj / "signoff_fix").mkdir()
+    (proj / "signoff_fix" / "antenna_nets.txt").write_text("n1\n")
+    plan = d.build_plan(_antenna_drc(), {}, CFG, check="drc")
+    d._drop_unmaterializable(plan, proj, CFG)
+    assert [s["id"] for s in plan["strategies"]][:3] == [
+        "deck_driven_antenna_diode", "deck_driven_antenna_diode_accumulate",
+        "antenna_ratio_overconstrain"]

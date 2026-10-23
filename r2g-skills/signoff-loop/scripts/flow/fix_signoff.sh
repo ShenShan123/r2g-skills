@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Resolve the toolchain the same way the stage scripts do. Without this the
+# diagnoser this script calls ran with no ORFS_ROOT and autodetected the FIRST
+# ORFS on the box -- on 208 another user's /opt checkout, which has no nangate45
+# antenna model, so the ratio rung was judged unmaterializable and the ladder
+# stopped after r1 (C03155, 2026-10-23); platform_assigned_keys() read the
+# wrong platform config the same way. stdout stays this script's own.
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/_env.sh" 1>&2
 # usage: fix_signoff.sh <project-dir> [platform] [--check drc|lvs|both|route|timing] [--max-iters N] [--resume]
 #
 # Iteratively applies REAL layout fixes for DRC/LVS violations: diagnose →

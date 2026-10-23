@@ -57,14 +57,18 @@ def test_antenna_fail_nangate45_offers_diode_repair(monkeypatch):
     # ANTENNAAREARATIO 10, grader untouched) sits between them -- it cleared 10
     # designs the deck-driven diodes could not, where antenna_diode_repair is the
     # measured no-op above.
-    assert ids == ["deck_driven_antenna_diode", "antenna_ratio_overconstrain",
-                   "antenna_diode_repair"]
-    deck, ratio, forced = plan["strategies"]
+    # deck_driven_antenna_diode_accumulate (rung r2) follows r1 in the catalog;
+    # the CLI drops it at selection until r1 has written its net list.
+    assert ids == ["deck_driven_antenna_diode", "deck_driven_antenna_diode_accumulate",
+                   "antenna_ratio_overconstrain", "antenna_diode_repair"]
+    deck, accum, ratio, forced = plan["strategies"]
+    assert accum["config_edits"] == deck["config_edits"]
+    assert accum["materialize"] == "deck_antenna_diodes"
     assert ratio["config_edits"] == {
         "TECH_LEF": "{PROJECT}/signoff_fix/antenna_ratio10.tech.lef"}
     assert ratio["override_keys"] == ["TECH_LEF"]
     assert ratio["materialize"] == "antenna_ratio_lef"
-    assert ratio["rerun_from"] == "floorplan"
+    assert ratio["rerun_from"] == "synth"    # 1_synth.odb carries the tech
     # The deck-driven one carries a hook path with a {PROJECT} placeholder, because
     # build_plan is pure and the real path is only known at apply time.
     assert deck["config_edits"] == {
@@ -679,7 +683,8 @@ def test_antenna_precondition_unknown_fails_open(monkeypatch):
                         lambda p: (None, "cannot inspect (test)"))
     plan = d._drc_plan(dict(_ANT_FAIL), {"PLATFORM": "nangate45"}, set())
     assert [s["id"] for s in plan["strategies"]] == [
-        "deck_driven_antenna_diode", "antenna_ratio_overconstrain", "antenna_diode_repair"]
+        "deck_driven_antenna_diode", "deck_driven_antenna_diode_accumulate",
+        "antenna_ratio_overconstrain", "antenna_diode_repair"]
 
 
 def test_antenna_precondition_keeps_density_relief_elsewhere(monkeypatch):
