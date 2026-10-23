@@ -84,7 +84,12 @@ PDN_FLOOR_UM = {"nangate45": 32.0, "gf180": 110.0, "sky130hd": 32.0}
 # pins), i.e. 16% fewer positions than the derivation, so every pin-floored die
 # came out too small. 0.90 = the measured minimum with the same ~1% margin as
 # nangate45's per-design correction (need_side * 1.01).
-IO_POS_PER_UM = {"nangate45": 1.80, "gf180": 0.894, "sky130hd": 0.90}
+# gf180 0.894 -> 0.885 (2026-10-23): the void 10-17 run's three PPL-0024
+# messages give positions / core perimeter 0.8940, 0.8952, 0.8946 -- the
+# derivation was right but left NO margin, so a pin-floored die sat exactly at
+# the edge. 0.885 keeps the ~1% margin nangate45 (need_side * 1.01) and
+# sky130hd (0.90 against a measured 0.912) carry.
+IO_POS_PER_UM = {"nangate45": 1.80, "gf180": 0.885, "sky130hd": 0.90}
 CORE_INSET_UM = 2.0
 PILOT_ROOT = {"nangate45": "n45_full", "gf180": "gf180_full",
               "sky130hd": "full_out"}
@@ -292,8 +297,15 @@ def pin_required_core(platform: str, npins: int) -> float:
 # buffers and failed GPL-0301 at 104% utilization, C00220 at 113%. The term is a
 # max() with the allowance, so it only moves dies where the buffers exceed it.
 # nangate45 is absent on purpose: its baseline ran without it and no nangate45
-# design failed GPL-0301; gf180 must be measured before its baseline.
-PORT_BUFFER_UM2 = {"sky130hd": 10.0096}
+# design failed GPL-0301.
+# gf180, measured 2026-10-23 before its baseline: buffer_ports inserts one
+# gf180mcu_fd_sc_mcu9t5v0__dlyb_2 per input port (8.4 x 5.04 um = 42.336 um2,
+# platform 9t LEF; C00148 got 99 of them), four times sky130hd's. The 10-17
+# gf180 run (void: it lacked the PDN/tapcell overrides, but placement does not
+# depend on them) lost C00148, C00832, C02939 and C03807 to GPL-0301 -- two of
+# them the same designs sky130hd lost. With the term 203 entries move (115 dev),
+# die only, all four among them.
+PORT_BUFFER_UM2 = {"sky130hd": 10.0096, "gf180": 42.336}
 
 
 def die_for(platform: str, cell_area_um2: float,
