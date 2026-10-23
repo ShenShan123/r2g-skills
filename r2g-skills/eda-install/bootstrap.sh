@@ -318,6 +318,19 @@ YES_FLAG=();  [[ "$do_yes" == "1" ]]      && YES_FLAG=(--yes)
 LINK_FLAG=(); [[ "$deploy_link" == "1" ]] && LINK_FLAG=(--link)
 GP_FLAG=();   [[ -n "$graph_python" ]]     && GP_FLAG=(--graph-python "$graph_python")
 
+# The tiers after core must act on the toolchain core just installed. Each tier
+# is a child process that re-runs _env.sh autodetection, which on a shared box
+# finds another user's read-only ORFS first -- the fresh-user test (2026-10-23)
+# had platform_rules try to write the nangate45 LVS deck into /opt and fail.
+# Exported values win over autodetection, so load core's choice into OUR env.
+_load_core_choice() {
+  if [[ -n "${BIGV:-}" && -f "$BIGV/.r2g-install/core.env" ]]; then
+    # shellcheck source=/dev/null
+    source "$BIGV/.r2g-install/core.env"
+  fi
+}
+_load_core_choice
+
 run_tier() {
   local t="$1" script="$SETUP_DIR/install_$1.sh"
   eval_tier "$t"
@@ -325,7 +338,8 @@ run_tier() {
   if [[ -x "$script" || -f "$script" ]]; then
     echo "[$t] running $(basename "$script") ..."
     R2G_PREFIX="${BIGV}" R2G_CONDA_ENV="$CONDA_ENV" bash "$script" "${YES_FLAG[@]}" || {
-      echo "[$t] installer returned non-zero (tier left unsatisfied)" >&2; return 1; }
+      echo "[$t] installer returned non-zero (tier left unsatisfied)" >&2; _load_core_choice; return 1; }
+    _load_core_choice
   else
     echo "[$t] no installer script yet — would run: $TIER_ACTION" >&2
     echo "     (see docs/superpowers/plans/r2g-skills-bootstrap-2026-07-08.md)" >&2
@@ -352,15 +366,28 @@ done
 # is pinned once it exists (it used to be installed and then left unpinned, so
 # every graph stage SKIPped on a freshly provisioned machine).
 if [[ -n "${BIGV:-}" && -f "$BIGV/.r2g-install/core.env" ]]; then
-  # shellcheck source=/dev/null
-  source "$BIGV/.r2g-install/core.env"
+  _load_core_choice
   echo "[pin] using the core tier's choice: ORFS_ROOT=$ORFS_ROOT"
+fi
+# Tools the conda tiers installed into the env (iverilog/vvp/verilator from
+# frontend, magic/netgen from the signoff tiers): autodetection does not look in
+# a conda env it did not create, so a fresh install verified them as MISSING.
+_cbin="${BIGV:-}/miniconda3/envs/$CONDA_ENV/bin"
+if [[ -n "${BIGV:-}" && -d "$_cbin" ]]; then
+  for _pair in IVERILOG_EXE:iverilog VVP_EXE:vvp VERILATOR_EXE:verilator MAGIC_EXE:magic NETGEN_EXE:netgen; do
+    _v="${_pair%%:*}"; _b="${_pair#*:}"
+    if [[ -x "$_cbin/$_b" && ! -x "${!_v:-}" ]]; then
+      export "$_v=$_cbin/$_b"; echo "[pin] $_v=$_cbin/$_b"
+    fi
+  done
 fi
 if [[ -z "$graph_python" && -n "${BIGV:-}" && -x "$BIGV/$GRAPH_VENV_SUBPATH/bin/python" ]]; then
   graph_python="$BIGV/$GRAPH_VENV_SUBPATH/bin/python"
   GP_FLAG=(--graph-python "$graph_python")
   echo "[pin] graph venv: $graph_python"
 fi
+# the verify step below runs check_env in THIS environment
+[[ -n "$graph_python" ]] && export R2G_GRAPH_PYTHON="$graph_python"
 if [[ -x "$SETUP_DIR/write_env_local.sh" || -f "$SETUP_DIR/write_env_local.sh" ]]; then
   echo
   echo "== pinning references/env.local.sh (both skills) =="
