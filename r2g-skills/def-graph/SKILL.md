@@ -191,6 +191,29 @@ Key differences from b–f — do not "harmonize" them:
 vendored upstream drop plus eleven recorded deltas (D1–D11); a new drop is re-vendored and the deltas
 re-applied, never hand-merged. `scripts/stage_dataset/` is our glue and is edited normally.
 
+### 5. Image (feature-map) dataset — `scripts/flow/run_images.sh <project-dir> [platform]`
+
+The GCell-raster companion of the graph datasets, CircuitNet style (2026-10-22). Same guards
+as `run_graphs.sh` (newest run, platform provenance, sign-off gate `enforce`, labels re-made
+unless their marker records THIS DEF's digest). Writes `images/{features,labels}.npz` (one
+`[x][y]` array per channel), `images/image_meta.json`, colour previews `images/png/`, and
+`reports/image_dataset.json` (`status: ok|invalid|skipped` + the verifier's result).
+
+- **Grid** = the congestion label's own sidecar (`labels/congestion_grid.json`), so every channel
+  is pixel-aligned with the congestion label by construction.
+- **Features** from ONE pre-route DEF of the same run — `R2G_IMAGE_FEATURE_STAGE=place`
+  (default, `3_place.odb`) | `cts` | `floorplan`, exported with `write_def`. The builder REFUSES
+  a DEF with routed wires (leakage guard). Channels: `cell_density`, `macro_region`, `rudy`
+  (net bbox spread of (w+h)/(w·h), sides floored at one GCell), `pin_rudy`, `pin_density`.
+- **Labels**: `congestion` / `congestion_raw` (= `congestion_grid.csv`, the same values the graph
+  label averages) and `ir_drop` (per-GCell worst of `ir_drop.csv`, mV).
+- **Verification is mandatory**: `scripts/extract/images/verify_images.py` re-parses DEF/LEF with
+  its own readers and re-derives the occupancy arrays, area conservation, pin count, the RUDY
+  integral, the exact label grids, the per-cell join with the graph label (`cell_congestion.csv`)
+  and IR drop — 17 checks; any failure marks the dataset `invalid` (exit 6).
+  `tests/test_image_dataset.py` holds hand-computed values on a non-square toy and one negative
+  control per channel.
+
 ## The five topologies (b–f)
 
 | Variant | Nodes kept | Folded into edges |

@@ -33,8 +33,10 @@ from .jobs import CANCELLED, FAILED, PASSED, RUNNING, JobStore
 from .paths import defgraph_scripts, r2g_home, repo_root, signoff_scripts, skills_dir, tools_dir
 
 STAGES = ["prepare", "synth", "size", "flow", "signoff", "repair", "graph", "verify", "preview"]
+# the "graph" stage builds whichever dataset the job asked for (graph or image)
+OUTPUTS = ("graph", "image")
 STAGE_LABEL = {"prepare": "准备工程", "synth": "综合", "size": "定尺寸与时钟", "flow": "布局布线",
-               "signoff": "签核 DRC/LVS", "repair": "自动修复", "graph": "转图", "verify": "数据集校验",
+               "signoff": "签核 DRC/LVS", "repair": "自动修复", "graph": "生成数据集", "verify": "数据集校验",
                "preview": "版图预览"}
 
 
@@ -97,6 +99,8 @@ class Pipeline:
     def submit(self, sources: list[dict], platform: str = "nangate45", title: str = "",
                output: str = "graph") -> str:
         """sources: [{"name":..., "path":..., "top": optional}]"""
+        if output not in OUTPUTS:
+            raise ValueError("output must be one of %s" % ", ".join(OUTPUTS))
         designs, seen = [], set()
         for s in sources:
             name = re.sub(r"[^A-Za-z0-9_]+", "_", s.get("name") or Path(s["path"]).name)
@@ -114,7 +118,7 @@ class Pipeline:
             pdir = ws / ("%s__%s" % (d["name"], jid))
             self.store.set_design(jid, d["name"], project=str(pdir))
             self.pool.submit(self._run_design, jid, d["name"], Path(d["detail"]["source"]),
-                             d["detail"].get("top"), pdir, platform)
+                             d["detail"].get("top"), pdir, platform, output)
         self.store.set_job(jid, RUNNING)
         threading.Thread(target=self._watch_job, args=(jid,), daemon=True).start()
         return jid
@@ -132,24 +136,56 @@ class Pipeline:
 
     # -- internals ------------------------------------------------------------
     def _watch_job(self, jid: str) -> None:
+        # never let one transient error (a busy database on a loaded machine)
+        # end the watcher: a dead watcher leaves a finished job "running" forever
         while True:
-            j = self.store.job(jid)
-            sts = [d["status"] for d in j["designs"]]
-            if all(s in (PASSED, FAILED, CANCELLED) for s in sts):
-                n_ok = sts.count(PASSED)
-                status = CANCELLED if jid in self._cancel else ("done" if n_ok else FAILED)
-                result = {"passed": n_ok, "total": len(sts)}
-                if n_ok:
-                    from .package import package_job
-                    try:
-                        result["package"] = str(package_job(self.store, jid))
-                    except Exception as e:                      # noqa: BLE001
-                        result["package_error"] = str(e)
-                self.store.set_job(jid, status, result)
-                self.store.event(jid, None, "job", "done",
-                                 "任务结束：%d/%d 个设计通过并产出数据集" % (n_ok, len(sts)), result)
-                return
+            try:
+                if self.finalize_if_done(jid):
+                    return
+            except Exception:                                   # noqa: BLE001
+                pass
             time.sleep(2)
+
+    def finalize_if_done(self, jid: str) -> bool:
+        """Close a job whose designs have all ended: package and record. True if closed."""
+        j = self.store.job(jid)
+        if not j or j["status"] not in (RUNNING, "pending"):
+            return True
+        sts = [d["status"] for d in j["designs"]]
+        if not all(s in (PASSED, FAILED, CANCELLED) for s in sts):
+            return False
+        n_ok = sts.count(PASSED)
+        status = CANCELLED if jid in self._cancel else ("done" if n_ok else FAILED)
+        result = {"passed": n_ok, "total": len(sts)}
+        if n_ok:
+            from .package import package_job
+            try:
+                result["package"] = str(package_job(self.store, jid))
+            except Exception as e:                              # noqa: BLE001
+                result["package_error"] = str(e)
+        self.store.set_job(jid, status, result)
+        self.store.event(jid, None, "job", "done",
+                         "任务结束：%d/%d 个设计通过并产出数据集" % (n_ok, len(sts)), result)
+        return True
+
+    def recover(self) -> list[str]:
+        """At start-up: close jobs that finished while no watcher was alive, and
+        mark designs a previous server process was running as interrupted (their
+        threads died with it; nothing will ever finish them)."""
+        touched = []
+        for j in self.store.jobs(500):
+            if j["status"] not in (RUNNING, "pending"):
+                continue
+            full = self.store.job(j["id"])
+            for d in full["designs"]:
+                if d["status"] in (RUNNING, "pending"):
+                    self.store.set_design(j["id"], d["name"], status=FAILED,
+                                          detail={"failed_stage": d["stage"],
+                                                  "reason": "服务重启时中断，未完成（可重新提交）"})
+                    self.store.event(j["id"], d["name"], d["stage"], "fail", "服务重启时中断，未完成（可重新提交）")
+            self.finalize_if_done(j["id"])
+            touched.append(j["id"])
+        return touched
 
     def _sh(self, jid: str, name: str, stage: str, cmd: list[str], project: Path,
             env: dict | None = None, timeout: int | None = None) -> int:
@@ -195,9 +231,9 @@ class Pipeline:
         self.store.set_design(jid, name, status=FAILED, detail={"failed_stage": stage, "reason": msg})
 
     def _run_design(self, jid: str, name: str, src: Path, top: str | None, pdir: Path,
-                    platform: str) -> None:
+                    platform: str, output: str = "graph") -> None:
         try:
-            self._run_design_inner(jid, name, src, top, pdir, platform)
+            self._run_design_inner(jid, name, src, top, pdir, platform, output)
         except Cancelled:
             self.store.set_design(jid, name, status=CANCELLED)
             self.store.event(jid, name, "job", "cancel", "已取消")
@@ -205,7 +241,7 @@ class Pipeline:
             self._fail(jid, name, self.store.design(jid, name).get("stage") or "prepare",
                        "内部错误：%s" % e)
 
-    def _run_design_inner(self, jid, name, src, top, pdir, platform) -> None:
+    def _run_design_inner(self, jid, name, src, top, pdir, platform, output="graph") -> None:
         S = str(signoff_scripts())
         # prepare
         self._stage(jid, name, "prepare")
@@ -267,6 +303,15 @@ class Pipeline:
                 return
             self._ok(jid, name, "repair", "修复成功，DRC/LVS 均已清零", v)
         self._ingest(jid, name, pdir)
+        if output == "image":
+            n_ok, n_all = self._image_dataset(jid, name, pdir, platform)
+            if n_ok is None:
+                return
+            self._preview(jid, name, pdir)
+            self.store.set_design(jid, name, status=PASSED, stage="done",
+                                  detail={"verify": {"passed": n_ok, "total": n_all}, "output": "image"})
+            self.store.event(jid, name, "done", "ok", "完成：签核通过，图像数据集已校验")
+            return
         # graph
         self._stage(jid, name, "graph")
         rc = self._sh(jid, name, "graph", ["bash", str(defgraph_scripts() / "flow" / "run_graphs.sh"),
@@ -297,15 +342,40 @@ class Pipeline:
             return
         self._ok(jid, name, "verify", "数据集校验通过：%d/%d 项" % (n_ok, len(res)),
                  {"checks": len(res)})
-        # preview (best effort, never decides anything)
-        self._stage(jid, name, "preview")
-        gds = latest_run(pdir) / "final" / "6_final.gds"
-        if gds.is_file():
-            self._sh(jid, name, "preview", ["python3", S + "/dashboard/render_gds_preview.py", str(gds),
-                                            str(pdir / "reports" / "layout.png"), "1200"], pdir, timeout=300)
+        self._preview(jid, name, pdir)
         self.store.set_design(jid, name, status=PASSED, stage="done",
                               detail={"verify": {"passed": n_ok, "total": len(res)}})
         self.store.event(jid, name, "done", "ok", "完成：签核通过，数据集已校验")
+
+    def _preview(self, jid, name, pdir: Path) -> None:
+        """Layout picture for the UI (best effort, never decides anything)."""
+        self._stage(jid, name, "preview")
+        gds = latest_run(pdir) / "final" / "6_final.gds"
+        if gds.is_file():
+            self._sh(jid, name, "preview", ["python3", str(signoff_scripts() / "dashboard" / "render_gds_preview.py"),
+                                            str(gds), str(pdir / "reports" / "layout.png"), "1200"], pdir, timeout=300)
+
+    def _image_dataset(self, jid, name, pdir: Path, platform: str):
+        """def-graph run_images.sh: GCell feature maps from the placement DEF,
+        labels from the routed result, then its independent verifier. Returns
+        (passed, total) or (None, None) after recording the failure."""
+        self._stage(jid, name, "graph", "生成图像数据集（特征取自放置后版图，标签取自布线后）")
+        rc = self._sh(jid, name, "graph", ["bash", str(defgraph_scripts() / "flow" / "run_images.sh"),
+                                           str(pdir), platform], pdir)
+        rep = read_json(pdir / "reports" / "image_dataset.json")
+        v = rep.get("verify") or {}
+        if rc != 0 or rep.get("status") != "ok":
+            bad = v.get("failed_checks") or []
+            self._fail(jid, name, "verify" if v else "graph",
+                       "图像数据集未通过（status=%s）%s" % (rep.get("status"), rep.get("reason") or "")
+                       + ("，未通过项：" + "；".join(bad[:5]) if bad else ""), rep)
+            return None, None
+        self.store.set_design(jid, name, detail={"image": {"shape": rep.get("shape"), "features": rep.get("features"),
+                                                           "labels": rep.get("labels")}})
+        self._ok(jid, name, "verify", "图像数据集校验通过：%d/%d 项（%s 网格，%d 个特征通道 + %d 个标签通道）"
+                 % (v["passed"], v["total"], "×".join(map(str, rep.get("shape") or [])),
+                    len(rep.get("features") or []), len(rep.get("labels") or [])), rep)
+        return v["passed"], v["total"]
 
     def _fail_soft(self, jid, name, stage, msg, data=None):
         self.store.event(jid, name, stage, "warn", msg, data)

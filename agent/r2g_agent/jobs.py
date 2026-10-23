@@ -42,12 +42,18 @@ class JobStore:
         self.path = Path(path or r2g_home() / "jobs.sqlite")
         self._lock = threading.Lock()
         with self._conn() as c:
+            # WAL is a property of the database FILE: set it once here. Setting it
+            # on every connection needs an exclusive lock and, with several
+            # pipeline threads writing on a loaded machine, raised "database is
+            # locked" -- which killed the job watcher and left a finished job
+            # "running" with no dataset (2026-10-22).
+            c.execute("PRAGMA journal_mode=WAL")
             c.executescript(SCHEMA)
 
     def _conn(self):
-        c = sqlite3.connect(self.path, timeout=30, isolation_level=None)
+        c = sqlite3.connect(self.path, timeout=60, isolation_level=None)
         c.row_factory = sqlite3.Row
-        c.execute("PRAGMA journal_mode=WAL")
+        c.execute("PRAGMA busy_timeout=60000")
         return c
 
     # -- jobs -------------------------------------------------------------

@@ -146,9 +146,10 @@ def create(src: Path, project: Path, platform: str, top: str | None = None,
     if not files:
         raise ValueError("no Verilog/SystemVerilog files under %s" % src)
     meta_file = src / "design.json" if src.is_dir() else None
+    how = "用户指定" if top else ""
     if top is None and meta_file and meta_file.is_file():
         top = json.loads(meta_file.read_text()).get("top")
-    how = "用户指定" if top else "design.json 指定" if (meta_file and meta_file.is_file() and json.loads(meta_file.read_text()).get("top")) else ""
+        how = "design.json 指定" if top else ""
     if not top:
         top, how = infer_top(files, hint=(src.name if src.is_dir() else src.stem))
     rtl = project / "rtl"

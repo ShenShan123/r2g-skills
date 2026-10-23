@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Download, Square, X, Image as ImageIcon, FileText, LayoutGrid,
+import { ArrowLeft, Download, Square, X, Image as ImageIcon, FileText, LayoutGrid, Grid3x3,
          CheckCircle2, XCircle, AlertTriangle, Circle } from "lucide-react";
-import { api, Design, fmtClock, Job, JobEvent, Stage } from "../lib/api";
+import { api, Design, fmtClock, Job, JobEvent, Stage, OUTPUT_LABEL } from "../lib/api";
 import { StagePipe, StatusBadge, Stat } from "../components/ui";
 
 const KIND_ICON: Record<string, any> = { ok: CheckCircle2, fail: XCircle, warn: AlertTriangle };
@@ -49,7 +49,7 @@ export default function JobDetail() {
         <div className="mt-3 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">{job.title}</h1>
-            <div className="mt-1 font-mono text-xs text-faint">{job.id} · {job.spec?.platform} · {job.spec?.output}</div>
+            <div className="mt-1 font-mono text-xs text-faint">{job.id} · {job.spec?.platform} · {OUTPUT_LABEL[job.spec?.output ?? "graph"]}</div>
           </div>
           <div className="flex items-center gap-2">
             <StatusBadge status={job.status} />
@@ -91,7 +91,7 @@ export default function JobDetail() {
           })}
         </div>
       </aside>
-      {selected && <DesignPanel jobId={id} d={selected} onClose={() => setSel(null)} />}
+      {selected && <DesignPanel jobId={id} d={selected} output={job.spec?.output ?? "graph"} onClose={() => setSel(null)} />}
     </div>
   );
 }
@@ -129,8 +129,8 @@ function Mini({ k, v, good }: { k: string; v: any; good?: boolean }) {
 
 const LOG_STAGES = ["synth", "flow", "signoff", "repair", "graph", "verify"];
 
-function DesignPanel({ jobId, d, onClose }: { jobId: string; d: Design; onClose: () => void }) {
-  const [tab, setTab] = useState<"overview" | "layout" | "log">("overview");
+function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; output: string; onClose: () => void }) {
+  const [tab, setTab] = useState<"overview" | "images" | "layout" | "log">(output === "image" ? "images" : "overview");
   const [rep, setRep] = useState<any>(null);
   const [logStage, setLogStage] = useState("flow");
   const [log, setLog] = useState("");
@@ -153,8 +153,9 @@ function DesignPanel({ jobId, d, onClose }: { jobId: string; d: Design; onClose:
             <button className="rounded-lg p-1.5 text-muted hover:bg-panel2" onClick={onClose}><X size={18} /></button></div>
         </div>
         <div className="flex gap-1 border-b border-line px-4">
-          {([["overview", "概览", LayoutGrid], ["layout", "版图", ImageIcon], ["log", "日志", FileText]] as const).map(([k, l, I]) => (
-            <button key={k} onClick={() => setTab(k)}
+          {([["overview", "概览", LayoutGrid], ...(output === "image" ? [["images", "图像", Grid3x3]] : []),
+             ["layout", "版图", ImageIcon], ["log", "日志", FileText]] as [string, string, any][]).map(([k, l, I]) => (
+            <button key={k} onClick={() => setTab(k as any)}
               className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm ${tab === k ? "border-accent text-accent" : "border-transparent text-muted hover:text-fg"}`}>
               <I size={15} /> {l}</button>))}
         </div>
@@ -206,6 +207,7 @@ function DesignPanel({ jobId, d, onClose }: { jobId: string; d: Design; onClose:
                   <div className="mt-2 text-xs text-muted">可以在「对话」里让 agent 分析原因并给出修复建议。</div>
                 </div>)}
             </div>)}
+          {tab === "images" && <ImagesTab jobId={jobId} d={d} />}
           {tab === "layout" && (
             imgOk ? <img src={`/api/jobs/${jobId}/designs/${d.name}/layout.png?ts=${d.updated}`} onError={() => setImgOk(false)}
                       className="w-full rounded-xl border border-line bg-black" alt="layout" />
@@ -228,4 +230,42 @@ function DesignPanel({ jobId, d, onClose }: { jobId: string; d: Design; onClose:
 function Verdict({ v }: { v?: string }) {
   if (!v) return <span className="text-faint">—</span>;
   return <span className={v === "clean" ? "text-ok" : "text-bad"}>{v === "clean" ? "干净" : v}</span>;
+}
+
+const CH_LABEL: Record<string, string> = {
+  cell_density: "单元密度", macro_region: "宏单元区域", rudy: "RUDY（布线需求估计）", pin_rudy: "引脚 RUDY",
+  pin_density: "引脚密度", congestion: "拥塞（平滑）", congestion_raw: "拥塞（原始）", ir_drop: "IR drop",
+};
+
+function ImagesTab({ jobId, d }: { jobId: string; d: Design }) {
+  const [info, setInfo] = useState<any>(null);
+  useEffect(() => { api.images(jobId, d.name).then(setInfo).catch(() => setInfo({ available: false })); }, [jobId, d.name, d.status]);
+  if (!info) return <div className="text-sm text-muted">加载中…</div>;
+  if (!info.available) return <div className="rounded-xl bg-panel2 p-10 text-center text-sm text-muted">图像数据集在设计完成后生成</div>;
+  const block = (title: string, sub: string, kind: "feature" | "label", chans: Record<string, any>) => (
+    <section className="mb-6">
+      <div className="mb-2 flex items-baseline justify-between"><div className="label">{title}</div><div className="text-xs text-faint">{sub}</div></div>
+      <div className="grid grid-cols-3 gap-3">
+        {Object.entries(chans).map(([k, v]: any) => (
+          <figure key={k} className="overflow-hidden rounded-xl border border-line bg-panel2">
+            <img src={`/api/jobs/${jobId}/designs/${d.name}/images/${kind}_${k}.png`} alt={k}
+              className="aspect-square w-full" style={{ imageRendering: "pixelated" }} />
+            <figcaption className="px-2.5 py-2 text-xs">
+              <div className="font-medium">{CH_LABEL[k] ?? k}</div>
+              <div className="text-faint">最大 {Number(v.max).toPrecision(3)} {v.unit}</div>
+            </figcaption>
+          </figure>))}
+      </div>
+    </section>);
+  return (
+    <div>
+      <div className="mb-4 grid grid-cols-3 gap-2 text-sm">
+        <div className="rounded-xl bg-panel2 px-3 py-2"><div className="label">网格</div><div className="font-semibold">{info.shape?.join(" × ")}</div></div>
+        <div className="rounded-xl bg-panel2 px-3 py-2"><div className="label">GCell</div><div className="font-semibold">{info.gcell_step_um?.[0]?.toFixed(2)} µm</div></div>
+        <div className="rounded-xl bg-panel2 px-3 py-2"><div className="label">特征来源</div><div className="font-semibold">{({ place: "放置后", cts: "CTS 后", floorplan: "floorplan" } as any)[info.feature_stage] ?? info.feature_stage}</div></div>
+      </div>
+      {block("特征（输入）", "只取自放置后版图，无布线信息", "feature", info.features)}
+      {block("标签（预测目标）", "取自布线后结果", "label", info.labels)}
+      <p className="text-xs text-faint">颜色仅用于预览（深紫→黄，按 99 分位缩放）；数值在下载包的 features.npz / labels.npz 中，数组为 [x][y]。</p>
+    </div>);
 }

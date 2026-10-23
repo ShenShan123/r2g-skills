@@ -71,7 +71,7 @@ def list_examples() -> dict:
 
 
 @tool("Start a background job that takes RTL designs through synthesis, place-and-route, DRC/LVS "
-      "sign-off, automatic repair, and graph-dataset construction. Returns a job_id immediately; "
+      "sign-off, automatic repair, and dataset construction (graph or image). Returns a job_id immediately; "
       "the job runs for minutes to hours. Each design is either a built-in example name or a "
       "directory/file path of Verilog sources on this machine.",
       _obj({"designs": {"type": "array", "description": "designs to run",
@@ -81,7 +81,11 @@ def list_examples() -> dict:
                             "top": {"type": "string", "description": "top module (optional; inferred if omitted)"},
                             "name": {"type": "string", "description": "display name (optional)"}}}},
             "platform": {"type": "string", "enum": ["nangate45"], "description": "process platform"},
-            "output": {"type": "string", "enum": ["graph"], "description": "dataset type"},
+            "output": {"type": "string", "enum": ["graph", "image"],
+                       "description": "dataset type: 'graph' = PyG graph datasets (b..f views + netlist graph); "
+                                      "'image' = CircuitNet-style GCell feature maps (features from the placement "
+                                      "layout, congestion/IR-drop label maps from the routed one). Ask the user if "
+                                      "they did not say which."},
             "title": {"type": "string"}}, ["designs"]))
 def start_job(designs: list, platform: str = "nangate45", output: str = "graph", title: str = "") -> dict:
     sources = []

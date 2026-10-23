@@ -413,3 +413,28 @@ def routing_layer_info(tech_lef, fallback=None):
         print("WARNING: no TYPE ROUTING layers parsed; using nangate45 DEFAULT_LAYER_INFO")
         return fallback
     return layers
+
+
+def macro_classes(lef_paths):
+    """``{macro_name: CLASS}`` (e.g. CORE, BLOCK, PAD, ENDCAP) from cell/macro LEFs.
+
+    Lets a consumer tell hard macros (``CLASS BLOCK``) from standard cells without
+    guessing from names. Later files win, like :func:`merge_macro_sizes`.
+    """
+    classes = {}
+    for path in lef_paths or []:
+        if not path or not os.path.isfile(path):
+            continue
+        current = None
+        with open(path, "r", errors="replace") as f:
+            for raw in f:
+                parts = raw.replace(";", " ").split()
+                if not parts:
+                    continue
+                if parts[0] == "MACRO" and len(parts) >= 2:
+                    current = parts[1]
+                elif current and parts[0] == "CLASS" and len(parts) >= 2 and current not in classes:
+                    classes[current] = parts[1].upper()
+                elif parts[0] == "END" and len(parts) >= 2 and parts[1] == current:
+                    current = None
+    return classes

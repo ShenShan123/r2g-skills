@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FolderUp, X, Sparkles, FileCode2 } from "lucide-react";
-import { api } from "../lib/api";
+import { api, Output } from "../lib/api";
+import OutputPicker from "./OutputPicker";
 
 export default function NewJobDialog({ onClose }: { onClose: () => void }) {
   const nav = useNavigate();
@@ -9,6 +10,7 @@ export default function NewJobDialog({ onClose }: { onClose: () => void }) {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [files, setFiles] = useState<File[]>([]);
   const [top, setTop] = useState("");
+  const [output, setOutput] = useState<Output>("graph");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const dirInput = useRef<HTMLInputElement>(null);
@@ -28,7 +30,7 @@ export default function NewJobDialog({ onClose }: { onClose: () => void }) {
         designs.push({ path: up.path, top: top || undefined, name: top || undefined });
       }
       if (!designs.length) throw new Error("请至少选择一个示例或上传 RTL");
-      const r = await api.createJob(designs);
+      const r = await api.createJob(designs, "", output);
       onClose(); nav(`/jobs/${r.job_id}`);
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }
@@ -40,7 +42,10 @@ export default function NewJobDialog({ onClose }: { onClose: () => void }) {
           <h2 className="text-lg font-semibold">新建任务</h2>
           <button className="rounded-lg p-1 text-muted hover:bg-panel2" onClick={onClose}><X size={18} /></button>
         </div>
-        <p className="mt-1 text-sm text-muted">平台 nangate45（45 nm）· 输出图数据集。设计会依次经过综合、布局布线、DRC/LVS 签核、自动修复、转图与校验。</p>
+        <p className="mt-1 text-sm text-muted">平台 nangate45（45 nm）。设计会依次经过综合、布局布线、DRC/LVS 签核、自动修复，再生成你选择的数据集并逐项校验。</p>
+
+        <div className="label mt-5">输出</div>
+        <div className="mt-2"><OutputPicker value={output} onChange={setOutput} /></div>
 
         <div className="label mt-5">内置示例</div>
         <div className="mt-2 grid grid-cols-3 gap-2">

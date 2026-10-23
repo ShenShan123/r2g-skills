@@ -1,19 +1,20 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Play, Upload, Wrench, ShieldCheck, Bot, Network, ArrowRight, ChevronRight } from "lucide-react";
-import { api, fmtTime, Job } from "../lib/api";
+import { api, fmtTime, Job, Output, OUTPUT_LABEL } from "../lib/api";
+import OutputPicker from "../components/OutputPicker";
 import { StatusBadge } from "../components/ui";
 import NewJobDialog from "../components/NewJobDialog";
 
 const PIPE = [
   ["RTL", "Verilog / SV"], ["综合", "Yosys"], ["布局布线", "OpenROAD"], ["签核", "DRC · LVS"],
-  ["自动修复", "诊断 → 修改 → 复核"], ["转图", "PyG 图数据集"], ["校验", "独立复算"],
+  ["自动修复", "诊断 → 修改 → 复核"], ["数据集", "图 或 图像"], ["校验", "独立复算"],
 ];
 const FEATURES = [
   { Icon: Wrench, title: "失败自己修", text: "天线违例、引脚放不下、违规单元……agent 读日志、诊断、选修法、重跑、复核。" },
   { Icon: ShieldCheck, title: "判定交给代码", text: "通过与否只由 DRC / LVS 和数据集校验器决定；工具没有判决就不算通过。" },
   { Icon: Bot, title: "模型随你选", text: "DeepSeek、通义、Kimi、GLM、OpenAI、Claude、Gemini 或本地模型，配置即用。" },
-  { Icon: Network, title: "训练就绪的数据", text: "五种图视图 + 网表图，拥塞、线长、时序、IR drop、RC 寄生标签对齐到同一份 DEF。" },
+  { Icon: Network, title: "训练就绪的数据", text: "图：五种视图 + 网表图；图像：GCell 特征图。拥塞、IR drop 等标签与特征对齐，且特征不含布线信息。" },
 ];
 
 export default function Home() {
@@ -21,12 +22,14 @@ export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [dlg, setDlg] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [output, setOutput] = useState<Output>("graph");
   useEffect(() => { api.jobs().then((j) => setJobs(j.slice(0, 5))).catch(() => {}); }, []);
 
   async function demo() {
     setBusy(true);
     try {
-      const r = await api.createJob([{ example: "counter8" }, { example: "alu8" }, { example: "uart_tx" }], "一键体验 · 3 个示例");
+      const r = await api.createJob([{ example: "counter8" }, { example: "alu8" }, { example: "uart_tx" }],
+        `一键体验 · 3 个示例 · ${OUTPUT_LABEL[output]}`, output);
       nav(`/jobs/${r.job_id}`);
     } finally { setBusy(false); }
   }
@@ -40,13 +43,14 @@ export default function Home() {
           <span className="chip bg-accent/15 text-accent">开源 EDA · 自主 agent</span>
           <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight">
             从 RTL 到签核版图，<br />
-            <span className="bg-gradient-to-r from-accent to-accent2 bg-clip-text text-transparent">再到可训练的图数据集</span>
+            <span className="bg-gradient-to-r from-accent to-accent2 bg-clip-text text-transparent">再到可训练的数据集</span>
           </h1>
           <p className="mt-4 max-w-2xl text-[15px] leading-7 text-muted">
             给它一批 Verilog，r2g 在后台跑完综合、布局布线、DRC/LVS 签核；遇到失败自己诊断和修复；
-            最后把通过签核的设计转成 GNN 图数据集，逐项校验后交给你。
+            最后把通过签核的设计转成 GNN 图数据集或 CNN 图像数据集，逐项校验后交给你。
           </p>
-          <div className="mt-7 flex flex-wrap gap-3">
+          <div className="mt-6 max-w-md"><OutputPicker value={output} onChange={setOutput} compact /></div>
+          <div className="mt-4 flex flex-wrap gap-3">
             <button className="btn-primary px-5 py-2.5 text-[15px]" onClick={demo} disabled={busy}>
               <Play size={17} /> {busy ? "启动中…" : "一键体验（3 个示例，约 3 分钟）"}
             </button>

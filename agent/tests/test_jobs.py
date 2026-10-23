@@ -13,3 +13,19 @@ def test_job_lifecycle():
     assert [e["kind"] for e in evs] == ["created", "ok"]
     assert st.events(jid, after=evs[0]["id"])[0]["message"] == "done"
     assert st.jobs()[0]["counts"] == {"passed": 1, "pending": 1}
+
+
+def test_recover_closes_finished_and_interrupts_orphans():
+    from r2g_agent.jobs import FAILED, PASSED, RUNNING
+    from r2g_agent.pipeline import Pipeline
+    st = JobStore()
+    done = st.create_job("t", {}, [{"name": "a"}])
+    st.set_job(done, RUNNING)
+    st.set_design(done, "a", status=FAILED)               # finished, but its watcher died
+    orphan = st.create_job("u", {}, [{"name": "b"}])
+    st.set_job(orphan, RUNNING)
+    st.set_design(orphan, "b", status=RUNNING, stage="flow")   # its thread died with the server
+    Pipeline(st, workers=1).recover()
+    assert st.job(done)["status"] == "failed"
+    o = st.job(orphan)
+    assert o["status"] == "failed" and o["designs"][0]["detail"]["reason"].startswith("服务重启时中断")

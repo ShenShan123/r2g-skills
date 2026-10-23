@@ -25,14 +25,24 @@ def package_job(store: JobStore, jid: str) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / ("r2g_dataset_%s.tar.gz" % jid)
     index = {"job": jid, "created": time.strftime("%Y-%m-%d %H:%M:%S"),
-             "platform": job["spec"].get("platform"), "designs": []}
+             "platform": job["spec"].get("platform"), "output": job["spec"].get("output", "graph"),
+             "designs": []}
     with tarfile.open(out, "w:gz") as tar:
         for d in job["designs"]:
             if d["status"] != PASSED:
                 continue
             p = Path(d["project"])
             root = "r2g_dataset_%s/%s" % (jid, d["name"])
-            tar.add(p / "dataset", arcname=root + "/dataset")
+            if (job["spec"] or {}).get("output") == "image":
+                for f in ("features.npz", "labels.npz", "image_meta.json", "verify.json"):
+                    if (p / "images" / f).is_file():
+                        tar.add(p / "images" / f, arcname=root + "/images/" + f)
+                if (p / "images" / "png").is_dir():
+                    tar.add(p / "images" / "png", arcname=root + "/images/png")
+                if (p / "reports" / "image_dataset.json").is_file():
+                    tar.add(p / "reports" / "image_dataset.json", arcname=root + "/reports/image_dataset.json")
+            else:
+                tar.add(p / "dataset", arcname=root + "/dataset")
             for r in REPORTS:
                 f = p / "reports" / r
                 if f.is_file():

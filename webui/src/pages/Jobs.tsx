@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
-import { api, fmtTime, Job } from "../lib/api";
+import { api, fmtTime, Job, OUTPUT_LABEL } from "../lib/api";
 import { StatusBadge } from "../components/ui";
 import NewJobDialog from "../components/NewJobDialog";
 
@@ -33,7 +33,7 @@ export default function Jobs() {
               return (
                 <tr key={j.id} className="hover:bg-panel2/50">
                   <td className="px-5 py-3.5"><Link to={`/jobs/${j.id}`} className="font-medium hover:text-accent">{j.title}</Link>
-                    <div className="font-mono text-xs text-faint">{j.id}</div></td>
+                    <div className="font-mono text-xs text-faint">{j.id} · {OUTPUT_LABEL[j.spec?.output ?? "graph"]}</div></td>
                   <td className="px-5 py-3.5 text-muted">{fmtTime(j.created)}</td>
                   <td className="px-5 py-3.5">
                     <span className="text-ok">{c.passed ?? 0}</span><span className="text-faint"> 通过 · </span>

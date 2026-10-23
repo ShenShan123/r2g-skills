@@ -356,3 +356,39 @@ def iter_route_segments(routes):
     """
     for line in routes:
         yield from route_segments(line)
+
+
+def parse_io_pins(def_path):
+    """Placed top-level IO pins from the DEF PINS section.
+
+    Returns ``{pin_name: {"net": str, "x": int, "y": int, "status": str}}`` in DBU
+    for every pin that carries a PLACED/FIXED/COVER location. A pin record spans
+    several lines (``- name + NET n + DIRECTION .. + LAYER .. + PLACED ( x y ) N ;``),
+    so it is accumulated up to its terminating ``;``. Pins with no location
+    (unplaced, e.g. a floorplan DEF before place_pins) are omitted.
+    """
+    pins = {}
+    in_pins = False
+    buf = ""
+    pat_loc = re.compile(r"\+\s*(PLACED|FIXED|COVER)\s*\(\s*(-?\d+)\s+(-?\d+)\s*\)")
+    pat_net = re.compile(r"\+\s*NET\s+(\S+)")
+    with open(def_path, "r", errors="replace") as f:
+        for raw in f:
+            s = raw.strip()
+            if not in_pins:
+                if s.startswith("PINS "):
+                    in_pins = True
+                continue
+            if s.startswith("END PINS"):
+                break
+            buf += " " + s
+            if s.endswith(";"):
+                toks = buf.split()
+                if len(toks) >= 2 and toks[0] == "-":
+                    m = pat_loc.search(buf)
+                    if m:
+                        n = pat_net.search(buf)
+                        pins[toks[1]] = {"net": n.group(1) if n else "", "status": m.group(1),
+                                         "x": int(m.group(2)), "y": int(m.group(3))}
+                buf = ""
+    return pins

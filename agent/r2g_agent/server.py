@@ -42,6 +42,7 @@ def init_runtime(cfg: config.Config | None = None) -> None:
     tools.RT.store = store
     tools.RT.pipeline = Pipeline(store, workers=cfg.workers, cores_per_design=cfg.cores_per_design,
                                  ingest=cfg.ingest)
+    tools.RT.pipeline.recover()
     tools.RT.platform = cfg.platform
     STATE.update(cfg=cfg, sessions=agent_loop.SessionStore())
 
@@ -222,6 +223,30 @@ def reports(jid: str, name: str):
         res = json.loads(v.read_text()).get("results") or []
         out["verify"] = {"passed": sum(1 for r in res if r.get("ok")), "total": len(res)}
     return out
+
+
+@app.get("/api/jobs/{jid}/designs/{name}/images")
+def images(jid: str, name: str):
+    """Image-dataset previews and channel metadata of one design."""
+    d = _design_project(jid, name) / "images"
+    meta = d / "image_meta.json"
+    if not meta.is_file():
+        return {"available": False}
+    m = json.loads(meta.read_text())
+    pngs = sorted(p.name for p in (d / "png").glob("*.png"))
+    return {"available": True, "shape": m.get("shape"), "feature_stage": m.get("feature_stage"),
+            "features": m.get("features"), "labels": m.get("labels"),
+            "gcell_step_um": m.get("gcell_step_um"), "pngs": pngs}
+
+
+@app.get("/api/jobs/{jid}/designs/{name}/images/{fname}")
+def image_png(jid: str, name: str, fname: str):
+    if not re.fullmatch(r"[a-z_]+\.png", fname):
+        raise HTTPException(400, "bad name")
+    p = _design_project(jid, name) / "images" / "png" / fname
+    if not p.is_file():
+        raise HTTPException(404)
+    return FileResponse(p, media_type="image/png")
 
 
 @app.post("/api/upload")
