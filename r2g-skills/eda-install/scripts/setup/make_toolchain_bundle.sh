@@ -8,7 +8,7 @@
 # dataset was produced with is a source build; this ships exactly that build.
 #
 #   make_toolchain_bundle.sh --orfs <ORFS checkout with tools/install> --out <dir>
-#                            [--klayout /usr/bin/klayout] [--tcl-lib DIR]
+#                            [--klayout /usr/bin/klayout | --klayout-dir DIR] [--tcl-lib DIR]
 #
 # Layout (relocatable: every ELF gets RUNPATH relative to $ORIGIN):
 #   <name>/openroad/bin/{openroad,sta}
@@ -22,13 +22,14 @@
 #   <name>/BUNDLE.json              versions, ORFS commit, glibc floor, file digests
 # glibc itself is NOT bundled (it cannot be relocated); the floor is recorded.
 set -euo pipefail
-ORFS=""; OUT=""; TCL_LIB=""; KLAYOUT=""; PATCHELF="${PATCHELF:-patchelf}"
+ORFS=""; OUT=""; TCL_LIB=""; KLAYOUT=""; KLAYOUT_DIR=""; PATCHELF="${PATCHELF:-patchelf}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --orfs) ORFS="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --tcl-lib) TCL_LIB="$2"; shift 2 ;;
     --klayout) KLAYOUT="$2"; shift 2 ;;
+    --klayout-dir) KLAYOUT_DIR="$2"; shift 2 ;;
     -h|--help) sed -n 2,20p "$0"; exit 0 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
@@ -44,7 +45,10 @@ ys_ver="$("$YS" -V | awk '{print $2}')"
 orfs_commit="$(git -C "$ORFS" rev-parse HEAD)"
 name="r2g-toolchain-openroad-${or_ver}-yosys-${ys_ver}"
 kl_ver=""
-if [[ -n "$KLAYOUT" ]]; then
+if [[ -n "$KLAYOUT_DIR" ]]; then
+  kl_ver="$(cat "$KLAYOUT_DIR/VERSION")"
+  name="$name-klayout-$kl_ver"
+elif [[ -n "$KLAYOUT" ]]; then
   kl_ver="$("$KLAYOUT" -b -v | awk '{print $2}')"
   name="$name-klayout-$kl_ver"
 fi
@@ -104,38 +108,16 @@ WRAP
 done
 
 # ---- KLayout (optional) -------------------------------------------------------
-if [[ -n "$KLAYOUT" ]]; then
-  K="$B/klayout"; kinst="$(dirname "$(readlink -f "$KLAYOUT")")/../lib/klayout"
-  [[ -d "$kinst" ]] || { echo "no klayout install dir at $kinst" >&2; exit 3; }
-  mkdir -p "$K/lib"
-  cp -a "$kinst/." "$K/"                 # libklayout_*, db_plugins/, lay_plugins/, pymod/
-  cp -L "$KLAYOUT" "$K/klayout.bin"; chmod -R u+w "$K"
-  # the embedded interpreters' standard libraries. KLayout starts Python for
-  # every -r script and reads KLAYOUT_PYTHONHOME, not PYTHONHOME.
-  pyver="$(env -u LD_LIBRARY_PATH ldd "$K/klayout.bin" | grep -oE 'libpython3\.[0-9]+' | head -1 | sed 's/lib//')"
-  rbver="$(env -u LD_LIBRARY_PATH ldd "$K/klayout.bin" | grep -oE 'libruby-?[0-9.]+' | head -1 | grep -oE '[0-9]+\.[0-9]+')"
-  mkdir -p "$K/python/lib" "$K/ruby"
-  rsync -a --exclude test --exclude tests --exclude site-packages --exclude dist-packages \
-        --exclude __pycache__ --exclude idlelib --exclude tkinter --exclude lib2to3 \
-        --exclude ensurepip --exclude turtledemo "/usr/lib/$pyver" "$K/python/lib/"
-  rsync -a "/usr/lib/ruby/$rbver.0" "$K/ruby/"
-  [[ -d "/usr/lib/x86_64-linux-gnu/ruby/$rbver.0" ]] && \
-    rsync -a "/usr/lib/x86_64-linux-gnu/ruby/$rbver.0/" "$K/ruby/$rbver.0/x86_64-linux-gnu/"
+# --klayout BIN collects here (collect_klayout.sh); --klayout-dir DIR takes a
+# directory collect_klayout.sh produced elsewhere -- e.g. inside the signoff
+# container image, whose KLayout is the one the datasets were signed off with.
+if [[ -n "$KLAYOUT" || -n "$KLAYOUT_DIR" ]]; then
+  K="$B/klayout"
+  if [[ -n "$KLAYOUT_DIR" ]]; then cp -a "$KLAYOUT_DIR" "$K"
+  else bash "$(dirname "${BASH_SOURCE[0]}")/collect_klayout.sh" "$KLAYOUT" "$K"; fi
   chmod -R u+w "$K"
   # its OWN lib/: it was built against the distro libstdc++/Qt, which must not be
-  # mixed with the newer libstdc++ the openroad build needs (top-level lib/).
-  # Collect from everything (binary, libklayout_*, plugins, interpreter
-  # extension modules) until no new library appears.
-  while :; do
-    added=0
-    while read -r so path; do
-      [[ "$so" =~ $GLIBC_RE || -e "$K/lib/$so" || -e "$K/$so" ]] && continue
-      cp -L "$path" "$K/lib/$so"; chmod u+w "$K/lib/$so"; added=1
-    done < <(find "$K" -type f \( -name klayout.bin -o -name '*.so*' \) -print0 \
-             | xargs -0 -n1 sh -c 'env -u LD_LIBRARY_PATH ldd "$1" 2>/dev/null' _ \
-             | awk '/=> \//{print $1, $3}' | sort -u)
-    [[ $added == 0 ]] && break
-  done
+  # mixed with the newer libstdc++ the openroad build needs (top-level lib/)
   while IFS= read -r -d '' f; do
     if [[ "$(dirname "$f")" == "$K/lib" ]]; then
       # some of these are klayout's own helper libs (liblefdef, libpcb, ...)
@@ -146,11 +128,13 @@ if [[ -n "$KLAYOUT" ]]; then
       "$PATCHELF" --set-rpath "\$ORIGIN/$up:\$ORIGIN/$up/lib" "$f" 2>/dev/null || true
     fi
   done < <(find "$K" -type f \( -name klayout.bin -o -name '*.so*' \) -print0)
+  # KLayout reads KLAYOUT_PYTHONHOME, not PYTHONHOME
+  rbdir="$(ls "$K/ruby" | head -1)"
   cat > "$K/klayout" <<WRAP
 #!/bin/sh
 d=\$(cd "\$(dirname "\$0")" && pwd)
 KLAYOUT_PYTHONHOME="\$d/python" PYTHONHOME="\$d/python" PYTHONNOUSERSITE=1 \\
-RUBYLIB="\$d/ruby/$rbver.0:\$d/ruby/$rbver.0/x86_64-linux-gnu" exec "\$d/klayout.bin" "\$@"
+RUBYLIB="\$d/ruby/$rbdir:\$d/ruby/$rbdir/x86_64-linux-gnu" exec "\$d/klayout.bin" "\$@"
 WRAP
   chmod 755 "$K/klayout"
 fi

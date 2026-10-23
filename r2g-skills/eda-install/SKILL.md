@@ -78,7 +78,7 @@ every tier routes through **pre-built conda `litex-hub` packages + a venv**, all
 
 | Tool(s) | No-sudo channel |
 | --- | --- |
-| openroad, yosys (+ sta), klayout | the **r2g toolchain bundle** — the exact source build every r2g dataset was made with, relocatable, ~220 MB, a GitHub release asset pinned by URL + sha256 in `references/toolchain_bundle.json` (built by `scripts/setup/make_toolchain_bundle.sh`); needs host glibc ≥ 2.35. **Not conda:** litex-hub froze openroad/yosys in Feb 2024 (yosys 0.38) and conda-forge has no openroad, so conda binaries + a current ORFS cannot synthesize (fresh-user test, 2026-10-23) |
+| openroad, yosys (+ sta), klayout | the **r2g toolchain bundle** — the exact OpenROAD/Yosys build (sha256-identical) and KLayout 0.30.7 of the signoff image `r2g-orfs:26Q3` every r2g corpus was run in, relocatable, ~220 MB, a GitHub release asset pinned by URL + sha256 in `references/toolchain_bundle.json` (built by `scripts/setup/make_toolchain_bundle.sh`); needs host glibc ≥ 2.35. **Not conda:** litex-hub froze openroad/yosys in Feb 2024 (yosys 0.38) and conda-forge has no openroad, so conda binaries + a current ORFS cannot synthesize (fresh-user test, 2026-10-23) |
 | iverilog, verilator, magic, netgen | conda `litex-hub` (all `--override-channels -c litex-hub -c conda-forge` — the ToS-gate workaround) |
 | ORFS flow + platforms | shallow fetch of **the commit the bundle was validated with** (no submodules, no build); a read-only system checkout never counts as installed |
 | sky130A PDK | conda `open_pdks.sky130a` → the big volume (never `volare` — proxy/rate-limit caveat) |

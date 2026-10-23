@@ -1,11 +1,12 @@
 {
- "name": "r2g-toolchain-openroad-26Q3-318-g6b9d7fb806-yosys-0.64-klayout-0.29.12",
- "url": "https://github.com/ShenShan123/r2g-skills/releases/download/toolchain-2026.10.1/r2g-toolchain-openroad-26Q3-318-g6b9d7fb806-yosys-0.64-klayout-0.29.12.tar.gz",
- "sha256": "6404a4a512a3e5292a90471fd6744f0c388cf277f777497d0bb6f55d4af3d7d5",
+ "name": "r2g-toolchain-openroad-26Q3-318-g6b9d7fb806-yosys-0.64-klayout-0.30.7",
+ "url": "https://github.com/ShenShan123/r2g-skills/releases/download/toolchain-2026.10.2/r2g-toolchain-openroad-26Q3-318-g6b9d7fb806-yosys-0.64-klayout-0.30.7.tar.gz",
+ "sha256": "2a3e7507b38cd670f12f9ea90c7cac3265dc62ef46a0047a683edcbe4cdc1116",
  "orfs_commit": "a5ff7ef7dac4338e6e5fad7710b85fc6c8f3503c",
  "glibc_min": "2.35",
  "openroad": "26Q3-318-g6b9d7fb806",
  "yosys": "0.64",
- "klayout": "0.29.12",
- "built_by": "scripts/setup/make_toolchain_bundle.sh --klayout /usr/bin/klayout"
+ "klayout": "0.30.7",
+ "built_by": "collect_klayout.sh inside r2g-orfs:26Q3 (the signoff image) + make_toolchain_bundle.sh --klayout-dir",
+ "provenance": "openroad/yosys sha256-identical to the signoff image's; klayout is the image's 0.30.7"
 }
