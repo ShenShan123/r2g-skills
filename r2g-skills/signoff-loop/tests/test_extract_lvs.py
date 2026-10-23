@@ -576,3 +576,57 @@ def test_fresh_klayout_artifacts_still_clean(tmp_path):
     os.utime(lvs_dir / "lvs_run.log", (st.st_atime, st.st_mtime - 5.0))
     res = _run_script(proj, tmp_path / "lvs_fresh.json")
     assert res["status"] == "clean", res
+
+
+# ---------------------------------------------------------------------------
+# nangate45 Netgen fallback (run_lvs.sh -> lvs_netgen_fallback.sh, 2026-10-23)
+# ---------------------------------------------------------------------------
+
+def _fallback(proj: Path, verdict: str, final: str = "", older: bool = False):
+    f = proj / "lvs" / "netgen_fallback.json"
+    f.write_text(json.dumps({"verdict": verdict, "final": final,
+                             "klayout": "KLayout 0.30.7", "netgen": "Netgen 1.5.272"}))
+    if older:  # written for a PREVIOUS run: older than this run's log
+        import os
+        t = (proj / "lvs" / "lvs_run.log").stat().st_mtime - 60
+        os.utime(f, (t, t))
+
+
+def test_fallback_match_supplies_the_verdict_for_a_crash(tmp_path):
+    proj = _make_project(tmp_path, log_run=_CRASH_RUN_LOG, log_6_lvs=_CRASH_6LVS_LOG)
+    _fallback(proj, "match", "Final result: Circuits match uniquely.")
+    r = _run_script(proj, tmp_path / "lvs.json")
+    assert r["status"] == "clean" and r["reason"] == "netgen_fallback_match"
+    assert r["lvs_by"] == "netgen_fallback" and r["klayout_status"] == "crash"
+    assert r["mismatch_count"] == 0
+
+
+def test_fallback_mismatch_is_a_fail(tmp_path):
+    proj = _make_project(tmp_path, log_run=_CRASH_RUN_LOG, log_6_lvs=_CRASH_6LVS_LOG)
+    _fallback(proj, "mismatch", "Final result: Top level cell failed pin matching.")
+    r = _run_script(proj, tmp_path / "lvs.json")
+    assert r["status"] == "fail" and r["reason"] == "netgen_fallback_mismatch"
+    assert r["lvs_by"] == "netgen_fallback"
+
+
+def test_fallback_without_a_verdict_leaves_the_crash(tmp_path):
+    proj = _make_project(tmp_path, log_run=_CRASH_RUN_LOG, log_6_lvs=_CRASH_6LVS_LOG)
+    _fallback(proj, "no_verdict")
+    r = _run_script(proj, tmp_path / "lvs.json")
+    assert r["status"] == "crash" and "lvs_by" not in r
+
+
+def test_stale_fallback_from_a_previous_run_is_ignored(tmp_path):
+    proj = _make_project(tmp_path, log_run=_CRASH_RUN_LOG, log_6_lvs=_CRASH_6LVS_LOG)
+    _fallback(proj, "match", "Final result: Circuits match uniquely.", older=True)
+    r = _run_script(proj, tmp_path / "lvs.json")
+    assert r["status"] == "crash"
+
+
+def test_fallback_never_overrides_a_klayout_verdict(tmp_path):
+    """KLayout matched: even a (contradicting) fallback file must not touch it."""
+    proj = _make_project(tmp_path, log_6_lvs="Congratulations! Netlists match.\n",
+                         log_run="Congratulations! Netlists match.\n", lvsdb=True)
+    _fallback(proj, "mismatch", "Final result: Netlists do not match.")
+    r = _run_script(proj, tmp_path / "lvs.json")
+    assert r["status"] == "clean" and "lvs_by" not in r

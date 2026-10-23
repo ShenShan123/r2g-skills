@@ -447,6 +447,30 @@ def main():
         else:
             status = 'unknown'
 
+    # nangate45 Netgen fallback (run_lvs.sh -> lvs_netgen_fallback.sh): adopted ONLY
+    # where KLayout gave no verdict, and only when it was written for THIS run (at
+    # least as fresh as the run log). Its source is recorded as lvs_by so a reader
+    # can always separate the two populations.
+    fb_verdict = None
+    _fb = lvs_dir / 'netgen_fallback.json'
+    if status in ('crash', 'incomplete', 'unknown') and _fb.exists():
+        try:
+            _runlog_m0 = _runlog.stat().st_mtime if _runlog.exists() else 0.0
+            if _fb.stat().st_mtime >= _runlog_m0 - 2.0:
+                fb_verdict = json.loads(_fb.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            fb_verdict = None
+    if isinstance(fb_verdict, dict) and fb_verdict.get('verdict') in ('match', 'mismatch'):
+        klayout_status = status
+        if fb_verdict['verdict'] == 'match':
+            status, mismatch_count = 'clean', 0
+            result_reason = 'netgen_fallback_match'
+        else:
+            status = 'fail'
+            result_reason = 'netgen_fallback_mismatch'
+    else:
+        klayout_status = None
+
     # Freshness override: a would-be 'clean' derived from KLayout artifacts that
     # are older than a fresh lvs_run.log is a STALE prior-run verdict, not this
     # run's result — emit 'stale' so ingest never records a fabricated clean.
@@ -463,11 +487,17 @@ def main():
     }
     if result_reason is not None:
         result['reason'] = result_reason
+    if klayout_status is not None:
+        result['lvs_by'] = 'netgen_fallback'
+        result['klayout_status'] = klayout_status
+        result['netgen_fallback'] = {k: fb_verdict.get(k) for k in
+                                     ('verdict', 'final', 'klayout', 'netgen')}
 
     # For a real mismatch with an lvsdb, classify the sub-cause (symmetric-matcher
     # tool residual vs real connectivity vs generic) so the diagnoser can report
     # an honest, specific residual_reason instead of "operator review".
-    if status == 'fail' and lvsdb_exists:
+    # (not for a fallback mismatch: the lvsdb there is the CRASHED KLayout run's)
+    if status == 'fail' and lvsdb_exists and klayout_status is None:
         cls = classify_lvs_mismatch(lvs_dir)
         if cls:
             result.update(cls)

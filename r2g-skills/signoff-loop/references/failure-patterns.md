@@ -1298,6 +1298,21 @@ strategy_ids: [lvs_same_nets_seed]
 - **Resource bug fixed alongside:** a SIGSEGV gives `make` exit 2 (not 124/137), so the old
   124/137-only cleanup left a multi-GB klayout child still spinning. `run_lvs.sh` now reaps orphans
   on **any** nonzero exit.
+- **When the retries run out: the Netgen fallback (nangate45, 2026-10-23).** On the nangate45
+  repair arm ~24 dev designs still crashed after every retry (and upgrading KLayout, dropping the
+  cross-reference and raising the search budget all failed). `run_lvs.sh` now calls
+  `scripts/flow/lvs_netgen_fallback.sh` when KLayout left NO verdict (crash signature, or a log
+  with neither a match nor a mismatch line; never after a timeout): KLayout runs only the deck's
+  extraction section (`assets/platforms/nangate45/lvs_fallback/FreePDK45_extract.lylvs`, lines
+  1-384 of the deck), both netlists are written, `reorder_spice.py` puts them definition-before-use
+  (backslash escapes removed, upper-cased like KLayout's CDL reader), and Netgen compares with the
+  deck's own tolerances (`nangate45_netgen_setup.tcl`). `extract_lvs.py` adopts its verdict ONLY
+  for crash/incomplete/unknown and only when it is fresher than the run log, recording
+  `lvs_by=netgen_fallback` and the original `klayout_status`. Validation: 11/11 KLayout-clean
+  designs match; every negative control (pin swap, deleted cell, swapped flip-flop D inputs, a
+  real case-folded-name mismatch) reads mismatch; on C01297 fifo (a crash design) the skill's
+  script reproduces the repair arm's `match`. Needs `NETGEN_EXE` (eda-install `sky130` tier, which
+  `install.sh` now selects); `R2G_LVS_FALLBACK=0` disables it.
 
 #### Sub-variant: the retry was dead on the frozen path — every corpus design (2026-10-15)
 

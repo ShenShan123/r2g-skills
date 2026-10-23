@@ -4,8 +4,8 @@
 #   git clone <repo> && cd <repo> && bash install.sh
 #
 # 1. checks the machine (Linux, a Python >= 3.10 that can build a venv)
-# 2. EDA toolchain via eda-install (ORFS + OpenROAD/Yosys, KLayout, the torch
-#    venv for graph datasets). No root needed: without sudo it installs pre-built
+# 2. EDA toolchain via eda-install (ORFS + OpenROAD/Yosys, KLayout, Netgen for
+#    the nangate45 LVS fallback, the torch venv for graph datasets). No root needed: without sudo it installs pre-built
 #    conda packages onto the largest free volume. Already-installed tools are
 #    detected and left alone.
 # 3. verifies the platform this version supports (nangate45) is STRICT-READY
@@ -80,7 +80,7 @@ if [[ $SKIP_TC -eq 0 ]]; then
   # under set -e a failing bootstrap used to end the script with no message at
   # all (fresh-user test, 2026-10-23) -- say what failed and how to resume
   bash "$REPO/r2g-skills/eda-install/bootstrap.sh" $YES ${PREFIX:+--prefix "$PREFIX"} \
-       --tiers core,frontend,klayout,platform_rules,graph --strict-platforms nangate45 \
+       --tiers core,frontend,klayout,platform_rules,sky130,graph --strict-platforms nangate45 \
     || die "EDA 工具链没有装完整（失败的那一项见上方 \"installer returned non-zero\" 附近的输出）。
   已下载的内容会保留，修好后重新运行同一条 bash install.sh 命令即可接着装。"
 else

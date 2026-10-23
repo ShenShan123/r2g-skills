@@ -548,6 +548,38 @@ if [[ -f "$RESULTS_DIR/6_final.cdl" ]]; then
   cp "$RESULTS_DIR/6_final.cdl" "$LVS_DIR/" 2>/dev/null || true
 fi
 
+# nangate45 LVS FALLBACK (2026-10-23; the repair arm's lvs45 fallback, moved in).
+# When KLayout gave NO verdict -- its comparer still crashing after the retries
+# above, or a log with neither a match nor a mismatch line -- compare the same
+# GDS and CDL with KLayout's extraction + Netgen's comparison
+# (lvs_netgen_fallback.sh). Never run over a verdict KLayout did give, never
+# after a timeout (that is a budget, not a comparer defect), and only adopted by
+# extract_lvs.py for crash/incomplete/unknown. R2G_LVS_FALLBACK=0 disables it.
+rm -f "$LVS_DIR/netgen_fallback.json"
+if [[ "$PLATFORM" == "nangate45" && "${R2G_LVS_FALLBACK:-1}" != "0" \
+      && $LVS_STATUS -ne 124 && $LVS_STATUS -ne 137 && "$LVS_IMPLICIT_REBUILD" != "1" ]]; then
+  _kl_verdict=0
+  if [[ -f "$LVS_DIR/6_lvs.log" ]] \
+     && grep -qiE "Congratulations.*match|Netlists match|don't match|do not match" "$LVS_DIR/6_lvs.log" \
+     && ! grep -qaE "Signal number|net2id\.end|dbLayoutVsSchematicWriter|Internal error.*Executable::cleanup" \
+          "$LVS_DIR/6_lvs.log" "$LVS_DIR/lvs_run.log" 2>/dev/null; then
+    _kl_verdict=1
+  fi
+  if [[ "$_kl_verdict" == "0" ]]; then
+    _fb_cdl="${ORFS_OBJECTS_DIR:-}/6_final_concat.cdl"
+    if [[ ! -s "$_fb_cdl" && -s "$RESULTS_DIR/6_final.cdl" ]]; then
+      _fb_cdl="$LVS_DIR/6_final_concat.cdl"
+      cat "$RESULTS_DIR/6_final.cdl" "$FLOW_DIR/platforms/nangate45/cdl/NangateOpenCellLibrary.cdl" \
+        > "$_fb_cdl" 2>/dev/null || true
+    fi
+    echo "KLayout gave no LVS verdict -- running the Netgen comparison fallback" >&2
+    bash "$(dirname "${BASH_SOURCE[0]}")/lvs_netgen_fallback.sh" "$GDS_FILE" "$_fb_cdl" "$DESIGN_NAME" \
+      "$LVS_DIR/netgen_fallback" >&2 || true
+    [[ -f "$LVS_DIR/netgen_fallback/netgen_fallback.json" ]] && \
+      cp "$LVS_DIR/netgen_fallback/netgen_fallback.json" "$LVS_DIR/netgen_fallback.json"
+  fi
+fi
+
 # Copy to the SELECTED backend run (RMD-P0-02: the run the restage picked and
 # this verdict describes — never `ls | tail -1`, which can name a newer empty
 # RUN dir from a crashed re-attempt).
