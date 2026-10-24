@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FolderUp, Play, Loader2, X, FileCode2, MessagesSquare, ChevronRight, Check } from "lucide-react";
-import { api, fmtTime, Job, Output } from "../lib/api";
+import { FolderUp, Play, Loader2, X, FileCode2, MessagesSquare, ChevronRight, Check, FolderTree, Search, AlertTriangle } from "lucide-react";
+import { api, fmtTime, Job, Output, Scan } from "../lib/api";
 import OutputPicker from "../components/OutputPicker";
 import { StatusBadge } from "../components/ui";
 
@@ -19,6 +19,8 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [mode, setMode] = useState<"single" | "batch">("single");
+  const [scan, setScan] = useState<Scan | null>(null);
   const dirInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => { dirInput.current?.setAttribute("webkitdirectory", ""); }, []);
@@ -30,11 +32,17 @@ export default function Home() {
   const hdl = files.filter((f) => HDL.test(f.name));
   const folder = files[0] ? (((files[0] as any).webkitRelativePath || "") as string).split("/")[0] : "";
   const toggle = (n: string) => { const s = new Set(picked); s.has(n) ? s.delete(n) : s.add(n); setPicked(s); };
-  const count = picked.size + (hdl.length ? 1 : 0);
+  const count = mode === "batch" ? (scan?.ok ?? 0) : picked.size + (hdl.length ? 1 : 0);
 
   async function start() {
     setBusy(true); setErr("");
     try {
+      if (mode === "batch" && scan) {
+        const designs = scan.designs.filter((d) => !d.problem).map((d) => ({ path: d.path, top: d.top, name: d.name }));
+        const name = scan.root.split("/").pop();
+        const r = await api.createJob(designs, `批量 · ${name} · ${designs.length} 个设计`, output);
+        nav(`/jobs/${r.job_id}`); return;
+      }
       const designs: any[] = [...picked].map((example) => ({ example }));
       if (hdl.length) {
         const up = await api.upload(files.filter((f) => SEND.test(f.name)));
@@ -55,6 +63,12 @@ export default function Home() {
       <div className="card mt-6 divide-y divide-line">
         {/* 1 */}
         <Step n={1} title="选择设计" done={count > 0}>
+          <div className="mb-3 inline-flex rounded-xl bg-panel2 p-1 text-sm">
+            {([["single", "一个设计"], ["batch", "批量（很多个设计）"]] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setMode(k)}
+                className={`rounded-lg px-3 py-1.5 ${mode === k ? "bg-panel font-medium text-fg shadow-card" : "text-muted"}`}>{l}</button>))}
+          </div>
+          {mode === "batch" ? <BatchPick scan={scan} setScan={setScan} /> : (<>
           <label className={`flex cursor-pointer items-center gap-3 rounded-xl border border-dashed px-4 py-4 transition
               ${hdl.length ? "border-accent bg-accent/5" : "border-line hover:border-accent hover:bg-panel2/60"}`}>
             <FolderUp size={22} className={hdl.length ? "text-accent" : "text-muted"} />
@@ -90,6 +104,7 @@ export default function Home() {
                 className={`chip border px-3 py-1.5 text-sm ${picked.has(e.name) ? "border-accent bg-accent/10 text-accent" : "border-line text-fg hover:bg-panel2"}`}>
                 {picked.has(e.name) && <Check size={13} />}<span className="font-mono">{e.name}</span></button>))}
           </div>
+          </>)}
         </Step>
 
         {/* 2 */}
@@ -103,7 +118,8 @@ export default function Home() {
             {busy ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
             {busy ? "提交中…" : count ? `开始处理 ${count} 个设计` : "先在第 1 步选择设计"}
           </button>
-          <p className="mt-2 text-center text-xs text-muted">小设计约 3–5 分钟；提交后会打开进度页，可以随时离开再回来看。</p>
+          <p className="mt-2 text-center text-xs text-muted">
+            {mode === "batch" ? "设计会按「设置」里的并发上限排队运行；服务重启后会自动接着跑。" : "小设计约 3–5 分钟；提交后会打开进度页，可以随时离开再回来看。"}</p>
           {err && <p className="mt-2 text-center text-sm text-bad">{err}</p>}
         </Step>
       </div>
@@ -148,5 +164,68 @@ function Step({ n, title, done, children }: { n: number; title: string; done: bo
       </div>
       {children}
     </section>
+  );
+}
+
+function BatchPick({ scan, setScan }: { scan: Scan | null; setScan: (s: Scan | null) => void }) {
+  const [path, setPath] = useState("");
+  const [busy, setBusy] = useState<"" | "upload" | "scan">("");
+  const [err, setErr] = useState("");
+  const [showSkip, setShowSkip] = useState(false);
+  const dir = useRef<HTMLInputElement>(null);
+  useEffect(() => { dir.current?.setAttribute("webkitdirectory", ""); }, []);
+
+  async function doScan(p: string) {
+    setBusy("scan"); setErr(""); setScan(null);
+    try { setScan(await api.scan(p)); } catch (e: any) { setErr(e.message); } finally { setBusy(""); }
+  }
+  async function upload(list: File[]) {
+    const keep = list.filter((f) => SEND.test(f.name));
+    if (!keep.length) { setErr("这个文件夹里没有 Verilog 文件"); return; }
+    setBusy("upload"); setErr(""); setScan(null);
+    try {
+      const up = await api.upload(keep);
+      const folder = (((keep[0] as any).webkitRelativePath || "") as string).split("/")[0];
+      await doScan(folder ? `${up.path}/${folder}` : up.path);
+    } catch (e: any) { setErr(e.message); setBusy(""); }
+  }
+  const ok = scan?.designs.filter((d) => !d.problem) ?? [];
+  const bad = scan?.designs.filter((d) => d.problem) ?? [];
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted">准备一个文件夹，里面<b className="text-fg">每个子文件夹是一个设计</b>。可以上传，也可以直接填服务器上的路径（文件已经在服务器上时更快）。</p>
+      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-line px-4 py-3 hover:border-accent hover:bg-panel2/60">
+        {busy === "upload" ? <Loader2 size={20} className="animate-spin text-accent" /> : <FolderTree size={20} className="text-muted" />}
+        <div className="flex-1"><div className="font-medium">{busy === "upload" ? "上传中…" : "上传装着多个设计的文件夹"}</div>
+          <div className="text-xs text-muted">只会上传源码和 $readmem 数据文件</div></div>
+        <input ref={dir} type="file" multiple className="hidden" onChange={(e) => { upload(Array.from(e.target.files || [])); e.target.value = ""; }} />
+      </label>
+      <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (path.trim()) doScan(path.trim()); }}>
+        <input className="input font-mono" placeholder="或填服务器上的目录，例如 /data/rtl_corpus" value={path} onChange={(e) => setPath(e.target.value)} />
+        <button className="btn-ghost shrink-0" disabled={!path.trim() || !!busy}>
+          {busy === "scan" ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} 扫描</button>
+      </form>
+      {err && <p className="text-sm text-bad">{err}</p>}
+      {scan && (
+        <div className="rounded-xl bg-panel2 p-4 text-sm">
+          <div className="font-medium">识别到 {scan.total} 个设计：<span className="text-ok">{scan.ok} 个将运行</span>
+            {scan.skipped > 0 && <span className="text-warn">，{scan.skipped} 个将跳过</span>}</div>
+          <div className="mt-1 truncate font-mono text-xs text-faint">{scan.root}</div>
+          {ok.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {ok.slice(0, 10).map((d) => <span key={d.name} className="chip bg-panel text-muted"><span className="font-mono">{d.name}</span>{d.top !== d.name && <span className="text-faint">· 顶层 {d.top}</span>}</span>)}
+              {ok.length > 10 && <span className="chip bg-panel text-muted">+{ok.length - 10}</span>}
+            </div>)}
+          {bad.length > 0 && (
+            <div className="mt-3">
+              <button type="button" className="flex items-center gap-1.5 text-xs text-warn" onClick={() => setShowSkip(!showSkip)}>
+                <AlertTriangle size={13} /> {showSkip ? "收起" : "查看"}跳过的设计和原因</button>
+              {showSkip && (
+                <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-xs">
+                  {bad.map((d) => <li key={d.name}><span className="font-mono">{d.name}</span>：<span className="text-muted">{d.problem}</span></li>)}
+                </ul>)}
+            </div>)}
+        </div>)}
+    </div>
   );
 }

@@ -1,5 +1,6 @@
 import json
 import subprocess
+from pathlib import Path
 import sys
 import threading
 import time
@@ -86,18 +87,74 @@ def test_a_variant_not_named_after_the_project_is_never_touched(tmp_path):
     assert housekeeping.orfs_variant_dirs(proj) == []
 
 
-def test_recover_leaves_a_live_owners_job_alone():
+def _resumable(st, status, owner, restarts=0, name="b"):
+    jid = st.create_job("u", {"platform": "nangate45", "output": "graph"}, [{"name": name}])
+    st.set_job(jid, RUNNING)
+    st.set_design(jid, name, status=status, stage="flow", project="/tmp/none",
+                  detail={"owner": owner, "source": "/src/" + name, "top": "t", "restarts": restarts})
+    return jid
+
+
+def test_server_resumes_a_dead_owners_designs_and_leaves_a_live_one(monkeypatch):
     st = JobStore()
-    live = st.create_job("t", {}, [{"name": "a"}])
-    st.set_job(live, RUNNING)
-    st.set_design(live, "a", status=RUNNING, stage="flow", detail={"owner": OWNER})
-    dead = st.create_job("u", {}, [{"name": "b"}])
-    st.set_job(dead, RUNNING)
-    st.set_design(dead, "b", status=RUNNING, stage="flow", detail={"owner": "999999999:1"})
+    live = _resumable(st, RUNNING, OWNER, name="a")
+    dead_run = _resumable(st, RUNNING, "999999999:1", name="b")
+    dead_queue = _resumable(st, "pending", "999999999:1", name="c")
+    p = Pipeline(st, workers=1, ingest=False)
+    calls = []
+    monkeypatch.setattr(p.pool, "submit", lambda fn, *a: calls.append(a))
+    monkeypatch.setattr(p, "_watch_job", lambda jid: None)
     assert owner_alive(OWNER) and not owner_alive("999999999:1") and not owner_alive(None)
-    Pipeline(st, workers=1, ingest=False).recover()
-    assert st.job(live)["status"] == RUNNING and st.design(live, "a")["status"] == RUNNING
-    assert st.design(dead, "b")["status"] == FAILED
+    p.recover(resume=True)
+    assert st.design(live, "a")["status"] == RUNNING and st.design(live, "a")["detail"]["owner"] == OWNER
+    assert sorted(a[1] for a in calls) == ["b", "c"]       # both re-queued, with source/top/platform
+    assert calls[0][2] == Path("/src/" + calls[0][1]) and calls[0][3] == "t"
+    b = st.design(dead_run, "b")
+    assert b["status"] == "pending" and b["detail"]["restarts"] == 1 and b["detail"]["owner"] == OWNER
+    assert st.design(dead_queue, "c")["detail"]["restarts"] == 0   # queued, never started: not a restart
+    calls.clear()
+    p.recover(resume=True)                                 # now owned by us (alive): nothing again
+    assert calls == []
+
+
+def test_a_design_interrupted_too_often_fails_instead_of_looping(monkeypatch):
+    st = JobStore()
+    jid = _resumable(st, RUNNING, "999999999:1", restarts=2)
+    p = Pipeline(st, workers=1, ingest=False)
+    monkeypatch.setattr(p.pool, "submit", lambda fn, *a: (_ for _ in ()).throw(AssertionError("resubmitted")))
+    p.recover(resume=True)
+    d = st.design(jid, "b")
+    assert d["status"] == FAILED and "中断" in d["detail"]["reason"]
+
+
+def test_two_servers_never_both_adopt_a_design():
+    st = JobStore()
+    jid = _resumable(st, RUNNING, "999999999:1")
+    assert st.claim_design(jid, "b", "999999999:1", "1:a") is True
+    assert st.claim_design(jid, "b", "999999999:1", "2:b") is False
+
+
+def test_wait_for_disk_pauses_then_proceeds(monkeypatch):
+    free = iter([10.0, 10.0, 80.0])
+    monkeypatch.setattr(housekeeping, "free_gb", lambda: next(free))
+    told = []
+    housekeeping.wait_for_disk(50, on_wait=told.append, poll=0)
+    assert told == [10.0]
+    housekeeping.wait_for_disk(0)                          # 0 disables the guard
+
+
+def test_slim_keeps_dataset_reports_logs(tmp_path):
+    proj = tmp_path / "p"
+    for k in ("results", "objects", "final", "logs", "reports_orfs"):
+        (proj / "backend" / "RUN_1" / k).mkdir(parents=True)
+        (proj / "backend" / "RUN_1" / k / "f").write_bytes(b"x" * 100)
+    for k in ("dataset", "reports", "rtl"):
+        (proj / k).mkdir()
+        (proj / k / "f").write_text("keep")
+    assert housekeeping.slim_passed(proj) == 300
+    left = sorted(p.name for p in (proj / "backend" / "RUN_1").iterdir())
+    assert left == ["logs", "reports_orfs"] and (proj / "dataset" / "f").is_file()
+    assert (proj / "backend" / "SLIMMED").is_file()
 
 
 def test_clean_candidates_only_old_finished_jobs(r2g_home):
@@ -115,3 +172,35 @@ def test_clean_candidates_only_old_finished_jobs(r2g_home):
     for j in (old_done, running):
         os.utime(r2g_home / "workspace" / j, (past, past))
     assert [r["job_id"] for r in housekeeping.clean_candidates(st, 7)] == [old_done]
+
+
+def test_stop_orphan_only_kills_a_group_that_names_the_project(tmp_path):
+    from r2g_agent.pipeline import stop_orphan
+    proj = str(tmp_path / "proj_x")
+    # like run_orfs.sh <project> <platform>: the project path is an argument
+    sleeper = "import time; time.sleep(60)"
+    mine = subprocess.Popen([sys.executable, "-c", sleeper, proj, "nangate45"], start_new_session=True)
+    other = subprocess.Popen([sys.executable, "-c", sleeper, "/elsewhere", "nangate45"], start_new_session=True)
+    try:
+        time.sleep(0.3)
+        assert stop_orphan(other.pid, proj) is False and other.poll() is None
+        assert stop_orphan(mine.pid, proj, grace=5) is True
+        mine.wait(5)
+        assert mine.returncode is not None
+    finally:
+        for p in (mine, other):
+            if p.poll() is None:
+                p.kill()
+
+
+def test_lowering_the_disk_limit_releases_a_waiter(monkeypatch):
+    monkeypatch.setattr(housekeeping, "free_gb", lambda: 10.0)
+    limit = {"gb": 50}
+    seen = []
+
+    def stop():
+        seen.append(1)
+        if len(seen) == 2:
+            limit["gb"] = 5            # the user lowers it in Settings while it waits
+    housekeeping.wait_for_disk(lambda: limit["gb"], should_stop=stop, poll=0)
+    assert len(seen) == 2

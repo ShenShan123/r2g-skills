@@ -45,6 +45,9 @@ class Cancelled(Exception):
     pass
 
 
+MAX_RESTARTS = 2
+
+
 def _proc_start(pid: int) -> str | None:
     """Kernel start time of a process (field 22 of /proc/<pid>/stat), None if gone."""
     try:
@@ -57,6 +60,46 @@ def _proc_start(pid: int) -> str | None:
 # this process, as an owner a later process can test for liveness; the start time
 # guards against a recycled pid
 OWNER = "%d:%s" % (os.getpid(), _proc_start(os.getpid()))
+
+
+def _group_members(pgid: int) -> list[int]:
+    out = []
+    for d in Path("/proc").iterdir():
+        if d.name.isdigit():
+            try:
+                if int((d / "stat").read_text().rsplit(")", 1)[1].split()[2]) == pgid:
+                    out.append(int(d.name))
+            except (OSError, ValueError, IndexError):
+                pass
+    return out
+
+
+def stop_orphan(pgid, project: str, grace: float = 10.0) -> bool:
+    """Stop a dead server's stage process group -- only if some member's command
+    line names this design's project (a recycled pgid is someone else's)."""
+    if not pgid or not project:
+        return False
+    members = _group_members(int(pgid))
+    ours = False
+    for pid in members:
+        try:
+            if project.encode() in Path("/proc/%d/cmdline" % pid).read_bytes():
+                ours = True
+                break
+        except OSError:
+            pass
+    if not ours:
+        return False
+    try:
+        os.killpg(int(pgid), signal.SIGTERM)
+        deadline = time.time() + grace
+        while time.time() < deadline and _group_members(int(pgid)):
+            time.sleep(0.5)
+        if _group_members(int(pgid)):
+            os.killpg(int(pgid), signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    return True
 
 
 def owner_alive(owner: str | None) -> bool:
@@ -107,9 +150,14 @@ class Pipeline:
     """Runs designs of a job on a thread pool; one subprocess tree per stage."""
 
     def __init__(self, store: JobStore, workers: int = 2, cores_per_design: int = 8,
-                 ingest: bool = True, stage_timeout: int = 6 * 3600):
+                 ingest: bool = True, stage_timeout: int = 6 * 3600, min_free_gb: float = 50,
+                 keep_intermediate: bool = False):
         self.store = store
-        self.pool = ThreadPoolExecutor(max_workers=max(1, workers))
+        self.min_free_gb = min_free_gb
+        self.keep_intermediate = keep_intermediate
+        # the real limit is the machine-wide slots (self.workers, changeable while
+        # running); the pool only needs enough threads to hold that many plus waiters
+        self.pool = ThreadPoolExecutor(max_workers=max(32, workers * 2))
         self.workers = max(1, workers)
         self.cores = cores_per_design
         self.ingest = ingest
@@ -148,6 +196,18 @@ class Pipeline:
         self.store.set_job(jid, RUNNING)
         threading.Thread(target=self._watch_job, args=(jid,), daemon=True).start()
         return jid
+
+    def shutdown(self) -> None:
+        """Server stopping: stop every running stage group (the designs restart on
+        the next start, so nothing may keep writing to their FLOW_VARIANT)."""
+        with self._lock:
+            procs = list(self._procs.values())
+        for p in procs:
+            if p.poll() is None:
+                try:
+                    os.killpg(p.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
 
     def cancel(self, jid: str) -> None:
         self._cancel.add(jid)
@@ -198,30 +258,69 @@ class Pipeline:
                          "任务结束：%d/%d 个设计通过并产出数据集" % (n_ok, len(sts)), result)
         return True
 
-    def recover(self) -> list[str]:
+    def recover(self, resume: bool = False) -> list[str]:
         """At start-up: close jobs that finished while no watcher was alive, and
-        mark designs whose owning process has died as interrupted (their threads
-        died with it; nothing will ever finish them).
+        deal with designs whose owning process has died.
 
-        Only a DEAD owner's designs: `r2g status` or `r2g run` in a terminal also
-        starts a runtime, and once marked every design the live web server was
-        running as interrupted."""
+        Only a DEAD owner's designs are touched: `r2g status` or `r2g run` in a
+        terminal also starts a runtime, and a live web server's designs are its own.
+
+        resume=True (the long-lived web server): a dead owner's queued designs are
+        queued again here and its interrupted ones restart from the beginning, so a
+        restart in the middle of a 2000-design batch loses nothing. A design
+        interrupted MAX_RESTARTS times fails instead of looping. resume=False (a
+        terminal command): nothing is adopted -- the next web server will -- and
+        nothing is marked failed."""
         touched = []
-        for j in self.store.jobs(500):
-            if j["status"] not in (RUNNING, "pending"):
+        for j in self.store.jobs(5000):
+            if j["status"] not in (RUNNING, "pending", "finalizing"):
                 continue
-            full = self.store.job(j["id"])
-            if any(d["status"] in (RUNNING, "pending") and owner_alive((d.get("detail") or {}).get("owner"))
-                   for d in full["designs"]):
+            jid = j["id"]
+            full = self.store.job(jid)
+            act = [d for d in full["designs"] if d["status"] in (RUNNING, "pending")]
+            if any(owner_alive((d.get("detail") or {}).get("owner")) for d in act):
                 continue            # another live process owns this job and will close it
-            for d in full["designs"]:
-                if d["status"] in (RUNNING, "pending"):
-                    self.store.set_design(j["id"], d["name"], status=FAILED,
-                                          detail={"failed_stage": d["stage"],
-                                                  "reason": "服务重启时中断，未完成（可重新提交）"})
-                    self.store.event(j["id"], d["name"], d["stage"], "fail", "服务重启时中断，未完成（可重新提交）")
-            self.finalize_if_done(j["id"])
-            touched.append(j["id"])
+            if j["status"] == "finalizing":
+                # its closer died mid-package: let one runtime take it back
+                if time.time() - (j.get("updated") or 0) > 600 and self.store.claim_job(jid, ("finalizing",), RUNNING):
+                    self.finalize_if_done(jid)
+                continue
+            if not act:
+                self.finalize_if_done(jid)
+                touched.append(jid)
+                continue
+            if not resume:
+                continue
+            spec = full.get("spec") or {}
+            n = 0
+            for d in act:
+                det = d.get("detail") or {}
+                if not self.store.claim_design(jid, d["name"], det.get("owner"), OWNER):
+                    continue
+                if d["status"] == RUNNING:
+                    stop_orphan(det.get("pgid"), d["project"])
+                if not det.get("source") or not d.get("project"):
+                    self.store.set_design(jid, d["name"], status=FAILED,
+                                          detail={"failed_stage": d["stage"], "reason": "记录不完整，无法恢复（可重新提交）"})
+                    continue
+                restarts = int(det.get("restarts") or 0) + (1 if d["status"] == RUNNING else 0)
+                if restarts > MAX_RESTARTS:
+                    msg = "运行中被中断了 %d 次，不再重试（可单独重新提交）" % restarts
+                    self.store.set_design(jid, d["name"], status=FAILED,
+                                          detail={"failed_stage": d["stage"], "reason": msg})
+                    self.store.event(jid, d["name"], d["stage"], "fail", msg)
+                    continue
+                self.store.set_design(jid, d["name"], status="pending", stage="prepare",
+                                      detail={"restarts": restarts})
+                self.store.event(jid, d["name"], "prepare", "warn",
+                                 "服务重启后从头重新运行" if d["status"] == RUNNING else "服务重启后继续排队")
+                self.pool.submit(self._run_design, jid, d["name"], Path(det["source"]), det.get("top"),
+                                 Path(d["project"]), spec.get("platform", "nangate45"), spec.get("output", "graph"))
+                n += 1
+            if n:
+                self.store.event(jid, None, "job", "info", "服务重启后恢复了 %d 个未完成的设计" % n)
+                threading.Thread(target=self._watch_job, args=(jid,), daemon=True).start()
+            touched.append(jid)
         return touched
 
     def _sh(self, jid: str, name: str, stage: str, cmd: list[str], project: Path,
@@ -243,6 +342,9 @@ class Pipeline:
                                  start_new_session=True)
             with self._lock:
                 self._procs[(jid, name)] = p
+            # the stage's process group, so a restarted server can stop it if this
+            # process dies without doing so (it would race the re-run on one FLOW_VARIANT)
+            self.store.set_design(jid, name, detail={"pgid": p.pid})
             try:
                 rc = p.wait(timeout=timeout or self.stage_timeout)
             except subprocess.TimeoutExpired:
@@ -280,9 +382,19 @@ class Pipeline:
                              "排队中：本机已有 %d 个设计在跑（上限 %d，网页、命令行、MCP 共用）"
                              % (housekeeping.slots_in_use(self.workers), self.workers))
         try:
-            with housekeeping.design_slot(self.workers, should_stop=stop, on_wait=waiting):
+            housekeeping.wait_for_disk(lambda: self.min_free_gb, should_stop=stop, poll=20,
+                                       on_wait=lambda free: self.store.event(
+                                           jid, name, "prepare", "warn",
+                                           "磁盘只剩 %.0f GB（下限 %g GB），暂停开始新设计；清理出空间后自动继续"
+                                           % (free, self.min_free_gb)))
+            with housekeeping.design_slot(lambda: self.workers, should_stop=stop, on_wait=waiting):
                 try:
                     self._run_design_inner(jid, name, src, top, pdir, platform, output)
+                    if not self.keep_intermediate and self.store.design(jid, name)["status"] == PASSED:
+                        freed = housekeeping.slim_passed(pdir)
+                        if freed:
+                            self.store.event(jid, name, "job", "info", "已删除中间版图文件 %.1f MB（数据集与报告保留）"
+                                             % (freed / 1e6))
                 finally:
                     # the ORFS checkout's per-variant dirs duplicate backend/RUN_*
                     freed = housekeeping.drop_orfs_copies(pdir)

@@ -11,6 +11,8 @@ export type Job = {
   spec: Record<string, any>; result: Record<string, any> | null;
   designs?: Design[]; counts?: Record<string, number>;
 };
+export type ScanDesign = { name: string; path: string; files: number; top: string | null; top_source: string | null; problem: string | null };
+export type Scan = { root: string; total: number; ok: number; skipped: number; designs: ScanDesign[] };
 export type JobEvent = {
   id: number; job_id: string; design: string | null; ts: number; stage: string;
   kind: string; message: string; data: Record<string, any>;
@@ -34,7 +36,11 @@ export const api = {
   examples: () => fetch("/api/examples").then(j<{ examples: { name: string; top: string; description: string }[] }>),
   jobs: () => fetch("/api/jobs").then(j<Job[]>),
   job: (id: string) => fetch(`/api/jobs/${id}`).then(j<Job>),
-  events: (id: string, after = 0) => fetch(`/api/jobs/${id}/events?after=${after}`).then(j<JobEvent[]>),
+  events: (id: string, after = 0, tail = 0) => fetch(`/api/jobs/${id}/events?after=${after}&tail=${tail}`).then(j<JobEvent[]>),
+  scan: (path: string) =>
+    fetch("/api/batch/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) })
+      .then(j<Scan>),
+  packageNow: (id: string) => fetch(`/api/jobs/${id}/package`, { method: "POST" }).then(j<{ url: string; designs: number }>),
   createJob: (designs: any[], title = "", output: Output = "graph") =>
     fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ designs, platform: "nangate45", output, title }) }).then(j<{ job_id: string }>),

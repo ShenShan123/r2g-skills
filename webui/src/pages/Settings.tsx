@@ -11,14 +11,16 @@ export default function Settings() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState<"" | "save" | "test">("");
   const [kn, setKn] = useState<any>(null);
+  const [machine, setMachine] = useState<any>(null);
 
   const load = () => api.config().then((c) => {
     setCfg(c);
     setForm({ provider: c.model.provider, model: c.model.model, base_url: c.model.base_url,
               api_key_env: c.model.api_key_env, thinking: c.model.thinking ?? true,
-              workers: c.workers, cores_per_design: c.cores_per_design });
+              workers: c.workers, cores_per_design: c.cores_per_design,
+              min_free_gb: c.min_free_gb ?? 50, keep_intermediate: !!c.keep_intermediate });
   });
-  useEffect(() => { load(); api.health().then((h) => setKn(h.knowledge)).catch(() => {}); }, []);
+  useEffect(() => { load(); api.health().then((h) => { setKn(h.knowledge); setMachine(h.machine); }).catch(() => {}); }, []);
   if (!cfg) return <div className="p-10 text-muted">加载中…</div>;
   const pre = cfg.providers[form.provider] ?? {};
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
@@ -30,7 +32,8 @@ export default function Settings() {
     try {
       await api.saveConfig({ model: { provider: form.provider, model: form.model, base_url: form.base_url,
         api_key_env: form.api_key_env, thinking: form.thinking, ...(key ? { api_key: key } : {}) },
-        workers: form.workers, cores_per_design: form.cores_per_design });
+        workers: form.workers, cores_per_design: form.cores_per_design,
+        min_free_gb: form.min_free_gb, keep_intermediate: form.keep_intermediate });
       setKey(""); await load(); setMsg({ ok: true, text: "已保存" }); return true;
     } catch (e: any) { setMsg({ ok: false, text: e.message }); return false; } finally { setBusy(""); }
   }
@@ -104,7 +107,25 @@ export default function Settings() {
           <Field label="同时运行的设计数"><input className="input" type="number" min={1} value={form.workers} onChange={(e) => set("workers", +e.target.value)} /></Field>
           <Field label="每个设计的 CPU 核数"><input className="input" type="number" min={1} value={form.cores_per_design} onChange={(e) => set("cores_per_design", +e.target.value)} /></Field>
         </div>
-        <p className="text-xs text-muted">建议：两者相乘约等于机器的线程数。设得太大机器看起来很忙，实际反而更慢。改完点上面的「保存」。</p>
+        <p className="text-xs text-muted">
+          {machine?.threads ? <>本机 <b>{machine.threads}</b> 个线程，建议两者相乘不超过这个数，例如同时 <b>{Math.max(1, Math.floor(machine.threads / 8))}</b> 个 × 每个 8 核。</> : "建议两者相乘约等于机器的线程数。"}
+          设得太大机器看起来很忙，实际反而更慢；如果机器还有别人在用，留出余量。
+        </p>
+        <div className="border-t border-line pt-4">
+          <h3 className="text-sm font-semibold">磁盘</h3>
+          <p className="mt-1 text-xs text-muted">当前剩余 {machine?.free_gb ?? "—"} GB。剩余空间低于下限时暂停开始新设计，清理出空间后自动继续。</p>
+          <div className="mt-3 grid grid-cols-2 gap-4">
+            <Field label="剩余空间下限（GB）"><input className="input" type="number" min={0} value={form.min_free_gb} onChange={(e) => set("min_free_gb", +e.target.value)} /></Field>
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-panel2 px-4 py-3">
+            <div>
+              <div className="text-sm font-medium">保留通过设计的中间版图文件</div>
+              <div className="text-xs text-muted">关闭时（推荐），设计通过后删除各阶段的 ODB/DEF/GDS 副本，只留数据集、报告和日志，大批量时能省下大部分空间。</div>
+            </div>
+            <Toggle on={form.keep_intermediate} onChange={(v) => set("keep_intermediate", v)} label="保留中间文件" />
+          </div>
+        </div>
+        <button className="btn-primary" onClick={save} disabled={!!busy}>{busy === "save" ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} 保存</button>
       </section>
 
       {kn && (

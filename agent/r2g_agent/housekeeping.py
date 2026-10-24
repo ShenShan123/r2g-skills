@@ -35,7 +35,8 @@ def design_slot(n: int, should_stop=lambda: False, on_wait=lambda: None, poll: f
     d.mkdir(parents=True, exist_ok=True)
     waited = False
     while True:
-        for i in range(max(1, n)):
+        # n may be a callable: the limit can change while designs wait
+        for i in range(max(1, n() if callable(n) else n)):
             f = open(d / ("slot%d.lock" % i), "a+")
             try:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -147,3 +148,60 @@ def clean_candidates(store, older_than_days: float) -> list[dict]:
         if r["status"] in FINISHED and p.stat().st_mtime < cutoff:
             out.append(dict(r, path=str(p)))
     return out
+
+
+def orfs_flow_dir() -> Path | None:
+    """The ORFS flow directory the skills use (signoff-loop's pinned env.local.sh)."""
+    import re
+    from .paths import skills_dir
+    pin = skills_dir() / "signoff-loop" / "references" / "env.local.sh"
+    root = os.environ.get("ORFS_ROOT")
+    if not root and pin.is_file():
+        m = re.search(r'^export ORFS_ROOT="?([^"\n]+)"?', pin.read_text(), re.M)
+        root = m.group(1) if m else None
+    return Path(root) / "flow" if root and (Path(root) / "flow").is_dir() else None
+
+
+def free_gb() -> float:
+    """Free space where designs write: R2G_HOME and the ORFS checkout, whichever is less."""
+    paths = [r2g_home()] + [p for p in [orfs_flow_dir()] if p]
+    return min(shutil.disk_usage(p).free for p in paths) / 1e9
+
+
+def wait_for_disk(min_gb, should_stop=lambda: None, on_wait=lambda free: None, poll: float = 60.0):
+    """Block while free space is under `min_gb` (0 disables; a callable is re-read
+    every poll, so lowering the limit in Settings releases the waiters)."""
+    told = False
+    while True:
+        need = min_gb() if callable(min_gb) else min_gb
+        if not need:
+            return
+        free = free_gb()
+        if free >= need:
+            return
+        if not told:
+            on_wait(free)
+            told = True
+        should_stop()
+        time.sleep(poll)
+
+
+# per-run copies run_orfs.sh makes (every stage's ODB/DEF/GDS, merged libs);
+# a passed design's dataset, reports, logs and RTL do not need them
+_SLIM = ("results", "objects", "final")
+
+
+def slim_passed(project: Path) -> int:
+    """Delete a PASSED design's backend binaries. Returns bytes freed."""
+    freed = 0
+    for run in (project / "backend").glob("RUN_*"):
+        for k in _SLIM:
+            p = run / k
+            if p.is_dir():
+                freed += dir_size(p)
+                shutil.rmtree(p, ignore_errors=True)
+    if freed:
+        (project / "backend" / "SLIMMED").write_text(
+            "results/objects/final of every run were deleted after the design passed;\n"
+            "its dataset, reports and logs are kept. Re-submit the design to rebuild them.\n")
+    return freed

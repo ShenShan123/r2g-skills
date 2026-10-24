@@ -4,6 +4,7 @@
   r2g check-model           one request with a tool: endpoint, key, tool calling
   r2g selftest              run the counter8 example end to end
   r2g run PATH|--example NAME ...   submit a job and follow it
+  r2g run --batch DIR [--output graph|image]   every subfolder of DIR is a design
   r2g status [JOB]
   r2g ui [--port N] [--host H]
   r2g chat                  terminal chat with the agent
@@ -27,16 +28,28 @@ def _runtime():
     return STATE
 
 
-def _follow(store, jid: str) -> dict:
-    after = 0
+def _follow(store, jid: str, quiet: bool = False) -> dict:
+    """Print a job's events until it ends. quiet (batches): only each design's
+    end and failures, plus a count line every minute."""
+    after, last = 0, 0.0
     while True:
         for e in store.events(jid, after=after):
             after = e["id"]
+            if quiet and not (e["kind"] == "fail" or e["stage"] in ("done", "job")):
+                continue
             mark = {"ok": "✓", "fail": "✗", "warn": "!", "start": "·"}.get(e["kind"], " ")
             print("%s %s %-10s %s" % (time.strftime("%H:%M:%S", time.localtime(e["ts"])), mark,
                                       (e["design"] or "job")[:10], e["message"]), flush=True)
         j = store.job(jid)
-        if j["status"] not in ("running", "pending"):
+        if quiet and time.time() - last > 60:
+            c = {}
+            for d in j["designs"]:
+                c[d["status"]] = c.get(d["status"], 0) + 1
+            print("%s   进度：通过 %d · 失败 %d · 运行 %d · 排队 %d / 共 %d" % (
+                time.strftime("%H:%M:%S"), c.get("passed", 0), c.get("failed", 0), c.get("running", 0),
+                c.get("pending", 0), len(j["designs"])), flush=True)
+            last = time.time()
+        if j["status"] not in ("running", "pending", "finalizing"):
             return j
         time.sleep(2)
 
@@ -74,8 +87,19 @@ def cmd_check_model(a) -> int:
 def cmd_run(a) -> int:
     st = _runtime()
     from . import tools
+    if a.batch:
+        r = tools.start_batch(a.batch, output=a.output, platform=a.platform)
+        if "error" in r:
+            print("错误：", r["error"])
+            return 2
+        print("批量任务 %s：提交 %d 个设计，跳过 %d 个" % (r["job_id"], r["submitted"], r["skipped"]))
+        for d in r["skipped_designs"]:
+            print("  跳过 %-30s %s" % (d["name"], d["problem"]))
+        j = _follow(tools.RT.store, r["job_id"], quiet=True)
+        print(json.dumps(j.get("result"), ensure_ascii=False))
+        return 0 if (j.get("result") or {}).get("passed") else 1
     designs = [{"example": e} for e in (a.example or [])] + [{"path": p} for p in (a.paths or [])]
-    r = tools.start_job(designs, platform=a.platform)
+    r = tools.start_job(designs, platform=a.platform, output=a.output)
     if "error" in r:
         print("错误：", r["error"])
         return 2
@@ -184,7 +208,9 @@ def main(argv=None) -> int:
     s.add_argument("--platform", default="nangate45"); s.set_defaults(fn=cmd_selftest)
     r = sub.add_parser("run", help="提交任务并跟踪")
     r.add_argument("paths", nargs="*"); r.add_argument("--example", action="append")
-    r.add_argument("--platform", default="nangate45"); r.set_defaults(fn=cmd_run)
+    r.add_argument("--platform", default="nangate45")
+    r.add_argument("--batch", metavar="DIR", help="DIR 下每个子文件夹是一个设计，一次提交")
+    r.add_argument("--output", choices=["graph", "image"], default="graph"); r.set_defaults(fn=cmd_run)
     t = sub.add_parser("status"); t.add_argument("job", nargs="?"); t.set_defaults(fn=cmd_status)
     u = sub.add_parser("ui", help="启动本地网页界面")
     u.add_argument("--port", type=int); u.add_argument("--host"); u.set_defaults(fn=cmd_ui)

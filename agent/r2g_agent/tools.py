@@ -111,12 +111,52 @@ def start_job(designs: list, platform: str = "nangate45", output: str = "graph",
             "note": "running in background; use job_status to follow progress"}
 
 
-@tool("Progress of a job: overall status and, per design, the current stage and verdicts so far.",
+@tool("Scan a folder whose subfolders are designs (one design per subfolder; a folder with only HDL "
+      "files is one design). Lists each with its top module, or why its top could not be decided "
+      "(those are skipped). Use before start_batch to tell the user what will run.",
+      _obj({"path": {"type": "string", "description": "folder on this machine"}}, ["path"]))
+def scan_batch(path: str) -> dict:
+    from . import batch
+    try:
+        r = batch.scan(Path(path))
+    except ValueError as e:
+        return {"error": str(e)}
+    bad = [d for d in r["designs"] if d["problem"]]
+    return {"root": r["root"], "total": r["total"], "will_run": r["ok"], "skipped": r["skipped"],
+            "first": [{k: d[k] for k in ("name", "top", "files")} for d in r["designs"] if not d["problem"]][:20],
+            "skipped_designs": [{"name": d["name"], "problem": d["problem"]} for d in bad][:30]}
+
+
+@tool("Submit every design in a folder of design folders as ONE job (see scan_batch). For tens to "
+      "thousands of designs; they queue under the machine-wide concurrency limit and survive a server "
+      "restart. Designs whose top module cannot be decided are skipped and listed.",
+      _obj({"path": {"type": "string"}, "output": {"type": "string", "enum": ["graph", "image"]},
+            "platform": {"type": "string", "enum": ["nangate45"]}, "title": {"type": "string"}}, ["path", "output"]))
+def start_batch(path: str, output: str = "graph", platform: str = "nangate45", title: str = "") -> dict:
+    from . import batch
+    try:
+        r = batch.scan(Path(path))
+    except ValueError as e:
+        return {"error": str(e)}
+    src = batch.sources(r)
+    if not src:
+        return {"error": "no design with a decidable top module under %s" % path}
+    jid = RT.pipeline.submit(src, platform=platform, output=output,
+                             title=title or "批量 · %s · %d 个设计" % (Path(r["root"]).name, len(src)))
+    return {"job_id": jid, "submitted": len(src), "skipped": r["skipped"],
+            "skipped_designs": [{"name": d["name"], "problem": d["problem"]} for d in r["designs"] if d["problem"]][:30],
+            "note": "queued in background; use job_status for counts"}
+
+
+@tool("Progress of a job: overall status and, per design, the current stage and verdicts so far. "
+      "A job with many designs is summarised: counts, failure reasons grouped, and the running ones.",
       _obj({"job_id": {"type": "string"}}, ["job_id"]))
 def job_status(job_id: str) -> dict:
     j = RT.store.job(job_id)
     if not j:
         return {"error": "no such job"}
+    if len(j["designs"]) > 30:
+        return _batch_summary(j)
     designs = []
     for d in j["designs"]:
         det = d.get("detail") or {}
@@ -128,6 +168,28 @@ def job_status(job_id: str) -> dict:
                         "reason": det.get("reason")})
     return {"job_id": job_id, "status": j["status"], "title": j["title"], "result": j.get("result"),
             "designs": designs}
+
+
+def _batch_summary(j: dict) -> dict:
+    counts, reasons, running = {}, {}, []
+    for d in j["designs"]:
+        counts[d["status"]] = counts.get(d["status"], 0) + 1
+        det = d.get("detail") or {}
+        if d["status"] == "failed":
+            # file names and numbers out, so one yosys error across 2000 files is one group
+            msg = re.sub(r"^[^：]*失败：", "", det.get("reason") or "")
+            msg = re.sub(r"^[^\s：]+\.s?vh?[^：]*：", "", msg)
+            key = "%s: %s" % (det.get("failed_stage"), re.sub(r"\d+", "N", msg)[:60])
+            r = reasons.setdefault(key, {"count": 0, "examples": []})
+            r["count"] += 1
+            if len(r["examples"]) < 3:
+                r["examples"].append(d["name"])
+        elif d["status"] == "running":
+            running.append({"name": d["name"], "stage": STAGE_LABEL.get(d["stage"], d["stage"])})
+    return {"job_id": j["id"], "status": j["status"], "title": j["title"], "total": len(j["designs"]),
+            "counts": counts, "failure_reasons": sorted(reasons.items(), key=lambda kv: -kv[1]["count"])[:10],
+            "running": running[:20], "result": j.get("result"),
+            "note": "use design_detail(job_id, name) for one design"}
 
 
 @tool("List recent jobs with their status counts.", _obj({"limit": {"type": "integer"}}))

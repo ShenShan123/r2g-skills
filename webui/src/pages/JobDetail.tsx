@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Download, Square, X, Image as ImageIcon, FileText, LayoutGrid, Grid3x3, ChevronDown, ChevronRight,
-         CheckCircle2, XCircle, AlertTriangle, Circle, MessagesSquare, Wand2, Loader2 } from "lucide-react";
+         CheckCircle2, XCircle, AlertTriangle, Circle, MessagesSquare, Wand2, Loader2, Search, PackageOpen } from "lucide-react";
 import { api, askAgent, Design, fmtClock, Job, JobEvent, OUTPUT_LABEL } from "../lib/api";
 import { StatusBadge, Stat, StepTrack, isActive } from "../components/ui";
 
@@ -22,16 +22,19 @@ export default function JobDetail() {
 
   useEffect(() => {
     let alive = true; lastEv.current = 0; setEvents([]);
+    let t: any;
+    // the page keeps at most the last 500 events; a big batch polls more slowly
     const tick = async () => {
       try {
-        const [j, ev] = await Promise.all([api.job(id), api.events(id, lastEv.current)]);
+        const [j, ev] = await Promise.all([api.job(id), api.events(id, lastEv.current, lastEv.current ? 0 : 300)]);
         if (!alive) return;
         setJob(j);
-        if (ev.length) { lastEv.current = ev[ev.length - 1].id; setEvents((p) => [...p, ...ev]); }
-      } catch { /* transient */ }
+        if (ev.length) { lastEv.current = ev[ev.length - 1].id; setEvents((p) => [...p, ...ev].slice(-500)); }
+        t = setTimeout(tick, (j.designs?.length ?? 0) > BIG ? 5000 : 2000);
+      } catch { t = setTimeout(tick, 5000); }
     };
-    tick(); const t = setInterval(tick, 2000);
-    return () => { alive = false; clearInterval(t); };
+    tick();
+    return () => { alive = false; clearTimeout(t); };
   }, [id]);
 
   if (!job) return <div className="p-10 text-muted">加载中…</div>;
@@ -72,17 +75,19 @@ export default function JobDetail() {
               </div>
             </>)}
         </div>
+        {active && passed > 0 && <PartialDownload id={id} />}
         {active && <button className="btn-ghost" onClick={() => api.cancel(id)}><Square size={14} /> 取消</button>}
         {job.result?.package && <a className="btn-primary" href={`/api/jobs/${id}/download`}><Download size={16} /> 下载数据集</a>}
       </div>
 
-      <div className="mt-4 space-y-3">
-        {ds.map((d) => <DesignCard key={d.name} jobId={id} d={d} onOpen={() => setSel(d.name)} />)}
-      </div>
+      {ds.length > BIG ? <BatchList jobId={id} ds={ds} onOpen={setSel} /> : (
+        <div className="mt-4 space-y-3">
+          {ds.map((d) => <DesignCard key={d.name} jobId={id} d={d} onOpen={() => setSel(d.name)} />)}
+        </div>)}
 
       <div className="mt-6">
         <button className="flex items-center gap-1.5 text-sm text-muted hover:text-fg" onClick={() => setShowLog(!showLog)}>
-          {showLog ? <ChevronDown size={16} /> : <ChevronRight size={16} />} 详细过程（{events.length} 条）
+          {showLog ? <ChevronDown size={16} /> : <ChevronRight size={16} />} 详细过程（最近 {events.length} 条）
         </button>
         {showLog && (
           <div className="card mt-2 max-h-[420px] space-y-0.5 overflow-y-auto p-2">
@@ -99,6 +104,100 @@ export default function JobDetail() {
           </div>)}
       </div>
       {selected && <DesignPanel jobId={id} d={selected} output={job.spec?.output ?? "graph"} onClose={() => setSel(null)} />}
+    </div>
+  );
+}
+
+const DOT: Record<string, string> = { passed: "bg-ok", failed: "bg-bad", running: "bg-run", pending: "bg-line", cancelled: "bg-warn" };
+const BIG = 12;      // more designs than this: a filterable list instead of cards
+const PAGE = 50;
+
+function PartialDownload({ id }: { id: string }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button className="btn-ghost" disabled={busy} title="把目前已通过的设计先打包下载"
+      onClick={async () => { setBusy(true); try { const r = await api.packageNow(id); window.location.href = r.url; } finally { setBusy(false); } }}>
+      {busy ? <Loader2 size={15} className="animate-spin" /> : <PackageOpen size={15} />} 下载已完成的部分
+    </button>);
+}
+
+/** Group key of a failure: the stage and the message without file names, line
+ *  numbers or counts -- 2000 designs with the same yosys error are one group. */
+function reasonKey(d: Design): string {
+  const msg = (d.detail?.reason ?? "").replace(/^[^：]*失败：/, "").replace(/^[^\s：]+\.(s?v|s?vh|v)[^：]*：/i, "")
+    .replace(/\d+/g, "N").slice(0, 60);
+  return `${STAGE_ZH[d.detail?.failed_stage] ?? d.detail?.failed_stage ?? "?"}：${msg}`;
+}
+
+function BatchList({ jobId, ds, onOpen }: { jobId: string; ds: Design[]; onOpen: (n: string) => void }) {
+  const [filter, setFilter] = useState<string>("all");
+  const [reason, setReason] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(0);
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    ds.forEach((d) => { c[d.status] = (c[d.status] ?? 0) + 1; });
+    return c;
+  }, [ds]);
+  const reasons = useMemo(() => {
+    const m = new Map<string, number>();
+    ds.filter((d) => d.status === "failed").forEach((d) => m.set(reasonKey(d), (m.get(reasonKey(d)) ?? 0) + 1));
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  }, [ds]);
+  const rows = ds.filter((d) => (filter === "all" || d.status === filter) && (!reason || reasonKey(d) === reason)
+    && (!q || d.name.toLowerCase().includes(q.toLowerCase())));
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE));
+  const shown = rows.slice(page * PAGE, page * PAGE + PAGE);
+  const tabs: [string, string][] = [["all", "全部"], ["running", "运行中"], ["pending", "排队中"], ["passed", "通过"], ["failed", "失败"]];
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {tabs.map(([k, l]) => (
+          <button key={k} onClick={() => { setFilter(k); setReason(null); setPage(0); }}
+            className={`rounded-xl border px-3 py-2 text-left ${filter === k ? "border-accent bg-accent/10" : "border-line bg-panel hover:bg-panel2"}`}>
+            <div className="text-xs text-muted">{l}</div>
+            <div className={`text-lg font-semibold ${k === "passed" ? "text-ok" : k === "failed" && counts.failed ? "text-bad" : ""}`}>
+              {k === "all" ? ds.length : counts[k] ?? 0}</div>
+          </button>))}
+      </div>
+      {reasons.length > 0 && (
+        <div className="card p-4">
+          <div className="text-sm font-medium">失败原因（点一下只看这一类）</div>
+          <div className="mt-2 space-y-1">
+            {reasons.map(([r, n]) => (
+              <button key={r} onClick={() => { setFilter("failed"); setReason(reason === r ? null : r); setPage(0); }}
+                className={`flex w-full items-center gap-3 rounded-lg px-2 py-1 text-left text-sm ${reason === r ? "bg-bad/10" : "hover:bg-panel2"}`}>
+                <span className="w-10 shrink-0 text-right font-semibold text-bad">{n}</span><span className="truncate text-muted">{r}</span>
+              </button>))}
+          </div>
+        </div>)}
+      <div className="card">
+        <div className="flex items-center gap-2 border-b border-line px-3 py-2">
+          <Search size={15} className="text-faint" />
+          <input className="w-full bg-transparent py-1 text-sm outline-none" placeholder="按设计名搜索" value={q}
+            onChange={(e) => { setQ(e.target.value); setPage(0); }} />
+          <span className="shrink-0 text-xs text-faint">{rows.length} 个</span>
+        </div>
+        <div className="divide-y divide-line">
+          {shown.map((d) => (
+            <button key={d.name} onClick={() => onOpen(d.name)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-panel2/60">
+              <span className={`h-2 w-2 shrink-0 rounded-full ${DOT[d.status] ?? "bg-line"}`} />
+              <span className="w-40 shrink-0 truncate font-mono text-sm sm:w-56">{d.name}</span>
+              <span className={`min-w-0 flex-1 truncate text-xs ${d.status === "failed" ? "text-bad" : "text-muted"}`}>{plain(d)}</span>
+              <StatusBadge status={d.status} />
+            </button>))}
+          {shown.length === 0 && <div className="px-3 py-6 text-center text-sm text-muted">没有符合条件的设计</div>}
+        </div>
+        {pages > 1 && (
+          <div className="flex items-center justify-center gap-3 border-t border-line px-3 py-2 text-sm">
+            <button className="btn-ghost px-3 py-1" disabled={page === 0} onClick={() => setPage(page - 1)}>上一页</button>
+            <span className="text-muted">{page + 1} / {pages}</span>
+            <button className="btn-ghost px-3 py-1" disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>下一页</button>
+          </div>)}
+      </div>
+      {counts.failed > 0 && (
+        <Link className="btn-ghost" to={askAgent(`任务 ${jobId} 有 ${counts.failed} 个设计失败，帮我按原因归类，告诉我哪些是 RTL 问题、哪些可以修`)}>
+          <MessagesSquare size={15} /> 让 agent 归类分析失败的设计</Link>)}
     </div>
   );
 }
@@ -169,6 +268,7 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
         <div className="flex items-center justify-between border-b border-line px-6 py-4">
           <div><div className="font-mono text-lg font-semibold">{d.name}</div><div className="text-xs text-muted">{d.project}</div></div>
           <div className="flex items-center gap-2"><StatusBadge status={d.status} />
+            {d.status === "passed" && <a className="btn-ghost px-3 py-1.5" href={`/api/jobs/${jobId}/designs/${d.name}/download`}><Download size={14} /> 下载</a>}
             <button className="rounded-lg p-1.5 text-muted hover:bg-panel2" onClick={onClose}><X size={18} /></button></div>
         </div>
         <div className="flex gap-1 border-b border-line px-4">

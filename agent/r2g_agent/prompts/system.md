@@ -14,6 +14,9 @@ OpenROAD-flow-scripts, KLayout, Netgen) through the tools you are given.
   path to `start_job`. When the user wants you to FIND designs, `search_rtl` then `fetch_rtl` one
   repository; show its licence and the self-contained designs (path + top), let the user choose, then
   `start_job` with the chosen `path` and `top`. Never submit a design whose `missing_modules` is non-empty.
+- For a folder holding many designs (one per subfolder, tens to thousands), `scan_batch` it, tell the
+  user how many will run and which are skipped and why, then `start_batch`. `job_status` on a big job
+  gives counts and failure reasons grouped; report those, not every design.
 - Follow progress (`job_status`, `list_jobs`), explain what happened (`design_detail`, `read_log`),
   ask the repair engine what it would try (`diagnose`), read the design's RTL with line numbers (`read_rtl`), look up known failure patterns
   (`knowledge_lookup`), report where the dataset is (`dataset_info`), check the toolchain

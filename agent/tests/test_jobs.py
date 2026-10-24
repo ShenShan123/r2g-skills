@@ -15,8 +15,8 @@ def test_job_lifecycle():
     assert st.jobs()[0]["counts"] == {"passed": 1, "pending": 1}
 
 
-def test_recover_closes_finished_and_interrupts_orphans():
-    from r2g_agent.jobs import FAILED, PASSED, RUNNING
+def test_recover_closes_finished_and_leaves_orphans_to_the_server():
+    from r2g_agent.jobs import FAILED, RUNNING
     from r2g_agent.pipeline import Pipeline
     st = JobStore()
     done = st.create_job("t", {}, [{"name": "a"}])
@@ -24,11 +24,10 @@ def test_recover_closes_finished_and_interrupts_orphans():
     st.set_design(done, "a", status=FAILED)               # finished, but its watcher died
     orphan = st.create_job("u", {}, [{"name": "b"}])
     st.set_job(orphan, RUNNING)
-    st.set_design(orphan, "b", status=RUNNING, stage="flow")   # its thread died with the server
-    Pipeline(st, workers=1).recover()
+    st.set_design(orphan, "b", status=RUNNING, stage="flow", detail={"owner": "999999999:1"})
+    Pipeline(st, workers=1, ingest=False).recover()       # a terminal command: adopts nothing
     assert st.job(done)["status"] == "failed"
-    o = st.job(orphan)
-    assert o["status"] == "failed" and o["designs"][0]["detail"]["reason"].startswith("服务重启时中断")
+    assert st.design(orphan, "b")["status"] == RUNNING     # left for the web server to resume
 
 
 def test_a_job_is_closed_once_even_by_two_runtimes():

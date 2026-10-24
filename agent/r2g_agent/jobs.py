@@ -83,6 +83,15 @@ class JobStore:
                             % ",".join("?" * len(frm)), (to, time.time(), jid, *frm))
             return cur.rowcount == 1
 
+    def claim_design(self, jid: str, name: str, old_owner: str | None, new_owner: str) -> bool:
+        """Adopt a design whose owner is `old_owner`; True only for the one caller
+        that changed it (two servers on one R2G_HOME never both resume it)."""
+        with self._lock, self._conn() as c:
+            cur = c.execute("UPDATE designs SET detail=json_set(COALESCE(detail,'{}'), '$.owner', ?), updated=? "
+                            "WHERE job_id=? AND name=? AND json_extract(COALESCE(detail,'{}'), '$.owner') IS ?",
+                            (new_owner, time.time(), jid, name, old_owner))
+            return cur.rowcount == 1
+
     def job(self, jid: str) -> dict | None:
         with self._conn() as c:
             r = c.execute("SELECT * FROM jobs WHERE id=?", (jid,)).fetchone()
@@ -130,10 +139,16 @@ class JobStore:
                       (jid, design, time.time(), stage, kind, message, json.dumps(data or {})))
             c.execute("UPDATE jobs SET updated=? WHERE id=?", (time.time(), jid))
 
-    def events(self, jid: str, after: int = 0, limit: int = 500) -> list[dict]:
+    def events(self, jid: str, after: int = 0, limit: int = 500, tail: int = 0) -> list[dict]:
+        """Events after id `after`; with `tail`, only the last `tail` of them (a
+        2000-design job has tens of thousands, and a page wants the recent ones)."""
         with self._conn() as c:
-            rs = c.execute("SELECT * FROM events WHERE job_id=? AND id>? ORDER BY id LIMIT ?",
-                           (jid, after, limit)).fetchall()
+            if tail:
+                rs = c.execute("SELECT * FROM (SELECT * FROM events WHERE job_id=? AND id>? ORDER BY id DESC LIMIT ?) "
+                               "ORDER BY id", (jid, after, tail)).fetchall()
+            else:
+                rs = c.execute("SELECT * FROM events WHERE job_id=? AND id>? ORDER BY id LIMIT ?",
+                               (jid, after, limit)).fetchall()
         return [_row(r) for r in rs]
 
 

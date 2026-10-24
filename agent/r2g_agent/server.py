@@ -6,6 +6,7 @@ machine through an SSH tunnel rather than exposing it.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import time
@@ -17,7 +18,7 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__, agent_loop, config, frontend, knowledge, tools
+from . import __version__, agent_loop, batch, config, frontend, housekeeping, knowledge, tools
 from . import project as rtl_project
 from .jobs import JobStore
 from .llm import make_adapter
@@ -30,20 +31,23 @@ STATE: dict = {}
 @asynccontextmanager
 async def _lifespan(_app):
     if not STATE:
-        init_runtime()
+        init_runtime(resume=True)      # the long-lived process resumes unfinished designs
     yield
+    if tools.RT.pipeline:
+        tools.RT.pipeline.shutdown()
 
 
 app = FastAPI(title="r2g agent", version=__version__, lifespan=_lifespan)
 
 
-def init_runtime(cfg: config.Config | None = None) -> None:
+def init_runtime(cfg: config.Config | None = None, resume: bool = False) -> None:
     cfg = cfg or config.load()
     store = JobStore()
     tools.RT.store = store
     tools.RT.pipeline = Pipeline(store, workers=cfg.workers, cores_per_design=cfg.cores_per_design,
-                                 ingest=cfg.ingest)
-    tools.RT.pipeline.recover()
+                                 ingest=cfg.ingest, min_free_gb=cfg.min_free_gb,
+                                 keep_intermediate=cfg.keep_intermediate)
+    tools.RT.pipeline.recover(resume=resume)
     tools.RT.platform = cfg.platform
     STATE.update(cfg=cfg, sessions=agent_loop.SessionStore())
 
@@ -57,7 +61,8 @@ def _sse(obj: dict) -> str:
 def health():
     return {"version": __version__, "stages": [{"id": s, "label": STAGE_LABEL[s]} for s in STAGES],
             "config": config.public_view(STATE["cfg"]),
-            "knowledge": dict(knowledge.summary(), sync=getattr(tools.RT.pipeline, "knowledge", None))}
+            "knowledge": dict(knowledge.summary(), sync=getattr(tools.RT.pipeline, "knowledge", None)),
+            "machine": {"threads": os.cpu_count(), "free_gb": round(housekeeping.free_gb(), 1)}}
 
 
 @app.get("/api/config")
@@ -80,10 +85,16 @@ async def set_config(req: Request):
         cfg.model.thinking = bool(m["thinking"])
     if m.get("api_key"):
         config.store_api_key(cfg.model.provider, m["api_key"])
-    for k in ("workers", "cores_per_design"):
+    for k in ("workers", "cores_per_design", "min_free_gb"):
         if k in body:
             setattr(cfg, k, int(body[k]))
+    if "keep_intermediate" in body:
+        cfg.keep_intermediate = bool(body["keep_intermediate"])
     config.save(cfg)
+    pl = tools.RT.pipeline
+    if pl:                       # take effect now, not at the next restart
+        pl.workers, pl.cores = max(1, cfg.workers), cfg.cores_per_design
+        pl.min_free_gb, pl.keep_intermediate = cfg.min_free_gb, cfg.keep_intermediate
     return config.public_view(cfg)
 
 
@@ -176,8 +187,18 @@ def job(jid: str):
 
 
 @app.get("/api/jobs/{jid}/events")
-def job_events(jid: str, after: int = 0):
-    return tools.RT.store.events(jid, after=after)
+def job_events(jid: str, after: int = 0, tail: int = 0):
+    return tools.RT.store.events(jid, after=after, tail=min(max(tail, 0), 2000))
+
+
+@app.post("/api/batch/scan")
+async def batch_scan(req: Request):
+    """A folder of design folders (an upload, or a path on this machine) -> candidates."""
+    body = await req.json()
+    try:
+        return batch.scan(Path(body.get("path") or ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/api/jobs/{jid}/cancel")
@@ -185,8 +206,35 @@ def cancel(jid: str):
     return tools.cancel_job(jid)
 
 
+@app.get("/api/jobs/{jid}/designs/{name}/download")
+def design_download(jid: str, name: str):
+    from .package import package_design
+    try:
+        p = package_design(tools.RT.store, jid, name)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    return FileResponse(p, filename=p.name, media_type="application/gzip")
+
+
+@app.post("/api/jobs/{jid}/package")
+def package_now(jid: str):
+    """Package the designs that have passed so far, while the job is still running."""
+    from .package import package_job
+    j = tools.RT.store.job(jid)
+    if not j:
+        raise HTTPException(404, "no such job")
+    p = package_job(tools.RT.store, jid, partial=True)
+    return {"path": str(p), "url": "/api/jobs/%s/download?partial=1" % jid,
+            "designs": sum(1 for d in j["designs"] if d["status"] == "passed")}
+
+
 @app.get("/api/jobs/{jid}/download")
-def download(jid: str):
+def download(jid: str, partial: int = 0):
+    if partial:
+        p = r2g_home() / "datasets" / ("r2g_dataset_%s_partial.tar.gz" % jid)
+        if not p.is_file():
+            raise HTTPException(404, "not packaged yet")
+        return FileResponse(p, filename=p.name, media_type="application/gzip")
     info = tools.dataset_info(jid)
     if not info.get("path"):
         raise HTTPException(404, info.get("note") or "no dataset")

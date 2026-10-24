@@ -76,6 +76,12 @@ class Config:
     workers: int = 2
     cores_per_design: int = 8
     ingest: bool = True
+    # disk: no new design starts while R2G_HOME (or the ORFS checkout) has less
+    # free space than this; a passed design's backend binaries (ODB/GDS/DEF copies
+    # of every run) are deleted unless keep_intermediate -- its dataset, reports,
+    # logs and RTL stay
+    min_free_gb: int = 50
+    keep_intermediate: bool = False
     host: str = "127.0.0.1"
     port: int = 8770
 
