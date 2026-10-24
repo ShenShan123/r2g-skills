@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Send, Wrench, ChevronDown, ChevronRight, Plus, MessageSquare, ExternalLink, AlertCircle, Loader2 } from "lucide-react";
+import { Send, Paperclip, X, Wrench, ChevronDown, ChevronRight, Plus, MessageSquare, ExternalLink, AlertCircle, Loader2 } from "lucide-react";
 import { api, chatStream } from "../lib/api";
 import { Md, Logo } from "../components/ui";
 
@@ -44,7 +44,23 @@ export default function Chat() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [att, setAtt] = useState<{ path: string; name: string; files: number } | null>(null);
+  const [attErr, setAttErr] = useState("");
   const end = useRef<HTMLDivElement>(null);
+  const dirInput = useRef<HTMLInputElement>(null);
+  useEffect(() => { dirInput.current?.setAttribute("webkitdirectory", ""); }, []);
+
+  // a folder of RTL: only HDL and the data files $readmem reads are sent
+  async function attach(list: File[]) {
+    setAttErr("");
+    const keep = list.filter((f) => /\.(s?v|s?vh|hex|mem|bin|txt|dat|coe|mif|init|rom|data)$/i.test(f.name));
+    if (!keep.some((f) => /\.(s?v|s?vh)$/i.test(f.name))) { setAttErr("这个文件夹里没有 .v / .sv 文件"); return; }
+    try {
+      const up = await api.upload(keep);
+      const rel = ((keep[0] as any).webkitRelativePath || keep[0].name) as string;
+      setAtt({ path: up.path, name: rel.split("/")[0], files: up.files.length });
+    } catch (e: any) { setAttErr(e.message); }
+  }
 
   const loadSessions = () => api.sessions().then(setSessions).catch(() => {});
   useEffect(() => { loadSessions(); }, []);
@@ -54,9 +70,11 @@ export default function Chat() {
     setSid(id); const s = await api.session(id); setMsgs(fromStored(s.messages));
   }
 
-  async function send(text: string) {
-    if (!text.trim() || busy) return;
-    setInput(""); setBusy(true);
+  async function send(typed: string) {
+    if ((!typed.trim() && !att) || busy) return;
+    // the model reads the attachment as a path it can pass to start_job
+    const text = att ? `[附件] 已上传 RTL 文件夹 ${att.name}（${att.files} 个文件），路径：${att.path}\n${typed}` : typed;
+    setInput(""); setAtt(null); setBusy(true);
     setMsgs((m) => [...m, { role: "user", parts: [{ kind: "text", text }] }, { role: "assistant", parts: [] }]);
     const upd = (f: (a: Msg) => void) => setMsgs((m) => {
       const c = m.slice(); const a = { ...c[c.length - 1], parts: c[c.length - 1].parts.slice() }; f(a); c[c.length - 1] = a; return c;
@@ -128,11 +146,22 @@ export default function Chat() {
           </div>
         </div>
         <div className="border-t border-line bg-panel/40 px-6 py-4">
+          {(att || attErr) && (
+            <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-sm">
+              {att && <span className="chip bg-panel2 text-muted"><Paperclip size={12} />{att.name} · {att.files} 个文件
+                <button type="button" className="ml-1 hover:text-fg" onClick={() => setAtt(null)}><X size={12} /></button></span>}
+              {attErr && <span className="text-bad">{attErr}</span>}
+            </div>)}
           <form className="mx-auto flex max-w-3xl gap-2" onSubmit={(e) => { e.preventDefault(); send(input); }}>
+            <label className="btn-ghost h-[44px] cursor-pointer px-3" title="上传 RTL 文件夹">
+              <Paperclip size={17} />
+              <input ref={dirInput} type="file" multiple className="hidden"
+                onChange={(e) => { attach(Array.from(e.target.files || [])); e.target.value = ""; }} />
+            </label>
             <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={1}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
               placeholder="例如：把 /data/rtl/my_cpu 跑一遍 nangate45 并转图" className="input min-h-[44px] resize-none py-2.5 text-[15px]" />
-            <button className="btn-primary h-[44px] px-4" disabled={busy || !input.trim()}><Send size={17} /></button>
+            <button className="btn-primary h-[44px] px-4" disabled={busy || (!input.trim() && !att)}><Send size={17} /></button>
           </form>
         </div>
       </div>

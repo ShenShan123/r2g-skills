@@ -25,6 +25,16 @@ def test_included_v_is_a_header_not_a_source(tmp_path):
     assert str(tmp_path / "p" / "rtl" / "inc") in meta["include_dirs"]
 
 
+def test_loose_snippet_dropped_defines_only_file_kept(tmp_path):
+    src = tmp_path / "src"
+    _w(src / "top.v", "module top(input a, output y); assign y = a; endmodule\n")
+    _w(src / "insert.v", "// paste into your module\n`define S 25\nreg [3:0] r;\nalways @(*) r = `S;\n")
+    _w(src / "defs.v", "`define WIDTH 8\n`timescale 1ns/1ps\n")
+    meta = project.create(src, tmp_path / "p", "nangate45", top="top")
+    assert sorted(Path(f).name for f in meta["files"]) == ["defs.v", "top.v"]
+    assert "代码片段" in meta["frontend_fixes"][0]["detail"]
+
+
 def test_commented_include_is_not_a_header(tmp_path):
     src = tmp_path / "src"
     _w(src / "top.v", 'module top(input a, output y);\n// `include "sub.v"\nsub u(.a(a), .y(y));\nendmodule\n')

@@ -136,6 +136,17 @@ fcntl 锁之一，三者合计不超过上限，进程崩溃时锁自动释放�
 `_restage_for_signoff.sh` 会恢复）。整个工作目录只在用户执行 `r2g clean --yes` 时删除
 （默认只列出；只删已结束任务；数据集包保留）。实现：`agent/r2g_agent/housekeeping.py`。
 
+## 7.3 找 RTL 与对话附件（2026-10-23）
+
+`search_rtl`（rtl-acquire 的 GitHub 搜索与质量打分）→ `fetch_rtl`（浅克隆到
+`R2G_HOME/rtl_sources`，>500 MB 拒收）→ 按目录列出候选设计：顶层候选、用到却没定义的模块
+（`ifdef FORMAL` 等验证代码按嵌套层级剔除）、是否自包含、仓库 LICENSE 识别结果。只有自包含的
+才可直接提交；模型必须告知许可证，由用户选择。对话框的回形针上传一个 RTL 文件夹（只发 HDL 和
+`$readmem` 数据文件），消息以 `[附件] … 路径：…` 开头，模型把该路径交给 `start_job`。
+验证：DeepSeek 真实对话两轮——附件提交任务；“找一个小 SPI 控制器、先别提交”时搜索、拉取两个
+仓库、推荐自包含的 freecores/spi 并指出另一个依赖 iCE40 原语，未提交任务。GitHub 上拉下的
+alexforencich/verilog-uart 与 ZipCPU/wbuart32 全流程双清、校验 297/297。
+
 ## 8. P0：先把验证过的修复沉淀进技能
 
 否则一个新的 agent 不知道这几天学到的东西。现状与落点：

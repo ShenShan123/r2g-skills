@@ -50,6 +50,22 @@ def _strip_comments(text: str) -> str:
     return re.sub(r"//[^\n]*", "", text)
 
 
+_UNIT_RE = re.compile(r"^\s*(?:module|macromodule|package|interface|primitive|program|class|config)\b", re.M)
+_LOOSE_RE = re.compile(r"^\s*(?:always(?:_ff|_comb|_latch)?|initial|assign|reg|wire|input|output|inout)\b", re.M)
+
+
+def loose_snippets(sources: list[Path]) -> set[Path]:
+    """Sources with no design unit but with statements only valid inside a module:
+    a paste-in fragment, never compilable alone. A file of only `define/`timescale
+    lines is NOT one -- other files may rely on its macros."""
+    hit = set()
+    for f in sources:
+        t = _strip_comments(f.read_text(errors="replace"))
+        if not _UNIT_RE.search(t) and _LOOSE_RE.search(t):
+            hit.add(f)
+    return hit
+
+
 def included_headers(sources: list[Path]) -> set[Path]:
     """Sources that another source `include`s (matched by path suffix)."""
     names = set()
@@ -107,10 +123,12 @@ def fix_sources(copied: list[Path], src_root: Path, rtl_root: Path) -> tuple[lis
     are under `src_root`. Returns (sources to compile, fixes, missing data files)."""
     sources = [p for p in copied if p.suffix.lower() in (".v", ".sv")]
     fixes, missing = [], []
-    for h in sorted(included_headers(copied) & set(sources)):
+    inc = included_headers(copied)
+    for h in sorted((inc | loose_snippets(sources)) & set(sources)):
         sources.remove(h)
         fixes.append({"recipe": "header_not_source", "file": str(h.relative_to(rtl_root)),
-                      "detail": "被其他文件 `include 的头文件，不再单独编译"})
+                      "detail": "被其他文件 `include 的头文件，不再单独编译" if h in inc
+                      else "没有模块声明的代码片段（只能粘贴进模块里用），不单独编译"})
     for f in sources:
         text = f.read_text(errors="replace")
         orig = src_root / f.relative_to(rtl_root)

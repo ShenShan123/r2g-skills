@@ -224,6 +224,32 @@ def knowledge_lookup(query: str) -> dict:
             "total": len(hits)}
 
 
+@tool("Search public GitHub repositories for RTL by keyword (e.g. 'uart', 'risc-v core', 'fft'). "
+      "Returns candidate repositories ranked by rtl-acquire's quality score. Use only when the user "
+      "asks you to find designs; then fetch_rtl one of them.",
+      _obj({"keyword": {"type": "string"}, "count": {"type": "integer", "description": "1-30, default 10"}},
+           ["keyword"]))
+def search_rtl(keyword: str, count: int = 10) -> dict:
+    from . import rtl_search
+    try:
+        return {"repos": rtl_search.search(keyword, max(1, min(int(count), 30)))}
+    except Exception as e:                                      # noqa: BLE001
+        return {"error": str(e)}
+
+
+@tool("Shallow-clone one repository found by search_rtl (or given by the user) and list the designs in "
+      "it: one per directory, with top-module candidates and any modules it uses but does not define. "
+      "Only a self_contained design can be submitted as is: start_job with its `path` and a `top`. "
+      "Always tell the user the repository's licence.",
+      _obj({"url": {"type": "string", "description": "https://github.com/<owner>/<repo>"}}, ["url"]))
+def fetch_rtl(url: str) -> dict:
+    from . import rtl_search
+    try:
+        return rtl_search.fetch(url)
+    except Exception as e:                                      # noqa: BLE001
+        return {"error": str(e)}
+
+
 @tool("Disk use of the user's r2g workspace: size per job, packaged datasets, free space. Read-only; "
       "to free space tell the user to run `r2g clean` (it lists first and deletes only with --yes).",
       _obj({}))
@@ -263,4 +289,8 @@ def check_environment(platform: str = "nangate45") -> dict:
     r = subprocess.run(["bash", str(signoff_scripts() / "flow" / "check_env.sh"), "--platform", platform],
                        cwd=repo_root(), capture_output=True, text=True, timeout=300)
     lines = [l for l in r.stdout.splitlines() if l.strip()]
-    return {"ok": r.returncode == 0, "summary": "\n".join(lines[-25:]), "knowledge": knowledge.summary()}
+    # the verdict for the platform asked about; check_env.sh's exit code also counts
+    # platforms nobody asked for (asap7 is unsupported by design)
+    ready = bool(re.search(r"^%s\s+STRICT-READY" % re.escape(platform), r.stdout, re.M))
+    return {"ok": ready, "platform": platform, "check_env_rc": r.returncode,
+            "summary": "\n".join(lines[-25:]), "knowledge": knowledge.summary()}
