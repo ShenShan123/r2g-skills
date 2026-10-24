@@ -45,7 +45,7 @@ export default function ParamsPicker({ value, onChange }: { value: Params | null
       {custom && (
         <div className="space-y-4 rounded-xl border border-line p-4">
           <div>
-            <div className="flex items-center gap-3 text-sm font-medium">时钟周期
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium"><span className="w-full sm:w-auto">时钟周期</span>
               <label className="flex items-center gap-1.5 text-xs font-normal text-muted">
                 <input type="radio" checked={!fixedPeriod} onChange={() => set("period_ns", null)} /> 按单元数分档</label>
               <label className="flex items-center gap-1.5 text-xs font-normal text-muted">
