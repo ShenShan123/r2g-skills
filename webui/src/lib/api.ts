@@ -54,6 +54,7 @@ export const api = {
 export type ChatEvent =
   | { type: "session"; session_id: string }
   | { type: "text"; delta: string }
+  | { type: "thinking"; delta: string }
   | { type: "tool_call"; id: string; name: string; arguments: any }
   | { type: "tool_result"; id: string; name: string; result: any }
   | { type: "error"; message: string }
@@ -84,5 +85,7 @@ export async function chatStream(message: string, sessionId: string | null, on: 
 
 export const fmtTime = (ts: number) =>
   new Date(ts * 1000).toLocaleString("zh-CN", { hour12: false, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+/** Chat link that pre-fills a question for the agent (the user still presses send). */
+export const askAgent = (q: string) => `/chat?q=${encodeURIComponent(q)}`;
 export const fmtClock = (ts: number) =>
   new Date(ts * 1000).toLocaleTimeString("zh-CN", { hour12: false });

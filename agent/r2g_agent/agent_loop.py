@@ -74,10 +74,13 @@ def run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
     messages.append({"role": "user", "content": user_text})
     title = user_text[:40]
     for step in range(MAX_STEPS):
-        text, calls, err = "", [], None
+        text, thinking, calls, err = "", "", [], None
         for ev in adapter.stream(messages, tools.specs(), system_prompt()):
             if ev["type"] == "text":
                 text += ev["delta"]
+                yield ev
+            elif ev["type"] == "thinking":
+                thinking += ev["delta"]
                 yield ev
             elif ev["type"] == "tool_call":
                 calls.append(ev)
@@ -87,7 +90,7 @@ def run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
             yield {"type": "error", "message": err}
             sessions.save(sid, messages, title)
             return
-        messages.append({"role": "assistant", "content": text,
+        messages.append({"role": "assistant", "content": text, "thinking": thinking,
                          "tool_calls": [{"id": c["id"], "name": c["name"], "arguments": c["arguments"]}
                                         for c in calls]})
         if not calls:

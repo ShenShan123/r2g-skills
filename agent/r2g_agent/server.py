@@ -76,6 +76,8 @@ async def set_config(req: Request):
     for k in ("temperature", "max_tokens"):
         if k in m:
             setattr(cfg.model, k, m[k])
+    if "thinking" in m:
+        cfg.model.thinking = bool(m["thinking"])
     if m.get("api_key"):
         config.store_api_key(cfg.model.provider, m["api_key"])
     for k in ("workers", "cores_per_design"):

@@ -76,3 +76,12 @@ def test_every_provider_resolves():
         assert r.protocol in ("openai", "anthropic")
         if p not in ("custom",):
             assert r.base_url.startswith("http")
+
+
+def test_thinking_switch_per_provider():
+    from r2g_agent.config import ModelConfig
+    from r2g_agent.llm.openai_compat import thinking_params
+    assert thinking_params(ModelConfig(provider="deepseek", thinking=False)) == {"thinking": {"type": "disabled"}}
+    assert thinking_params(ModelConfig(provider="deepseek")) == {"thinking": {"type": "enabled"}}
+    assert thinking_params(ModelConfig(provider="qwen", thinking=False)) == {"enable_thinking": False}
+    assert thinking_params(ModelConfig(provider="kimi", thinking=False)) == {}   # no known switch: untouched

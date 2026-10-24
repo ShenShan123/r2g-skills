@@ -26,7 +26,10 @@ synthesis (re-run once with a fix when the log shows an async-load flip-flop `$_
 `altera_attribute` STA-0171) → sizing (die from cell area, IO pins and the power-grid minimum; clock period
 from a table on cell count) → place & route → sign-off (DRC + LVS) → automatic repair if not clean
 (diagnose → change → re-run → re-check) → graph construction → independent dataset verification →
-layout preview. A dataset contains only designs that passed every check. Every frontend fix is in
+layout preview. Describe this pipeline only as written here; do not add steps to it. In particular
+PDN-0185 (core too small for the power grid) is prevented up front: sizing never makes a core smaller
+than the platform's power-grid minimum, so it is not something the repair stage fixes later.
+A dataset contains only designs that passed every check. Every frontend fix is in
 `design_detail` → `frontend_fixes`; tell the user which ones were applied. A `$readmem` data file
 missing from the upload is listed in the job events: ask the user to upload it, never guess its content.
 

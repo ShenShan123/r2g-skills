@@ -1,4 +1,5 @@
-import { CheckCircle2, CircleDashed, Loader2, XCircle, Ban } from "lucide-react";
+import { CheckCircle2, CircleDashed, Loader2, XCircle, Ban, Minus } from "lucide-react";
+import { useId } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -7,31 +8,35 @@ export const STATUS: Record<string, { label: string; cls: string; Icon: any }> =
   done: { label: "完成", cls: "bg-ok/15 text-ok", Icon: CheckCircle2 },
   failed: { label: "失败", cls: "bg-bad/15 text-bad", Icon: XCircle },
   running: { label: "进行中", cls: "bg-run/15 text-run", Icon: Loader2 },
-  pending: { label: "排队", cls: "bg-faint/15 text-muted", Icon: CircleDashed },
+  finalizing: { label: "打包中", cls: "bg-run/15 text-run", Icon: Loader2 },
+  pending: { label: "排队中", cls: "bg-faint/15 text-muted", Icon: CircleDashed },
   cancelled: { label: "已取消", cls: "bg-warn/15 text-warn", Icon: Ban },
 };
+export const isActive = (s: string) => s === "running" || s === "pending" || s === "finalizing";
 
 export function StatusBadge({ status }: { status: string }) {
   const s = STATUS[status] ?? STATUS.pending;
   return (
     <span className={`chip whitespace-nowrap ${s.cls}`}>
-      <s.Icon size={13} className={status === "running" ? "animate-spin" : ""} />
+      <s.Icon size={13} className={status === "running" || status === "finalizing" ? "animate-spin" : ""} />
       {s.label}
     </span>
   );
 }
 
 export function Logo({ size = 30 }: { size?: number }) {
-  // a small graph: the product turns layouts into graphs
+  // a small graph: the product turns layouts into graphs. The gradient id is per
+  // instance: with a shared id, a copy inside a hidden sidebar blanked the visible one
+  const gid = "r2g-lg" + useId().replace(/:/g, "");
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden>
       <defs>
-        <linearGradient id="r2g-lg" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="rgb(var(--accent))" />
           <stop offset="1" stopColor="rgb(var(--accent2))" />
         </linearGradient>
       </defs>
-      <rect width="32" height="32" rx="8" fill="url(#r2g-lg)" />
+      <rect width="32" height="32" rx="8" fill={`url(#${gid})`} />
       <g stroke="rgb(var(--on-accent))" strokeWidth="2" strokeLinecap="round" opacity="0.9">
         <line x1="10" y1="10" x2="22" y2="13" /><line x1="10" y1="10" x2="13" y2="22" /><line x1="22" y1="13" x2="13" y2="22" />
         <line x1="22" y1="13" x2="23" y2="23" />
@@ -43,18 +48,61 @@ export function Logo({ size = 30 }: { size?: number }) {
   );
 }
 
-/** One segment per pipeline stage; filled up to the current one. */
-export function StagePipe({ stages, current, status }: { stages: { id: string; label: string }[]; current: string; status: string }) {
-  const idx = current === "done" ? stages.length : Math.max(0, stages.findIndex((s) => s.id === current));
+/** The six steps a user recognises, each covering one or more pipeline stages. */
+export const STEPS = [
+  { label: "综合", stages: ["prepare", "synth", "size"] },
+  { label: "布局布线", stages: ["flow"] },
+  { label: "签核", stages: ["signoff"] },
+  { label: "修复", stages: ["repair"] },
+  { label: "数据集", stages: ["graph"] },
+  { label: "校验", stages: ["verify", "preview"] },
+];
+
+type StepState = "done" | "now" | "fail" | "todo" | "skip";
+
+export function stepStates(stage: string, status: string, repaired: boolean): StepState[] {
+  if (status === "pending" && (!stage || stage === "prepare")) return STEPS.map(() => "todo");
+  const cur = stage === "done" ? STEPS.length : Math.max(0, STEPS.findIndex((s) => s.stages.includes(stage)));
+  return STEPS.map((s, i) => {
+    if (i < cur) return s.label === "修复" && !repaired ? "skip" : "done";
+    if (i > cur) return "todo";
+    return status === "failed" ? "fail" : status === "passed" ? "done" : status === "cancelled" ? "todo" : "now";
+  });
+}
+
+/** A labelled step track: what has happened, what is happening, what is next. */
+export function StepTrack({ stage, status, repaired }: { stage: string; status: string; repaired: boolean }) {
+  const st = stepStates(stage, status, repaired);
+  const dot: Record<StepState, string> = {
+    done: "bg-ok text-onaccent", now: "bg-run text-onaccent animate-pulse2", fail: "bg-bad text-onaccent",
+    todo: "bg-panel2 text-faint border border-line", skip: "bg-panel2 text-faint border border-line",
+  };
   return (
-    <div className="flex gap-1" title={stages[idx]?.label ?? "完成"}>
-      {stages.map((s, i) => {
-        let c = "bg-line";
-        if (i < idx) c = "bg-ok";
-        else if (i === idx) c = status === "failed" ? "bg-bad" : status === "running" ? "bg-run animate-pulse2" : status === "passed" ? "bg-ok" : "bg-line";
-        return <div key={s.id} className={`h-1.5 flex-1 rounded-full ${c}`} title={s.label} />;
-      })}
-    </div>
+    <ol className="flex items-start">
+      {STEPS.map((s, i) => (
+        <li key={s.label} className="flex min-w-0 flex-1 flex-col items-center">
+          <div className="flex w-full items-center">
+            <div className={`h-0.5 flex-1 ${i === 0 ? "invisible" : st[i] === "todo" ? "bg-line" : "bg-ok/60"}`} />
+            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${dot[st[i]]}`}>
+              {st[i] === "done" ? <CheckCircle2 size={14} /> : st[i] === "fail" ? <XCircle size={14} /> :
+               st[i] === "skip" ? <Minus size={12} /> : i + 1}
+            </span>
+            <div className={`h-0.5 flex-1 ${i === STEPS.length - 1 ? "invisible" : st[i + 1] === "todo" ? "bg-line" : "bg-ok/60"}`} />
+          </div>
+          <span className={`mt-1.5 truncate text-[11px] ${st[i] === "now" ? "font-medium text-run" : st[i] === "fail" ? "font-medium text-bad" : "text-muted"}`}>
+            {s.label}{st[i] === "skip" ? "（无需）" : ""}
+          </span>
+        </li>))}
+    </ol>
+  );
+}
+
+export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)}
+      className={`relative h-6 w-11 shrink-0 rounded-full transition ${on ? "bg-accent" : "bg-line"}`}>
+      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${on ? "left-[22px]" : "left-0.5"}`} />
+    </button>
   );
 }
 
@@ -65,7 +113,7 @@ export function Md({ children }: { children: string }) {
 export function Stat({ label, value, sub }: { label: string; value: any; sub?: string }) {
   return (
     <div className="rounded-xl bg-panel2 px-4 py-3">
-      <div className="label">{label}</div>
+      <div className="text-xs text-muted">{label}</div>
       <div className="mt-1 text-lg font-semibold">{value ?? "—"}</div>
       {sub && <div className="text-xs text-muted">{sub}</div>}
     </div>

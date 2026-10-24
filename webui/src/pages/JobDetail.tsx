@@ -1,23 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Download, Square, X, Image as ImageIcon, FileText, LayoutGrid, Grid3x3,
-         CheckCircle2, XCircle, AlertTriangle, Circle } from "lucide-react";
-import { api, Design, fmtClock, Job, JobEvent, Stage, OUTPUT_LABEL } from "../lib/api";
-import { StagePipe, StatusBadge, Stat } from "../components/ui";
+import { ArrowLeft, Download, Square, X, Image as ImageIcon, FileText, LayoutGrid, Grid3x3, ChevronDown, ChevronRight,
+         CheckCircle2, XCircle, AlertTriangle, Circle, MessagesSquare, Wand2, Loader2 } from "lucide-react";
+import { api, askAgent, Design, fmtClock, Job, JobEvent, OUTPUT_LABEL } from "../lib/api";
+import { StatusBadge, Stat, StepTrack, isActive } from "../components/ui";
 
 const KIND_ICON: Record<string, any> = { ok: CheckCircle2, fail: XCircle, warn: AlertTriangle };
 const KIND_CLS: Record<string, string> = { ok: "text-ok", fail: "text-bad", warn: "text-warn", start: "text-run" };
+const STAGE_ZH: Record<string, string> = {
+  prepare: "准备", synth: "综合", size: "定尺寸", flow: "布局布线", signoff: "签核", repair: "自动修复",
+  graph: "生成数据集", verify: "数据集校验", preview: "版图预览", ingest: "写入知识库", done: "完成",
+};
 
 export default function JobDetail() {
   const { id = "" } = useParams();
   const [job, setJob] = useState<Job | null>(null);
-  const [stages, setStages] = useState<Stage[]>([]);
   const [events, setEvents] = useState<JobEvent[]>([]);
   const [sel, setSel] = useState<string | null>(null);
+  const [showLog, setShowLog] = useState(false);
   const lastEv = useRef(0);
-  const evBox = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { api.health().then((h) => setStages(h.stages)); }, []);
   useEffect(() => {
     let alive = true; lastEv.current = 0; setEvents([]);
     const tick = async () => {
@@ -31,98 +33,115 @@ export default function JobDetail() {
     tick(); const t = setInterval(tick, 2000);
     return () => { alive = false; clearInterval(t); };
   }, [id]);
-  useEffect(() => { evBox.current?.scrollTo({ top: evBox.current.scrollHeight, behavior: "smooth" }); }, [events.length]);
 
   if (!job) return <div className="p-10 text-muted">加载中…</div>;
   const ds = job.designs ?? [];
   const passed = ds.filter((d) => d.status === "passed").length;
   const failed = ds.filter((d) => d.status === "failed").length;
-  const running = job.status === "running" || job.status === "pending";
+  const active = isActive(job.status);
   const started = events[0]?.ts ?? job.created;
-  const elapsed = Math.round(((running ? Date.now() / 1000 : job.updated) - started) / 60);
+  const minutes = Math.max(0, Math.round(((active ? Date.now() / 1000 : job.updated) - started) / 60));
   const selected = ds.find((d) => d.name === sel) ?? null;
+  const now = [...events].reverse().find((e) => e.kind === "start");
 
   return (
-    <div className="flex h-full">
-      <div className="min-w-0 flex-1 overflow-y-auto px-10 py-8">
-        <Link to="/jobs" className="inline-flex items-center gap-1 text-sm text-muted hover:text-fg"><ArrowLeft size={15} /> 任务</Link>
-        <div className="mt-3 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">{job.title}</h1>
-            <div className="mt-1 font-mono text-xs text-faint">{job.id} · {job.spec?.platform} · {OUTPUT_LABEL[job.spec?.output ?? "graph"]}</div>
-          </div>
-          <div className="flex items-center gap-2">
-            <StatusBadge status={job.status} />
-            {running && <button className="btn-ghost" onClick={() => api.cancel(id)}><Square size={14} /> 取消</button>}
-            {job.result?.package && (
-              <a className="btn-primary" href={`/api/jobs/${id}/download`}><Download size={16} /> 下载数据集</a>)}
-          </div>
+    <div className="mx-auto max-w-4xl px-4 py-6 md:px-8 md:py-8">
+      <Link to="/jobs" className="inline-flex items-center gap-1 text-sm text-muted hover:text-fg"><ArrowLeft size={15} /> 全部任务</Link>
+      <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-bold md:text-2xl">{job.title}</h1>
+          <div className="mt-1 text-xs text-faint">{OUTPUT_LABEL[job.spec?.output ?? "graph"]} · {job.spec?.platform} · {job.id}</div>
         </div>
-
-        <div className="mt-6 grid grid-cols-4 gap-3">
-          <Stat label="设计" value={ds.length} />
-          <Stat label="通过" value={<span className="text-ok">{passed}</span>} sub="签核 + 数据集校验" />
-          <Stat label="失败" value={<span className={failed ? "text-bad" : ""}>{failed}</span>} />
-          <Stat label="用时" value={`${Math.max(elapsed, 0)} 分钟`} sub={running ? "进行中" : "已结束"} />
-        </div>
-
-        <div className="mt-6 grid grid-cols-1 gap-3 xl:grid-cols-2">
-          {ds.map((d) => <DesignCard key={d.name} d={d} stages={stages} onOpen={() => setSel(d.name)} active={sel === d.name} />)}
-        </div>
+        <StatusBadge status={job.status} />
       </div>
 
-      <aside className="flex w-[380px] shrink-0 flex-col border-l border-line bg-panel/50">
-        <div className="border-b border-line px-5 py-4">
-          <div className="font-semibold">实时进度</div>
-          <div className="text-xs text-muted">每一步都来自流程与签核工具的真实输出</div>
+      {/* what is going on, in one sentence, with the one action that matters now */}
+      <div className={`card mt-5 flex flex-wrap items-center gap-4 p-4 md:p-5 ${!active && passed ? "border-ok/40" : ""}`}>
+        <div className="min-w-0 flex-1">
+          {active ? (
+            <>
+              <div className="flex items-center gap-2 font-semibold"><Loader2 size={17} className="animate-spin text-run" />
+                正在处理 · 已完成 {passed + failed}/{ds.length}</div>
+              <div className="mt-1 truncate text-sm text-muted">{now ? `${now.design ?? ""} ${now.message}` : "准备中"} · 已用 {minutes} 分钟</div>
+            </>) : (
+            <>
+              <div className="font-semibold">{passed ? `完成：${passed}/${ds.length} 个设计通过` : `没有设计通过（${failed}/${ds.length} 失败）`}</div>
+              <div className="mt-1 text-sm text-muted">
+                {passed ? "通过的设计都已签核（DRC、LVS 干净）并通过数据集校验，已打包。" : "点开失败的设计查看原因，或让 agent 帮你分析。"}
+                {passed > 0 && failed > 0 && ` ${failed} 个失败的设计不在数据集里。`} 用时 {minutes} 分钟。
+              </div>
+            </>)}
         </div>
-        <div ref={evBox} className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
-          {events.map((e) => {
-            const I = KIND_ICON[e.kind] ?? Circle;
-            return (
-              <div key={e.id} className="flex gap-2.5 rounded-lg px-2 py-1.5 text-[13px] hover:bg-panel2/60">
-                <I size={14} className={`mt-0.5 shrink-0 ${KIND_CLS[e.kind] ?? "text-faint"}`} />
-                <div className="min-w-0">
-                  <div className="leading-5"><span className="font-mono text-xs text-accent">{e.design ?? "任务"}</span>{" "}
+        {active && <button className="btn-ghost" onClick={() => api.cancel(id)}><Square size={14} /> 取消</button>}
+        {job.result?.package && <a className="btn-primary" href={`/api/jobs/${id}/download`}><Download size={16} /> 下载数据集</a>}
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {ds.map((d) => <DesignCard key={d.name} jobId={id} d={d} onOpen={() => setSel(d.name)} />)}
+      </div>
+
+      <div className="mt-6">
+        <button className="flex items-center gap-1.5 text-sm text-muted hover:text-fg" onClick={() => setShowLog(!showLog)}>
+          {showLog ? <ChevronDown size={16} /> : <ChevronRight size={16} />} 详细过程（{events.length} 条）
+        </button>
+        {showLog && (
+          <div className="card mt-2 max-h-[420px] space-y-0.5 overflow-y-auto p-2">
+            {events.map((e) => {
+              const I = KIND_ICON[e.kind] ?? Circle;
+              return (
+                <div key={e.id} className="flex gap-2.5 rounded-lg px-2 py-1.5 text-[13px]">
+                  <span className="w-14 shrink-0 font-mono text-[11px] leading-5 text-faint">{fmtClock(e.ts)}</span>
+                  <I size={14} className={`mt-0.5 shrink-0 ${KIND_CLS[e.kind] ?? "text-faint"}`} />
+                  <div className="min-w-0 leading-5"><span className="font-mono text-xs text-accent">{e.design ?? "任务"}</span>{" "}
                     <span className={e.kind === "fail" ? "text-bad" : ""}>{e.message}</span></div>
-                  <div className="text-[11px] text-faint">{fmtClock(e.ts)}</div>
-                </div>
-              </div>);
-          })}
-        </div>
-      </aside>
+                </div>);
+            })}
+          </div>)}
+      </div>
       {selected && <DesignPanel jobId={id} d={selected} output={job.spec?.output ?? "graph"} onClose={() => setSel(null)} />}
     </div>
   );
 }
 
-function DesignCard({ d, stages, onOpen, active }: { d: Design; stages: Stage[]; onOpen: () => void; active: boolean }) {
-  const s = d.detail?.sizing; const so = d.detail?.signoff; const v = d.detail?.verify;
-  const stageLabel = stages.find((x) => x.id === d.stage)?.label ?? (d.stage === "done" ? "完成" : d.stage);
-  return (
-    <button onClick={onOpen}
-      className={`card p-5 text-left transition hover:border-accent/60 ${active ? "border-accent" : ""}`}>
-      <div className="flex items-center justify-between">
-        <div className="font-mono font-semibold">{d.name}</div>
-        <StatusBadge status={d.status} />
-      </div>
-      <div className="mt-3"><StagePipe stages={stages} current={d.stage} status={d.status} /></div>
-      <div className="mt-2 text-xs text-muted">{d.status === "failed" ? <span className="text-bad">{d.detail?.reason}</span> : stageLabel}</div>
-      <div className="mt-4 grid grid-cols-4 gap-2 text-xs">
-        <Mini k="单元" v={s?.cells} /><Mini k="die" v={s ? `${s.die_side_um} µm` : null} />
-        <Mini k="DRC" v={so?.drc} good={so?.drc === "clean"} />
-        <Mini k="LVS" v={so?.lvs} good={so?.lvs === "clean"} />
-      </div>
-      {v && <div className="mt-3 text-xs text-ok">数据集校验 {v.passed}/{v.total} 项通过</div>}
-    </button>
-  );
+function plain(d: Design): string {
+  const v = d.detail?.verify;
+  if (d.status === "pending") return "排队中，等待空闲的算力";
+  if (d.status === "passed") return v ? `完成：签核通过，数据集校验 ${v.passed}/${v.total} 项全部通过` : "完成";
+  if (d.status === "failed") return d.detail?.reason ?? "失败";
+  if (d.status === "cancelled") return "已取消";
+  return `正在${STAGE_ZH[d.stage] ?? d.stage}…`;
 }
 
-function Mini({ k, v, good }: { k: string; v: any; good?: boolean }) {
+function DesignCard({ jobId, d, onOpen }: { jobId: string; d: Design; onOpen: () => void }) {
+  const s = d.detail?.sizing; const so = d.detail?.signoff;
+  const fixes: any[] = d.detail?.frontend_fixes ?? [];
+  const repaired = Array.isArray(d.detail?.repair) && d.detail.repair.length > 0;
   return (
-    <div className="rounded-lg bg-panel2 px-2 py-1.5">
-      <div className="text-[10px] uppercase tracking-wider text-faint">{k}</div>
-      <div className={`truncate font-medium ${good === true ? "text-ok" : good === false && v ? "text-bad" : ""}`}>{v ?? "—"}</div>
+    <div className="card p-4 md:p-5">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1 truncate font-mono font-semibold">{d.name}</div>
+        <StatusBadge status={d.status} />
+        <button className="btn-ghost px-3 py-1.5" onClick={onOpen}>详情</button>
+      </div>
+      <div className="mt-4"><StepTrack stage={d.stage} status={d.status} repaired={repaired} /></div>
+      <p className={`mt-3 text-sm ${d.status === "failed" ? "text-bad" : "text-muted"}`}>{plain(d)}</p>
+      {(s || so) && (
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted">
+          {s && <span>{s.cells} 个单元 · die {s.die_side_um} µm · 时钟 {s.period_ns} ns</span>}
+          {so && <span>DRC <b className={so.drc === "clean" ? "text-ok" : "text-bad"}>{so.drc === "clean" ? "干净" : `${so.drc_violations ?? "?"} 处违例`}</b>
+            {" · "}LVS <b className={so.lvs === "clean" ? "text-ok" : "text-bad"}>{so.lvs === "clean" ? "一致" : so.lvs}</b></span>}
+        </div>)}
+      {(fixes.length > 0 || repaired) && (
+        <div className="mt-3 rounded-xl bg-accent2/10 px-3 py-2 text-xs">
+          <div className="flex items-center gap-1.5 font-medium text-accent2"><Wand2 size={13} /> 自动修复</div>
+          <ul className="mt-1 space-y-0.5 text-muted">
+            {fixes.map((f, i) => <li key={i}>{f.detail}</li>)}
+            {repaired && <li>签核未通过后自动诊断并修复（{d.detail.repair.length} 步，见详情）</li>}
+          </ul>
+        </div>)}
+      {d.status === "failed" && (
+        <Link className="btn-ghost mt-3" to={askAgent(`任务 ${jobId} 里的设计 ${d.name} 失败了，帮我分析原因并告诉我怎么改`)}>
+          <MessagesSquare size={15} /> 让 agent 分析原因</Link>)}
     </div>
   );
 }
@@ -146,7 +165,7 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/40 backdrop-blur-[2px]" onClick={onClose}>
-      <div className="flex h-full w-[640px] flex-col border-l border-line bg-panel" onClick={(e) => e.stopPropagation()}>
+      <div className="flex h-full w-full flex-col border-l border-line bg-panel md:w-[640px]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-6 py-4">
           <div><div className="font-mono text-lg font-semibold">{d.name}</div><div className="text-xs text-muted">{d.project}</div></div>
           <div className="flex items-center gap-2"><StatusBadge status={d.status} />
@@ -164,7 +183,7 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
             <div className="space-y-5">
               <section>
                 <div className="label mb-2">尺寸与约束</div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <Stat label="综合后单元" value={s?.cells} /><Stat label="面积" value={s ? `${s.area_um2} µm²` : null} />
                   <Stat label="IO 引脚" value={s?.pins} /><Stat label="die 边长" value={s ? `${s.die_side_um} µm` : null}
                     sub={s ? { area: "由面积决定", pins: "由引脚数决定", pdn_floor: "由电源网格下限决定" }[s.binding as string] : ""} />
@@ -174,7 +193,7 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
               </section>
               <section>
                 <div className="label mb-2">PPA（来自版图）</div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <Stat label="利用率" value={typeof geo.utilization === "number" ? `${(geo.utilization * 100).toFixed(1)} %` : null} />
                   <Stat label="单元面积" value={fmt(geo.stdcell_area_um2, 1) && `${fmt(geo.stdcell_area_um2, 1)} µm²`} />
                   <Stat label="功耗" value={typeof sum?.power?.total_power_w === "number" ? `${(sum.power.total_power_w * 1000).toFixed(3)} mW` : null} />
@@ -182,7 +201,7 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
               </section>
               <section>
                 <div className="label mb-2">签核（由工具判定）</div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <Stat label="DRC" value={<Verdict v={rep?.drc?.status} />} sub={rep?.drc ? `${rep.drc.total_violations ?? 0} 处违例` : ""} />
                   <Stat label="LVS" value={<Verdict v={rep?.lvs?.status} />} sub={rep?.lvs?.mismatch_count != null ? `${rep.lvs.mismatch_count} 处不匹配` : ""} />
                   <Stat label="数据集校验" value={rep?.verify ? `${rep.verify.passed}/${rep.verify.total}` : "—"}
@@ -202,9 +221,10 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
                 </section>)}
               {d.status === "failed" && (
                 <div className="rounded-xl border border-bad/40 bg-bad/10 p-4 text-sm">
-                  <div className="font-medium text-bad">失败于：{d.detail?.failed_stage}</div>
+                  <div className="font-medium text-bad">失败于：{STAGE_ZH[d.detail?.failed_stage] ?? d.detail?.failed_stage}</div>
                   <div className="mt-1 text-muted">{d.detail?.reason}</div>
-                  <div className="mt-2 text-xs text-muted">可以在「对话」里让 agent 分析原因并给出修复建议。</div>
+                  <Link className="btn-ghost mt-3" to={askAgent(`任务 ${jobId} 里的设计 ${d.name} 失败了，帮我分析原因并告诉我怎么改`)}>
+                    <MessagesSquare size={15} /> 让 agent 分析原因</Link>
                 </div>)}
             </div>)}
           {tab === "images" && <ImagesTab jobId={jobId} d={d} />}
@@ -217,7 +237,7 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
               <div className="mb-3 flex flex-wrap gap-1.5">
                 {LOG_STAGES.map((st) => (
                   <button key={st} onClick={() => setLogStage(st)}
-                    className={`chip ${logStage === st ? "bg-accent/15 text-accent" : "bg-panel2 text-muted hover:text-fg"}`}>{st}</button>))}
+                    className={`chip ${logStage === st ? "bg-accent/15 text-accent" : "bg-panel2 text-muted hover:text-fg"}`}>{STAGE_ZH[st] ?? st}</button>))}
               </div>
               <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap rounded-xl bg-bg p-4 font-mono text-[11.5px] leading-5 text-muted">{log || "（暂无日志）"}</pre>
             </div>)}
@@ -259,7 +279,7 @@ function ImagesTab({ jobId, d }: { jobId: string; d: Design }) {
     </section>);
   return (
     <div>
-      <div className="mb-4 grid grid-cols-3 gap-2 text-sm">
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 text-sm">
         <div className="rounded-xl bg-panel2 px-3 py-2"><div className="label">网格</div><div className="font-semibold">{info.shape?.join(" × ")}</div></div>
         <div className="rounded-xl bg-panel2 px-3 py-2"><div className="label">GCell</div><div className="font-semibold">{info.gcell_step_um?.[0]?.toFixed(2)} µm</div></div>
         <div className="rounded-xl bg-panel2 px-3 py-2"><div className="label">特征来源</div><div className="font-semibold">{({ place: "放置后", cts: "CTS 后", floorplan: "floorplan" } as any)[info.feature_stage] ?? info.feature_stage}</div></div>

@@ -75,6 +75,14 @@ class JobStore:
             c.execute("UPDATE jobs SET status=?, updated=?, result=COALESCE(?, result) WHERE id=?",
                       (status, time.time(), json.dumps(result) if result is not None else None, jid))
 
+    def claim_job(self, jid: str, frm: tuple = ("running", "pending"), to: str = "finalizing") -> bool:
+        """Atomically move a job from one of `frm` to `to`. True only for the one
+        caller that made the change -- so two processes never both close a job."""
+        with self._lock, self._conn() as c:
+            cur = c.execute("UPDATE jobs SET status=?, updated=? WHERE id=? AND status IN (%s)"
+                            % ",".join("?" * len(frm)), (to, time.time(), jid, *frm))
+            return cur.rowcount == 1
+
     def job(self, jid: str) -> dict | None:
         with self._conn() as c:
             r = c.execute("SELECT * FROM jobs WHERE id=?", (jid,)).fetchone()

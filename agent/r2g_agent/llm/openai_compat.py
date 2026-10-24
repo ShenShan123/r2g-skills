@@ -7,6 +7,18 @@ import json
 import httpx
 
 
+def thinking_params(mc) -> dict:
+    """The provider's own deep-thinking switch (verified 2026-10-23 on deepseek-flash
+    and qwen3.8-flash: both default to ON; these turn it off)."""
+    from ..config import PROVIDERS
+    kind = PROVIDERS.get(mc.provider, {}).get("thinking")
+    if kind == "deepseek":
+        return {"thinking": {"type": "enabled" if mc.thinking else "disabled"}}
+    if kind == "qwen":
+        return {"enable_thinking": bool(mc.thinking)}
+    return {}
+
+
 class OpenAICompatAdapter:
     def __init__(self, mc, key: str | None):
         self.mc, self.key = mc, key
@@ -40,6 +52,7 @@ class OpenAICompatAdapter:
                 "temperature": self.mc.temperature, "max_tokens": self.mc.max_tokens}
         if tools:
             body["tools"] = [{"type": "function", "function": t} for t in tools]
+        body.update(thinking_params(self.mc))
         calls: dict[int, dict] = {}
         stop = "stop"
         try:
@@ -60,6 +73,8 @@ class OpenAICompatAdapter:
                         continue
                     for ch in ev.get("choices") or []:
                         d = ch.get("delta") or {}
+                        if d.get("reasoning_content"):
+                            yield {"type": "thinking", "delta": d["reasoning_content"]}
                         if d.get("content"):
                             yield {"type": "text", "delta": d["content"]}
                         for tc in d.get("tool_calls") or []:

@@ -29,3 +29,16 @@ def test_recover_closes_finished_and_interrupts_orphans():
     assert st.job(done)["status"] == "failed"
     o = st.job(orphan)
     assert o["status"] == "failed" and o["designs"][0]["detail"]["reason"].startswith("服务重启时中断")
+
+
+def test_a_job_is_closed_once_even_by_two_runtimes():
+    from r2g_agent.jobs import RUNNING
+    from r2g_agent.pipeline import Pipeline
+    st = JobStore()
+    jid = st.create_job("t", {}, [{"name": "a"}])
+    st.set_job(jid, RUNNING)
+    st.set_design(jid, "a", status="failed")
+    a, b = Pipeline(st, workers=1, ingest=False), Pipeline(st, workers=1, ingest=False)
+    assert a.finalize_if_done(jid) and b.finalize_if_done(jid)
+    assert [e["kind"] for e in st.events(jid)].count("done") == 1
+    assert st.job(jid)["status"] == "failed"

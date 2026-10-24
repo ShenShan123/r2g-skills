@@ -180,6 +180,10 @@ class Pipeline:
         sts = [d["status"] for d in j["designs"]]
         if not all(s in (PASSED, FAILED, CANCELLED) for s in sts):
             return False
+        # the web server's watcher and a terminal `r2g status` can both get here;
+        # only the one that claims the job packages it and writes "任务结束"
+        if not self.store.claim_job(jid):
+            return True
         n_ok = sts.count(PASSED)
         status = CANCELLED if jid in self._cancel else ("done" if n_ok else FAILED)
         result = {"passed": n_ok, "total": len(sts)}
@@ -320,7 +324,7 @@ class Pipeline:
             hits = frontend.match_synth_failure(self._synth_log_text(pdir, run),
                                                 run / "results" / "1_2_yosys.v" if run else None, tried)
             if not hits:
-                msg = "综合失败（rc=%s）" % rc
+                msg = "综合失败：%s" % (self._last_error(pdir) if run else "rc=%s" % rc)
                 if meta["missing_data_files"]:
                     msg += "：缺少数据文件 %s" % "、".join(m["reference"] for m in meta["missing_data_files"])
                 self._fail(jid, name, "synth", msg, {"log_tail": self._tail(pdir, "synth"),
@@ -504,7 +508,12 @@ class Pipeline:
         if not run:
             return "无运行记录"
         for f in sorted((run / "logs").rglob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)[:6]:
-            m = re.findall(r"\[ERROR [A-Z]+-\d+\][^\n]{0,120}", f.read_text(errors="replace"))
+            t = f.read_text(errors="replace")
+            m = re.findall(r"\[ERROR [A-Z]+-\d+\][^\n]{0,120}", t)
             if m:
                 return m[-1]
+            # yosys: "<file>:<line>: ERROR: <what>" -- keep file name and line, drop the long path
+            y = re.findall(r"([^\s/]+:\d+): ERROR: ([^\n]{0,120})", t) or re.findall(r"^ERROR: ([^\n]{0,140})", t, re.M)
+            if y:
+                return "%s：%s" % y[0] if isinstance(y[0], tuple) else y[0]
         return "见日志"

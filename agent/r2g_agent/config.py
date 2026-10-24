@@ -21,9 +21,11 @@ from .paths import r2g_home
 # `model:` always wins.
 PROVIDERS = {
     "deepseek":  {"protocol": "openai", "base_url": "https://api.deepseek.com/v1",
-                  "model": "deepseek-chat", "key_env": "DEEPSEEK_API_KEY", "label": "DeepSeek"},
+                  "model": "deepseek-chat", "key_env": "DEEPSEEK_API_KEY", "label": "DeepSeek",
+                  "thinking": "deepseek"},
     "qwen":      {"protocol": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                  "model": "qwen-plus", "key_env": "DASHSCOPE_API_KEY", "label": "通义千问"},
+                  "model": "qwen-plus", "key_env": "DASHSCOPE_API_KEY", "label": "通义千问",
+                  "thinking": "qwen"},
     "kimi":      {"protocol": "openai", "base_url": "https://api.moonshot.cn/v1",
                   "model": "kimi-k2-turbo-preview", "key_env": "MOONSHOT_API_KEY", "label": "Kimi"},
     "glm":       {"protocol": "openai", "base_url": "https://open.bigmodel.cn/api/paas/v4",
@@ -52,6 +54,9 @@ class ModelConfig:
     protocol: str = ""
     temperature: float = 0.2
     max_tokens: int = 4096
+    # deep thinking: sent with the provider's own switch (PROVIDERS[...]["thinking"]);
+    # providers without a known switch use their default and the toggle is hidden
+    thinking: bool = True
 
     def resolved(self) -> "ModelConfig":
         pre = PROVIDERS.get(self.provider, PROVIDERS["custom"])
@@ -60,7 +65,8 @@ class ModelConfig:
                            base_url=(self.base_url or pre["base_url"]).rstrip("/"),
                            api_key_env=self.api_key_env or pre["key_env"],
                            protocol=self.protocol or pre["protocol"],
-                           temperature=self.temperature, max_tokens=self.max_tokens)
+                           temperature=self.temperature, max_tokens=self.max_tokens,
+                           thinking=self.thinking)
 
 
 @dataclass
@@ -126,6 +132,8 @@ def public_view(cfg: Config) -> dict:
     r = cfg.model.resolved()
     d["model_resolved"] = {"provider": r.provider, "model": r.model, "base_url": r.base_url,
                            "protocol": r.protocol, "api_key_env": r.api_key_env,
-                           "has_key": bool(api_key(cfg.model)) or r.provider == "ollama"}
+                           "has_key": bool(api_key(cfg.model)) or r.provider == "ollama",
+                           "thinking": r.thinking,
+                           "thinking_switch": bool(PROVIDERS.get(r.provider, {}).get("thinking"))}
     d["providers"] = {k: {kk: vv for kk, vv in v.items()} for k, v in PROVIDERS.items()}
     return d
