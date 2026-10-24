@@ -28,7 +28,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import frontend
+from . import frontend, knowledge
 from . import project as proj
 from .jobs import CANCELLED, FAILED, PASSED, RUNNING, JobStore
 from .paths import defgraph_scripts, r2g_home, repo_root, signoff_scripts, skills_dir, tools_dir
@@ -93,6 +93,9 @@ class Pipeline:
         self.ingest = ingest
         self.stage_timeout = stage_timeout
         self._procs: dict[tuple, subprocess.Popen] = {}
+        # the user's own knowledge store (seeded from the shipped one, which the
+        # skills refuse to write); every stage reads and writes this copy
+        self.knowledge = knowledge.ensure() if ingest else {"action": "disabled"}
         self._cancel: set[str] = set()
         self._lock = threading.Lock()
 
@@ -197,6 +200,8 @@ class Pipeline:
         e = dict(os.environ)
         e.update({"NUM_CORES": str(self.cores), "OMP_NUM_THREADS": str(self.cores),
                   "ORFS_TIMEOUT": str(self.stage_timeout)})
+        if self.ingest:
+            e.update(knowledge.env())
         e.update(env or {})
         with open(logdir / ("%s.log" % stage), "ab") as log:
             log.write(("\n$ %s\n" % " ".join(cmd)).encode())
@@ -275,6 +280,7 @@ class Pipeline:
                     msg += "：缺少数据文件 %s" % "、".join(m["reference"] for m in meta["missing_data_files"])
                 self._fail(jid, name, "synth", msg, {"log_tail": self._tail(pdir, "synth"),
                                                      "frontend_tried": tried})
+                self._ingest(jid, name, pdir)
                 return
             tried += [h["id"] for h in hits]
             meta = proj.add_synth_hooks(pdir, [h["id"] for h in hits])
@@ -411,11 +417,21 @@ class Pipeline:
             return
         ing = skills_dir() / "signoff-loop" / "knowledge" / "ingest_run.py"
         try:
-            self._sh(jid, name, "ingest", ["python3", str(ing), str(pdir)], pdir, timeout=600)
+            rc = self._sh(jid, name, "ingest", ["python3", str(ing), str(pdir), "--db",
+                                                knowledge.env()["R2G_KNOWLEDGE_DB"]], pdir, timeout=600)
         except Cancelled:
             raise
-        except Exception:                                         # noqa: BLE001
-            pass
+        except Exception as e:                                    # noqa: BLE001
+            rc, err = -1, str(e)
+        else:
+            err = self._tail(pdir, "ingest", 3)
+        # never silent: a swallowed refusal here once left every agent run unrecorded
+        if rc != 0:
+            self._fail_soft(jid, name, "ingest", "未能写入知识库（rc=%s）：%s" % (rc, err[-300:]))
+            return
+        ok, msg = knowledge.learn()
+        if not ok:
+            self._fail_soft(jid, name, "ingest", "已写入知识库，但重新学习修复经验失败：%s" % msg[-300:])
 
     @staticmethod
     def _synth_log_text(pdir: Path, run: Path | None) -> str:

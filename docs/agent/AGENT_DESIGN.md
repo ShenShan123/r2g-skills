@@ -116,6 +116,16 @@ compute: {workers: 8, cores_per_design: 8}
 - 复用现有的 SQLite 认领队列（`rtl-acquire/vendor/rtl-expander/scripts/processing_queue.py`）和 engineer_loop 的 ledger 思路。
 - 吸取 216 上的教训：并发按 `flows × NUM_CORES ≈ nproc` 控制；一次只跑一个批次；容器按名字回收；用"每分钟新产出"而不是负载判断是否卡住。
 
+## 7.1 每个用户自己的知识库（2026-10-23）
+
+仓库里的 `knowledge.sqlite` / `heuristics.json` 是随代码分发的"出厂经验"，技能拒绝直接写它。
+agent 首次启动时把它复制到 `R2G_HOME/knowledge/`，之后所有阶段（修复诊断、ingest、学习）都读写
+这份副本：每个设计跑完（包括综合失败）都 ingest，随后重新学习 `heuristics.json`。`git pull` 带来
+新的出厂经验时，用 `knowledge_sync merge` 并入：只增不改，过诚实性检查，失败则回滚并在
+`/api/health` 里显示 `merge_refused`。写入失败会作为任务事件显示，不再静默。用户的经验不会自动
+上传；想贡献时手动 `knowledge_sync.py export` 导出经验包，由我们审核后合并。实现：
+`agent/r2g_agent/knowledge.py`。
+
 ## 8. P0：先把验证过的修复沉淀进技能
 
 否则一个新的 agent 不知道这几天学到的东西。现状与落点：

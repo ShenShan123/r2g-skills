@@ -17,7 +17,7 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__, agent_loop, config, frontend, tools
+from . import __version__, agent_loop, config, frontend, knowledge, tools
 from . import project as rtl_project
 from .jobs import JobStore
 from .llm import make_adapter
@@ -56,7 +56,8 @@ def _sse(obj: dict) -> str:
 @app.get("/api/health")
 def health():
     return {"version": __version__, "stages": [{"id": s, "label": STAGE_LABEL[s]} for s in STAGES],
-            "config": config.public_view(STATE["cfg"])}
+            "config": config.public_view(STATE["cfg"]),
+            "knowledge": dict(knowledge.summary(), sync=getattr(tools.RT.pipeline, "knowledge", None))}
 
 
 @app.get("/api/config")

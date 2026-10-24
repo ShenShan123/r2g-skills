@@ -11,10 +11,12 @@ LVS are clean and the dataset verifier is green.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
 
+from . import knowledge
 from .jobs import JobStore
 from .paths import examples_dir, repo_root, signoff_scripts, skills_dir
 from .pipeline import STAGE_LABEL, Pipeline
@@ -171,7 +173,8 @@ def diagnose(job_id: str, design: str, check: str) -> dict:
         return {"error": "no such design in job"}
     r = subprocess.run(["python3", str(signoff_scripts() / "reports" / "diagnose_signoff_fix.py"),
                         d["project"], "--check", check, "--list"], cwd=repo_root(),
-                       capture_output=True, text=True, timeout=300)
+                       capture_output=True, text=True, timeout=300,
+                       env={**os.environ, **knowledge.env()})
     try:
         plan = json.loads(r.stdout)
     except ValueError:
@@ -250,4 +253,4 @@ def check_environment(platform: str = "nangate45") -> dict:
     r = subprocess.run(["bash", str(signoff_scripts() / "flow" / "check_env.sh"), "--platform", platform],
                        cwd=repo_root(), capture_output=True, text=True, timeout=300)
     lines = [l for l in r.stdout.splitlines() if l.strip()]
-    return {"ok": r.returncode == 0, "summary": "\n".join(lines[-25:])}
+    return {"ok": r.returncode == 0, "summary": "\n".join(lines[-25:]), "knowledge": knowledge.summary()}
