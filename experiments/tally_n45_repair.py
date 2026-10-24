@@ -158,6 +158,12 @@ def main() -> int:
               % (len(FALLBACK_USED), dict(_C(v for _, _, v in FALLBACK_USED))))
     print("  单独一层：驱动缺陷救回（不进比较） %d 份，其中双清 %d"
           % (len(stratum), sum(1 for k in stratum if dual(rescued_other[k]))))
+    if "--json" in sys.argv:
+        # the sets themselves, for experiments that re-run them (agent_repro/)
+        out = Path(sys.argv[sys.argv.index("--json") + 1])
+        out.write_text(json.dumps({"baseline_frozen": sorted(b_frozen), "apparatus": sorted(b_app),
+                                   "r2g_extra": dict(sorted(r2g_extra.items())), "dev": len(devk)}, indent=1))
+        print("  集合已写入 %s" % out)
     if "-v" in sys.argv:
         for k in sorted(r2g_extra):
             print("    %s  %s" % (r2g_extra[k], k))

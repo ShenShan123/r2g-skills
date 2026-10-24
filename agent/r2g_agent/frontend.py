@@ -116,12 +116,18 @@ def readmem_references(text: str) -> list[tuple[str, str]]:
     return out
 
 
-def fix_sources(copied: list[Path], src_root: Path, rtl_root: Path) -> tuple[list[Path], list[dict], list[dict]]:
+def fix_sources(copied: list[Path], src_root: Path, rtl_root: Path,
+                only: set[Path] | None = None) -> tuple[list[Path], list[dict], list[dict]]:
     """Apply the two create-time recipes to the project's copies.
 
     `copied` are the project copies, laid out under `rtl_root` as the originals
-    are under `src_root`. Returns (sources to compile, fixes, missing data files)."""
-    sources = [p for p in copied if p.suffix.lower() in (".v", ".sv")]
+    are under `src_root`; `only`, when given, is the manifest's source list (the
+    recipes still apply to it -- a listed file another one includes is still a
+    header). Returns (sources to compile, fixes, missing data files)."""
+    # a manifest may list a .vh/.svh as a source: compiled as listed (its `defines
+    # can be global), unless another file `include`s it -- then it is a header
+    exts = (".v", ".sv") if only is None else (".v", ".sv", ".vh", ".svh")
+    sources = [p for p in copied if p.suffix.lower() in exts and (only is None or p in only)]
     fixes, missing = [], []
     inc = included_headers(copied)
     for h in sorted((inc | loose_snippets(sources)) & set(sources)):

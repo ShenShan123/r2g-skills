@@ -221,7 +221,7 @@ function plain(d: Design): string {
 
 function DesignCard({ jobId, d, onOpen }: { jobId: string; d: Design; onOpen: () => void }) {
   const s = d.detail?.sizing; const so = d.detail?.signoff;
-  const fixes: any[] = d.detail?.frontend_fixes ?? [];
+  const fixes: any[] = [...(d.detail?.frontend_fixes ?? []), ...(d.detail?.flow_fixes ?? [])];
   const repaired = Array.isArray(d.detail?.repair) && d.detail.repair.length > 0;
   return (
     <div className="card p-4 md:p-5">
@@ -234,7 +234,7 @@ function DesignCard({ jobId, d, onOpen }: { jobId: string; d: Design; onOpen: ()
       <p className={`mt-3 text-sm ${d.status === "failed" ? "text-bad" : "text-muted"}`}>{plain(d)}</p>
       {(s || so) && (
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted">
-          {s && <span>{s.cells} 个单元 · die {s.die_side_um} µm{s.binding === "fixed" ? "（自定义）" : ""} · 时钟 {s.period_ns} ns{s.period_source === "fixed" ? "（自定义）" : ""}</span>}
+          {s && <span>{s.cells} 个单元 · die {s.die_side_um} µm{s.binding === "fixed" ? "（自定义）" : s.binding === "pins_ppl" ? "（按引脚数修正）" : ""} · 时钟 {s.period_ns} ns{s.period_source === "fixed" ? "（自定义）" : ""}</span>}
           {so && <span>DRC <b className={so.drc === "clean" ? "text-ok" : "text-bad"}>{so.drc === "clean" ? "干净" : `${so.drc_violations ?? "?"} 处违例`}</b>
             {" · "}LVS <b className={so.lvs === "clean" ? "text-ok" : "text-bad"}>{so.lvs === "clean" ? "一致" : so.lvs}</b></span>}
         </div>)}

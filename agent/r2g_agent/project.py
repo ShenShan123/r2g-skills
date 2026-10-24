@@ -15,6 +15,7 @@ CORE_UTILIZATION alone gets a core too narrow for the power grid (PDN-0185).
 from __future__ import annotations
 
 import json
+import math
 import re
 import shutil
 from pathlib import Path
@@ -148,12 +149,20 @@ def create(src: Path, project: Path, platform: str, top: str | None = None,
     if not files:
         raise ValueError("no Verilog/SystemVerilog files under %s" % src)
     meta_file = src / "design.json" if src.is_dir() else None
+    manifest = json.loads(meta_file.read_text()) if meta_file and meta_file.is_file() else {}
     how = "用户指定" if top else ""
-    if top is None and meta_file and meta_file.is_file():
-        top = json.loads(meta_file.read_text()).get("top")
-        how = "design.json 指定" if top else ""
+    if top is None and manifest.get("top"):
+        top, how = manifest["top"], "design.json 指定"
+    # design.json "files": the exact sources to compile (paths relative to the
+    # folder), as a corpus file list states them; everything else in the folder
+    # is only there to be `include`d or $readmem'd. Without it every HDL file is
+    # a source candidate.
+    listed = [src / f for f in manifest.get("files") or []]
+    missing_listed = [str(f) for f in listed if not f.is_file()]
+    if missing_listed:
+        raise ValueError("design.json 列出的源文件不存在：%s" % ", ".join(missing_listed[:5]))
     if not top:
-        top, how = infer_top(files, hint=(src.name if src.is_dir() else src.stem))
+        top, how = infer_top(listed or files, hint=(src.name if src.is_dir() else src.stem))
     rtl = project / "rtl"
     if project.exists():
         shutil.rmtree(project)
@@ -166,10 +175,19 @@ def create(src: Path, project: Path, platform: str, top: str | None = None,
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(f, dst)
         copied.append(dst)
-    sources, fixes, missing = frontend.fix_sources(copied, base, rtl)
+    if listed:
+        keep = {rtl / f.relative_to(base) for f in listed}
+        sources, fixes, missing = frontend.fix_sources(copied, base, rtl, only=keep)
+        for f in listed:
+            if f.suffix.lower() not in (".v", ".sv", ".vh", ".svh"):
+                fixes.append({"recipe": "header_not_source", "file": str(f.relative_to(base)),
+                              "detail": "清单把 %s 文件列成了源文件，它不是可单独编译的 Verilog，不编译" % f.suffix})
+    else:
+        sources, fixes, missing = frontend.fix_sources(copied, base, rtl)
     if not sources:
         raise ValueError("no compilable Verilog/SystemVerilog source under %s" % src)
-    inc_dirs = sorted({str(p.parent) for p in copied})
+    inc_dirs = sorted({str(p.parent) for p in copied} |
+                      {str(rtl / d) for d in manifest.get("include_dirs") or [] if (rtl / d).is_dir()})
     meta = {
         "design_name": name or top,
         "top": top,
@@ -272,6 +290,39 @@ def count_io_bits(netlist: Path, top: str) -> int:
         width = abs(int(hi) - int(lo)) + 1 if hi else 1
         n += width * len([x for x in names.split(",") if x.strip()])
     return n
+
+
+_PPL_RE = re.compile(r"\[ERROR PPL-0024\] Number of IO pins \((\d+)\) exceeds maximum number of available "
+                     r"positions \((\d+)\)\. Increase the die perimeter from ([0-9.]+)\s*um")
+
+
+def ppl_corrected_die(project: Path, log_text: str) -> dict | None:
+    """The die a PPL-0024 refusal asks for, from the design's OWN numbers.
+
+    place_pins reports the pins, the positions the current perimeter offers and
+    that perimeter. Positions scale with the perimeter, so the side that fits is
+    perimeter * pins / positions / 4, plus 1 % -- the per-design correction
+    experiments/make_spec_table.py applies (the derived 1.80 positions/um is
+    slightly optimistic on small dies). Only the die grows; the rest of the spec
+    is untouched. None when there is no such refusal or nothing to grow."""
+    m = None
+    for m in _PPL_RE.finditer(log_text):
+        pass
+    if not m:
+        return None
+    pins, avail, perim = int(m.group(1)), int(m.group(2)), float(m.group(3))
+    meta = json.loads((project / "metadata.json").read_text())
+    sz = dict(meta["sizing"])
+    need = math.ceil(perim * pins / avail * 1.01 / 4.0)
+    if need <= sz["die_side_um"]:
+        return None
+    old = sz["die_side_um"]
+    sz.update(die_side_um=need, core_side_um=need - 2 * sz["core_inset_um"], binding="pins_ppl",
+              ppl={"pins": pins, "positions": avail, "perimeter_um": perim, "die_before_um": old})
+    _write_config(project, meta, sz)
+    meta["sizing"] = sz
+    (project / "metadata.json").write_text(json.dumps(meta, indent=2))
+    return sz
 
 
 def add_synth_hooks(project: Path, recipe_ids: list[str]) -> dict:

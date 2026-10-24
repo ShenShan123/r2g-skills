@@ -107,3 +107,40 @@ def test_synth_size_scientific_notation(tmp_path):
         "=== array_mul ===\n     3359 6.25E+03     3359 6.25E+03 cells\n"
         "   Chip area for module '\\array_mul': 6247.276000\n")
     assert project.synth_size(tmp_path / "s.txt", "array_mul") == (3359, 6247.276)
+
+
+def test_ppl_refusal_grows_only_the_die(tmp_path):
+    src = Path(project.__file__).parent / "examples" / "counter8"
+    pdir = tmp_path / "p"
+    project.create(src, pdir, "nangate45")
+    (tmp_path / "s.txt").write_text(FLAT)
+    (tmp_path / "n.v").write_text("module counter8(clk, q);\n input clk;\n output [7:0] q;\nendmodule\n")
+    before = project.apply_sizing(pdir, tmp_path / "s.txt", tmp_path / "n.v")
+    log = ("[ERROR PPL-0024] Number of IO pins (313) exceeds maximum number of available positions (288). "
+           "Increase the die perimeter from 160.00um to 173.89um.\n")
+    sz = project.ppl_corrected_die(pdir, log)
+    # 160 * 313 / 288 * 1.01 / 4 = 43.9 -> 44
+    assert sz["die_side_um"] == 44 and sz["core_side_um"] == 40 and sz["binding"] == "pins_ppl"
+    assert sz["period_ns"] == before["period_ns"] and sz["ppl"]["die_before_um"] == before["die_side_um"]
+    assert "export DIE_AREA  = 0 0 44 44" in (pdir / "constraints" / "config.mk").read_text()
+    assert project.ppl_corrected_die(pdir, log) is None          # already big enough: no loop
+    assert project.ppl_corrected_die(pdir, "[ERROR GPL-0301] overflow") is None
+
+
+def test_manifest_compiles_only_the_listed_sources(tmp_path):
+    import json as _j
+    src = tmp_path / "d"
+    (src / "rtl").mkdir(parents=True)
+    (src / "inc").mkdir()
+    (src / "rtl" / "top.v").write_text('module top(input a, output y);\n`include "defs.vh"\nassign y = a;\nendmodule\n')
+    (src / "inc" / "defs.vh").write_text("localparam W = 1;\n")
+    (src / "rtl" / "tb.v").write_text("module tb(); top t(); endmodule\n")          # present, not listed
+    (src / "design.json").write_text(_j.dumps({"top": "top", "files": ["rtl/top.v", "inc/defs.vh"],
+                                               "include_dirs": ["inc"]}))
+    meta = project.create(src, tmp_path / "p", "nangate45")
+    assert [Path(f).name for f in meta["files"]] == ["top.v"] and meta["top"] == "top"
+    assert any(f["recipe"] == "header_not_source" and f["file"] == "inc/defs.vh" for f in meta["frontend_fixes"])
+    assert str(tmp_path / "p" / "rtl" / "inc") in meta["include_dirs"]
+    (src / "design.json").write_text(_j.dumps({"top": "top", "files": ["rtl/gone.v"]}))
+    with pytest.raises(ValueError):
+        project.create(src, tmp_path / "q", "nangate45")

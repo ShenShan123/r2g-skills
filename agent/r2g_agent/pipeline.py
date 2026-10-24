@@ -463,7 +463,7 @@ class Pipeline:
         self._ok(jid, name, "size", "%d 个单元，die %g µm（%s），时钟 %g ns（%s）"
                  % (sizing["cells"], sizing["die_side_um"],
                     {"area": "由面积决定", "pins": "由引脚数决定", "pdn_floor": "电源网格下限",
-                     "fixed": "自定义固定值"}[sizing["binding"]],
+                     "fixed": "自定义固定值", "pins_ppl": "按引脚数修正"}[sizing["binding"]],
                     sizing["period_ns"], "按单元数分档" if sizing["period_source"] == "tiers" else "自定义固定值"),
                  sizing)
         if sizing["binding"] == "fixed" and sizing["rule_die_side_um"] > sizing["die_side_um"]:
@@ -480,6 +480,24 @@ class Pipeline:
         # and the baseline then synthesised every design at its own period
         rc = self._sh(jid, name, "flow", ["bash", S + "/flow/run_orfs.sh", str(pdir), platform], pdir,
                       env={"NUM_CORES": str(cores), "OMP_NUM_THREADS": str(cores)})
+        # place_pins refusing the IO count (PPL-0024): grow only the die, from the
+        # design's own reported numbers, and redo from floorplan (at most twice)
+        for _ in range(2):
+            if rc == 0:
+                break
+            sz = proj.ppl_corrected_die(pdir, self._run_log_text(latest_run(pdir)))
+            if not sz:
+                break
+            fx = {"recipe": "ppl_die_correction", "file": "constraints/config.mk",
+                  "detail": "引脚放不下（PPL-0024：%d 个引脚，只有 %d 个位置），die %g → %g µm"
+                            % (sz["ppl"]["pins"], sz["ppl"]["positions"], sz["ppl"]["die_before_um"], sz["die_side_um"])}
+            meta = json.loads((pdir / "metadata.json").read_text())
+            meta.setdefault("flow_fixes", []).append(fx)
+            (pdir / "metadata.json").write_text(json.dumps(meta, indent=2))
+            self.store.set_design(jid, name, detail={"sizing": sz, "flow_fixes": meta["flow_fixes"]})
+            self._ok(jid, name, "flow", "自动修复：%s，从 floorplan 重跑" % fx["detail"], fx)
+            rc = self._sh(jid, name, "flow", ["bash", S + "/flow/run_orfs.sh", str(pdir), platform], pdir,
+                          env={"FROM_STAGE": "floorplan", "NUM_CORES": str(cores), "OMP_NUM_THREADS": str(cores)})
         if rc != 0:
             self._fail(jid, name, "flow", "布局布线失败（rc=%s）：%s" % (rc, self._last_error(pdir)),
                        {"log_tail": self._tail(pdir, "flow")})
@@ -606,6 +624,16 @@ class Pipeline:
         ok, msg = knowledge.learn()
         if not ok:
             self._fail_soft(jid, name, "ingest", "已写入知识库，但重新学习修复经验失败：%s" % msg[-300:])
+
+    @staticmethod
+    def _run_log_text(run: Path | None) -> str:
+        parts = []
+        for p in (sorted((run / "logs").rglob("*.log")) if run else []):
+            try:
+                parts.append(p.read_text(errors="replace"))
+            except OSError:
+                pass
+        return "\n".join(parts)
 
     @staticmethod
     def _synth_log_text(pdir: Path, run: Path | None) -> str:
