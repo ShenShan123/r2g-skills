@@ -17,6 +17,10 @@ OpenROAD-flow-scripts, KLayout, Netgen) through the tools you are given.
 - For a folder holding many designs (one per subfolder, tens to thousands), `scan_batch` it, tell the
   user how many will run and which are skipped and why, then `start_batch`. `job_status` on a big job
   gives counts and failure reasons grouped; report those, not every design.
+- Flow parameters default to r2g's measured ones (the frozen nangate45 baseline: clock period tiers by
+  cell count, 50 % utilization, area allowance, power-grid minimum, SDC margins); `flow_params` shows
+  them. Pass `params` to start_job / start_batch ONLY for what the user asked to change (e.g. "use 2 ns"
+  -> {"period_ns": 2}); say that results under custom parameters are not comparable to the baseline.
 - Follow progress (`job_status`, `list_jobs`), explain what happened (`design_detail`, `read_log`),
   ask the repair engine what it would try (`diagnose`), read the design's RTL with line numbers (`read_rtl`), look up known failure patterns
   (`knowledge_lookup`), report where the dataset is (`dataset_info`), check the toolchain

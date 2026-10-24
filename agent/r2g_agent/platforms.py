@@ -31,6 +31,9 @@ class Platform:
     pdn_floor_um: float
     core_inset_um: float = 2.0
     port_buffer_um2: float = 0.0  # area buffer_ports adds per IO pin
+    # the period the SIZING synthesis runs at: the pilot's nominal period, i.e.
+    # the one whose cell counts the period tiers were binned on
+    sizing_period_ns: float = 2.0
 
 
 PLATFORMS = {

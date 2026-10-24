@@ -172,7 +172,8 @@ def jobs():
 async def create_job(req: Request):
     body = await req.json()
     r = tools.start_job(body.get("designs") or [], platform=body.get("platform", "nangate45"),
-                        output=body.get("output", "graph"), title=body.get("title", ""))
+                        output=body.get("output", "graph"), title=body.get("title", ""),
+                        params=body.get("params") or None)
     if "error" in r:
         raise HTTPException(400, r["error"])
     return r
@@ -189,6 +190,11 @@ def job(jid: str):
 @app.get("/api/jobs/{jid}/events")
 def job_events(jid: str, after: int = 0, tail: int = 0):
     return tools.RT.store.events(jid, after=after, tail=min(max(tail, 0), 2000))
+
+
+@app.get("/api/params")
+def params(platform: str = "nangate45"):
+    return tools.flow_params(platform)
 
 
 @app.post("/api/batch/scan")

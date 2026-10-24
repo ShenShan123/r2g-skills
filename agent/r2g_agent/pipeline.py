@@ -28,7 +28,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import frontend, housekeeping, knowledge
+from . import frontend, housekeeping, knowledge, profile
 from . import project as proj
 from .jobs import CANCELLED, FAILED, PASSED, RUNNING, JobStore
 from .paths import defgraph_scripts, r2g_home, repo_root, signoff_scripts, skills_dir, tools_dir
@@ -36,7 +36,7 @@ from .paths import defgraph_scripts, r2g_home, repo_root, signoff_scripts, skill
 STAGES = ["prepare", "synth", "size", "flow", "signoff", "repair", "graph", "verify", "preview"]
 # the "graph" stage builds whichever dataset the job asked for (graph or image)
 OUTPUTS = ("graph", "image")
-STAGE_LABEL = {"prepare": "准备工程", "synth": "综合", "size": "定尺寸与时钟", "flow": "布局布线",
+STAGE_LABEL = {"prepare": "准备工程", "synth": "综合", "size": "定尺寸与时钟", "flow": "按最终时钟综合并布局布线",
                "signoff": "签核 DRC/LVS", "repair": "自动修复", "graph": "生成数据集", "verify": "数据集校验",
                "preview": "版图预览"}
 
@@ -171,10 +171,11 @@ class Pipeline:
 
     # -- public -------------------------------------------------------------
     def submit(self, sources: list[dict], platform: str = "nangate45", title: str = "",
-               output: str = "graph") -> str:
+               output: str = "graph", params: dict | None = None) -> str:
         """sources: [{"name":..., "path":..., "top": optional}]"""
         if output not in OUTPUTS:
             raise ValueError("output must be one of %s" % ", ".join(OUTPUTS))
+        profile.merge(platform, params)          # a bad value is refused here, not per design
         designs, seen = [], set()
         for s in sources:
             name = re.sub(r"[^A-Za-z0-9_]+", "_", s.get("name") or Path(s["path"]).name)
@@ -182,7 +183,7 @@ class Pipeline:
                 name += "_x"
             seen.add(name)
             designs.append({"name": name, "detail": {"source": str(s["path"]), "top": s.get("top")}})
-        spec = {"platform": platform, "output": output, "sources": sources}
+        spec = {"platform": platform, "output": output, "sources": sources, "params": params or {}}
         jid = self.store.create_job(title or "%d 个设计 · %s · %s" % (len(designs), platform, output),
                                     spec, designs)
         ws = r2g_home() / "workspace" / jid
@@ -412,7 +413,11 @@ class Pipeline:
         S = str(signoff_scripts())
         # prepare
         self._stage(jid, name, "prepare")
-        meta = proj.create(src, pdir, platform, top=top, name=name)
+        params = (self.store.job(jid) or {}).get("spec", {}).get("params") or {}
+        meta = proj.create(src, pdir, platform, top=top, name=name, params=params)
+        if meta["profile_changed"]:
+            self._ok(jid, name, "prepare", "使用自定义参数：%s" % "、".join(
+                profile.FIELDS[k][0] if k in profile.FIELDS else k for k in meta["profile_changed"]))
         self._ok(jid, name, "prepare", "顶层模块 %s（%s），%d 个源文件"
                  % (meta["top"], meta.get("top_source") or "指定", len(meta["files"])),
                  {"top": meta["top"], "top_source": meta.get("top_source")})
@@ -455,18 +460,26 @@ class Pipeline:
         self._stage(jid, name, "size")
         sizing = proj.apply_sizing(pdir, stat, run / "results" / "1_2_yosys.v")
         self.store.set_design(jid, name, detail={"sizing": sizing})
-        self._ok(jid, name, "size", "%d 个单元，die %g µm，时钟 %.1f ns（%s 决定尺寸）"
-                 % (sizing["cells"], sizing["die_side_um"], sizing["period_ns"],
-                    {"area": "面积", "pins": "引脚数", "pdn_floor": "电源网格下限"}[sizing["binding"]]),
+        self._ok(jid, name, "size", "%d 个单元，die %g µm（%s），时钟 %g ns（%s）"
+                 % (sizing["cells"], sizing["die_side_um"],
+                    {"area": "由面积决定", "pins": "由引脚数决定", "pdn_floor": "电源网格下限",
+                     "fixed": "自定义固定值"}[sizing["binding"]],
+                    sizing["period_ns"], "按单元数分档" if sizing["period_source"] == "tiers" else "自定义固定值"),
                  sizing)
+        if sizing["binding"] == "fixed" and sizing["rule_die_side_um"] > sizing["die_side_um"]:
+            self._fail_soft(jid, name, "size", "固定 die %g µm 小于规则算出的 %g µm，可能放不下或拥塞"
+                            % (sizing["die_side_um"], sizing["rule_die_side_um"]))
         if sizing["cells"] < 5000:
             cores = min(self.cores, 4)    # small designs: more threads only thrash
         else:
             cores = self.cores
         # flow
         self._stage(jid, name, "flow")
+        # from synthesis again, under the final SDC: the first synthesis only measured
+        # the design at the tiers' nominal period, exactly as the baseline's pilot did,
+        # and the baseline then synthesised every design at its own period
         rc = self._sh(jid, name, "flow", ["bash", S + "/flow/run_orfs.sh", str(pdir), platform], pdir,
-                      env={"FROM_STAGE": "floorplan", "NUM_CORES": str(cores), "OMP_NUM_THREADS": str(cores)})
+                      env={"NUM_CORES": str(cores), "OMP_NUM_THREADS": str(cores)})
         if rc != 0:
             self._fail(jid, name, "flow", "布局布线失败（rc=%s）：%s" % (rc, self._last_error(pdir)),
                        {"log_tail": self._tail(pdir, "flow")})

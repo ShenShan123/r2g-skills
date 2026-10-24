@@ -41,9 +41,9 @@ export const api = {
     fetch("/api/batch/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) })
       .then(j<Scan>),
   packageNow: (id: string) => fetch(`/api/jobs/${id}/package`, { method: "POST" }).then(j<{ url: string; designs: number }>),
-  createJob: (designs: any[], title = "", output: Output = "graph") =>
+  createJob: (designs: any[], title = "", output: Output = "graph", params?: Record<string, any>) =>
     fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ designs, platform: "nangate45", output, title }) }).then(j<{ job_id: string }>),
+      body: JSON.stringify({ designs, platform: "nangate45", output, title, params }) }).then(j<{ job_id: string }>),
   images: (id: string, d: string) => fetch(`/api/jobs/${id}/designs/${d}/images`).then(j<any>),
   cancel: (id: string) => fetch(`/api/jobs/${id}/cancel`, { method: "POST" }).then(j<any>),
   reports: (id: string, d: string) => fetch(`/api/jobs/${id}/designs/${d}/reports`).then(j<any>),

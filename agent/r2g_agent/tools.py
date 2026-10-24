@@ -88,8 +88,9 @@ def list_examples() -> dict:
                                       "'image' = CircuitNet-style GCell feature maps (features from the placement "
                                       "layout, congestion/IR-drop label maps from the routed one). Ask the user if "
                                       "they did not say which."},
-            "title": {"type": "string"}}, ["designs"]))
-def start_job(designs: list, platform: str = "nangate45", output: str = "graph", title: str = "") -> dict:
+            "title": {"type": "string"}, "params": {"type": "object", "description": "flow parameters overriding r2g's measured defaults (omit to use the defaults; call flow_params first). Keys: period_ns, period_tiers, utilization, area_allowance, pdn_floor_um, die_side_um, io_pct, setup_uncertainty_pct, hold_uncertainty_ns, place_density_lb_addon"}}, ["designs"]))
+def start_job(designs: list, platform: str = "nangate45", output: str = "graph", title: str = "",
+              params: dict | None = None) -> dict:
     sources = []
     for d in designs:
         if d.get("example"):
@@ -106,9 +107,22 @@ def start_job(designs: list, platform: str = "nangate45", output: str = "graph",
             return {"error": "each design needs 'example' or 'path'"}
     if not sources:
         return {"error": "no designs given"}
-    jid = RT.pipeline.submit(sources, platform=platform, title=title, output=output)
+    try:
+        jid = RT.pipeline.submit(sources, platform=platform, title=title, output=output, params=params)
+    except ValueError as e:
+        return {"error": str(e)}
     return {"job_id": jid, "designs": [s["name"] for s in sources],
             "note": "running in background; use job_status to follow progress"}
+
+
+@tool("The flow parameters r2g uses by default (measured on 1249 nangate45 designs: clock period tiers "
+      "by cell count, 50% utilization, area allowance, power-grid minimum, SDC margins) and what each "
+      "may be set to. Use it to explain the defaults, or before passing `params` to start_job/start_batch "
+      "when the user wants their own (e.g. a fixed clock period).",
+      _obj({"platform": {"type": "string", "enum": ["nangate45"]}}))
+def flow_params(platform: str = "nangate45") -> dict:
+    from . import profile
+    return profile.describe(platform)
 
 
 @tool("Scan a folder whose subfolders are designs (one design per subfolder; a folder with only HDL "
@@ -131,8 +145,10 @@ def scan_batch(path: str) -> dict:
       "thousands of designs; they queue under the machine-wide concurrency limit and survive a server "
       "restart. Designs whose top module cannot be decided are skipped and listed.",
       _obj({"path": {"type": "string"}, "output": {"type": "string", "enum": ["graph", "image"]},
-            "platform": {"type": "string", "enum": ["nangate45"]}, "title": {"type": "string"}}, ["path", "output"]))
-def start_batch(path: str, output: str = "graph", platform: str = "nangate45", title: str = "") -> dict:
+            "platform": {"type": "string", "enum": ["nangate45"]}, "title": {"type": "string"},
+            "params": {"type": "object", "description": "flow parameters overriding r2g's measured defaults (omit to use the defaults; call flow_params first). Keys: period_ns, period_tiers, utilization, area_allowance, pdn_floor_um, die_side_um, io_pct, setup_uncertainty_pct, hold_uncertainty_ns, place_density_lb_addon"}}, ["path", "output"]))
+def start_batch(path: str, output: str = "graph", platform: str = "nangate45", title: str = "",
+                params: dict | None = None) -> dict:
     from . import batch
     try:
         r = batch.scan(Path(path))
@@ -141,8 +157,11 @@ def start_batch(path: str, output: str = "graph", platform: str = "nangate45", t
     src = batch.sources(r)
     if not src:
         return {"error": "no design with a decidable top module under %s" % path}
-    jid = RT.pipeline.submit(src, platform=platform, output=output,
-                             title=title or "批量 · %s · %d 个设计" % (Path(r["root"]).name, len(src)))
+    try:
+        jid = RT.pipeline.submit(src, platform=platform, output=output, params=params,
+                                 title=title or "批量 · %s · %d 个设计" % (Path(r["root"]).name, len(src)))
+    except ValueError as e:
+        return {"error": str(e)}
     return {"job_id": jid, "submitted": len(src), "skipped": r["skipped"],
             "skipped_designs": [{"name": d["name"], "problem": d["problem"]} for d in r["designs"] if d["problem"]][:30],
             "note": "queued in background; use job_status for counts"}

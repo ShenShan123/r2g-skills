@@ -7,6 +7,11 @@ import { StatusBadge, Stat, StepTrack, isActive } from "../components/ui";
 
 const KIND_ICON: Record<string, any> = { ok: CheckCircle2, fail: XCircle, warn: AlertTriangle };
 const KIND_CLS: Record<string, string> = { ok: "text-ok", fail: "text-bad", warn: "text-warn", start: "text-run" };
+const PARAM_ZH: Record<string, string> = {
+  period_ns: "时钟", period_tiers: "时钟分档", utilization: "利用率", area_allowance: "面积余量", pdn_floor_um: "core 下限",
+  die_side_um: "die", io_pct: "IO 延迟%", setup_uncertainty_pct: "建立不确定度%", hold_uncertainty_ns: "保持不确定度",
+  place_density_lb_addon: "密度加量",
+};
 const STAGE_ZH: Record<string, string> = {
   prepare: "准备", synth: "综合", size: "定尺寸", flow: "布局布线", signoff: "签核", repair: "自动修复",
   graph: "生成数据集", verify: "数据集校验", preview: "版图预览", ingest: "写入知识库", done: "完成",
@@ -53,7 +58,10 @@ export default function JobDetail() {
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="truncate text-xl font-bold md:text-2xl">{job.title}</h1>
-          <div className="mt-1 text-xs text-faint">{OUTPUT_LABEL[job.spec?.output ?? "graph"]} · {job.spec?.platform} · {job.id}</div>
+          <div className="mt-1 text-xs text-faint">{OUTPUT_LABEL[job.spec?.output ?? "graph"]} · {job.spec?.platform} ·{" "}
+            {Object.keys(job.spec?.params ?? {}).length
+              ? <span className="text-accent2">自定义参数：{Object.entries(job.spec.params).map(([k, v]) => `${PARAM_ZH[k] ?? k} ${typeof v === "object" ? "已改" : v}`).join("、")}</span>
+              : "r2g 经验参数"} · {job.id}</div>
         </div>
         <StatusBadge status={job.status} />
       </div>
@@ -226,7 +234,7 @@ function DesignCard({ jobId, d, onOpen }: { jobId: string; d: Design; onOpen: ()
       <p className={`mt-3 text-sm ${d.status === "failed" ? "text-bad" : "text-muted"}`}>{plain(d)}</p>
       {(s || so) && (
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted">
-          {s && <span>{s.cells} 个单元 · die {s.die_side_um} µm · 时钟 {s.period_ns} ns</span>}
+          {s && <span>{s.cells} 个单元 · die {s.die_side_um} µm{s.binding === "fixed" ? "（自定义）" : ""} · 时钟 {s.period_ns} ns{s.period_source === "fixed" ? "（自定义）" : ""}</span>}
           {so && <span>DRC <b className={so.drc === "clean" ? "text-ok" : "text-bad"}>{so.drc === "clean" ? "干净" : `${so.drc_violations ?? "?"} 处违例`}</b>
             {" · "}LVS <b className={so.lvs === "clean" ? "text-ok" : "text-bad"}>{so.lvs === "clean" ? "一致" : so.lvs}</b></span>}
         </div>)}

@@ -56,8 +56,11 @@ def package_job(store: JobStore, jid: str, partial: bool = False) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / ("r2g_dataset_%s%s.tar.gz" % (jid, "_partial" if partial else ""))
     tmp = out.with_suffix(".tmp")
+    params = (job["spec"] or {}).get("params") or {}
+    # which parameters built it: r2g's measured defaults, or what the user changed
     index = {"job": jid, "created": time.strftime("%Y-%m-%d %H:%M:%S"), "partial": partial,
              "platform": job["spec"].get("platform"), "output": job["spec"].get("output", "graph"),
+             "params_source": "custom" if params else "r2g_default", "params": params,
              "designs": []}
     with tarfile.open(tmp, "w:gz") as tar:
         for d in job["designs"]:

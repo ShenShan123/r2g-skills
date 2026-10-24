@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { FolderUp, Play, Loader2, X, FileCode2, MessagesSquare, ChevronRight, Check, FolderTree, Search, AlertTriangle } from "lucide-react";
 import { api, fmtTime, Job, Output, Scan } from "../lib/api";
 import OutputPicker from "../components/OutputPicker";
+import ParamsPicker, { cleanParams, Params } from "../components/ParamsPicker";
 import { StatusBadge } from "../components/ui";
 
 const HDL = /\.(s?v|s?vh)$/i;
@@ -20,6 +21,7 @@ export default function Home() {
   const [err, setErr] = useState("");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [mode, setMode] = useState<"single" | "batch">("single");
+  const [params, setParams] = useState<Params | null>(null);
   const [scan, setScan] = useState<Scan | null>(null);
   const dirInput = useRef<HTMLInputElement>(null);
 
@@ -40,7 +42,7 @@ export default function Home() {
       if (mode === "batch" && scan) {
         const designs = scan.designs.filter((d) => !d.problem).map((d) => ({ path: d.path, top: d.top, name: d.name }));
         const name = scan.root.split("/").pop();
-        const r = await api.createJob(designs, `批量 · ${name} · ${designs.length} 个设计`, output);
+        const r = await api.createJob(designs, `批量 · ${name} · ${designs.length} 个设计`, output, cleanParams(params));
         nav(`/jobs/${r.job_id}`); return;
       }
       const designs: any[] = [...picked].map((example) => ({ example }));
@@ -48,7 +50,7 @@ export default function Home() {
         const up = await api.upload(files.filter((f) => SEND.test(f.name)));
         designs.push({ path: up.path, top: top || undefined, name: top || folder || undefined });
       }
-      const r = await api.createJob(designs, "", output);
+      const r = await api.createJob(designs, "", output, cleanParams(params));
       nav(`/jobs/${r.job_id}`);
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }
@@ -113,10 +115,15 @@ export default function Home() {
         </Step>
 
         {/* 3 */}
-        <Step n={3} title="开始" done={false}>
+        <Step n={3} title="流程参数" done>
+          <ParamsPicker value={params} onChange={setParams} />
+        </Step>
+
+        {/* 4 */}
+        <Step n={4} title="开始" done={false}>
           <button className="btn-primary w-full justify-center py-3 text-base" onClick={start} disabled={busy || count === 0}>
             {busy ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
-            {busy ? "提交中…" : count ? `开始处理 ${count} 个设计` : "先在第 1 步选择设计"}
+            {busy ? "提交中…" : count ? `开始处理 ${count} 个设计${cleanParams(params) ? "（自定义参数）" : ""}` : "先在第 1 步选择设计"}
           </button>
           <p className="mt-2 text-center text-xs text-muted">
             {mode === "batch" ? "设计会按「设置」里的并发上限排队运行；服务重启后会自动接着跑。" : "小设计约 3–5 分钟；提交后会打开进度页，可以随时离开再回来看。"}</p>

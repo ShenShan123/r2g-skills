@@ -5,6 +5,8 @@
   r2g selftest              run the counter8 example end to end
   r2g run PATH|--example NAME ...   submit a job and follow it
   r2g run --batch DIR [--output graph|image]   every subfolder of DIR is a design
+          [--period NS --util U --die UM --params FILE]   override r2g's measured defaults
+  r2g params                 the default flow parameters and their ranges
   r2g status [JOB]
   r2g ui [--port N] [--host H]
   r2g chat                  terminal chat with the agent
@@ -87,8 +89,15 @@ def cmd_check_model(a) -> int:
 def cmd_run(a) -> int:
     st = _runtime()
     from . import tools
+    params = {}
+    if a.params:
+        params.update(json.loads(open(a.params).read()))
+    for k in ("period", "util", "die"):
+        v = getattr(a, k)
+        if v is not None:
+            params[{"period": "period_ns", "util": "utilization", "die": "die_side_um"}[k]] = v
     if a.batch:
-        r = tools.start_batch(a.batch, output=a.output, platform=a.platform)
+        r = tools.start_batch(a.batch, output=a.output, platform=a.platform, params=params or None)
         if "error" in r:
             print("错误：", r["error"])
             return 2
@@ -99,7 +108,7 @@ def cmd_run(a) -> int:
         print(json.dumps(j.get("result"), ensure_ascii=False))
         return 0 if (j.get("result") or {}).get("passed") else 1
     designs = [{"example": e} for e in (a.example or [])] + [{"path": p} for p in (a.paths or [])]
-    r = tools.start_job(designs, platform=a.platform, output=a.output)
+    r = tools.start_job(designs, platform=a.platform, output=a.output, params=params or None)
     if "error" in r:
         print("错误：", r["error"])
         return 2
@@ -107,6 +116,16 @@ def cmd_run(a) -> int:
     j = _follow(tools.RT.store, r["job_id"])
     print(json.dumps(j.get("result"), ensure_ascii=False))
     return 0 if (j.get("result") or {}).get("passed") else 1
+
+
+def cmd_params(a) -> int:
+    from . import profile
+    d = profile.describe(a.platform)
+    print("默认流程参数（%s）—— 来源：%s" % (a.platform, d["source"]))
+    for k, v in d["defaults"].items():
+        f = d["fields"].get(k)
+        print("  %-24s %-28s %s" % (k, json.dumps(v), (f["label"] + "：" + f["help"]) if f else "时钟分档 [单元数上限, 周期ns]"))
+    return 0
 
 
 def cmd_selftest(a) -> int:
@@ -210,7 +229,13 @@ def main(argv=None) -> int:
     r.add_argument("paths", nargs="*"); r.add_argument("--example", action="append")
     r.add_argument("--platform", default="nangate45")
     r.add_argument("--batch", metavar="DIR", help="DIR 下每个子文件夹是一个设计，一次提交")
-    r.add_argument("--output", choices=["graph", "image"], default="graph"); r.set_defaults(fn=cmd_run)
+    r.add_argument("--output", choices=["graph", "image"], default="graph")
+    r.add_argument("--period", type=float, help="固定时钟周期 ns（默认按单元数分档）")
+    r.add_argument("--util", type=float, help="利用率，默认 0.50")
+    r.add_argument("--die", type=float, help="固定 die 边长 µm（默认自动）")
+    r.add_argument("--params", help="参数 JSON 文件（键见 r2g params）"); r.set_defaults(fn=cmd_run)
+    pp = sub.add_parser("params", help="显示默认流程参数（经验值）及可改范围")
+    pp.add_argument("--platform", default="nangate45"); pp.set_defaults(fn=cmd_params)
     t = sub.add_parser("status"); t.add_argument("job", nargs="?"); t.set_defaults(fn=cmd_status)
     u = sub.add_parser("ui", help="启动本地网页界面")
     u.add_argument("--port", type=int); u.add_argument("--host"); u.set_defaults(fn=cmd_ui)

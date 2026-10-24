@@ -168,6 +168,21 @@ alexforencich/verilog-uart 与 ZipCPU/wbuart32 全流程双清、校验 297/297�
 时暂停、调回后 20 秒内继续；2000 个设计的假任务：接口 0.15 秒 / 414 KB，页面 0.5 秒渲染。
 注意：agent 的 die/时钟规则是它自己的，不是 216 实验冻结的规格表；要做可比的数据仍用 216 驱动。
 
+## 7.5 流程参数：默认用经验值，可自定义（2026-10-23）
+
+默认参数 = nangate45 冻结基线（1249 个设计）：时钟按综合后单元数分档（<100 0.5 ns，<1000 1.0，
+<5000 1.6，其余 3.0）、利用率 0.50、面积余量 1.021、core ≥ 32 µm、引脚 1.80 个/µm、内缩 2 µm；
+SDC 建立不确定度 5 %（只加 setup）、保持 20 ps、IO 15 %。`agent/tests/test_profile.py` 直接加载
+`experiments/make_spec_table.py` 和 `conformance_check.py` 逐项比对，并用同一组输入比对 die 公式和
+分档结果——两边谁改了测试就失败。为和基线一致做了三处对齐：去掉基线没有的
+`PLACE_DENSITY_LB_ADDON = 0.20`；定尺寸用的那次综合按试跑的标称周期 2.0 ns 跑（分档就是按它的
+单元数定的）；定好尺寸后从综合开始重跑，网表也按最终时钟综合。
+自定义：网页首页第 3 步、`r2g run --period/--util/--die/--params`、工具参数 `params`；可改时钟
+（固定值或改分档）、利用率、固定 die、余量、core 下限、SDC 余量、放置密度加量（≥0.10）。越界拒绝，
+不静默截断；固定 die 小于规则值时给出警告。每个设计在 metadata 里记 `flow_profile` 和改了哪些项，
+数据集 index.json 记 `params_source`（`r2g_default` / `custom`）。
+未移植：make_spec_table 里按设计自身 PPL-0024 日志修正 die 的那一步（需要先失败一次）。
+
 ## 8. P0：先把验证过的修复沉淀进技能
 
 否则一个新的 agent 不知道这几天学到的东西。现状与落点：

@@ -20,6 +20,7 @@ import shutil
 from pathlib import Path
 
 from . import frontend, platforms
+from . import profile as flow_profile
 
 HDL_SUFFIXES = (".v", ".sv", ".vh", ".svh")
 
@@ -44,12 +45,12 @@ if {{[llength $cand] > 0}} {{
 }} else {{
   create_clock -name virtual_clk -period $_per
 }}
-# setup uncertainty 5 % of the period; hold a fixed 20 ps (skew does not scale
-# with the period)
-set_clock_uncertainty -setup [expr {{$_per * 0.05}}] [get_clocks *]
-set_clock_uncertainty -hold 0.020 [get_clocks *]
-# I/O delay 15 % of the period so port paths are constrained too
-set _io [expr {{$_per * 0.15}}]
+# setup uncertainty a share of the period; hold a fixed margin (skew does not
+# scale with the period). Defaults 5 % / 20 ps / 15 %: experiments/conformance_check.py FROZEN
+set_clock_uncertainty -setup [expr {{$_per * {unc}}}] [get_clocks *]
+set_clock_uncertainty -hold {hold} [get_clocks *]
+# I/O delay as a share of the period so port paths are constrained too
+set _io [expr {{$_per * {io}}}]
 set _clks [get_clocks *]
 set _in [all_inputs]
 foreach _c $cand {{
@@ -139,9 +140,10 @@ def infer_top(files: list[Path], hint: str | None = None) -> tuple[str, str]:
 
 
 def create(src: Path, project: Path, platform: str, top: str | None = None,
-           name: str | None = None) -> dict:
+           name: str | None = None, params: dict | None = None) -> dict:
     """Copy the RTL in and write the synthesis-stage config. Returns metadata."""
     platforms.get(platform)
+    prof, changed = flow_profile.merge(platform, params)     # refuse bad values before copying anything
     files = find_hdl(src)
     if not files:
         raise ValueError("no Verilog/SystemVerilog files under %s" % src)
@@ -179,6 +181,8 @@ def create(src: Path, project: Path, platform: str, top: str | None = None,
         "frontend_fixes": fixes,
         "missing_data_files": missing,
         "synth_hooks": [],
+        "flow_profile": prof,
+        "profile_changed": changed,
         "status": "created",
     }
     _write_config(project, meta, sizing=None)
@@ -194,10 +198,13 @@ def _write_config(project: Path, meta: dict, sizing: dict | None) -> None:
         "export VERILOG_FILES = %s" % " ".join(meta["files"]),
         "export VERILOG_INCLUDE_DIRS = %s" % " ".join(meta["include_dirs"]),
         "export SDC_FILE = %s" % (project / "constraints" / "constraint.sdc"),
-        "export PLACE_DENSITY_LB_ADDON = 0.20",
         "export ABC_AREA = 1",
         "export SYNTH_MEMORY_MAX_BITS = 131072",
     ]
+    prof = meta.get("flow_profile") or flow_profile.defaults(meta["platform"])
+    # not set by the frozen baseline the defaults come from; only on request
+    if prof.get("place_density_lb_addon"):
+        lines.append("export PLACE_DENSITY_LB_ADDON = %g" % prof["place_density_lb_addon"])
     if meta.get("synth_hooks"):
         lines.append("export SYNTH_CANONICALIZE_TCL = %s"
                      % frontend.write_synth_hook(project, meta["synth_hooks"]))
@@ -207,11 +214,15 @@ def _write_config(project: Path, meta: dict, sizing: dict | None) -> None:
                   "export CORE_AREA = %g %g %g %g" % (i, i, d - i, d - i)]
         period = sizing["period_ns"]
     else:
-        lines.append("export CORE_UTILIZATION = %d" % round(p.utilization * 100))
-        period = p.period_bins[-1][1]
+        # the sizing synthesis: its only job is to measure cells and area, at the
+        # period the tiers were binned on; the die below is not used
+        lines.append("export CORE_UTILIZATION = %d" % round(prof["utilization"] * 100))
+        period = prof.get("period_ns") or p.sizing_period_ns
     (project / "constraints" / "config.mk").write_text("\n".join(lines) + "\n")
     (project / "constraints" / "constraint.sdc").write_text(
-        SDC_TEMPLATE.format(top=meta["top"], ports=CLOCK_PORTS, period=period))
+        SDC_TEMPLATE.format(top=meta["top"], ports=CLOCK_PORTS, period=period,
+                            unc="%g" % (prof["setup_uncertainty_pct"] / 100.0),
+                            hold="%g" % prof["hold_uncertainty_ns"], io="%g" % (prof["io_pct"] / 100.0)))
 
 
 _NUM = r"[\d.]+(?:[eE][+-]?\d+)?"
@@ -274,12 +285,20 @@ def add_synth_hooks(project: Path, recipe_ids: list[str]) -> dict:
 
 def apply_sizing(project: Path, synth_stat: Path, netlist: Path) -> dict:
     meta = json.loads((project / "metadata.json").read_text())
-    p = platforms.get(meta["platform"])
+    prof = meta.get("flow_profile") or flow_profile.defaults(meta["platform"])
+    p = flow_profile.platform_view(meta["platform"], prof)
     cells, area = synth_size(synth_stat, meta["top"])
     pins = count_io_bits(netlist, meta["top"])
-    sizing = platforms.die_for(p, area, pins)
-    sizing.update(cells=cells, area_um2=area, pins=pins,
-                  period_ns=platforms.period_for(p, cells))
+    if prof.get("die_side_um"):
+        die = float(prof["die_side_um"])
+        sizing = {"core_side_um": die - 2 * p.core_inset_um, "die_side_um": die,
+                  "core_inset_um": p.core_inset_um, "binding": "fixed",
+                  # what the rules would have chosen, so a too-small fixed die is visible
+                  "rule_die_side_um": platforms.die_for(p, area, pins)["die_side_um"]}
+    else:
+        sizing = platforms.die_for(p, area, pins)
+    sizing.update(cells=cells, area_um2=area, pins=pins, period_ns=flow_profile.period(prof, cells),
+                  period_source="fixed" if prof.get("period_ns") else "tiers")
     _write_config(project, meta, sizing)
     meta["sizing"] = sizing
     meta["status"] = "sized"
