@@ -33,7 +33,12 @@ def main() -> int:
                "r2g 修复臂赢下的" if g[0] == "r2g" else {"control": "对照：基线已双清", "apparatus": "器具修复救回"}[g[0]],
                g[1] if len(g) > 1 else "")
         d = by.get(short)
+        det0 = (d or {}).get("detail") or {}
+        # the experiment's criterion is sign-off dual-clean; the agent's "passed"
+        # also needs the dataset verifier, so the two are counted apart
+        dual = bool((det0.get("signoff") or {}).get("dual_clean"))
         st = d["status"] if d else "missing"
+        rows[key]["dual"] += dual
         rows[key][st] += 1
         if d:
             det = d.get("detail") or {}
@@ -41,16 +46,15 @@ def main() -> int:
                 used[key][f["recipe"]] += 1
             for r in det.get("repair") or []:
                 used[key]["signoff:" + str(r.get("strategy") or r.get("strategy_id") or "?")] += 1
-        if st != "passed":
-            fails[key].append((short, st, ((d or {}).get("detail") or {}).get("reason", "")[:70]))
+        if not dual or st != "passed":
+            fails[key].append((short, "双清但数据集未过" if dual else st, (det0.get("reason") or "")[:70]))
     print("job %s  %s" % (job["id"], job["status"]))
-    print("%-28s %-22s %5s %5s %s" % ("组", "repair-arm recipe", "通过", "总数", "agent 用到的修复"))
+    print("%-28s %-22s %5s %5s %5s %s" % ("组", "repair-arm recipe", "双清", "+数据集", "总数", "agent 用到的修复"))
     tot = collections.Counter()
     for key in sorted(rows):
         c = rows[key]
-        n = sum(c.values())
-        tot[key[0]] += 0
-        print("%-28s %-22s %5d %5d %s" % (key[0], key[1], c["passed"], n,
+        n = sum(v for k, v in c.items() if k != "dual")
+        print("%-28s %-22s %5d %5d %5d %s" % (key[0], key[1], c["dual"], c["passed"], n,
                                           ", ".join("%s×%d" % kv for kv in used[key].most_common(4))))
     for key in sorted(fails):
         for short, st, why in fails[key]:
