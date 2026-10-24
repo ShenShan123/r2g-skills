@@ -224,6 +224,16 @@ def knowledge_lookup(query: str) -> dict:
             "total": len(hits)}
 
 
+@tool("Disk use of the user's r2g workspace: size per job, packaged datasets, free space. Read-only; "
+      "to free space tell the user to run `r2g clean` (it lists first and deletes only with --yes).",
+      _obj({}))
+def disk_usage() -> dict:
+    from . import housekeeping
+    rep = housekeeping.disk_report(RT.store)
+    rep["jobs"] = sorted(rep["jobs"], key=lambda r: -r["bytes"])[:20]
+    return rep
+
+
 @tool("Cancel a running job.", _obj({"job_id": {"type": "string"}}, ["job_id"]))
 def cancel_job(job_id: str) -> dict:
     RT.pipeline.cancel(job_id)

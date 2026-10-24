@@ -8,6 +8,7 @@
   r2g ui [--port N] [--host H]
   r2g chat                  terminal chat with the agent
   r2g mcp                   MCP server on stdio
+  r2g clean [--older-than DAYS] [--yes]   list (or delete) finished jobs' workspaces
 """
 from __future__ import annotations
 
@@ -100,6 +101,33 @@ def cmd_status(a) -> int:
     return 0
 
 
+def cmd_clean(a) -> int:
+    """Finished jobs' workspaces only; never a running job, never the packaged dataset."""
+    import shutil
+    from . import housekeeping
+    from .jobs import JobStore
+    store = JobStore()
+    rep = housekeeping.disk_report(store)
+    rows = housekeeping.clean_candidates(store, a.older_than)
+    gb = lambda b: b / 1e9
+    print("工作目录合计 %.2f GB，数据集包 %.2f GB，磁盘剩余 %.1f GB"
+          % (gb(rep["workspace_bytes"]), gb(rep["datasets_bytes"]), gb(rep["free_bytes"])))
+    if not rows:
+        print("没有超过 %g 天的已结束任务可清理" % a.older_than)
+        return 0
+    for r in rows:
+        print("  %s  %-9s  %8.2f GB" % (r["job_id"], r["status"], gb(r["bytes"])))
+    total = sum(r["bytes"] for r in rows)
+    if not a.yes:
+        print("以上 %d 个任务共 %.2f GB。加 --yes 才会删除（数据集包保留）。" % (len(rows), gb(total)))
+        return 0
+    for r in rows:
+        shutil.rmtree(r["path"], ignore_errors=True)
+        store.event(r["job_id"], None, "job", "info", "工作目录已清理（数据集包保留）")
+    print("已删除 %d 个任务的工作目录，释放 %.2f GB" % (len(rows), gb(total)))
+    return 0
+
+
 def cmd_ui(a) -> int:
     import uvicorn
     cfg = config.load()
@@ -162,6 +190,10 @@ def main(argv=None) -> int:
     u.add_argument("--port", type=int); u.add_argument("--host"); u.set_defaults(fn=cmd_ui)
     sub.add_parser("chat", help="终端对话").set_defaults(fn=cmd_chat)
     sub.add_parser("mcp", help="以 MCP 服务器方式运行（stdio）").set_defaults(fn=cmd_mcp)
+    k = sub.add_parser("clean", help="清理已结束任务的工作目录（默认只列出）")
+    k.add_argument("--older-than", type=float, default=7.0, help="天数，默认 7")
+    k.add_argument("--yes", action="store_true", help="确认删除")
+    k.set_defaults(fn=cmd_clean)
     a = ap.parse_args(argv)
     return a.fn(a)
 

@@ -126,6 +126,16 @@ agent 首次启动时把它复制到 `R2G_HOME/knowledge/`，之后所有阶段�
 上传；想贡献时手动 `knowledge_sync.py export` 导出经验包，由我们审核后合并。实现：
 `agent/r2g_agent/knowledge.py`。
 
+## 7.2 全机并发上限与磁盘（2026-10-23）
+
+网页、`r2g run`、MCP 是三个独立进程。每个设计运行前先占 `R2G_HOME/slots/` 下 `workers` 个
+fcntl 锁之一，三者合计不超过上限，进程崩溃时锁自动释放；排队时任务事件写“排队中”。每个设计
+记录所属进程（pid + 启动时间），启动时的恢复逻辑只把**所属进程已不在**的设计判为中断——以前
+在终端敲一次 `r2g status` 就会把网页服务正在跑的设计全标成中断。设计结束时删除 ORFS 目录里
+该 FLOW_VARIANT 的 results/logs/reports/objects（项目 backend/RUN_* 已有完整拷贝，签核需要时
+`_restage_for_signoff.sh` 会恢复）。整个工作目录只在用户执行 `r2g clean --yes` 时删除
+（默认只列出；只删已结束任务；数据集包保留）。实现：`agent/r2g_agent/housekeeping.py`。
+
 ## 8. P0：先把验证过的修复沉淀进技能
 
 否则一个新的 agent 不知道这几天学到的东西。现状与落点：

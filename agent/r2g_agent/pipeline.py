@@ -28,7 +28,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import frontend, knowledge
+from . import frontend, housekeeping, knowledge
 from . import project as proj
 from .jobs import CANCELLED, FAILED, PASSED, RUNNING, JobStore
 from .paths import defgraph_scripts, r2g_home, repo_root, signoff_scripts, skills_dir, tools_dir
@@ -43,6 +43,27 @@ STAGE_LABEL = {"prepare": "准备工程", "synth": "综合", "size": "定尺寸�
 
 class Cancelled(Exception):
     pass
+
+
+def _proc_start(pid: int) -> str | None:
+    """Kernel start time of a process (field 22 of /proc/<pid>/stat), None if gone."""
+    try:
+        stat = Path("/proc/%d/stat" % pid).read_text()
+    except OSError:
+        return None
+    return stat.rsplit(")", 1)[1].split()[19]
+
+
+# this process, as an owner a later process can test for liveness; the start time
+# guards against a recycled pid
+OWNER = "%d:%s" % (os.getpid(), _proc_start(os.getpid()))
+
+
+def owner_alive(owner: str | None) -> bool:
+    if not owner:
+        return False
+    pid, _, start = owner.partition(":")
+    return pid.isdigit() and _proc_start(int(pid)) == start
 
 
 def graph_python() -> str | None:
@@ -89,6 +110,7 @@ class Pipeline:
                  ingest: bool = True, stage_timeout: int = 6 * 3600):
         self.store = store
         self.pool = ThreadPoolExecutor(max_workers=max(1, workers))
+        self.workers = max(1, workers)
         self.cores = cores_per_design
         self.ingest = ingest
         self.stage_timeout = stage_timeout
@@ -120,7 +142,7 @@ class Pipeline:
             # FLOW_VARIANT comes from the project folder name, so it carries the
             # job id: two jobs on one design must never share ORFS result dirs
             pdir = ws / ("%s__%s" % (d["name"], jid))
-            self.store.set_design(jid, d["name"], project=str(pdir))
+            self.store.set_design(jid, d["name"], project=str(pdir), detail={"owner": OWNER})
             self.pool.submit(self._run_design, jid, d["name"], Path(d["detail"]["source"]),
                              d["detail"].get("top"), pdir, platform, output)
         self.store.set_job(jid, RUNNING)
@@ -174,13 +196,20 @@ class Pipeline:
 
     def recover(self) -> list[str]:
         """At start-up: close jobs that finished while no watcher was alive, and
-        mark designs a previous server process was running as interrupted (their
-        threads died with it; nothing will ever finish them)."""
+        mark designs whose owning process has died as interrupted (their threads
+        died with it; nothing will ever finish them).
+
+        Only a DEAD owner's designs: `r2g status` or `r2g run` in a terminal also
+        starts a runtime, and once marked every design the live web server was
+        running as interrupted."""
         touched = []
         for j in self.store.jobs(500):
             if j["status"] not in (RUNNING, "pending"):
                 continue
             full = self.store.job(j["id"])
+            if any(d["status"] in (RUNNING, "pending") and owner_alive((d.get("detail") or {}).get("owner"))
+                   for d in full["designs"]):
+                continue            # another live process owns this job and will close it
             for d in full["designs"]:
                 if d["status"] in (RUNNING, "pending"):
                     self.store.set_design(j["id"], d["name"], status=FAILED,
@@ -238,8 +267,24 @@ class Pipeline:
 
     def _run_design(self, jid: str, name: str, src: Path, top: str | None, pdir: Path,
                     platform: str, output: str = "graph") -> None:
+        def stop():
+            if jid in self._cancel:
+                raise Cancelled()
+
+        def waiting():
+            self.store.event(jid, name, "prepare", "start",
+                             "排队中：本机已有 %d 个设计在跑（上限 %d，网页、命令行、MCP 共用）"
+                             % (housekeeping.slots_in_use(self.workers), self.workers))
         try:
-            self._run_design_inner(jid, name, src, top, pdir, platform, output)
+            with housekeeping.design_slot(self.workers, should_stop=stop, on_wait=waiting):
+                try:
+                    self._run_design_inner(jid, name, src, top, pdir, platform, output)
+                finally:
+                    # the ORFS checkout's per-variant dirs duplicate backend/RUN_*
+                    freed = housekeeping.drop_orfs_copies(pdir)
+                    if freed:
+                        self.store.event(jid, name, "job", "info",
+                                         "已清理 ORFS 目录中的重复中间文件 %.1f MB" % (freed / 1e6))
         except Cancelled:
             self.store.set_design(jid, name, status=CANCELLED)
             self.store.event(jid, name, "job", "cancel", "已取消")
