@@ -91,7 +91,8 @@ def _resumable(st, status, owner, restarts=0, name="b"):
     jid = st.create_job("u", {"platform": "nangate45", "output": "graph"}, [{"name": name}])
     st.set_job(jid, RUNNING)
     st.set_design(jid, name, status=status, stage="flow", project="/tmp/none",
-                  detail={"owner": owner, "source": "/src/" + name, "top": "t", "restarts": restarts})
+                  detail={"owner": owner, "source": "/src/" + name, "top": "t", "restarts": restarts,
+                          "execution_protocol": 1})  # no begin_execution yet: known pre-spawn state
     return jid
 
 

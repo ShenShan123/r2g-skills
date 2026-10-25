@@ -30,7 +30,8 @@ from pathlib import Path
 
 from . import frontend, housekeeping, knowledge, profile
 from . import project as proj
-from .jobs import CANCELLED, FAILED, PASSED, RUNNING, JobStore
+from .jobs import CANCELLED, CANCELLING, RECOVERY_REQUIRED, FAILED, PASSED, RUNNING, JobStore
+from .processes import boot_id, proc_start as _proc_start, stop_orphan
 from .paths import defgraph_scripts, r2g_home, repo_root, signoff_scripts, skills_dir, tools_dir
 
 STAGES = ["prepare", "synth", "size", "flow", "signoff", "repair", "graph", "verify", "preview"]
@@ -48,65 +49,30 @@ class Cancelled(Exception):
 MAX_RESTARTS = 2
 
 
-def _proc_start(pid: int) -> str | None:
-    """Kernel start time of a process (field 22 of /proc/<pid>/stat), None if gone."""
-    try:
-        stat = Path("/proc/%d/stat" % pid).read_text()
-    except OSError:
-        return None
-    return stat.rsplit(")", 1)[1].split()[19]
+BOOT_ID = boot_id()
+OWNER = "%d:%s:%s" % (os.getpid(), _proc_start(os.getpid()), BOOT_ID)
 
 
-# this process, as an owner a later process can test for liveness; the start time
-# guards against a recycled pid
-OWNER = "%d:%s" % (os.getpid(), _proc_start(os.getpid()))
+class RecoveryRequired(RuntimeError):
+    pass
 
 
-def _group_members(pgid: int) -> list[int]:
-    out = []
-    for d in Path("/proc").iterdir():
-        if d.name.isdigit():
-            try:
-                if int((d / "stat").read_text().rsplit(")", 1)[1].split()[2]) == pgid:
-                    out.append(int(d.name))
-            except (OSError, ValueError, IndexError):
-                pass
-    return out
-
-
-def stop_orphan(pgid, project: str, grace: float = 10.0) -> bool:
-    """Stop a dead server's stage process group -- only if some member's command
-    line names this design's project (a recycled pgid is someone else's)."""
-    if not pgid or not project:
-        return False
-    members = _group_members(int(pgid))
-    ours = False
-    for pid in members:
-        try:
-            if project.encode() in Path("/proc/%d/cmdline" % pid).read_bytes():
-                ours = True
-                break
-        except OSError:
-            pass
-    if not ours:
-        return False
-    try:
-        os.killpg(int(pgid), signal.SIGTERM)
-        deadline = time.time() + grace
-        while time.time() < deadline and _group_members(int(pgid)):
-            time.sleep(0.5)
-        if _group_members(int(pgid)):
-            os.killpg(int(pgid), signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    return True
+class LostOwnership(RuntimeError):
+    pass
 
 
 def owner_alive(owner: str | None) -> bool:
     if not owner:
         return False
-    pid, _, start = owner.partition(":")
-    return pid.isdigit() and _proc_start(int(pid)) == start
+    parts = owner.split(":")
+    if len(parts) not in (2, 3) or not parts[0].isdigit():
+        return False
+    if len(parts) == 3 and parts[2] != BOOT_ID:
+        return False
+    try:
+        return _proc_start(int(parts[0])) == parts[1]
+    except RuntimeError:
+        return True  # uncertain liveness is not permission to adopt
 
 
 def graph_python() -> str | None:
@@ -167,7 +133,8 @@ class Pipeline:
         # skills refuse to write); every stage reads and writes this copy
         self.memory_env = knowledge.env()
         self.knowledge = knowledge.ensure() if ingest else {"action": "disabled"}
-        self._cancel: set[str] = set()
+        self._shutdown = threading.Event()
+        self.stop_grace = 10.0
         self._lock = threading.Lock()
 
     # -- public -------------------------------------------------------------
@@ -192,7 +159,7 @@ class Pipeline:
             # FLOW_VARIANT comes from the project folder name, so it carries the
             # job id: two jobs on one design must never share ORFS result dirs
             pdir = ws / ("%s__%s" % (d["name"], jid))
-            self.store.set_design(jid, d["name"], project=str(pdir), detail={"owner": OWNER})
+            self.store.set_design(jid, d["name"], project=str(pdir), detail={"owner": OWNER, "execution_protocol": 1})
             self.pool.submit(self._run_design, jid, d["name"], Path(d["detail"]["source"]),
                              d["detail"].get("top"), pdir, platform, output)
         self.store.set_job(jid, RUNNING)
@@ -202,6 +169,7 @@ class Pipeline:
     def shutdown(self) -> None:
         """Server stopping: stop every running stage group (the designs restart on
         the next start, so nothing may keep writing to their FLOW_VARIANT)."""
+        self._shutdown.set()
         with self._lock:
             procs = list(self._procs.values())
         for p in procs:
@@ -211,16 +179,27 @@ class Pipeline:
                 except ProcessLookupError:
                     pass
 
-    def cancel(self, jid: str) -> None:
-        self._cancel.add(jid)
-        with self._lock:
-            for (j, _d), p in list(self._procs.items()):
-                if j == jid and p.poll() is None:
-                    try:
-                        os.killpg(p.pid, signal.SIGTERM)
-                    except ProcessLookupError:
-                        pass
-        self.store.event(jid, None, "job", "cancel", "已请求取消")
+    def cancel(self, jid: str) -> dict | None:
+        # Any service instance can cancel; the worker polls the persisted intent.
+        return self.store.request_cancel(jid)
+
+    def _check_cancel(self, jid: str) -> None:
+        if self.store.cancel_requested(jid):
+            raise Cancelled()
+        if self._shutdown.is_set():
+            raise RecoveryRequired("服务正在停止，已保留执行记录等待恢复核对")
+
+    def _update(self, jid: str, name: str, **kwargs) -> None:
+        if not self.store.set_design(jid, name, expected_owner=OWNER, **kwargs):
+            self._check_cancel(jid)
+            raise LostOwnership("worker no longer owns a mutable design")
+
+    def _blocked(self, jid, name, reason):
+        changed = self.store.set_design(jid, name, status=RECOVERY_REQUIRED, expected_owner=OWNER,
+                              detail={"reason": reason},
+                              event=("job", "recovery_required", reason, {}))
+        if changed:
+            self.store.set_job(jid, RECOVERY_REQUIRED)
 
     # -- internals ------------------------------------------------------------
     def _watch_job(self, jid: str) -> None:
@@ -237,17 +216,19 @@ class Pipeline:
     def finalize_if_done(self, jid: str) -> bool:
         """Close a job whose designs have all ended: package and record. True if closed."""
         j = self.store.job(jid)
-        if not j or j["status"] not in (RUNNING, "pending"):
+        if not j or j["status"] not in (RUNNING, "pending", CANCELLING):
             return True
         sts = [d["status"] for d in j["designs"]]
         if not all(s in (PASSED, FAILED, CANCELLED) for s in sts):
+            return False
+        if self.store.active_executions(jid):
             return False
         # the web server's watcher and a terminal `r2g status` can both get here;
         # only the one that claims the job packages it and writes "任务结束"
         if not self.store.claim_job(jid):
             return True
         n_ok = sts.count(PASSED)
-        status = CANCELLED if jid in self._cancel else ("done" if n_ok else FAILED)
+        status = CANCELLED if self.store.cancel_requested(jid) else ("done" if n_ok else FAILED)
         result = {"passed": n_ok, "total": len(sts)}
         if n_ok:
             from .package import package_job
@@ -255,35 +236,22 @@ class Pipeline:
                 result["package"] = str(package_job(self.store, jid))
             except Exception as e:                              # noqa: BLE001
                 result["package_error"] = str(e)
-        self.store.set_job(jid, status, result)
-        self.store.event(jid, None, "job", "done",
-                         "任务结束：%d/%d 个设计通过并产出数据集" % (n_ok, len(sts)), result)
+        self.store.set_job(jid, status, result, event=("job", "done",
+                         "任务结束：%d/%d 个设计通过并产出数据集" % (n_ok, len(sts)), result))
         return True
 
     def recover(self, resume: bool = False) -> list[str]:
-        """At start-up: close jobs that finished while no watcher was alive, and
-        deal with designs whose owning process has died.
-
-        Only a DEAD owner's designs are touched: `r2g status` or `r2g run` in a
-        terminal also starts a runtime, and a live web server's designs are its own.
-
-        resume=True (the long-lived web server): a dead owner's queued designs are
-        queued again here and its interrupted ones restart from the beginning, so a
-        restart in the middle of a 2000-design batch loses nothing. A design
-        interrupted MAX_RESTARTS times fails instead of looping. resume=False (a
-        terminal command): nothing is adopted -- the next web server will -- and
-        nothing is marked failed."""
+        """Adopt dead owners only; uncertain executions block instead of replaying."""
         touched = []
         for j in self.store.jobs(5000):
-            if j["status"] not in (RUNNING, "pending", "finalizing"):
+            if j["status"] not in (RUNNING, "pending", "finalizing", CANCELLING, RECOVERY_REQUIRED):
                 continue
             jid = j["id"]
             full = self.store.job(jid)
-            act = [d for d in full["designs"] if d["status"] in (RUNNING, "pending")]
+            act = [d for d in full["designs"] if d["status"] in (RUNNING, "pending", RECOVERY_REQUIRED)]
             if any(owner_alive((d.get("detail") or {}).get("owner")) for d in act):
-                continue            # another live process owns this job and will close it
+                continue
             if j["status"] == "finalizing":
-                # its closer died mid-package: let one runtime take it back
                 if time.time() - (j.get("updated") or 0) > 600 and self.store.claim_job(jid, ("finalizing",), RUNNING):
                     self.finalize_if_done(jid)
                 continue
@@ -294,89 +262,154 @@ class Pipeline:
             if not resume:
                 continue
             spec = full.get("spec") or {}
-            n = 0
+            queued, blocked = [], False
             for d in act:
                 det = d.get("detail") or {}
                 if not self.store.claim_design(jid, d["name"], det.get("owner"), OWNER):
                     continue
-                if d["status"] == RUNNING:
-                    stop_orphan(det.get("pgid"), d["project"])
+                run = self.store.execution(det["execution_id"]) if det.get("execution_id") else None
+                safe = False
+                if run:
+                    if run["status"] in ("exited", "not_started", "interrupted"):
+                        safe = True
+                    elif run["pgid"] and run["boot_id"] == BOOT_ID:
+                        safe = stop_orphan(run["pgid"], d["project"], self.stop_grace,
+                                           expected_start=run["process_start"], execution_id=run["id"])
+                        if safe:
+                            self.store.update_execution(run["id"], OWNER, "interrupted")
+                    # Missing handles or another boot are unresolved, not evidence of no spawn.
+                elif det.get("execution_id"):
+                    safe = False  # a broken reference is not proof of no spawn
+                elif det.get("execution_protocol") == 1:
+                    # This protocol always commits begin_execution before any Popen.
+                    safe = True
+                elif d["status"] == "pending" and d["stage"] == "queued":
+                    safe = True  # the old runner changes stage before it can spawn
+                # Legacy running records have no execution marker. Even an
+                # empty original pgid cannot rule out a detached EDA child.
+                if not safe:
+                    if run:
+                        self.store.update_execution(run["id"], OWNER, "recovery_required")
+                    self._blocked(jid, d["name"], "无法确认旧执行已停止，需要恢复核对；未自动重跑")
+                    blocked = True
+                    continue
+                if self.store.cancel_requested(jid):
+                    self._update(jid, d["name"], status=CANCELLED,
+                                 event=("job", "cancelled", "已确认旧执行停止，取消完成", {}))
+                    continue
                 if not det.get("source") or not d.get("project"):
-                    self.store.set_design(jid, d["name"], status=FAILED,
-                                          detail={"failed_stage": d["stage"], "reason": "记录不完整，无法恢复（可重新提交）"})
+                    self._update(jid, d["name"], status=FAILED,
+                                 detail={"reason": "记录不完整，无法恢复"},
+                                 event=("job", "fail", "记录不完整，无法恢复", {}))
                     continue
-                restarts = int(det.get("restarts") or 0) + (1 if d["status"] == RUNNING else 0)
+                restarts = int(det.get("restarts") or 0) + (d["status"] != "pending")
                 if restarts > MAX_RESTARTS:
-                    msg = "运行中被中断了 %d 次，不再重试（可单独重新提交）" % restarts
-                    self.store.set_design(jid, d["name"], status=FAILED,
-                                          detail={"failed_stage": d["stage"], "reason": msg})
-                    self.store.event(jid, d["name"], d["stage"], "fail", msg)
+                    self._update(jid, d["name"], status=FAILED,
+                                 detail={"reason": "运行中被中断过多，不再重试"},
+                                 event=("job", "fail", "运行中被中断过多，不再重试", {}))
                     continue
-                self.store.set_design(jid, d["name"], status="pending", stage="prepare",
-                                      detail={"restarts": restarts})
-                self.store.event(jid, d["name"], "prepare", "warn",
-                                 "服务重启后从头重新运行" if d["status"] == RUNNING else "服务重启后继续排队")
+                self._update(jid, d["name"], status="pending", stage="queued",
+                             detail={"restarts": restarts, "execution_protocol": 1},
+                             event=("prepare", "warn", "已核对旧执行，准备从头恢复", {}))
+                queued.append(d)
+            if not blocked:
+                self.store.set_job(jid, RUNNING)
+            for d in queued:
+                det = d["detail"]
                 self.pool.submit(self._run_design, jid, d["name"], Path(det["source"]), det.get("top"),
                                  Path(d["project"]), spec.get("platform", "nangate45"), spec.get("output", "graph"))
-                n += 1
-            if n:
-                self.store.event(jid, None, "job", "info", "服务重启后恢复了 %d 个未完成的设计" % n)
+            if queued:
                 threading.Thread(target=self._watch_job, args=(jid,), daemon=True).start()
+            elif not blocked:
+                self.finalize_if_done(jid)
             touched.append(jid)
         return touched
 
     def _sh(self, jid: str, name: str, stage: str, cmd: list[str], project: Path,
             env: dict | None = None, timeout: int | None = None) -> int:
-        if jid in self._cancel:
-            raise Cancelled()
+        self._check_cancel(jid)
+        invocation = self.store.begin_execution(jid, name, stage, OWNER, BOOT_ID, cmd)
+        if invocation is None:
+            self._check_cancel(jid)
+            raise LostOwnership("execution admission refused")
         logdir = project / "agent_logs"
-        logdir.mkdir(parents=True, exist_ok=True)
-        e = dict(os.environ)
-        e.update({"NUM_CORES": str(self.cores), "OMP_NUM_THREADS": str(self.cores),
-                  "ORFS_TIMEOUT": str(self.stage_timeout)})
-        e.update(self.memory_env)
-        e.update(env or {})
-        with open(logdir / ("%s.log" % stage), "ab") as log:
-            log.write(("\n$ %s\n" % " ".join(cmd)).encode())
-            log.flush()
-            p = subprocess.Popen(cmd, cwd=repo_root(), env=e, stdout=log, stderr=subprocess.STDOUT,
-                                 start_new_session=True)
-            with self._lock:
-                self._procs[(jid, name)] = p
-            # the stage's process group, so a restarted server can stop it if this
-            # process dies without doing so (it would race the re-run on one FLOW_VARIANT)
-            self.store.set_design(jid, name, detail={"pgid": p.pid})
-            try:
-                rc = p.wait(timeout=timeout or self.stage_timeout)
-            except subprocess.TimeoutExpired:
-                os.killpg(p.pid, signal.SIGTERM)
-                time.sleep(10)
-                if p.poll() is None:
-                    os.killpg(p.pid, signal.SIGKILL)
-                rc = 124
-            finally:
+        e = {**os.environ, "NUM_CORES": str(self.cores), "OMP_NUM_THREADS": str(self.cores),
+             "ORFS_TIMEOUT": str(self.stage_timeout), **self.memory_env, **(env or {}),
+             "EDACODE_EXECUTION_ID": invocation}
+        p = None
+        confirmed = False
+        start = None
+        try:
+            logdir.mkdir(parents=True, exist_ok=True)
+            with open(logdir / (stage + ".log"), "ab") as log:
+                log.write(("\n$ %s\n" % " ".join(cmd)).encode())
+                log.flush()
+                self._check_cancel(jid)
+                p = subprocess.Popen(cmd, cwd=repo_root(), env=e, stdout=log, stderr=subprocess.STDOUT,
+                                     start_new_session=True)
+                start = _proc_start(p.pid)
+                with self._lock:
+                    self._procs[(jid, name)] = p
+                if not self.store.update_execution(invocation, OWNER, "running", pgid=p.pid, process_start=start):
+                    raise LostOwnership("execution owner changed after spawn")
+                deadline = time.monotonic() + (timeout or self.stage_timeout)
+                timed_out = False
+                while True:
+                    self._check_cancel(jid)
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        timed_out = True
+                        break
+                    try:
+                        rc = p.wait(timeout=min(0.2, remaining))
+                        break
+                    except subprocess.TimeoutExpired:
+                        pass
+                confirmed = stop_orphan(p.pid, str(project), self.stop_grace,
+                                        expected_start=start, execution_id=invocation)
+                if not confirmed:
+                    raise RecoveryRequired("阶段结束但无法确认进程组已停止")
+                p.wait(timeout=self.stop_grace + 1)
+                if timed_out:
+                    rc = 124
+                if not self.store.update_execution(invocation, OWNER, "exited", exit_code=rc):
+                    raise LostOwnership("execution owner changed before completion")
+                self._check_cancel(jid)
+                return rc
+        finally:
+            if p is None:
+                self.store.update_execution(invocation, OWNER, "not_started")
+            else:
+                if not confirmed:
+                    confirmed = stop_orphan(p.pid, str(project), self.stop_grace,
+                                            expected_start=start, execution_id=invocation)
+                    if confirmed:
+                        p.wait(timeout=self.stop_grace + 1)
+                        self.store.update_execution(invocation, OWNER, "interrupted", exit_code=p.returncode)
+                    else:
+                        self.store.update_execution(invocation, OWNER, "recovery_required")
                 with self._lock:
                     self._procs.pop((jid, name), None)
-        if jid in self._cancel:
-            raise Cancelled()
-        return rc
+                if not confirmed:
+                    raise RecoveryRequired("无法确认进程组已停止；保留工作目录等待恢复核对")
 
     def _stage(self, jid: str, name: str, stage: str, msg: str | None = None) -> None:
-        self.store.set_design(jid, name, stage=stage, status=RUNNING)
-        self.store.event(jid, name, stage, "start", msg or STAGE_LABEL[stage])
+        self._check_cancel(jid)
+        self._update(jid, name, stage=stage, status=RUNNING,
+                     event=(stage, "start", msg or STAGE_LABEL[stage], {}))
 
     def _ok(self, jid, name, stage, msg, data=None):
-        self.store.event(jid, name, stage, "ok", msg, data)
+        self.store.event(jid, name, stage, "ok", msg, data, expected_owner=OWNER)
 
     def _fail(self, jid, name, stage, msg, data=None):
-        self.store.event(jid, name, stage, "fail", msg, data)
-        self.store.set_design(jid, name, status=FAILED, detail={"failed_stage": stage, "reason": msg})
+        self._check_cancel(jid)
+        self._update(jid, name, status=FAILED, detail={"failed_stage": stage, "reason": msg},
+                     event=(stage, "fail", msg, data or {}))
 
     def _run_design(self, jid: str, name: str, src: Path, top: str | None, pdir: Path,
                     platform: str, output: str = "graph") -> None:
         def stop():
-            if jid in self._cancel:
-                raise Cancelled()
+            self._check_cancel(jid)
 
         def waiting():
             self.store.event(jid, name, "prepare", "start",
@@ -396,18 +429,34 @@ class Pipeline:
                         if freed:
                             self.store.event(jid, name, "job", "info", "已删除中间版图文件 %.1f MB（数据集与报告保留）"
                                              % (freed / 1e6))
-                finally:
+                except (RecoveryRequired, LostOwnership):
+                    raise
+                else:
+                    # Clean only after confirmed execution, never on an uncertain stop.
                     # the ORFS checkout's per-variant dirs duplicate backend/RUN_*
                     freed = housekeeping.drop_orfs_copies(pdir)
                     if freed:
                         self.store.event(jid, name, "job", "info",
                                          "已清理 ORFS 目录中的重复中间文件 %.1f MB" % (freed / 1e6))
         except Cancelled:
-            self.store.set_design(jid, name, status=CANCELLED)
-            self.store.event(jid, name, "job", "cancel", "已取消")
+            self.store.set_design(jid, name, expected_owner=OWNER, status=CANCELLED,
+                                  event=("job", "cancelled", "已确认停止，取消完成", {}))
+        except RecoveryRequired as e:
+            self._blocked(jid, name, str(e))
+        except LostOwnership:
+            return
         except Exception as e:                                   # noqa: BLE001
-            self._fail(jid, name, self.store.design(jid, name).get("stage") or "prepare",
-                       "内部错误：%s" % e)
+            # Cancellation or ownership may change while reporting an exception.
+            # Do not let that secondary exception strand a design as running.
+            if any(run["design"] == name for run in self.store.active_executions(jid)):
+                self._blocked(jid, name, "执行异常且停止尚未确认：%s" % e)
+            elif self.store.cancel_requested(jid):
+                self.store.set_design(jid, name, expected_owner=OWNER, status=CANCELLED,
+                                      event=("job", "cancelled", "已确认停止，取消完成", {}))
+            else:
+                self.store.set_design(jid, name, expected_owner=OWNER, status=FAILED,
+                                      detail={"reason": "内部错误：%s" % e},
+                                      event=("job", "fail", "内部错误：%s" % e, {}))
 
     def _run_design_inner(self, jid, name, src, top, pdir, platform, output="graph") -> None:
         S = str(signoff_scripts())
@@ -421,7 +470,7 @@ class Pipeline:
         self._ok(jid, name, "prepare", "顶层模块 %s（%s），%d 个源文件"
                  % (meta["top"], meta.get("top_source") or "指定", len(meta["files"])),
                  {"top": meta["top"], "top_source": meta.get("top_source")})
-        self.store.set_design(jid, name, detail={"top": meta["top"], "top_source": meta.get("top_source"),
+        self._update(jid, name, detail={"top": meta["top"], "top_source": meta.get("top_source"),
                                                  "frontend_fixes": meta["frontend_fixes"]})
         for fx in meta["frontend_fixes"]:
             self._ok(jid, name, "prepare", "前端修复：%s（%s）" % (fx["detail"], fx["file"]), fx)
@@ -444,9 +493,9 @@ class Pipeline:
                 msg = "综合失败：%s" % (self._last_error(pdir) if run else "rc=%s" % rc)
                 if meta["missing_data_files"]:
                     msg += "：缺少数据文件 %s" % "、".join(m["reference"] for m in meta["missing_data_files"])
+                self._ingest(jid, name, pdir)
                 self._fail(jid, name, "synth", msg, {"log_tail": self._tail(pdir, "synth"),
                                                      "frontend_tried": tried})
-                self._ingest(jid, name, pdir)
                 return
             tried += [h["id"] for h in hits]
             meta = proj.add_synth_hooks(pdir, [h["id"] for h in hits])
@@ -455,11 +504,11 @@ class Pipeline:
                 meta["frontend_fixes"].append(fx)
                 self._ok(jid, name, "synth", "前端修复：%s，重新综合" % h["label"], fx)
             (pdir / "metadata.json").write_text(json.dumps(meta, indent=2))
-            self.store.set_design(jid, name, detail={"frontend_fixes": meta["frontend_fixes"]})
+            self._update(jid, name, detail={"frontend_fixes": meta["frontend_fixes"]})
         # size
         self._stage(jid, name, "size")
         sizing = proj.apply_sizing(pdir, stat, run / "results" / "1_2_yosys.v")
-        self.store.set_design(jid, name, detail={"sizing": sizing})
+        self._update(jid, name, detail={"sizing": sizing})
         self._ok(jid, name, "size", "%d 个单元，die %g µm（%s），时钟 %g ns（%s）"
                  % (sizing["cells"], sizing["die_side_um"],
                     {"area": "由面积决定", "pins": "由引脚数决定", "pdn_floor": "电源网格下限",
@@ -494,21 +543,21 @@ class Pipeline:
             meta = json.loads((pdir / "metadata.json").read_text())
             meta.setdefault("flow_fixes", []).append(fx)
             (pdir / "metadata.json").write_text(json.dumps(meta, indent=2))
-            self.store.set_design(jid, name, detail={"sizing": sz, "flow_fixes": meta["flow_fixes"]})
+            self._update(jid, name, detail={"sizing": sz, "flow_fixes": meta["flow_fixes"]})
             self._ok(jid, name, "flow", "自动修复：%s，从 floorplan 重跑" % fx["detail"], fx)
             rc = self._sh(jid, name, "flow", ["bash", S + "/flow/run_orfs.sh", str(pdir), platform], pdir,
                           env={"FROM_STAGE": "floorplan", "NUM_CORES": str(cores), "OMP_NUM_THREADS": str(cores)})
         if rc != 0:
+            self._ingest(jid, name, pdir)
             self._fail(jid, name, "flow", "布局布线失败（rc=%s）：%s" % (rc, self._last_error(pdir)),
                        {"log_tail": self._tail(pdir, "flow")})
-            self._ingest(jid, name, pdir)
             return
         self._ok(jid, name, "flow", "布局布线完成")
         # signoff
         self._stage(jid, name, "signoff")
         self._sh(jid, name, "signoff", ["bash", str(tools_dir() / "run_signoff.sh"), str(pdir), platform], pdir)
         v = signoff_verdict(pdir)
-        self.store.set_design(jid, name, detail={"signoff": v})
+        self._update(jid, name, detail={"signoff": v})
         (self._ok if v["dual_clean"] else self._fail_soft)(
             jid, name, "signoff", "DRC %s（%s 处），LVS %s" % (v["drc"], v["drc_violations"] or 0, v["lvs"]), v)
         # repair
@@ -519,10 +568,10 @@ class Pipeline:
             v = signoff_verdict(pdir)
             fixes = [json.loads(l) for l in (pdir / "reports" / "fix_log.jsonl").read_text().splitlines()
                      if l.strip()] if (pdir / "reports" / "fix_log.jsonl").is_file() else []
-            self.store.set_design(jid, name, detail={"signoff": v, "repair": fixes[-5:]})
+            self._update(jid, name, detail={"signoff": v, "repair": fixes[-5:]})
             if not v["dual_clean"]:
-                self._fail(jid, name, "repair", "修复后仍未双清：DRC %s，LVS %s" % (v["drc"], v["lvs"]), v)
                 self._ingest(jid, name, pdir)
+                self._fail(jid, name, "repair", "修复后仍未双清：DRC %s，LVS %s" % (v["drc"], v["lvs"]), v)
                 return
             self._ok(jid, name, "repair", "修复成功，DRC/LVS 均已清零", v)
         self._ingest(jid, name, pdir)
@@ -531,9 +580,9 @@ class Pipeline:
             if n_ok is None:
                 return
             self._preview(jid, name, pdir)
-            self.store.set_design(jid, name, status=PASSED, stage="done",
-                                  detail={"verify": {"passed": n_ok, "total": n_all}, "output": "image"})
-            self.store.event(jid, name, "done", "ok", "完成：签核通过，图像数据集已校验")
+            self._update(jid, name, status=PASSED, stage="done",
+                         detail={"verify": {"passed": n_ok, "total": n_all}, "output": "image"},
+                         event=("done", "ok", "完成：签核通过，图像数据集已校验", {}))
             return
         # graph
         self._stage(jid, name, "graph")
@@ -557,7 +606,7 @@ class Pipeline:
             # name the failing checks: "288/295" alone tells nobody whether it is a
             # stale input, a broken label or a physically extreme but genuine value
             bad = [r.get("check") for r in res if not r.get("ok")]
-            self.store.set_design(jid, name, detail={"verify": {"passed": n_ok, "total": len(res),
+            self._update(jid, name, detail={"verify": {"passed": n_ok, "total": len(res),
                                                                 "failed_checks": bad[:20]}})
             self._fail(jid, name, "verify", "数据集校验未通过：%d/%d，未通过项：%s"
                        % (n_ok, len(res), "；".join(bad[:5]) + ("……" if len(bad) > 5 else "")),
@@ -566,9 +615,9 @@ class Pipeline:
         self._ok(jid, name, "verify", "数据集校验通过：%d/%d 项" % (n_ok, len(res)),
                  {"checks": len(res)})
         self._preview(jid, name, pdir)
-        self.store.set_design(jid, name, status=PASSED, stage="done",
-                              detail={"verify": {"passed": n_ok, "total": len(res)}})
-        self.store.event(jid, name, "done", "ok", "完成：签核通过，数据集已校验")
+        self._update(jid, name, status=PASSED, stage="done",
+                     detail={"verify": {"passed": n_ok, "total": len(res)}},
+                     event=("done", "ok", "完成：签核通过，数据集已校验", {}))
 
     def _preview(self, jid, name, pdir: Path) -> None:
         """Layout picture for the UI (best effort, never decides anything)."""
@@ -593,7 +642,7 @@ class Pipeline:
                        "图像数据集未通过（status=%s）%s" % (rep.get("status"), rep.get("reason") or "")
                        + ("，未通过项：" + "；".join(bad[:5]) if bad else ""), rep)
             return None, None
-        self.store.set_design(jid, name, detail={"image": {"shape": rep.get("shape"), "features": rep.get("features"),
+        self._update(jid, name, detail={"image": {"shape": rep.get("shape"), "features": rep.get("features"),
                                                            "labels": rep.get("labels")}})
         self._ok(jid, name, "verify", "图像数据集校验通过：%d/%d 项（%s 网格，%d 个特征通道 + %d 个标签通道）"
                  % (v["passed"], v["total"], "×".join(map(str, rep.get("shape") or [])),
@@ -601,7 +650,7 @@ class Pipeline:
         return v["passed"], v["total"]
 
     def _fail_soft(self, jid, name, stage, msg, data=None):
-        self.store.event(jid, name, stage, "warn", msg, data)
+        self.store.event(jid, name, stage, "warn", msg, data, expected_owner=OWNER)
 
     def _ingest(self, jid, name, pdir: Path) -> None:
         """Every flow -- clean, failed or partial -- goes into the knowledge store."""
@@ -613,7 +662,7 @@ class Pipeline:
             if self.memory_env["R2G_MEMORY_BACKEND"] == "legacy":
                 cmd += ["--db", self.memory_env["R2G_KNOWLEDGE_DB"]]
             rc = self._sh(jid, name, "ingest", cmd, pdir, timeout=600)
-        except Cancelled:
+        except (Cancelled, RecoveryRequired, LostOwnership):
             raise
         except Exception as e:                                    # noqa: BLE001
             rc, err = -1, str(e)

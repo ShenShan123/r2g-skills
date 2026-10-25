@@ -219,7 +219,10 @@ async def batch_scan(req: Request):
 
 @app.post("/api/jobs/{jid}/cancel")
 def cancel(jid: str):
-    return tools.cancel_job(jid)
+    result = tools.cancel_job(jid)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result
 
 
 @app.get("/api/jobs/{jid}/designs/{name}/download")

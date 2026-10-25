@@ -20,7 +20,6 @@ from .paths import PKG_DIR, r2g_home
 from .tool_outputs import ToolContext, ToolOutputError, ToolOutputStore
 
 MAX_STEPS = 12
-MAX_TOOL_RESULT_CHARS = 12000
 
 
 def system_prompt() -> str:
@@ -61,13 +60,6 @@ class SessionStore:
             rs = c.execute("SELECT id, created, updated, title FROM sessions ORDER BY updated DESC LIMIT ?",
                            (limit,)).fetchall()
         return [dict(r) for r in rs]
-
-
-def _clip(obj) -> str:
-    s = json.dumps(obj, ensure_ascii=False, default=str)
-    if len(s) > MAX_TOOL_RESULT_CHARS:
-        s = s[:MAX_TOOL_RESULT_CHARS] + "...(truncated)"
-    return s
 
 
 def run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):

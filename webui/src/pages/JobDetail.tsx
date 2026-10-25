@@ -23,6 +23,7 @@ export default function JobDetail() {
   const [events, setEvents] = useState<JobEvent[]>([]);
   const [sel, setSel] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
+  const [cancelError, setCancelError] = useState("");
   const lastEv = useRef(0);
 
   useEffect(() => {
@@ -69,7 +70,16 @@ export default function JobDetail() {
       {/* what is going on, in one sentence, with the one action that matters now */}
       <div className={`card mt-5 flex flex-wrap items-center gap-4 p-4 md:p-5 ${!active && passed ? "border-ok/40" : ""}`}>
         <div className="min-w-0 flex-1">
-          {active ? (
+          {job.status === "recovery_required" ? (
+            <><div className="font-semibold text-warn">需要恢复核对</div>
+              <p className="mt-1 text-sm text-muted">尚未确认旧执行已停止，任务已暂停自动重跑。请查看设计状态与执行记录。</p></>
+          ) : job.status === "cancelling" ? (
+            <><div className="font-semibold text-warn">正在取消</div>
+              <p className="mt-1 text-sm text-muted">取消请求已保存，正在等待执行进程停止。</p></>
+          ) : job.status === "cancelled" ? (
+            <><div className="font-semibold">已取消</div>
+              <p className="mt-1 text-sm text-muted">执行已停止，已有日志与结果仍可查看。</p></>
+          ) : active ? (
             <>
               <div className="flex items-center gap-2 font-semibold"><Loader2 size={17} className="animate-spin text-run" />
                 正在处理 · 已完成 {passed + failed}/{ds.length}</div>
@@ -84,7 +94,12 @@ export default function JobDetail() {
             </>)}
         </div>
         {active && passed > 0 && <PartialDownload id={id} />}
-        {active && <button className="btn-ghost" onClick={() => api.cancel(id)}><Square size={14} /> 取消</button>}
+        {active && <button className="btn-ghost" disabled={!!job.cancel_requested_at} onClick={async () => {
+          setCancelError("");
+          try { await api.cancel(id); setJob(await api.job(id)); }
+          catch (e: any) { setCancelError(e.message); }
+        }}><Square size={14} /> {job.cancel_requested_at ? "已请求取消" : "取消"}</button>}
+        {cancelError && <p role="alert" className="text-bad">{cancelError}</p>}
         {job.result?.package && <a className="btn-primary" href={`/api/jobs/${id}/download`}><Download size={16} /> 下载数据集</a>}
       </div>
 
@@ -156,7 +171,7 @@ function BatchList({ jobId, ds, onOpen }: { jobId: string; ds: Design[]; onOpen:
     && (!q || d.name.toLowerCase().includes(q.toLowerCase())));
   const pages = Math.max(1, Math.ceil(rows.length / PAGE));
   const shown = rows.slice(page * PAGE, page * PAGE + PAGE);
-  const tabs: [string, string][] = [["all", "全部"], ["running", "运行中"], ["pending", "排队中"], ["passed", "通过"], ["failed", "失败"]];
+  const tabs: [string, string][] = [["all", "全部"], ["running", "运行中"], ["pending", "排队中"], ["passed", "通过"], ["failed", "失败"], ["recovery_required", "需核对"], ["cancelled", "已取消"]];
   return (
     <div className="mt-4 space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -216,6 +231,7 @@ function plain(d: Design): string {
   if (d.status === "passed") return v ? `完成：签核通过，数据集校验 ${v.passed}/${v.total} 项全部通过` : "完成";
   if (d.status === "failed") return d.detail?.reason ?? "失败";
   if (d.status === "cancelled") return "已取消";
+  if (d.status === "recovery_required") return d.detail?.reason ?? "需要核对旧执行状态，未自动重跑";
   return `正在${STAGE_ZH[d.stage] ?? d.stage}…`;
 }
 

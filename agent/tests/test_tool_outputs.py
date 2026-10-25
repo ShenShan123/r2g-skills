@@ -35,7 +35,7 @@ def test_long_result_is_readable_after_reopen_and_in_model_context(fake_adapter,
     raw = json.dumps(original, ensure_ascii=False)
     assert ref["sha256"] == hashlib.sha256(raw.encode()).hexdigest()
     assert ref["original_bytes"] == len(raw.encode())
-    assert "ERROR_LOCATION_317" not in agent_loop._clip(original)  # paired legacy control
+    assert "ERROR_LOCATION_317" not in raw[:12000]  # legacy head-only clipping lost it
 
 
 def test_small_result_keeps_existing_wire_shape():

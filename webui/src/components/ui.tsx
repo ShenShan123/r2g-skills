@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleDashed, Loader2, XCircle, Ban, Minus } from "lucide-react";
+import { CheckCircle2, CircleDashed, Loader2, XCircle, Ban, Minus, AlertTriangle } from "lucide-react";
 import { useId } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -11,8 +11,10 @@ export const STATUS: Record<string, { label: string; cls: string; Icon: any }> =
   finalizing: { label: "打包中", cls: "bg-run/15 text-run", Icon: Loader2 },
   pending: { label: "排队中", cls: "bg-faint/15 text-muted", Icon: CircleDashed },
   cancelled: { label: "已取消", cls: "bg-warn/15 text-warn", Icon: Ban },
+  cancelling: { label: "正在取消", cls: "bg-warn/15 text-warn", Icon: Loader2 },
+  recovery_required: { label: "需要恢复核对", cls: "bg-warn/15 text-warn", Icon: AlertTriangle },
 };
-export const isActive = (s: string) => s === "running" || s === "pending" || s === "finalizing";
+export const isActive = (s: string) => ["running", "pending", "finalizing", "cancelling", "recovery_required"].includes(s);
 
 export function StatusBadge({ status }: { status: string }) {
   const s = STATUS[status] ?? STATUS.pending;

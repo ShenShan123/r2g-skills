@@ -19,6 +19,7 @@ export type Job = {
   id: string; created: number; updated: number; status: string; title: string;
   spec: Record<string, any>; result: Record<string, any> | null;
   designs?: Design[]; counts?: Record<string, number>;
+  cancel_requested_at?: number | null; cancelled_at?: number | null;
 };
 export type ScanDesign = { name: string; path: string; files: number; top: string | null; top_source: string | null; problem: string | null };
 export type Scan = { root: string; total: number; ok: number; skipped: number; designs: ScanDesign[] };

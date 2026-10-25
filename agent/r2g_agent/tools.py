@@ -365,8 +365,10 @@ def disk_usage() -> dict:
 
 @tool("Cancel a running job.", _obj({"job_id": {"type": "string"}}, ["job_id"]))
 def cancel_job(job_id: str) -> dict:
-    RT.pipeline.cancel(job_id)
-    return {"job_id": job_id, "cancel_requested": True}
+    receipt = RT.pipeline.cancel(job_id)
+    if receipt is None:
+        return {"error": "no such job"}
+    return {"job_id": job_id, "cancel_requested": bool(receipt["cancel_requested_at"]), **receipt}
 
 
 @tool("Where the finished dataset of a job is and what it contains (only designs that passed sign-off "
