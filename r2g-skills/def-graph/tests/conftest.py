@@ -19,6 +19,7 @@ SKILL_ROOT = Path(__file__).resolve().parents[1]
 # package) resolves; then the per-stage worker dirs so `import compute_feature_stats`,
 # `import extract_congestion`, `import build_graphs`, `import graph_lib` etc. resolve.
 for _sub in (
+    SKILL_ROOT / "tests",
     SKILL_ROOT / "scripts" / "extract",
     SKILL_ROOT / "scripts" / "extract" / "labels",
     SKILL_ROOT / "scripts" / "extract" / "features",

@@ -17,6 +17,7 @@ import importlib.util
 import json
 import os
 import sys
+from lvs_fixture import add_lvs_evidence
 
 _FLOW = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                      "scripts", "flow")
@@ -56,6 +57,7 @@ def _proj(tmp_path, *, drc_digest=None, lvs_digest=None, gds=GDS_BYTES,
             f.write(json.dumps(recd) + "\n")
     if record is not None:
         (proj / "backend" / ".r2g_signoff_run").write_text(record)
+    add_lvs_evidence(proj, run, record_summary=False, create_gds=False)
     return str(proj), str(run)
 
 

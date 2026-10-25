@@ -186,22 +186,37 @@ def wait_for_disk(min_gb, should_stop=lambda: None, on_wait=lambda free: None, p
         time.sleep(poll)
 
 
-# per-run copies run_orfs.sh makes (every stage's ODB/DEF/GDS, merged libs);
-# a passed design's dataset, reports, logs and RTL do not need them
+# Per-run checkpoints are regenerable; final signoff inputs remain reviewable.
 _SLIM = ("results", "objects", "final")
+# Preserve the small final inputs needed to re-audit signoff. ODB/checkpoints
+# remain regenerable; the actual GDS/netlist/constraint/SPEF bytes are evidence.
+_SIGNOFF_EVIDENCE = {".gds", ".def", ".v", ".vg", ".cdl", ".cir", ".spice", ".sdc", ".spef"}
 
 
 def slim_passed(project: Path) -> int:
-    """Delete a PASSED design's backend binaries. Returns bytes freed."""
+    """Delete regenerable checkpoints, retaining final signoff evidence."""
     freed = 0
     for run in (project / "backend").glob("RUN_*"):
         for k in _SLIM:
             p = run / k
-            if p.is_dir():
-                freed += dir_size(p)
-                shutil.rmtree(p, ignore_errors=True)
+            if p.is_dir() and not p.is_symlink():
+                if k in ("results", "final"):
+                    for f in p.rglob("*"):
+                        keep = (f.suffix.lower() in _SIGNOFF_EVIDENCE
+                                and (k == "final" or f.stem == "6_final"))
+                        if f.is_file() and not f.is_symlink() and not keep:
+                            freed += f.stat().st_size
+                            f.unlink()
+                    for folder in sorted(p.rglob("*"), key=lambda f: len(f.parts), reverse=True):
+                        if folder.is_dir() and not folder.is_symlink() and not any(folder.iterdir()):
+                            folder.rmdir()
+                    if not any(p.iterdir()):
+                        p.rmdir()
+                else:
+                    freed += dir_size(p)
+                    shutil.rmtree(p, ignore_errors=True)
     if freed:
         (project / "backend" / "SLIMMED").write_text(
-            "results/objects/final of every run were deleted after the design passed;\n"
-            "its dataset, reports and logs are kept. Re-submit the design to rebuild them.\n")
+            "regenerable checkpoints/objects/ODB were deleted after acceptance;\n"
+            "final GDS/netlist/constraints/SPEF, dataset, reports and logs are retained as evidence.\n")
     return freed

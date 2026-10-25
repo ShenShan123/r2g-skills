@@ -33,22 +33,61 @@ TIMEOUT="${LVS_FALLBACK_TIMEOUT:-${LVS_TIMEOUT:-21600}}"
 KL="${KLAYOUT_CMD:-klayout}"; NG="${NETGEN_EXE:-netgen}"
 mkdir -p "$OUT"
 RES="$OUT/netgen_fallback.json"
+# Isolate output names per invocation. A failed extractor/comparer must never
+# consume files left by an earlier attempt in the same project.
+rm -f "$RES"
+OUT=$(mktemp -d "$OUT/attempt.XXXXXXXX") || exit 3
+EXTRACT_RC=""; COMPARE_RC=""
+INPUT_SHA=$(python3 - "$GDS" "$CDL" "$ASSETS/FreePDK45_extract.lylvs" "$ASSETS/nangate45_netgen_setup.tcl" <<'PY'
+import hashlib, json, sys
+def sha(path):
+    try:
+        h = hashlib.sha256()
+        with open(path, 'rb') as stream:
+            for chunk in iter(lambda: stream.read(1048576), b''): h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+print(json.dumps({path: sha(path) for path in sys.argv[1:]}))
+PY
+) || exit 3
 
 emit() {  # verdict final detail
-  python3 - "$RES" "$1" "$2" "$3" "$KL" "$NG" <<'PY'
-import json, subprocess, sys, time
-out, verdict, final, detail, kl, ng = sys.argv[1:7]
+  python3 - "$RES" "$1" "$2" "$3" "$KL" "$NG" "$OUT" "$INPUT_SHA" "$EXTRACT_RC" "$COMPARE_RC" <<'PY'
+import hashlib, json, os, subprocess, sys, time
+from pathlib import Path
+out, verdict, final, detail, kl, ng, work, original, extract_rc, compare_rc = sys.argv[1:]
+def sha(path):
+    try:
+        h = hashlib.sha256()
+        with open(path, 'rb') as stream:
+            for chunk in iter(lambda: stream.read(1048576), b''): h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+inputs = json.loads(original)
+if verdict == 'match' and (any(not digest or sha(path) != digest for path, digest in inputs.items())
+                           or extract_rc != '0' or compare_rc != '0'):
+    verdict, detail = 'no_verdict', 'inputs_changed_or_execution_incomplete'
 def ver(cmd):
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         return (r.stdout or r.stderr).strip().splitlines()[0]
     except Exception:
         return None
-json.dump({"engine": "klayout_extract+netgen_compare", "verdict": verdict,
+doc = {"engine": "klayout_extract+netgen_compare", "verdict": verdict,
            "final": final or None, "detail": detail or None,
            "klayout": ver([kl, "-b", "-v"]), "netgen": ver([ng, "-batch", "quit"]),
-           "written_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")},
-          open(out, "w"), indent=2)
+           "extraction_exit_code": int(extract_rc) if extract_rc else None,
+           "comparison_exit_code": int(compare_rc) if compare_rc else None,
+           "input_sha256": inputs, "attempt_directory": Path(work).name,
+           "output_sha256": {name: sha(Path(work) / name) for name in
+                             ('layout.cir', 'schematic.cir', 'layout_bu.cir', 'schematic_bu.cir', 'netgen.rpt')},
+           "written_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+temporary = out + '.tmp'
+with open(temporary, 'w') as stream:
+    json.dump(doc, stream, indent=2)
+os.replace(temporary, out)
 PY
   echo "netgen fallback: verdict=$1 ${2:-$3}"
 }
@@ -62,7 +101,8 @@ timeout --kill-after=60 "$TIMEOUT" "$KL" -b -r "$ASSETS/FreePDK45_extract.lylvs"
   -rd target_netlist="$OUT/target.cir" -rd extracted_out="$OUT/layout.cir" \
   -rd schematic_out="$OUT/schematic.cir" > "$OUT/extract.log" 2>&1
 rc=$?
-if [[ ! -s "$OUT/layout.cir" || ! -s "$OUT/schematic.cir" ]]; then
+EXTRACT_RC="$rc"
+if [[ $rc -ne 0 || ! -s "$OUT/layout.cir" || ! -s "$OUT/schematic.cir" ]]; then
   emit no_verdict "" "extract_failed(rc=$rc)"; exit 4
 fi
 tl=$(python3 -I "$HERE/../extract/reorder_spice.py" "$OUT/layout.cir" "$OUT/layout_bu.cir" --top "$TOP") \
@@ -72,6 +112,10 @@ ts=$(python3 -I "$HERE/../extract/reorder_spice.py" "$OUT/schematic.cir" "$OUT/s
 ( cd "$OUT" && timeout --kill-after=60 "$TIMEOUT" "$NG" -batch lvs "layout_bu.cir $tl" \
     "schematic_bu.cir $ts" "$ASSETS/nangate45_netgen_setup.tcl" netgen.rpt -json > netgen.log 2>&1 )
 rc=$?
+COMPARE_RC="$rc"
+if [[ $rc -ne 0 ]]; then
+  emit no_verdict "" "netgen_failed(rc=$rc)"; exit 4
+fi
 final=$(grep -h "^Final result" "$OUT/netgen.rpt" 2>/dev/null | tail -1)
 case "$final" in
   "Final result: Circuits match uniquely.") emit match "$final" "" ;;

@@ -74,8 +74,12 @@ export function stepStates(stage: string, status: string, repaired: boolean): St
 }
 
 /** A labelled step track: what has happened, what is happening, what is next. */
-export function StepTrack({ stage, status, repaired }: { stage: string; status: string; repaired: boolean }) {
+export function StepTrack({ stage, status, repaired, validation }: {
+  stage: string; status: string; repaired: boolean; validation?: "PASS" | "FAIL" | "UNKNOWN" | "STALE";
+}) {
   const st = stepStates(stage, status, repaired);
+  // Completed execution is distinct from a supported signoff verdict.
+  if (st[2] === "done" && validation && validation !== "PASS") st[2] = validation === "FAIL" ? "fail" : "review";
   const dot: Record<StepState, string> = {
     done: "bg-ok text-onaccent", now: "bg-run text-onaccent animate-pulse2", fail: "bg-bad text-onaccent",
     todo: "bg-panel2 text-faint border border-line", skip: "bg-panel2 text-faint border border-line",

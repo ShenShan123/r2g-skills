@@ -384,15 +384,17 @@ def log(jid: str, name: str, stage: str, lines: int = 200):
 def reports(jid: str, name: str):
     p = _design_project(jid, name) / "reports"
     out = {}
-    for f in ("drc.json", "lvs.json", "ppa.json", "graph_dataset.json"):
+    for f in ("drc.json", "lvs.json", "rcx.json", "ppa.json", "graph_dataset.json", "verification_review.json"):
         try:
-            out[f[:-5]] = json.loads((p / f).read_text())
+            out["validation" if f == "verification_review.json" else f[:-5]] = json.loads((p / f).read_text())
         except (OSError, ValueError):
             pass
     v = p / "verify.json"
     if v.is_file():
         res = json.loads(v.read_text()).get("results") or []
         out["verify"] = {"passed": sum(1 for r in res if r.get("ok")), "total": len(res)}
+    from .validation import review
+    out["validation"] = review(p.parent)  # Fresh read-only review; saved PASS is not its own evidence.
     return out
 
 

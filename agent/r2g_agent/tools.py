@@ -35,7 +35,7 @@ REGISTRY: dict[str, dict] = {}
 REVIEW_TOOLS = frozenset({"list_examples", "job_status", "list_jobs", "design_detail", "read_log",
                          "dataset_info", "read_rtl", "read_tool_output", "read_session_history",
                          "flow_params", "knowledge_lookup", "disk_usage", "propose_rtl_repair",
-                         "eda_capabilities", "task_skill", "plan_next_step"})
+                         "eda_capabilities", "task_skill", "plan_next_step", "review_evidence"})
 
 
 def tool(description: str, parameters: dict, *, session_scoped: bool = False):
@@ -274,7 +274,8 @@ def job_status(job_id: str) -> dict:
                         "stage": STAGE_LABEL.get(d["stage"], d["stage"]),
                         "sizing": {k: det.get("sizing", {}).get(k) for k in ("cells", "die_side_um", "period_ns")}
                         if det.get("sizing") else None,
-                        "signoff": det.get("signoff"), "failed_stage": det.get("failed_stage"),
+                        "signoff": det.get("signoff"), "validation": _validation_summary(det),
+                        "failed_stage": det.get("failed_stage"),
                         "reason": det.get("reason")})
     return {"job_id": job_id, "status": j["status"], "title": j["title"], "result": j.get("result"),
             "designs": designs}
@@ -317,6 +318,7 @@ def design_detail(job_id: str, design: str) -> dict:
         return {"error": "no such design in job"}
     evs = [e for e in RT.store.events(job_id, limit=2000) if e["design"] == design][-15:]
     return {"design": design, "status": d["status"], "stage": d["stage"], "detail": d["detail"],
+            "validation": _validation_summary(d.get("detail") or {}),
             "events": [{"id": e["id"], "stage": e["stage"], "kind": e["kind"],
                         "message": e["message"], "data": e.get("data")} for e in evs]}
 
@@ -560,3 +562,26 @@ def inspect_design(path: str, top: str = "") -> dict:
 def check_design(path: str, top: str, check: str = "compile") -> dict:
     from . import design_checks
     return design_checks.check_design(path, top, check)
+
+
+def _validation_summary(detail: dict) -> dict:
+    from .validation import validation_summary
+    return validation_summary(detail)
+
+
+@tool("Independently review one design's actual verification reports and raw LVS evidence. "
+      "Returns final-result, quantitative and technical layers plus a claim/evidence table. "
+      "Missing evidence is UNKNOWN; STA is not functional simulation, cell matching is not "
+      "transistor validation, and recorded job status cannot override this review. Read-only: "
+      "does not rewrite old reports, authorize repair or award PASS from model text.",
+      _obj({"job_id": {"type": "string"}, "design": {"type": "string"},
+            "claims": {"type": "array", "maxItems": 32, "items": {"type": "object"},
+                       "description": "Optional claims to check: claim_id, kind, metric, claimed, verification_level. Observations come only from files."}},
+           ["job_id", "design"]))
+def review_evidence(job_id: str, design: str, claims: list | None = None) -> dict:
+    from .validation import review
+    record = RT.store.design(job_id, design)
+    if not record or not record.get("project"):
+        return {"error": "no such design with a project"}
+    return {"job_id": job_id, "design": design, "recorded_status": record["status"],
+            **review(Path(record["project"]), claims=claims)}

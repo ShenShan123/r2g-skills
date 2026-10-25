@@ -151,7 +151,7 @@ export default function Home() {
               <Link key={j.id} to={`/jobs/${j.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-panel2/60">
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{j.title}</div>
-                  <div className="text-xs text-muted">{fmtTime(j.created)} · {j.counts?.passed ?? 0}/{Object.values(j.counts ?? {}).reduce((a, b) => a + b, 0)} 通过</div>
+                  <div className="text-xs text-muted">{fmtTime(j.created)} · {j.counts?.passed ?? 0}/{Object.values(j.counts ?? {}).reduce((a, b) => a + b, 0)} 流程完成</div>
                 </div>
                 <StatusBadge status={j.status} />
               </Link>))}

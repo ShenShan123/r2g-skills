@@ -173,8 +173,7 @@ def test_status_incomplete_when_reached_devices_no_lvsdb(tmp_path):
 
 
 def test_status_incomplete_requires_no_lvsdb(tmp_path):
-    """If lvsdb IS present (somehow) and reached device extraction with a match verdict,
-    the status should be 'clean', NOT 'incomplete'."""
+    """A legacy match is retained as raw evidence but lacks three-layer verification."""
     clean_log = (
         "KLayout 0.30.7\n"
         '"extract_devices" in: FreePDK45.lylvs:123\n'
@@ -183,7 +182,7 @@ def test_status_incomplete_requires_no_lvsdb(tmp_path):
     proj = _make_project(tmp_path, log_6_lvs=clean_log, lvsdb=True)
     out = tmp_path / "lvs.json"
     result = _run_script(proj, out)
-    assert result["status"] == "clean", f"expected clean; got {result['status']!r}"
+    assert result["status"] == "unverified" and result["raw_status"] == "clean"
 
 
 def test_status_unknown_for_uninformative_log(tmp_path):
@@ -353,14 +352,14 @@ def _make_netgen_project(tmp_path: Path, ng: dict, *, also_klayout: str = "") ->
 
 
 def test_netgen_clean_is_honored(tmp_path):
-    """Netgen 'clean' verdict + no KLayout artifacts → status clean (not unknown)."""
+    """Keep the Netgen verdict source while requiring its quantitative adapter."""
     ng = {"tool": "netgen", "design": "memory_controller", "platform": "sky130hd",
           "status": "clean", "match": "match", "mismatch_class": "",
           "report_file": "/p/lvs/netgen_lvs.rpt", "log_file": "/p/lvs/netgen_lvs.log"}
     out = tmp_path / "lvs.json"
     result = _run_script(_make_netgen_project(tmp_path, ng), out)
-    assert result["status"] == "clean", result
-    assert result["mismatch_count"] == 0, result
+    assert result["status"] == "unverified" and result["raw_status"] == "clean", result
+    assert result["mismatch_count"] is None and result["raw_mismatch_count"] == 0, result
     assert result["tool"] == "netgen", result
 
 
@@ -404,7 +403,7 @@ def test_netgen_takes_precedence_when_fresher(tmp_path):
     os.utime(lvs_dir / "netgen_lvs_result.json", (2_000_000, 2_000_000))  # netgen newer
     out = tmp_path / "lvs.json"
     result = _run_script(proj, out)
-    assert result["status"] == "clean", result
+    assert result["status"] == "unverified" and result["raw_status"] == "clean", result
     assert result.get("tool") == "netgen", result
 
 
@@ -566,8 +565,8 @@ def test_stale_klayout_artifacts_after_rerun_not_reported_clean(tmp_path):
     assert res["mismatch_count"] is None, res
 
 
-def test_fresh_klayout_artifacts_still_clean(tmp_path):
-    """Guard must not over-fire: a match written in the same run as lvs_run.log stays clean."""
+def test_fresh_klayout_artifacts_retain_raw_match(tmp_path):
+    """Fresh legacy artifacts are unverified rather than incorrectly marked stale."""
     proj = _make_project(tmp_path, log_6_lvs="circuits match\n", lvsdb=True)
     lvs_dir = proj / "lvs"
     (lvs_dir / "lvs_run.log").write_text("make lvs\n", encoding="utf-8")
@@ -575,7 +574,8 @@ def test_fresh_klayout_artifacts_still_clean(tmp_path):
     st = (lvs_dir / "lvs_run.log").stat()
     os.utime(lvs_dir / "lvs_run.log", (st.st_atime, st.st_mtime - 5.0))
     res = _run_script(proj, tmp_path / "lvs_fresh.json")
-    assert res["status"] == "clean", res
+    assert res["status"] == "unverified" and res["raw_status"] == "clean", res
+    assert res["three_layer_audit"]["verdict"] == "UNKNOWN", res
 
 
 # ---------------------------------------------------------------------------
@@ -596,9 +596,10 @@ def test_fallback_match_supplies_the_verdict_for_a_crash(tmp_path):
     proj = _make_project(tmp_path, log_run=_CRASH_RUN_LOG, log_6_lvs=_CRASH_6LVS_LOG)
     _fallback(proj, "match", "Final result: Circuits match uniquely.")
     r = _run_script(proj, tmp_path / "lvs.json")
-    assert r["status"] == "clean" and r["reason"] == "netgen_fallback_match"
+    assert r["status"] == "unverified" and r["raw_status"] == "clean"
+    assert r["raw_reason"] == "netgen_fallback_match"
     assert r["lvs_by"] == "netgen_fallback" and r["klayout_status"] == "crash"
-    assert r["mismatch_count"] == 0
+    assert r["mismatch_count"] is None and r["raw_mismatch_count"] == 0
 
 
 def test_fallback_mismatch_is_a_fail(tmp_path):
@@ -629,7 +630,7 @@ def test_fallback_never_overrides_a_klayout_verdict(tmp_path):
                          log_run="Congratulations! Netlists match.\n", lvsdb=True)
     _fallback(proj, "mismatch", "Final result: Netlists do not match.")
     r = _run_script(proj, tmp_path / "lvs.json")
-    assert r["status"] == "clean" and "lvs_by" not in r
+    assert r["status"] == "unverified" and r["raw_status"] == "clean" and "lvs_by" not in r
 
 
 def test_fresh_layout_invalidation_overrides_match_log(tmp_path):

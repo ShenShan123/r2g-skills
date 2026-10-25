@@ -27,7 +27,7 @@ export default function Jobs() {
                 <div className="truncate font-medium">{j.title}</div>
                 <div className="mt-0.5 text-xs text-muted">
                   {fmtTime(j.created)} · {OUTPUT_LABEL[j.spec?.output ?? "graph"]} ·{" "}
-                  <span className="text-ok">{c.passed ?? 0} 通过</span>
+                  <span>{c.passed ?? 0} 流程完成</span>
                   {(c.failed ?? 0) > 0 && <span className="text-bad"> · {c.failed} 失败</span>}
                   <span> · 共 {total}</span>
                 </div>

@@ -52,6 +52,7 @@ import glob
 import hashlib
 import json
 import os
+from pathlib import Path
 import sys
 
 # Statuses the signoff step itself treats as acceptable (fix_signoff.sh's
@@ -85,12 +86,37 @@ def _check_drc(reports_dir):
     return out
 
 
-def _check_lvs(reports_dir):
+def _audit_lvs(project):
+    """Use the same read-only raw-evidence audit as the signoff producer."""
+    import importlib.util
+    script = Path(__file__).resolve().parents[3] / "signoff-loop/scripts/extract/lvs_audit.py"
+    try:
+        spec = importlib.util.spec_from_file_location("r2g_raw_lvs_audit", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.audit(project, project / "lvs")
+    except Exception as exc:
+        return {"schema_version": 1, "verdict": "UNKNOWN", "layers": [],
+                "reasons": ["raw_auditor_unavailable:" + type(exc).__name__]}
+
+
+def _check_lvs(reports_dir, run_dir=None):
     j = _load_json(os.path.join(reports_dir, "lvs.json"))
     if j is None:
         return {"status": "missing", "detail": "reports/lvs.json not found — LVS never ran (or ran elsewhere)"}
     st = str(j.get("status", "unknown"))
     out = {"status": st, "mismatch_count": j.get("mismatch_count")}
+    if st == "clean":
+        checked = _audit_lvs(Path(reports_dir).resolve().parent)
+        out["three_layer_audit"] = checked
+        final = next((layer for layer in checked.get("layers", []) if layer.get("id") == "final_result"), {})
+        actual_tag = final.get("evidence", {}).get("run_tag")
+        if checked.get("verdict") != "PASS" or (run_dir and actual_tag != Path(run_dir).name):
+            out.update(status="unverified", raw_status=st, category="unverified", mismatch_count=None,
+                       detail="LVS raw three-layer evidence is not verified for the selected backend run",
+                       reason=("lvs_run_binding_mismatch" if checked.get("verdict") == "PASS"
+                               else "lvs_three_layer_audit_" + str(checked.get("verdict", "UNKNOWN")).lower()))
+            return out
     if st == "error":
         # The checker could not run to a verdict (e.g. powered_netlist_unavailable:
         # the powered netlist could not be written). Blocks like any unverified LVS,
@@ -820,7 +846,7 @@ def evaluate(project_dir, run_dir, def_path=None):
     reports_dir = os.path.join(project_dir, "reports")
     checks = {
         "drc": _check_drc(reports_dir),
-        "lvs": _check_lvs(reports_dir),
+        "lvs": _check_lvs(reports_dir, run_dir),
         "orfs": _check_orfs(run_dir),
         "route": _check_route(reports_dir, run_dir),
         "antenna": _check_antenna(reports_dir),
@@ -950,7 +976,7 @@ def main():
         for k in verdict["blockers"])
     print(f"signoff gate: NOT SIGNED OFF — {detail}", file=sys.stderr)
     print(f"  verdict recorded in {out}", file=sys.stderr)
-    if mode == "enforce":
+    if mode in ("enforce", "strict"):
         return 3
     print("  proceeding anyway (mode=warn) — the manifest will carry signoff_health="
           f"{verdict['status']!r}", file=sys.stderr)

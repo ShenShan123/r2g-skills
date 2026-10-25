@@ -257,6 +257,13 @@ fi
 export KLAYOUT_CMD
 KLAYOUT_VERSION="$("$KLAYOUT_CMD" -v 2>/dev/null | head -1 || true)"
 DECK_SHA="$(sha256sum "$DRC_DECK" 2>/dev/null | cut -d' ' -f1 || true)"
+# Keep the actual checker input alongside its native output. Later review must
+# not depend on an installed deck that can change after this run.
+cp -- "$DRC_DECK" "$DRC_DIR/audit_rule.lydrc"
+if [[ -z "$DECK_SHA" || "$(sha256sum "$DRC_DIR/audit_rule.lydrc" | cut -d' ' -f1)" != "$DECK_SHA" ]]; then
+  echo "ERROR: DRC deck snapshot changed before execution" >&2
+  exit 1
+fi
 
 # Write DRC output under the selected backend run FIRST, then mirror to the
 # project-level drc/ dir (RMD-P0-02: the report is born run-local).
@@ -425,11 +432,21 @@ fi
 python3 - "$DRC_DIR/drc_result.json" "$DRC_RUN_TAG" "$DRC_GDS" "$GDS_SHA_PRE" \
   "$DRC_DECK" "$DECK_SHA" "$KLAYOUT_VERSION" "$DRC_STARTED_AT" "$DRC_ENDED_AT" \
   "$DRC_TIMEOUT" "$DRC_STATUS" "$DRC_CELL_COUNT" "$DRC_STARTED_EPOCH" \
-  "${_R2G_BOUNDED_PEAK_RSS_KB:-0}" <<'PYEOF' || true
-import json, os, sys, time
+  "${_R2G_BOUNDED_PEAK_RSS_KB:-0}" "$DRC_DIR" "$DRC_MODE" <<'PYEOF' || true
+import hashlib, json, os, sys, time
 (path, run_tag, gds, gds_sha, deck, deck_sha,
  klayout_version, started, ended, timeout_s, exit_code,
  cell_count, started_epoch, peak_rss_kb) = sys.argv[1:15]
+drc_dir, drc_mode = sys.argv[15:17]
+def sha256(path):
+    try:
+        with open(path, "rb") as stream:
+            value = hashlib.sha256()
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                value.update(block)
+            return value.hexdigest()
+    except OSError:
+        return None
 try:
     d = json.load(open(path))
 except Exception:
@@ -439,6 +456,7 @@ try:
 except OSError:
     gds_bytes = None
 d.update(checker="klayout_direct",
+         schema_version=2,
          run_tag=run_tag or None,
          gds_path=gds, gds_sha256=gds_sha or None,
          deck_path=deck, deck_sha256=deck_sha or None,
@@ -454,6 +472,16 @@ d.update(checker="klayout_direct",
          gds_bytes=gds_bytes,
          peak_rss_kb=int(peak_rss_kb or 0) or None,
          wall_s=max(0, int(time.time()) - int(started_epoch)))
+d.update(raw_report_path="drc/6_drc.lyrdb",
+         raw_report_sha256=sha256(os.path.join(drc_dir, "6_drc.lyrdb")),
+         log_path="drc/6_drc.log",
+         log_sha256=sha256(os.path.join(drc_dir, "6_drc.log")),
+         audit_rule_path="drc/audit_rule.lydrc",
+         excluded_rules=[] if drc_mode == "full" else ["FEOL: BEOL-only diagnostic"],
+         deck_sha256_post=sha256(deck),
+         audit_rule_sha256=sha256(os.path.join(drc_dir, "audit_rule.lydrc")))
+if any(d.get(key) != deck_sha for key in ("deck_sha256_post", "audit_rule_sha256")):
+    d.update(status="failed", reason="drc_deck_changed_under_signoff")
 with open(path, "w") as f:
     json.dump(d, f, indent=2)
     f.write("\n")

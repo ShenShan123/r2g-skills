@@ -23,6 +23,7 @@ Observed on the 2026-10-06 nangate45 corpus run, where every design came back
 `lvs_failed` while the layouts were in fact clean.
 """
 import os
+import hashlib
 import json
 import shutil
 import subprocess
@@ -152,6 +153,26 @@ def test_unresolvable_chain_falls_back_to_frozen_layout(tmp_path):
     # a tool-path defect must not be recorded as an LVS verdict
     assert not (proj / "lvs" / "lvs_result.json").is_file(), \
         (proj / "lvs" / "lvs_result.json").read_text()
+    receipt = json.loads((proj / "lvs/lvs_execution.json").read_text())
+    assert receipt['exit_code'] == 0 and receipt['run_tag'] == 'RUN_A'
+    assert receipt['tool_sha256'] == hashlib.sha256((bin_dir / 'klayout').read_bytes()).hexdigest()
+    assert receipt['gds_sha256'] == hashlib.sha256((proj / 'backend/RUN_A/results/6_final.gds').read_bytes()).hexdigest()
+    for name, digest in receipt['files'].items():
+        assert digest == hashlib.sha256((proj / 'lvs' / name).read_bytes()).hexdigest()
+    assert receipt['rule_sha256'] == receipt['files']['audit_rule.lylvs']
+    assert receipt['masters_sha256'] == receipt['files']['audit_masters.cdl']
+
+
+def test_failed_discovery_invalidates_old_receipt_before_any_checker(tmp_path):
+    skill, orfs, proj, bin_dir = _setup(tmp_path, UNRESOLVABLE_MAKEFILE)
+    (proj / 'lvs').mkdir()
+    receipt = proj / 'lvs/lvs_execution.json'
+    receipt.write_text('{"exit_code":0}')
+    (proj / 'constraints/config.mk').unlink()
+    run = _run_lvs(tmp_path, skill, orfs, proj, bin_dir)
+    assert run.returncode != 0
+    assert not receipt.exists()
+    assert not (proj / 'lvs/6_lvs.lvsdb').exists()
 
 
 def test_frozen_fallback_can_be_disabled(tmp_path):
@@ -209,3 +230,4 @@ def test_layout_change_overrides_match_after_artifact_collection(tmp_path):
     result = json.loads(report.read_text())
     assert result['status'] == 'failed', result
     assert result['reason'] == 'layout_changed_under_signoff'
+    assert json.loads((proj / 'lvs/lvs_execution.json').read_text())['exit_code'] != 0

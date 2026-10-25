@@ -5,6 +5,7 @@ import { ArrowLeft, Download, Square, X, Image as ImageIcon, FileText, LayoutGri
 import { api, askAgent, Design, fmtClock, Job, JobEvent, OUTPUT_LABEL } from "../lib/api";
 import { StatusBadge, Stat, isActive } from "../components/ui";
 import { DesignProgressCard, designSummary, STAGE_ZH } from "../components/DesignProgressCard";
+import { DesignStatusBadge, legacyValidation, ValidationEvidence, validationVerdict } from "../components/ValidationEvidence";
 
 const KIND_ICON: Record<string, any> = { ok: CheckCircle2, fail: XCircle, warn: AlertTriangle };
 const KIND_CLS: Record<string, string> = { ok: "text-ok", fail: "text-bad", warn: "text-warn", start: "text-run" };
@@ -44,6 +45,8 @@ export default function JobDetail() {
   if (!job) return <div className="p-10 text-muted">加载中…</div>;
   const ds = job.designs ?? [];
   const passed = ds.filter((d) => d.status === "passed").length;
+  const validated = ds.filter((d) => d.status === "passed" && validationVerdict(d.detail?.validation) === "PASS").length;
+  const historical = ds.some((d) => d.status === "passed" && legacyValidation(d.detail?.validation));
   const failed = ds.filter((d) => d.status === "failed").length;
   const active = isActive(job.status);
   const started = events[0]?.ts ?? job.created;
@@ -66,7 +69,7 @@ export default function JobDetail() {
       </div>
 
       {/* what is going on, in one sentence, with the one action that matters now */}
-      <div className={`card mt-5 flex flex-wrap items-center gap-4 p-4 md:p-5 ${!active && passed ? "border-ok/40" : ""}`}>
+      <div className={`card mt-5 flex flex-wrap items-center gap-4 p-4 md:p-5 ${!active && validated === ds.length && validated > 0 ? "border-ok/40" : ""}`}>
         <div className="min-w-0 flex-1">
           {job.status === "recovery_required" ? (
             <><div className="font-semibold text-warn">需要恢复核对</div>
@@ -84,9 +87,9 @@ export default function JobDetail() {
               <div className="mt-1 truncate text-sm text-muted">{now ? `${now.design ?? ""} ${now.message}` : "准备中"} · 已用 {minutes} 分钟</div>
             </>) : (
             <>
-              <div className="font-semibold">{passed ? `完成：${passed}/${ds.length} 个设计通过` : `没有设计通过（${failed}/${ds.length} 失败）`}</div>
+              <div className="font-semibold">{passed ? `流程完成：${passed}/${ds.length} 个设计` : `没有设计完成（${failed}/${ds.length} 失败）`}</div>
               <div className="mt-1 text-sm text-muted">
-                {passed ? "通过的设计都已签核（DRC、LVS 干净）并通过数据集校验，已打包。" : "点开失败的设计查看原因，或让 agent 帮你分析。"}
+                {passed ? `${validated} 个在已列检查范围内通过三层核查。${historical ? "历史结果尚未完成三层复核，原产物仍可下载。" : "检查范围和未确认项见各设计的证据报告。"}` : "点开失败的设计查看原因，或让 agent 帮你分析。"}
                 {passed > 0 && failed > 0 && ` ${failed} 个失败的设计不在数据集里。`} 用时 {minutes} 分钟。
               </div>
             </>)}
@@ -98,7 +101,7 @@ export default function JobDetail() {
           catch (e: any) { setCancelError(e.message); }
         }}><Square size={14} /> {job.cancel_requested_at ? "已请求取消" : "取消"}</button>}
         {cancelError && <p role="alert" className="text-bad">{cancelError}</p>}
-        {job.result?.package && <a className="btn-primary" href={`/api/jobs/${id}/download`}><Download size={16} /> 下载数据集</a>}
+        {job.result?.package && <a className="btn-primary" href={`/api/jobs/${id}/download`}><Download size={16} /> {historical ? "下载历史产物" : "下载数据集"}</a>}
       </div>
 
       {ds.length > BIG ? <BatchList jobId={id} ds={ds} onOpen={setSel} /> : (
@@ -129,14 +132,14 @@ export default function JobDetail() {
   );
 }
 
-const DOT: Record<string, string> = { passed: "bg-ok", failed: "bg-bad", running: "bg-run", pending: "bg-line", cancelled: "bg-warn" };
+const DOT: Record<string, string> = { passed: "bg-faint", failed: "bg-bad", running: "bg-run", pending: "bg-line", cancelled: "bg-warn" };
 const BIG = 12;      // more designs than this: a filterable list instead of cards
 const PAGE = 50;
 
 function PartialDownload({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   return (
-    <button className="btn-ghost" disabled={busy} title="把目前已通过的设计先打包下载"
+    <button className="btn-ghost" disabled={busy} title="打包目前已完成且满足当前交付检查的设计"
       onClick={async () => { setBusy(true); try { const r = await api.packageNow(id); window.location.href = r.url; } finally { setBusy(false); } }}>
       {busy ? <Loader2 size={15} className="animate-spin" /> : <PackageOpen size={15} />} 下载已完成的部分
     </button>);
@@ -169,7 +172,7 @@ function BatchList({ jobId, ds, onOpen }: { jobId: string; ds: Design[]; onOpen:
     && (!q || d.name.toLowerCase().includes(q.toLowerCase())));
   const pages = Math.max(1, Math.ceil(rows.length / PAGE));
   const shown = rows.slice(page * PAGE, page * PAGE + PAGE);
-  const tabs: [string, string][] = [["all", "全部"], ["running", "运行中"], ["pending", "排队中"], ["passed", "通过"], ["failed", "失败"], ["recovery_required", "需核对"], ["cancelled", "已取消"]];
+  const tabs: [string, string][] = [["all", "全部"], ["running", "运行中"], ["pending", "排队中"], ["passed", "流程完成"], ["failed", "失败"], ["recovery_required", "需核对"], ["cancelled", "已取消"]];
   return (
     <div className="mt-4 space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -177,7 +180,7 @@ function BatchList({ jobId, ds, onOpen }: { jobId: string; ds: Design[]; onOpen:
           <button key={k} onClick={() => { setFilter(k); setReason(null); setPage(0); }}
             className={`rounded-xl border px-3 py-2 text-left ${filter === k ? "border-accent bg-accent/10" : "border-line bg-panel hover:bg-panel2"}`}>
             <div className="text-xs text-muted">{l}</div>
-            <div className={`text-lg font-semibold ${k === "passed" ? "text-ok" : k === "failed" && counts.failed ? "text-bad" : ""}`}>
+            <div className={`text-lg font-semibold ${k === "failed" && counts.failed ? "text-bad" : ""}`}>
               {k === "all" ? ds.length : counts[k] ?? 0}</div>
           </button>))}
       </div>
@@ -205,7 +208,7 @@ function BatchList({ jobId, ds, onOpen }: { jobId: string; ds: Design[]; onOpen:
               <span className={`h-2 w-2 shrink-0 rounded-full ${DOT[d.status] ?? "bg-line"}`} />
               <span className="w-40 shrink-0 truncate font-mono text-sm sm:w-56">{d.name}</span>
               <span className={`min-w-0 flex-1 truncate text-xs ${d.status === "failed" ? "text-bad" : "text-muted"}`}>{designSummary(d)}</span>
-              <StatusBadge status={d.status} />
+              <DesignStatusBadge status={d.status} validation={d.detail?.validation} />
             </button>))}
           {shown.length === 0 && <div className="px-3 py-6 text-center text-sm text-muted">没有符合条件的设计</div>}
         </div>
@@ -228,25 +231,35 @@ const LOG_STAGES = ["synth", "flow", "signoff", "repair", "graph", "verify"];
 function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; output: string; onClose: () => void }) {
   const [tab, setTab] = useState<"overview" | "images" | "layout" | "log">(output === "image" ? "images" : "overview");
   const [rep, setRep] = useState<any>(null);
+  const [reportError, setReportError] = useState("");
   const [logStage, setLogStage] = useState("flow");
   const [log, setLog] = useState("");
   const [imgOk, setImgOk] = useState(true);
-  useEffect(() => { setRep(null); api.reports(jobId, d.name).then(setRep).catch(() => {}); }, [jobId, d.name, d.status]);
+  useEffect(() => {
+    let alive = true;
+    setRep(null); setReportError("");
+    api.reports(jobId, d.name).then((r) => { if (alive) setRep(r); })
+      .catch((e: Error) => { if (alive) setReportError(e.message); });
+    return () => { alive = false; };
+  }, [jobId, d.name, d.updated]);
   useEffect(() => {
     if (tab === "log") api.log(jobId, d.name, logStage).then((r) => setLog(r.log_tail ?? r.error ?? "")).catch(() => setLog(""));
   }, [tab, logStage, jobId, d.name, d.stage]);
   const s = d.detail?.sizing;
   const sum = useMemo(() => rep?.ppa?.summary ?? {}, [rep]);
   const geo = rep?.ppa?.geometry ?? {};
+  const validation = reportError || rep === null
+    ? { status: "reviewed", verdict: "UNKNOWN" }
+    : rep.validation;
   const fmt = (x: any, n = 3) => (typeof x === "number" ? x.toFixed(n) : null);
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/40 backdrop-blur-[2px]" onClick={onClose}>
       <div className="flex h-full w-full flex-col border-l border-line bg-panel md:w-[640px]" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-line px-6 py-4">
-          <div><div className="font-mono text-lg font-semibold">{d.name}</div><div className="text-xs text-muted">{d.project}</div></div>
-          <div className="flex items-center gap-2"><StatusBadge status={d.status} />
-            {d.status === "passed" && <a className="btn-ghost px-3 py-1.5" href={`/api/jobs/${jobId}/designs/${d.name}/download`}><Download size={14} /> 下载</a>}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-4 sm:px-6">
+          <div className="min-w-0"><div className="break-words font-mono text-lg font-semibold">{d.name}</div><div className="break-all text-xs text-muted">{d.project}</div></div>
+          <div className="flex flex-wrap items-center gap-2"><DesignStatusBadge status={d.status} validation={validation} />
+            {d.status === "passed" && (legacyValidation(d.detail?.validation) || validationVerdict(validation) === "PASS") && <a className="btn-ghost px-3 py-1.5" href={`/api/jobs/${jobId}/designs/${d.name}/download`}><Download size={14} /> {legacyValidation(d.detail?.validation) ? "下载历史产物" : "下载"}</a>}
             <button className="rounded-lg p-1.5 text-muted hover:bg-panel2" onClick={onClose}><X size={18} /></button></div>
         </div>
         <div className="flex gap-1 border-b border-line px-4">
@@ -277,15 +290,7 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
                   <Stat label="功耗" value={typeof sum?.power?.total_power_w === "number" ? `${(sum.power.total_power_w * 1000).toFixed(3)} mW` : null} />
                 </div>
               </section>
-              <section>
-                <div className="label mb-2">签核（由工具判定）</div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  <Stat label="DRC" value={<Verdict v={rep?.drc?.status} />} sub={rep?.drc ? `${rep.drc.total_violations ?? 0} 处违例` : ""} />
-                  <Stat label="LVS" value={<Verdict v={rep?.lvs?.status} />} sub={rep?.lvs?.mismatch_count != null ? `${rep.lvs.mismatch_count} 处不匹配` : ""} />
-                  <Stat label="数据集校验" value={rep?.verify ? `${rep.verify.passed}/${rep.verify.total}` : "—"}
-                    sub={rep?.graph_dataset?.status ? `manifest ${rep.graph_dataset.status}` : ""} />
-                </div>
-              </section>
+              <ValidationEvidence value={validation} loadError={reportError} historical={d.status === "passed"} />
               {Array.isArray(d.detail?.repair) && d.detail.repair.length > 0 && (
                 <section>
                   <div className="label mb-2">自动修复记录</div>
@@ -323,11 +328,6 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
       </div>
     </div>
   );
-}
-
-function Verdict({ v }: { v?: string }) {
-  if (!v) return <span className="text-faint">—</span>;
-  return <span className={v === "clean" ? "text-ok" : "text-bad"}>{v === "clean" ? "干净" : v}</span>;
 }
 
 const CH_LABEL: Record<string, string> = {

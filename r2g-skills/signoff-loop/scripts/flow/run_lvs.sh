@@ -8,6 +8,11 @@ set -euo pipefail
 
 PROJECT_DIR="${1:-}"
 PLATFORM="${2:-sky130hd}"
+# Invalidate the previous execution receipt before any fallible discovery.
+# Existing raw evidence is retained for diagnosis but cannot certify this attempt.
+if [[ -n "$PROJECT_DIR" && -d "$PROJECT_DIR/lvs" ]]; then
+  rm -f "$PROJECT_DIR/lvs/lvs_execution.json"
+fi
 # Derive FLOW_VARIANT from project directory basename (matching run_orfs.sh logic)
 if [[ -n "${3:-}" ]]; then
   FLOW_VARIANT="$3"
@@ -353,6 +358,9 @@ else
 fi
 
 # True when the frozen path has everything it needs to produce a verdict.
+_LVS_RULE_SHA_PRE="$(sha256sum "$KLAYOUT_LVS_RESOLVED" 2>/dev/null | cut -d' ' -f1 || true)"
+_LVS_MASTERS_SHA_PRE="$(sha256sum "$_LVS_CDL_MASTERS" 2>/dev/null | cut -d' ' -f1 || true)"
+_LVS_TOOL_SHA_PRE="$(sha256sum "$KLAYOUT_CMD" 2>/dev/null | cut -d' ' -f1 || true)"
 _r2g_lvs_frozen_available() {
   [[ "$_LVS_FROZEN_MODE" != "0" ]] || return 1
   [[ -f "$RESULTS_DIR/6_final.odb" ]] || return 1
@@ -401,6 +409,9 @@ _r2g_lvs_frozen_bounded() {
 LVS_RUN_LOG="/tmp/lvs_run_$$.log"
 LVS_STATUS=0
 for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
+  # Every retry must create its own verdict; old outputs cannot survive a crash.
+  rm -f "$RESULTS_DIR/6_lvs.lvsdb" "$LOGS_DIR/6_lvs.log" \
+    "$PROJECT_DIR/lvs/6_lvs.lvsdb" "$PROJECT_DIR/lvs/6_lvs.log"
   set +e +o pipefail
   # `_LVS_FROZEN` is set by the fallback further down, so a retry after a frozen
   # crash re-enters the frozen path here instead of re-running the `make lvs`
@@ -545,6 +556,26 @@ fi
 if [[ -f "$RESULTS_DIR/6_final.cdl" ]]; then
   cp "$RESULTS_DIR/6_final.cdl" "$LVS_DIR/" 2>/dev/null || true
 fi
+cp "$KLAYOUT_LVS_RESOLVED" "$LVS_DIR/audit_rule.lylvs" 2>/dev/null || true
+cp "$_LVS_CDL_MASTERS" "$LVS_DIR/audit_masters.cdl" 2>/dev/null || true
+python3 - "$LVS_DIR" "$LVS_STATUS" "${R2G_BACKEND_RUN:-}" "$LVS_GDS_SHA_PRE" \
+  "$_LVS_RULE_SHA_PRE" "$_LVS_MASTERS_SHA_PRE" "$_LVS_TOOL_SHA_PRE" <<'PYEOF'
+import hashlib, json, os, sys
+from pathlib import Path
+root, rc, run, gds, rule, masters, tool = sys.argv[1:]
+root = Path(root)
+files = {}
+for name in ('6_lvs.lvsdb', '6_lvs.log', 'lvs_run.log', '6_final.cdl', 'audit_rule.lylvs', 'audit_masters.cdl'):
+    path = root / name
+    if path.is_file():
+        files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+doc = {'schema_version': 1, 'engine': 'klayout', 'exit_code': int(rc),
+       'run_tag': os.path.basename(run), 'gds_sha256': gds, 'rule_sha256': rule,
+       'masters_sha256': masters, 'tool_sha256': tool, 'files': files}
+temporary = root / 'lvs_execution.json.tmp'
+temporary.write_text(json.dumps(doc, indent=2) + '\n')
+os.replace(temporary, root / 'lvs_execution.json')
+PYEOF
 
 # Publish invalidation after collecting artifacts: copying a match log updates
 # its mtime, and must not make it newer than the runner's failed postcondition.

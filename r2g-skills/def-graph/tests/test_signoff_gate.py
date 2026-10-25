@@ -23,6 +23,7 @@ import subprocess
 import sys
 
 import pytest
+from lvs_fixture import add_lvs_evidence
 
 _FLOW = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                      "scripts", "flow")
@@ -124,6 +125,8 @@ def _proj(tmp_path, *, drc="clean", lvs="clean", route=0, stage_log=CLEAN_STAGES
         rdir = run / "reports_orfs"
         rdir.mkdir(exist_ok=True)
         (rdir / "5_route_drc.rpt").write_text(route_rpt, encoding="utf-8")
+    if lvs == "clean":
+        add_lvs_evidence(proj, run)
     return str(proj), str(run)
 
 
@@ -141,6 +144,47 @@ def test_all_clean_pass(tmp_path):
     proj, run = _proj(tmp_path, ppa={"summary": {"timing": {"setup_wns": 0.05}}})
     v = sg.evaluate(proj, run)
     assert v["status"] == "pass" and not v["blockers"] and not v["caveats"], v
+
+
+@pytest.mark.parametrize("mode,exit_code", [("enforce", 3), ("strict", 3), ("warn", 0)])
+def test_cached_clean_or_claimed_audit_pass_cannot_replace_raw_lvs(tmp_path, mode, exit_code):
+    """The standalone entrypoint rechecks raw evidence even for a forged cached PASS."""
+    proj, run = _proj(tmp_path)
+    from pathlib import Path
+    root = Path(proj)
+    report = root / "reports/lvs.json"
+    doc = json.loads(report.read_text())
+    doc["three_layer_audit"] = {"verdict": "PASS"}
+    report.write_text(json.dumps(doc))
+    (root / "lvs/lvs_execution.json").unlink()
+    rc, value, _ = _cli(proj, run, mode=mode)
+    assert rc == exit_code
+    assert value["status"] == "dirty" and "lvs" in value["blockers"]
+    assert value["checks"]["lvs"]["raw_status"] == "clean"
+    assert value["checks"]["lvs"]["three_layer_audit"]["verdict"] == "UNKNOWN"
+
+
+def test_gate_rejects_raw_lvs_changes_after_cached_clean(tmp_path):
+    proj, run = _proj(tmp_path)
+    from pathlib import Path
+    with (Path(proj) / "lvs/6_lvs.lvsdb").open("a") as stream:
+        stream.write("\n# replaced after comparison\n")
+    value = sg.evaluate(proj, run)
+    assert value["checks"]["lvs"]["three_layer_audit"]["verdict"] == "STALE"
+    assert "lvs" in value["blockers"]
+
+
+def test_gate_requires_receipt_for_the_selected_run(tmp_path):
+    proj, run = _proj(tmp_path)
+    value = sg._check_lvs(os.path.join(proj, "reports"), run + "_different")
+    assert value["three_layer_audit"]["verdict"] == "PASS"
+    assert value["status"] == "unverified" and value["reason"] == "lvs_run_binding_mismatch"
+
+
+def test_gate_off_is_explicitly_unverified(tmp_path):
+    proj, run = _proj(tmp_path, lvs=None)
+    rc, value, _ = _cli(proj, run, mode="off")
+    assert rc == 0 and value == {"status": "gate_off", "mode": "off"}
 
 
 def test_def_bound_to_run_passes(tmp_path):

@@ -21,6 +21,7 @@ import subprocess
 import sys
 
 import pytest
+from lvs_fixture import add_lvs_evidence
 
 _FLOW = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                      "scripts", "flow")
@@ -52,6 +53,8 @@ def _proj(tmp_path, *, lvs="clean", stage_log=CLEAN_STAGES, ppa=None):
             f.write(json.dumps(rec) + "\n")
     if ppa is not None:
         json.dump(ppa, open(rep / "ppa.json", "w"))
+    if lvs == "clean":
+        add_lvs_evidence(proj, run)
     return str(proj), str(run)
 
 

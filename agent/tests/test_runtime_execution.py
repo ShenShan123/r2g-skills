@@ -356,11 +356,20 @@ def test_terminal_design_cannot_start_another_stage(tmp_path):
     ('unknown', 'clean', 'complete', None, True),
     ('timeout', 'clean', 'complete', None, True),
 ])
-def test_signoff_distinguishes_infrastructure_failure_from_measured_mismatch(tmp_path, drc, lvs, rcx, reason, expected):
+def test_signoff_distinguishes_infrastructure_failure_from_measured_mismatch(tmp_path, monkeypatch, drc, lvs, rcx, reason, expected):
+    # This test isolates consumer classification. Native evidence and missing
+    # evidence are exercised independently in test_validation / integration.
+    from r2g_agent import validation
+    checks = {key: {'verdict': 'FAIL' if status == 'fail' else 'PASS'}
+              for key, status in [('drc', drc), ('lvs', lvs), ('rcx', rcx)]}
+    monkeypatch.setattr(validation, 'review', lambda *a, **kw: {
+        'verdict': 'FAIL' if any(c['verdict'] == 'FAIL' for c in checks.values()) else 'PASS',
+        'checks': checks, 'three_layer': {}, 'claims': [], 'evidence_files': []})
     reports = tmp_path / 'reports'
     reports.mkdir()
-    (reports / 'drc.json').write_text(json.dumps({'status': drc}))
-    (reports / 'lvs.json').write_text(json.dumps({'status': lvs, 'reason': reason}))
+    (reports / 'drc.json').write_text(json.dumps({'status': drc, 'total_violations': 1 if drc == 'fail' else 0}))
+    (reports / 'lvs.json').write_text(json.dumps({'status': lvs, 'reason': reason,
+                                               'mismatch_count': 1 if lvs == 'fail' else 0}))
     if rcx != 'missing':
         (reports / 'rcx.json').write_text(json.dumps({'status':rcx}))
     verdict = pipeline.signoff_verdict(tmp_path)

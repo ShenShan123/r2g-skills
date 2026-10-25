@@ -22,7 +22,7 @@ from .paths import r2g_home
 REPORTS = ("drc.json", "lvs.json", "rcx.json", "route.json", "ppa.json",
            "timing_check.json", "signoff_manifest.json", "signoff_gate.json",
            "graph_dataset.json", "image_dataset.json", "verify.json",
-           "fix_log.jsonl", "layout.png", "toolchain_capabilities.json", "task_contract.json")
+           "fix_log.jsonl", "layout.png", "toolchain_capabilities.json", "task_contract.json", "output_bindings.json")
 REPAIR_REPORTS = ("agent_repair.json", "agent_repair.diff", "functional_check.json", "input_bindings.json")
 LOG_STAGES = ("prepare", "synth", "size", "flow", "signoff", "repair", "graph", "verify", "preview")
 # Limits apply to uncompressed bytes, including generated manifests. They bound
@@ -101,6 +101,41 @@ def _tree(base: int, relative: str, *, budget, required=False, depth=0):
         os.close(directory)
 
 
+def _final_evidence(base: int, budget):
+    try:
+        directory = _open_relative(base, "backend", directory=True)
+    except FileNotFoundError:
+        return
+    try:
+        names = os.listdir(directory)
+        budget.scanned += len(names)
+        if budget.scanned > MAX_MEMBERS:
+            raise ValueError("archive traversal entry count exceeds limit")
+        for name in sorted(names):
+            if not name.startswith("RUN_"):
+                continue
+            _component(name)
+            native_sta = "backend/" + name + "/logs/6_report.json"
+            try:
+                fd = _open_relative(base, native_sta)
+            except FileNotFoundError:
+                pass
+            else:
+                os.close(fd)
+                yield native_sta
+            for relative in _tree(base, "backend/" + name + "/final", budget=budget):
+                if Path(relative).suffix.lower() in {".gds", ".def", ".v", ".vg", ".cdl", ".cir", ".spice", ".sdc", ".spef"}:
+                    yield relative
+            # Review binds the original results file while intermediates are
+            # retained. These final inputs may not have been copied to final/.
+            for relative in _tree(base, "backend/" + name + "/results", budget=budget):
+                path = Path(relative)
+                if path.stem == "6_final" and path.suffix.lower() in {".gds", ".def", ".v", ".vg", ".cdl", ".cir", ".spice", ".sdc", ".spef"}:
+                    yield relative
+    finally:
+        os.close(directory)
+
+
 class _HashingReader:
     def __init__(self, source):
         self.source = source
@@ -165,6 +200,12 @@ class _Archive:
 
 
 def _add_design(archive: _Archive, job: dict, d: dict, root: str, *, index=None) -> None:
+    from .validation import review, validation_summary
+    checked = review(Path(d["project"]))
+    details = d.get("detail") or {}
+    if details.get("validation") and (checked["verdict"] != "PASS"
+            or checked.get("checks", {}).get("dataset", {}).get("verdict") != "PASS"):
+        raise ValueError("delivery evidence no longer satisfies the three-layer acceptance policy")
     members = []
     logs = []
     spec = job.get("spec") or {}
@@ -178,8 +219,14 @@ def _add_design(archive: _Archive, job: dict, d: dict, root: str, *, index=None)
             paths.extend(_tree(project, "dataset", budget=archive, required=True))
         for folder in ("rtl", "constraints"):
             paths.extend(_tree(project, folder, budget=archive))
+        # These are raw signoff evidence, not regenerable placement databases.
+        # The same descriptor-based path/type/size limits apply to them.
+        for folder in ("drc", "lvs", "rcx"):
+            paths.extend(_tree(project, folder, budget=archive))
+        paths.extend(_final_evidence(project, archive))
         optional.extend("reports/" + report for report in (*REPORTS, *REPAIR_REPORTS))
         optional.append("metadata.json")
+        optional.append("backend/.r2g_signoff_run")
         for relative in paths:
             members.append(archive.file(project, relative, root))
         for relative in optional:
@@ -200,16 +247,41 @@ def _add_design(archive: _Archive, job: dict, d: dict, root: str, *, index=None)
                 os.close(fd)
     if index is not None:
         members.append(archive.document(root + "/index.json", index))
+    checked_entry = archive.document(root + "/reports/verification_review.json", checked)
+    members.append({**checked_entry, "path": "reports/verification_review.json"})
+    captured = {entry["path"]: entry["sha256"] for entry in members}
+    if details.get("validation"):
+        for evidence in checked.get("evidence_files", []):
+            if captured.get(evidence.get("path")) != evidence.get("sha256"):
+                raise ValueError("verification evidence changed or was omitted during packaging")
     inputs = [m for m in members if m["path"].startswith(("rtl/", "constraints/"))]
+    verified_snapshot = None
+    if details.get("validation"):
+        from .input_snapshots import digest
+        packaged = {}
+        for directory in ("rtl", "constraints"):
+            entries = sorted(({**entry, "path": entry["path"][len(directory) + 1:]}
+                              for entry in inputs if entry["path"].startswith(directory + "/")),
+                             key=lambda entry: entry["path"])
+            packaged[directory] = {"sha256": digest(entries), "files": entries}
+        packaged["sha256"] = digest(packaged)
+        verified_snapshot = checked.get("input_snapshot")
+        if not isinstance(verified_snapshot, dict) or packaged != verified_snapshot:
+            raise ValueError("delivery inputs changed or lack a verified execution snapshot")
+        from .artifact_snapshots import from_entries
+        actual_outputs = from_entries(members, spec.get("output", "graph"))
+        if actual_outputs != checked.get("output_snapshot"):
+            raise ValueError("delivery outputs changed or lack a verified dataset snapshot")
     required_reports = ("drc.json", "lvs.json", "rcx.json", "route.json", "timing_check.json",
                         "signoff_manifest.json", "signoff_gate.json")
     required_reports += (("image_dataset.json",) if spec.get("output") == "image"
                          else ("graph_dataset.json", "verify.json"))
     present = {member["path"] for member in members}
     missing_reports = ["reports/" + name for name in required_reports if "reports/" + name not in present]
-    details = d.get("detail") or {}
     manifest = {
-        "schema_version": 1, "job_id": job["id"], "design": d["name"], "status": d["status"],
+        "schema_version": 1, "job_id": job["id"], "design": d["name"],
+        "status": d["status"] if checked["verdict"] == "PASS" else "unverified",
+        "recorded_status": d["status"], "validation": validation_summary({"validation": checked}),
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "spec": spec,
         "capture": {"authority": "packaging_time_inventory", "pre_execution_source_verification": "unverified",
                     "cross_file_snapshot": "unverified"},
@@ -227,6 +299,16 @@ def _add_design(archive: _Archive, job: dict, d: dict, root: str, *, index=None)
         manifest["unverified"].append("input_files_missing")
     if missing_reports:
         manifest["unverified"].append("required_reports_missing")
+    if verified_snapshot is not None:
+        manifest.update(source_snapshot_id=verified_snapshot["sha256"],
+                        acceptance_policy_sha256=checked["policy_sha256"],
+                        output_snapshot_id=actual_outputs["sha256"])
+        manifest["capture"].update(authority="bound_execution_inputs",
+                                   pre_execution_source_verification="verified",
+                                   cross_file_snapshot="matched_by_content_hash")
+        manifest["unverified"] = [item for item in manifest["unverified"] if item not in {
+            "pre_execution_source_snapshot", "evidence_binding_to_packaged_inputs", "acceptance_policy_version"}]
+        manifest["unverified"].append("base_commit_not_bound")
     binding = details.get("repair_validation")
     if binding:
         from .input_snapshots import digest
@@ -274,8 +356,10 @@ def _publish(out: Path):
 
 
 def _design_summary(d):
+    from .validation import validation_summary
     details = d.get("detail") or {}
     return {"name": d["name"], "sizing": details.get("sizing"),
+            "validation": validation_summary(details),
             "signoff": details.get("signoff"), "verify": details.get("verify")}
 
 

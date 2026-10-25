@@ -35,6 +35,7 @@ import json
 import os
 import random
 import re
+import stat
 import sys
 
 import numpy as np
@@ -48,6 +49,37 @@ def sha256(p):
         for c in iter(lambda: f.read(1 << 20), b""):
             h.update(c)
     return h.hexdigest()
+
+
+def core_snapshot(images_dir):
+    """Hash the three verifier inputs by descriptor, before and after checks."""
+    directory = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    entries = []
+    try:
+        for part in os.path.abspath(images_dir).split("/")[1:]:
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        for name in ("features.npz", "image_meta.json", "labels.npz"):
+            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+            with os.fdopen(fd, "rb") as stream:
+                before = os.fstat(stream.fileno())
+                if not stat.S_ISREG(before.st_mode) or before.st_size > 2 * 1024 ** 3:
+                    raise ValueError("image input type or size refused")
+                h, size = hashlib.sha256(), 0
+                for chunk in iter(lambda: stream.read(1 << 20), b""):
+                    size += len(chunk)
+                    if size > 2 * 1024 ** 3:
+                        raise ValueError("image input size limit exceeded")
+                    h.update(chunk)
+                after = os.fstat(stream.fileno())
+                if (before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
+                        after.st_size, after.st_mtime_ns, after.st_ctime_ns) or size != before.st_size:
+                    raise ValueError("image input changed during capture")
+            entries.append({"path": "images/" + name, "size": size, "sha256": h.hexdigest()})
+    finally:
+        os.close(directory)
+    return entries
 
 
 # ---- independent readers -------------------------------------------------------
@@ -153,6 +185,7 @@ def main(argv=None):
         x, y = np.asarray(x, float), np.asarray(y, float)
         return float(np.abs(x - y).max()) if x.shape == y.shape else float("inf")
 
+    before_outputs = core_snapshot(a.images_dir)
     meta = json.load(open(os.path.join(a.images_dir, "image_meta.json")))
     F = dict(np.load(os.path.join(a.images_dir, "features.npz")))
     L = dict(np.load(os.path.join(a.images_dir, "labels.npz")))
@@ -312,9 +345,13 @@ def main(argv=None):
         hits += F["cell_density"].shape == (nx, ny) and F["cell_density"][i, j] > 0
     check("axis.cells_land_in_own_gcell", not probe or hits == len(probe), "%d/%d" % (hits, len(probe)))
 
+    after_outputs = core_snapshot(a.images_dir)
+    check("provenance.output_bytes_unchanged", before_outputs == after_outputs,
+          "features, labels and metadata match before/after verifier; PNG previews are outside this check")
     ok = all(r["ok"] for r in res)
     out = {"status": "ok" if ok else "invalid", "passed": sum(r["ok"] for r in res), "total": len(res),
-           "results": res}
+           "results": res, "output_binding": {"schema_version": 1, "scope": "core_files_unchanged_during_verifier",
+                                                "before": before_outputs, "after": after_outputs}}
     if a.json:
         json.dump(out, open(a.json, "w"), indent=1)
     for r in res:

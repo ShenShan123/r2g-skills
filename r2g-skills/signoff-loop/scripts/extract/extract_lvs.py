@@ -12,6 +12,21 @@ import xml.etree.ElementTree as ET
 # Atomic report writes: a kill -9/OOM mid-write must never leave a torn
 # reports/*.json for ingest to misread (2026-07-04 robustness audit M1).
 import report_io
+from lvs_audit import audit
+
+
+def _audit_result(result, project_root, lvs_dir):
+    checked = audit(project_root, lvs_dir)
+    result['three_layer_audit'] = checked
+    if result.get('status') == 'clean' and checked['verdict'] != 'PASS':
+        result['raw_status'] = result['status']
+        result['raw_mismatch_count'] = result.get('mismatch_count')
+        if result.get('reason'):
+            result['raw_reason'] = result['reason']
+        result['status'] = 'unverified'
+        result['mismatch_count'] = None
+        result['reason'] = 'lvs_three_layer_audit_' + checked['verdict'].lower()
+    return result
 
 
 def parse_lvsdb(lvs_dir: Path) -> dict:
@@ -306,7 +321,7 @@ def main():
                 # e.g. make lvs rebuilt the layout while checking it.
                 report_io.stamp_run_provenance(skip_data, project_root, run_dir)
                 out_path.parent.mkdir(parents=True, exist_ok=True)
-                report_io.write_json_atomic(out_path, skip_data)
+                report_io.write_json_atomic(out_path, _audit_result(skip_data, project_root, lvs_dir))
                 print(out_path)
                 return
         except Exception:
@@ -371,7 +386,7 @@ def main():
                     out[k] = ng[k]
             report_io.stamp_run_provenance(out, project_root, run_dir)
             out_path.parent.mkdir(parents=True, exist_ok=True)
-            report_io.write_json_atomic(out_path, out)
+            report_io.write_json_atomic(out_path, _audit_result(out, project_root, lvs_dir))
             print(out_path)
             return
         except Exception:
@@ -526,7 +541,7 @@ def main():
     report_io.stamp_run_provenance(result, project_root, run_dir)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    report_io.write_json_atomic(out_path, result)
+    report_io.write_json_atomic(out_path, _audit_result(result, project_root, lvs_dir))
     print(out_path)
 
 

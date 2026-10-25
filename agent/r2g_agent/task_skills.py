@@ -222,6 +222,7 @@ def _delivery(candidate: dict, job: dict, record: dict, evidence: list[dict]) ->
     if not isinstance(_obj(job.get("result")).get("package"), str) or not job["result"]["package"]:
         refusals.append("delivery_archive_not_recorded")
     candidate["recommended_next_checks"] = [
+        _next("review_evidence", {"job_id": job["id"], "design": record["name"]}, "逐项核对三层验证和声称/实证，不从历史passed状态推断通过"),
         _next("dataset_info", {"job_id": job["id"]}, "核对实际交付产物；存在记录不等于已核对归档内容"),
         _next("design_detail", {"job_id": job["id"], "design": record["name"]}, "核对原始verify.json、输入绑定和签核报告"),
         _next("read_log", {"job_id": job["id"], "design": record["name"], "stage": "verify", "lines": 60},

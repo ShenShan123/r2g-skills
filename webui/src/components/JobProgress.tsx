@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Download, ExternalLink, XCircle } from "lu
 import { askAgent, Design, Job, JobEvent } from "../lib/api";
 import { DesignProgressCard, STAGE_ZH } from "./DesignProgressCard";
 import { StatusBadge } from "./ui";
+import { legacyValidation, validationLabel, validationVerdict } from "./ValidationEvidence";
 
 export const jobFinished = (job: Job) => ["done", "failed", "cancelled", "partial"].includes(job.status);
 
@@ -40,17 +41,21 @@ export function JobResult({ job, events }: { job: Job; events: JobEvent[] }) {
   const failed = designs.filter((d) => d.status === "failed");
   const cancelled = job.status === "cancelled";
   const success = job.status === "done" && passed.length === designs.length && designs.length > 0;
+  const validated = passed.filter((d) => validationVerdict(d.detail?.validation) === "PASS").length;
+  const historical = passed.some((d) => legacyValidation(d.detail?.validation));
+  const allValidated = success && validated === passed.length;
   const title = cancelled ? "任务已取消" : success ? "任务已完成" : job.status === "failed" ? "任务失败" : passed.length ? "任务部分完成" : "任务已结束";
-  const Icon = success ? CheckCircle2 : cancelled ? AlertTriangle : XCircle;
+  const Icon = allValidated ? CheckCircle2 : success || cancelled ? AlertTriangle : XCircle;
   return (
     <section aria-label="任务结果" data-job-id={job.id} className="space-y-3 py-1">
-      <div className={`flex items-center gap-2 font-semibold ${success ? "text-ok" : cancelled ? "text-warn" : "text-bad"}`}><Icon size={18} /><h3>{title}</h3></div>
+      <div className={`flex items-center gap-2 font-semibold ${allValidated ? "text-ok" : success || cancelled ? "text-warn" : "text-bad"}`}><Icon size={18} /><h3>{title}</h3></div>
       {passed.length > 0 && <>
-        <p className="text-sm">{passed.length}/{designs.length} 个设计通过签核和数据集校验。</p>
+        <p className="text-sm">{passed.length}/{designs.length} 个设计的流程已完成；{validated} 个在已列检查范围内通过三层核查。</p>
         <ul className="space-y-1 text-sm text-muted">
           {passed.slice(0, 5).map((d) => <li key={d.name}><span className="font-mono text-fg">{d.name}</span>
-            {d.detail?.verify && <> · 数据集校验 {d.detail.verify.passed}/{d.detail.verify.total} 项通过</>}</li>)}
+            {" · "}{validationLabel(d.detail?.validation)}</li>)}
         </ul>
+        <p className="text-xs text-muted">{historical ? "历史产物可下载，原通过状态尚未得到三层复核。" : "核查范围和未确认项请见报告。"} STA 不等于功能仿真，也不代表制造签核。</p>
       </>}
       {failed.length > 0 && <ul className="space-y-3 text-sm">
         {failed.slice(0, 5).map((d) => <li key={d.name} className="space-y-1">
@@ -61,7 +66,7 @@ export function JobResult({ job, events }: { job: Job; events: JobEvent[] }) {
       {!passed.length && !cancelled && <p className="text-sm text-muted">本次未生成可交付的数据集。</p>}
       {cancelled && <p className="text-sm text-muted">已确认取消，已有执行记录可在过程中查看。</p>}
       <div className="flex flex-wrap items-center gap-3">
-        {job.result?.package && <a className="btn-primary" href={`/api/jobs/${encodeURIComponent(job.id)}/download`}><Download size={15} /> 下载数据集</a>}
+        {job.result?.package && <a className="btn-primary" href={`/api/jobs/${encodeURIComponent(job.id)}/download`}><Download size={15} /> {historical ? "下载历史产物" : "下载数据集"}</a>}
         <Link to={`/jobs/${encodeURIComponent(job.id)}`} className="inline-flex items-center gap-1 text-sm text-accent hover:underline">查看报告 <ExternalLink size={13} /></Link>
         {failed.length > 0 && <Link to={askAgent(`任务 ${job.id} 执行失败，请读取失败日志，说明实际原因和下一步处理方法。`)} className="text-sm text-accent hover:underline">分析失败原因</Link>}
       </div>

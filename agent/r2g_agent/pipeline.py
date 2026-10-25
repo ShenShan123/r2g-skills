@@ -100,6 +100,8 @@ def read_json(p: Path) -> dict:
 
 
 def signoff_verdict(project: Path) -> dict:
+    from .validation import review, validation_summary
+    from .input_snapshots import write_json
     drc = read_json(project / "reports" / "drc.json")
     lvs = read_json(project / "reports" / "lvs.json")
     rcx = read_json(project / "reports" / "rcx.json")
@@ -110,7 +112,13 @@ def signoff_verdict(project: Path) -> dict:
         "lvs_mismatches": lvs.get("mismatch_count"),
         "rcx": rcx.get("status") or "missing",
     }
-    v["dual_clean"] = v["drc"] == "clean" and v["lvs"] == "clean"
+    checked = review(project)
+    write_json(project / "reports" / "verification_review.json", checked)
+    v["validation"] = validation_summary({"validation": checked})
+    v["dual_clean"] = (v["drc"] == "clean" and v["lvs"] == "clean"
+                       and type(v["drc_violations"]) is int and v["drc_violations"] == 0
+                       and type(v["lvs_mismatches"]) is int and v["lvs_mismatches"] == 0
+                       and checked["verdict"] == "PASS")
     if lvs.get("reason") == "layout_changed_under_signoff":
         v["infrastructure_error"] = "LVS 检查期间版图被重建，签核证据已失效"
     elif v["lvs"] not in ("clean", "fail"):
@@ -120,6 +128,14 @@ def signoff_verdict(project: Path) -> dict:
         v["infrastructure_error"] = "DRC 未获得完整的规则检查结果（%s），需要检查工具与输入" % v["drc"]
     elif v["rcx"] != "complete":
         v["infrastructure_error"] = "RCX 未确认完成（%s），不能生成已验证数据集" % v["rcx"]
+    elif any(status == "clean" and (type(count) is not int or count != 0)
+             for status, count in ((v["drc"], v["drc_violations"]), (v["lvs"], v["lvs_mismatches"]))):
+        v["infrastructure_error"] = "摘要 clean 与计数不一致或缺少可核实计数，不能按零处理"
+    elif any(checked["checks"].get(kind, {}).get("verdict") in (None, "UNKNOWN", "STALE")
+             for kind in ("drc", "lvs", "rcx")):
+        v["infrastructure_error"] = "三层验证证据缺失、未闭合或已变化；未判定设计通过，也不据此自动修版图"
+    elif v["drc"] == "clean" and v["lvs"] == "clean" and checked["verdict"] != "PASS":
+        v["infrastructure_error"] = "签核摘要声称 clean，但原始证据核查不一致；请查看声称与实证对照"
     return v
 
 
@@ -259,8 +275,17 @@ class Pipeline:
                 result["package"] = str(package_job(self.store, jid))
             except Exception as e:                              # noqa: BLE001
                 result["package_error"] = str(e)
-        self.store.set_job(jid, status, result, event=("job", "done",
-                         "任务结束：%d/%d 个设计通过并产出数据集" % (n_ok, len(sts)), result))
+                if status != CANCELLED:
+                    status = FAILED
+        if result.get("package_error"):
+            message = "交付失败：%d/%d 个设计有验收记录，但数据集未能打包：%s" % (
+                n_ok, len(sts), result["package_error"])
+        elif status == CANCELLED:
+            message = "任务已取消：%d/%d 个设计保留完成记录" % (n_ok, len(sts))
+        else:
+            message = "任务结束：%d/%d 个设计通过并产出数据集" % (n_ok, len(sts))
+        self.store.set_job(jid, status, result, event=("job", "fail" if result.get("package_error") else "done",
+                         message, result))
         return True
 
     def recover(self, resume: bool = False) -> list[str]:
@@ -362,6 +387,13 @@ class Pipeline:
             bindings[stage] = {"before": bound, "unchanged": False}
             self._update(jid, name, detail={"input_bindings": bindings})
             write_json(project / "reports" / "input_bindings.json", bindings)
+        from . import artifact_snapshots
+        output_kind = ("graph" if stage == "verify" else "image" if stage == "graph" and
+                       (self.store.job(jid).get("spec") or {}).get("output") == "image" else None)
+        output_receipt = None
+        if output_kind:
+            output_receipt = artifact_snapshots.begin(project, output_kind)
+            write_json(project / "reports" / "output_bindings.json", {output_kind: output_receipt})
         invocation = self.store.begin_execution(jid, name, stage, OWNER, BOOT_ID, cmd)
         if invocation is None:
             self._check_cancel(jid)
@@ -418,6 +450,9 @@ class Pipeline:
                                        "execution_id": invocation, "exit_code": rc}
                     self._update(jid, name, detail={"input_bindings": bindings})
                     write_json(project / "reports" / "input_bindings.json", bindings)
+                if output_receipt is not None:
+                    output_receipt = artifact_snapshots.finish(project, output_kind, output_receipt, invocation, rc)
+                    write_json(project / "reports" / "output_bindings.json", {output_kind: output_receipt})
                 self._check_cancel(jid)
                 return rc
         finally:
@@ -635,26 +670,30 @@ class Pipeline:
         self._ok(jid, name, "flow", "布局布线完成")
         # signoff
         self._stage(jid, name, "signoff")
-        self._sh(jid, name, "signoff", ["bash", str(tools_dir() / "run_signoff.sh"), str(pdir), platform], pdir,
-                 env={"R2G_LVS_FROZEN": "1"})
+        signoff_rc = self._sh(jid, name, "signoff", ["bash", str(tools_dir() / "run_signoff.sh"), str(pdir), platform], pdir,
+                              env={"R2G_LVS_FROZEN": "1"})
         v = signoff_verdict(pdir)
-        self._update(jid, name, detail={"signoff": v})
+        if signoff_rc != 0:
+            v.update(dual_clean=False, infrastructure_error="签核执行未成功结束（rc=%s），报告中的匹配字样不能代替执行完成" % signoff_rc)
+        self._update(jid, name, detail={"signoff": v, "validation": v["validation"]})
         if v.get("infrastructure_error"):
             self._ingest(jid, name, pdir)
             self._fail(jid, name, "signoff", v["infrastructure_error"], v)
             return
         (self._ok if v["dual_clean"] else self._fail_soft)(
-            jid, name, "signoff", "DRC %s（%s 处），LVS %s" % (v["drc"], v["drc_violations"] or 0, v["lvs"]), v)
+            jid, name, "signoff", "DRC %s（%s 处），LVS %s" % (v["drc"], v["drc_violations"] if v["drc_violations"] is not None else "未核实", v["lvs"]), v)
         # repair
         if not v["dual_clean"]:
             self._stage(jid, name, "repair", "自动修复：诊断 → 修改 → 重跑 → 重新签核")
-            self._sh(jid, name, "repair", ["bash", S + "/flow/fix_signoff.sh", str(pdir), platform,
+            repair_rc = self._sh(jid, name, "repair", ["bash", S + "/flow/fix_signoff.sh", str(pdir), platform,
                                            "--check", "both", "--max-iters", "3"], pdir,
                      env={"R2G_LVS_FROZEN": "1"})
             v = signoff_verdict(pdir)
+            if repair_rc != 0:
+                v.update(dual_clean=False, infrastructure_error="修复/复核执行未成功结束（rc=%s）" % repair_rc)
             fixes = [json.loads(l) for l in (pdir / "reports" / "fix_log.jsonl").read_text().splitlines()
                      if l.strip()] if (pdir / "reports" / "fix_log.jsonl").is_file() else []
-            self._update(jid, name, detail={"signoff": v, "repair": fixes[-5:]})
+            self._update(jid, name, detail={"signoff": v, "validation": v["validation"], "repair": fixes[-5:]})
             if not v["dual_clean"] or v.get("infrastructure_error"):
                 self._ingest(jid, name, pdir)
                 self._fail(jid, name, "repair", v.get("infrastructure_error") or
@@ -667,6 +706,8 @@ class Pipeline:
             if n_ok is None:
                 return
             self._preview(jid, name, pdir)
+            if not self._acceptance_gate(jid, name, pdir, n_ok, n_all):
+                return
             self._update(jid, name, status=PASSED, stage="done",
                          detail={"verify": {"passed": n_ok, "total": n_all}, "output": "image"},
                          event=("done", "ok", "完成：签核通过，图像数据集已校验", {}))
@@ -702,11 +743,31 @@ class Pipeline:
         self._ok(jid, name, "verify", "数据集校验通过：%d/%d 项" % (n_ok, len(res)),
                  {"checks": len(res)})
         self._preview(jid, name, pdir)
+        if not self._acceptance_gate(jid, name, pdir, n_ok, len(res)):
+            return
         from .repairs import validate_child
         validate_child(self.store, jid, name, pdir)
         self._update(jid, name, status=PASSED, stage="done",
                      detail={"verify": {"passed": n_ok, "total": len(res)}},
                      event=("done", "ok", "完成：签核通过，数据集已校验", {}))
+
+    def _acceptance_gate(self, jid, name, pdir: Path, passed: int, total: int) -> bool:
+        """Re-read actual evidence before a design can enter PASSED."""
+        from .validation import review, validation_summary
+        from .input_snapshots import write_json
+        self._check_cancel(jid)
+        checked = review(pdir)
+        write_json(pdir / "reports" / "verification_review.json", checked)
+        self._update(jid, name, detail={"validation": validation_summary({"validation": checked})})
+        dataset = checked.get("checks", {}).get("dataset", {})
+        measured = dataset.get("metrics", {})
+        valid_counts = (type(passed) is int and type(total) is int and 0 < passed == total
+                        and measured.get("passed") == passed and measured.get("total") == total)
+        if checked["verdict"] != "PASS" or dataset.get("verdict") != "PASS" or not valid_counts:
+            self._fail(jid, name, "verify", "三层证据核查未通过；数据集校验、STA 或报告摘要不能替代缺失的签核/仿真证据",
+                       {"validation": validation_summary({"validation": checked})})
+            return False
+        return True
 
     def _preview(self, jid, name, pdir: Path) -> None:
         """Layout picture for the UI (best effort, never decides anything)."""

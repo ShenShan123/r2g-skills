@@ -250,6 +250,7 @@ class JobStore:
                 "('fail','warn','recovery_required','cancelled','done') ORDER BY id DESC LIMIT 3", (jid,)).fetchall()
         job = _row(row)
         result = job.get("result") or {}
+        from .validation import validation_summary
         selected = []
         for row in designs:
             d = _row(row)
@@ -261,9 +262,10 @@ class JobStore:
                              "reason": str(detail.get("reason") or "")[:600] or None,
                              "reason_truncated": len(str(detail.get("reason") or "")) > 600,
                              "signoff": {k: str(signoff[k])[:256] if isinstance(signoff[k], str) else signoff[k]
-                                         for k in ("drc", "lvs", "rcx", "drc_violations", "infrastructure_error")
+                                         for k in ("drc", "lvs", "rcx", "drc_violations", "lvs_mismatches", "infrastructure_error")
                                          if k in signoff},
-                             "verify": {k: verify[k] for k in ("passed", "total") if k in verify}})
+                             "verify": {k: verify[k] for k in ("passed", "total") if k in verify},
+                             "validation": validation_summary(detail)})
         return {"source": "jobs.sqlite", "observed_at": time.time(),
                 "event_cursor": cursor, "updated": job["updated"],
                 "status": job["status"], "title": job["title"][:240], "counts": counts,

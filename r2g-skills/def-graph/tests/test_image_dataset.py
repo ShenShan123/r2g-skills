@@ -158,6 +158,32 @@ def test_values_by_hand(toy):
 def test_verifier_passes_clean_build(toy):
     rc, res = _verify(toy, _build(toy))
     assert rc == 0, [k for k, v in res.items() if not v]
+    binding = json.loads((toy / "v.json").read_text())["output_binding"]
+    assert binding["before"] == binding["after"]
+    assert {entry["path"] for entry in binding["after"]} == {
+        "images/features.npz", "images/labels.npz", "images/image_meta.json"}
+
+
+def test_verifier_rejects_core_file_mutation_after_loading(toy, monkeypatch):
+    import verify_images
+    img = _build(toy)
+    original = verify_images.read_lef
+
+    def mutate_after_loading(*args):
+        # The loaded tensors still satisfy every numerical check. Only the
+        # verifier's byte binding can detect the changed artifact on disk.
+        with (img / "features.npz").open("ab") as stream:
+            stream.write(b"changed after load")
+        return original(*args)
+
+    monkeypatch.setattr(verify_images, "read_lef", mutate_after_loading)
+    report = toy / "mutation.json"
+    rc = verify_images.main([str(img), "--labels-dir", str(toy / "labels"), "--final-def", str(toy / "place.def"),
+                             "--lef", str(toy / "cells.lef"), "--json", str(report)])
+    observed = json.loads(report.read_text())
+    assert rc == 1
+    assert [r["check"] for r in observed["results"] if not r["ok"]] == ["provenance.output_bytes_unchanged"]
+    assert observed["output_binding"]["before"] != observed["output_binding"]["after"]
 
 
 @pytest.mark.parametrize("channel,corrupt,expect", [

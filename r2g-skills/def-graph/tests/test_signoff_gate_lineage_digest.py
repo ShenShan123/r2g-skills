@@ -17,6 +17,7 @@ import json
 import os
 import subprocess
 import sys
+from lvs_fixture import add_lvs_evidence
 
 _FLOW = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                      "scripts", "flow")
@@ -86,6 +87,7 @@ def _repair_project(tmp_path):
                "platform": IDENTITY["platform"], "design": IDENTITY["design_name"],
                "flow_variant": IDENTITY["flow_variant"]},
               open(child / "resume_meta.json", "w"))
+    add_lvs_evidence(proj, child)
     return proj, child, lineage
 
 

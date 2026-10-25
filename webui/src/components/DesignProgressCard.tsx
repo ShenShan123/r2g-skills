@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { MessagesSquare, Wand2 } from "lucide-react";
 import { askAgent, Design } from "../lib/api";
-import { StatusBadge, StepTrack } from "./ui";
+import { StepTrack } from "./ui";
+import { DesignStatusBadge, legacyValidation, ValidationSummary, validationLabel, validationVerdict } from "./ValidationEvidence";
 
 export const STAGE_ZH: Record<string, string> = {
   queued: "排队", prepare: "准备", synth: "综合", size: "定尺寸", flow: "布局布线", signoff: "签核", repair: "自动修复",
@@ -11,7 +12,8 @@ export const STAGE_ZH: Record<string, string> = {
 export function designSummary(d: Design, status = d.status): string {
   const v = d.detail?.verify;
   if (status === "pending") return "排队中，等待空闲的算力";
-  if (status === "passed") return v ? `完成：签核通过，数据集校验 ${v.passed}/${v.total} 项通过` : "完成";
+  if (status === "passed") return `流程完成 · ${validationLabel(d.detail?.validation)}`
+    + (v && typeof v.passed === "number" && typeof v.total === "number" ? ` · 数据集校验原记录 ${v.passed}/${v.total} 项` : "");
   if (status === "failed") return d.detail?.reason ?? "失败";
   if (status === "cancelled") return "已取消";
   if (status === "cancelling") return "取消请求已保存，正在等待执行进程停止";
@@ -29,6 +31,7 @@ export function DesignProgressCard({ jobId, d, onOpen, jobStatus, offerAnalysis 
   jobId: string; d: Design; onOpen?: () => void; jobStatus?: string; offerAnalysis?: boolean;
 }) {
   const s = d.detail?.sizing; const so = d.detail?.signoff;
+  const validation = d.detail?.validation;
   const fixes: any[] = [...(d.detail?.frontend_fixes ?? []), ...(d.detail?.flow_fixes ?? [])];
   const repaired = Array.isArray(d.detail?.repair) && d.detail.repair.length > 0;
   const status = jobStatus === "cancelling" && ["running", "pending"].includes(d.status) ? "cancelling" : d.status;
@@ -38,17 +41,19 @@ export function DesignProgressCard({ jobId, d, onOpen, jobStatus, offerAnalysis 
     <div className="card min-w-0 p-3 sm:p-4 md:p-5">
       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <div className="min-w-0 flex-1 truncate font-mono font-semibold" title={d.name}>{d.name}</div>
-        <StatusBadge status={status} />
+        <DesignStatusBadge status={status} validation={validation} />
         {onOpen ? <button className="btn-ghost px-3 py-1.5" onClick={onOpen}>详情</button>
           : <Link className="btn-ghost px-3 py-1.5" to={detailsUrl}>详情</Link>}
       </div>
-      <div className="mt-4"><StepTrack stage={d.stage} status={status} repaired={repaired} /></div>
+      <div className="mt-4"><StepTrack stage={d.stage} status={status} repaired={repaired}
+        validation={validationVerdict(validation)} /></div>
       <p className={`mt-3 break-words text-sm ${statusColor}`}>{designSummary(d, status)}</p>
+      <div className="mt-2"><ValidationSummary value={validation} /></div>
       {(s || so) && (
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted">
           {s && <span>{s.cells ?? "—"} 个单元 · die {s.die_side_um ?? "—"} µm{s.binding === "fixed" ? "（自定义）" : s.binding === "pins_ppl" ? "（按引脚数修正）" : ""} · 时钟 {s.period_ns ?? "—"} ns{s.period_source === "fixed" ? "（自定义）" : ""}</span>}
-          {so && <span>DRC <b className={so.drc === "clean" ? "text-ok" : "text-warn"}>{so.drc === "clean" ? "干净" : so.drc_violations > 0 ? `${so.drc_violations} 处违例` : verdictLabel(so.drc)}</b>
-            {" · "}LVS <b className={so.lvs === "clean" ? "text-ok" : "text-warn"}>{so.lvs === "clean" ? "一致" : verdictLabel(so.lvs)}</b></span>}
+          {so && legacyValidation(validation) && <span>原报告声称：DRC {so.drc === "clean" ? "干净" : so.drc_violations > 0 ? `${so.drc_violations} 处违例` : verdictLabel(so.drc)}
+            {" · "}LVS {so.lvs === "clean" ? "一致" : verdictLabel(so.lvs)}（待复核）</span>}
         </div>)}
       {(fixes.length > 0 || repaired) && (
         <div className="mt-3 rounded-xl bg-accent2/10 px-3 py-2 text-xs">
