@@ -60,15 +60,16 @@ export const STEPS = [
   { label: "校验", stages: ["verify", "preview"] },
 ];
 
-type StepState = "done" | "now" | "fail" | "todo" | "skip";
+type StepState = "done" | "now" | "fail" | "todo" | "skip" | "stopped" | "review";
 
 export function stepStates(stage: string, status: string, repaired: boolean): StepState[] {
-  if (status === "pending" && (!stage || stage === "prepare")) return STEPS.map(() => "todo");
+  if (status === "pending") return STEPS.map(() => "todo");
   const cur = stage === "done" ? STEPS.length : Math.max(0, STEPS.findIndex((s) => s.stages.includes(stage)));
   return STEPS.map((s, i) => {
     if (i < cur) return s.label === "修复" && !repaired ? "skip" : "done";
     if (i > cur) return "todo";
-    return status === "failed" ? "fail" : status === "passed" ? "done" : status === "cancelled" ? "todo" : "now";
+    return status === "failed" ? "fail" : status === "passed" ? "done" : status === "recovery_required" ? "review"
+      : status === "cancelled" || status === "cancelling" ? "stopped" : "now";
   });
 }
 
@@ -78,6 +79,7 @@ export function StepTrack({ stage, status, repaired }: { stage: string; status: 
   const dot: Record<StepState, string> = {
     done: "bg-ok text-onaccent", now: "bg-run text-onaccent animate-pulse2", fail: "bg-bad text-onaccent",
     todo: "bg-panel2 text-faint border border-line", skip: "bg-panel2 text-faint border border-line",
+    stopped: "bg-warn/15 text-warn border border-warn/30", review: "bg-warn/15 text-warn border border-warn/30",
   };
   return (
     <ol className="flex items-start">
@@ -87,12 +89,12 @@ export function StepTrack({ stage, status, repaired }: { stage: string; status: 
             <div className={`h-0.5 flex-1 ${i === 0 ? "invisible" : st[i] === "todo" ? "bg-line" : "bg-ok/60"}`} />
             <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${dot[st[i]]}`}>
               {st[i] === "done" ? <CheckCircle2 size={14} /> : st[i] === "fail" ? <XCircle size={14} /> :
-               st[i] === "skip" ? <Minus size={12} /> : i + 1}
+               st[i] === "skip" ? <Minus size={12} /> : st[i] === "review" ? <AlertTriangle size={13} /> : st[i] === "stopped" ? <Ban size={13} /> : i + 1}
             </span>
             <div className={`h-0.5 flex-1 ${i === STEPS.length - 1 ? "invisible" : st[i + 1] === "todo" ? "bg-line" : "bg-ok/60"}`} />
           </div>
-          <span className={`mt-1.5 truncate text-[11px] ${st[i] === "now" ? "font-medium text-run" : st[i] === "fail" ? "font-medium text-bad" : "text-muted"}`}>
-            {s.label}{st[i] === "skip" ? "（无需）" : ""}
+          <span className={`mt-1.5 text-center text-[10px] leading-4 sm:text-[11px] ${st[i] === "now" ? "font-medium text-run" : st[i] === "fail" ? "font-medium text-bad" : st[i] === "stopped" || st[i] === "review" ? "text-warn" : "text-muted"}`}>
+            {s.label}{st[i] === "skip" && <span className="block sm:inline">（无需）</span>}
           </span>
         </li>))}
     </ol>

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Download, Square, X, Image as ImageIcon, FileText, LayoutGrid, Grid3x3, ChevronDown, ChevronRight,
-         CheckCircle2, XCircle, AlertTriangle, Circle, MessagesSquare, Wand2, Loader2, Search, PackageOpen } from "lucide-react";
+         CheckCircle2, XCircle, AlertTriangle, Circle, MessagesSquare, Loader2, Search, PackageOpen } from "lucide-react";
 import { api, askAgent, Design, fmtClock, Job, JobEvent, OUTPUT_LABEL } from "../lib/api";
-import { StatusBadge, Stat, StepTrack, isActive } from "../components/ui";
+import { StatusBadge, Stat, isActive } from "../components/ui";
+import { DesignProgressCard, designSummary, STAGE_ZH } from "../components/DesignProgressCard";
 
 const KIND_ICON: Record<string, any> = { ok: CheckCircle2, fail: XCircle, warn: AlertTriangle };
 const KIND_CLS: Record<string, string> = { ok: "text-ok", fail: "text-bad", warn: "text-warn", start: "text-run" };
@@ -12,10 +13,7 @@ const PARAM_ZH: Record<string, string> = {
   die_side_um: "die", io_pct: "IO 延迟%", setup_uncertainty_pct: "建立不确定度%", hold_uncertainty_ns: "保持不确定度",
   place_density_lb_addon: "密度加量",
 };
-const STAGE_ZH: Record<string, string> = {
-  prepare: "准备", synth: "综合", size: "定尺寸", flow: "布局布线", signoff: "签核", repair: "自动修复",
-  graph: "生成数据集", verify: "数据集校验", preview: "版图预览", ingest: "写入知识库", done: "完成",
-};
+
 
 export default function JobDetail() {
   const { id = "" } = useParams();
@@ -105,7 +103,7 @@ export default function JobDetail() {
 
       {ds.length > BIG ? <BatchList jobId={id} ds={ds} onOpen={setSel} /> : (
         <div className="mt-4 space-y-3">
-          {ds.map((d) => <DesignCard key={d.name} jobId={id} d={d} onOpen={() => setSel(d.name)} />)}
+          {ds.map((d) => <DesignProgressCard key={d.name} jobId={id} d={d} jobStatus={job.status} onOpen={() => setSel(d.name)} />)}
         </div>)}
 
       <div className="mt-6">
@@ -206,7 +204,7 @@ function BatchList({ jobId, ds, onOpen }: { jobId: string; ds: Design[]; onOpen:
             <button key={d.name} onClick={() => onOpen(d.name)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-panel2/60">
               <span className={`h-2 w-2 shrink-0 rounded-full ${DOT[d.status] ?? "bg-line"}`} />
               <span className="w-40 shrink-0 truncate font-mono text-sm sm:w-56">{d.name}</span>
-              <span className={`min-w-0 flex-1 truncate text-xs ${d.status === "failed" ? "text-bad" : "text-muted"}`}>{plain(d)}</span>
+              <span className={`min-w-0 flex-1 truncate text-xs ${d.status === "failed" ? "text-bad" : "text-muted"}`}>{designSummary(d)}</span>
               <StatusBadge status={d.status} />
             </button>))}
           {shown.length === 0 && <div className="px-3 py-6 text-center text-sm text-muted">没有符合条件的设计</div>}
@@ -221,50 +219,6 @@ function BatchList({ jobId, ds, onOpen }: { jobId: string; ds: Design[]; onOpen:
       {counts.failed > 0 && (
         <Link className="btn-ghost" to={askAgent(`任务 ${jobId} 有 ${counts.failed} 个设计失败，帮我按原因归类，告诉我哪些是 RTL 问题、哪些可以修`)}>
           <MessagesSquare size={15} /> 让 agent 归类分析失败的设计</Link>)}
-    </div>
-  );
-}
-
-function plain(d: Design): string {
-  const v = d.detail?.verify;
-  if (d.status === "pending") return "排队中，等待空闲的算力";
-  if (d.status === "passed") return v ? `完成：签核通过，数据集校验 ${v.passed}/${v.total} 项全部通过` : "完成";
-  if (d.status === "failed") return d.detail?.reason ?? "失败";
-  if (d.status === "cancelled") return "已取消";
-  if (d.status === "recovery_required") return d.detail?.reason ?? "需要核对旧执行状态，未自动重跑";
-  return `正在${STAGE_ZH[d.stage] ?? d.stage}…`;
-}
-
-function DesignCard({ jobId, d, onOpen }: { jobId: string; d: Design; onOpen: () => void }) {
-  const s = d.detail?.sizing; const so = d.detail?.signoff;
-  const fixes: any[] = [...(d.detail?.frontend_fixes ?? []), ...(d.detail?.flow_fixes ?? [])];
-  const repaired = Array.isArray(d.detail?.repair) && d.detail.repair.length > 0;
-  return (
-    <div className="card p-4 md:p-5">
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1 truncate font-mono font-semibold">{d.name}</div>
-        <StatusBadge status={d.status} />
-        <button className="btn-ghost px-3 py-1.5" onClick={onOpen}>详情</button>
-      </div>
-      <div className="mt-4"><StepTrack stage={d.stage} status={d.status} repaired={repaired} /></div>
-      <p className={`mt-3 text-sm ${d.status === "failed" ? "text-bad" : "text-muted"}`}>{plain(d)}</p>
-      {(s || so) && (
-        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted">
-          {s && <span>{s.cells} 个单元 · die {s.die_side_um} µm{s.binding === "fixed" ? "（自定义）" : s.binding === "pins_ppl" ? "（按引脚数修正）" : ""} · 时钟 {s.period_ns} ns{s.period_source === "fixed" ? "（自定义）" : ""}</span>}
-          {so && <span>DRC <b className={so.drc === "clean" ? "text-ok" : "text-bad"}>{so.drc === "clean" ? "干净" : `${so.drc_violations ?? "?"} 处违例`}</b>
-            {" · "}LVS <b className={so.lvs === "clean" ? "text-ok" : "text-bad"}>{so.lvs === "clean" ? "一致" : so.lvs}</b></span>}
-        </div>)}
-      {(fixes.length > 0 || repaired) && (
-        <div className="mt-3 rounded-xl bg-accent2/10 px-3 py-2 text-xs">
-          <div className="flex items-center gap-1.5 font-medium text-accent2"><Wand2 size={13} /> 自动修复</div>
-          <ul className="mt-1 space-y-0.5 text-muted">
-            {fixes.map((f, i) => <li key={i}>{f.detail}</li>)}
-            {repaired && <li>签核未通过后自动诊断并修复（{d.detail.repair.length} 步，见详情）</li>}
-          </ul>
-        </div>)}
-      {d.status === "failed" && (
-        <Link className="btn-ghost mt-3" to={askAgent(`任务 ${jobId} 里的设计 ${d.name} 失败了，帮我分析原因并告诉我怎么改`)}>
-          <MessagesSquare size={15} /> 让 agent 分析原因</Link>)}
     </div>
   );
 }

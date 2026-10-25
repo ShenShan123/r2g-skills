@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Send, Paperclip, X, ChevronDown, ChevronRight, Plus, MessageSquare, ExternalLink, AlertCircle,
-         Loader2, CheckCircle2, XCircle, Brain, History } from "lucide-react";
+         Loader2, CheckCircle2, XCircle, History } from "lucide-react";
 import { api, chatStream, ToolOutputRef } from "../lib/api";
 import { Md, Logo } from "../components/ui";
 import { ToolOutputView } from "../components/ToolOutputView";
+import { JobProgress } from "../components/JobProgress";
 
 type Part =
   | { kind: "text"; text: string }
-  | { kind: "thinking"; text: string }
   | { kind: "tool"; id: string; name: string; args: any; result?: any; output_ref?: ToolOutputRef };
 type Msg = { role: "user" | "assistant"; parts: Part[]; error?: string };
+
+function toolJobId(p: Extract<Part, { kind: "tool" }>): string | null {
+  if (!p.result || typeof p.result !== "object" || p.result.error) return null;
+  return typeof p.result.job_id === "string" && p.result.job_id ? p.result.job_id : null;
+}
 
 const TOOL_LABEL: Record<string, string> = {
   read_tool_output: "读取已保存的工具结果",
@@ -36,7 +41,6 @@ function fromStored(ms: any[]): Msg[] {
     else if (m.role === "assistant") {
       const last = out[out.length - 1];
       const target = last && last.role === "assistant" ? last : (out.push({ role: "assistant", parts: [] }), out[out.length - 1]);
-      if (m.thinking) target.parts.push({ kind: "thinking", text: m.thinking });
       if (m.content) target.parts.push({ kind: "text", text: m.content });
       for (const t of m.tool_calls ?? []) target.parts.push({ kind: "tool", id: t.id, name: t.name, args: t.arguments });
     } else if (m.role === "tool") {
@@ -62,6 +66,15 @@ export default function Chat() {
   const end = useRef<HTMLDivElement>(null);
   const dirInput = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
+  // Keep one live card per task at its most recent mention in this conversation.
+  const latestJobs = new Map<string, string>();
+  msgs.forEach((m, i) => {
+    m.parts.forEach((p, k) => {
+      if (p.kind !== "tool") return;
+      const id = toolJobId(p);
+      if (id) latestJobs.set(id, `${i}:${k}`);
+    });
+  });
 
   const loadSessions = () => api.sessions().then(setSessions).catch(() => {});
   useEffect(() => { loadSessions(); }, []);
@@ -99,7 +112,7 @@ export default function Chat() {
     const upd = (f: (a: Msg) => void) => setMsgs((m) => {
       const c = m.slice(); const a = { ...c[c.length - 1], parts: c[c.length - 1].parts.slice() }; f(a); c[c.length - 1] = a; return c;
     });
-    const append = (kind: "text" | "thinking", delta: string) => upd((a) => {
+    const append = (kind: "text", delta: string) => upd((a) => {
       const p = a.parts[a.parts.length - 1];
       if (p && p.kind === kind) a.parts[a.parts.length - 1] = { kind, text: (p as any).text + delta };
       else a.parts.push({ kind, text: delta });
@@ -108,7 +121,6 @@ export default function Chat() {
       await chatStream(text, sid, (e) => {
         if (e.type === "session") setSid(e.session_id);
         else if (e.type === "text") append("text", e.delta);
-        else if (e.type === "thinking") append("thinking", e.delta);
         else if (e.type === "tool_call") upd((a) => { a.parts.push({ kind: "tool", id: e.id, name: e.name, args: e.arguments }); });
         else if (e.type === "tool_result") upd((a) => {
           a.parts = a.parts.map((p) => (p.kind === "tool" && p.id === e.id ? { ...p, result: e.result, output_ref: e.output_ref } : p));
@@ -167,8 +179,7 @@ export default function Chat() {
                   <div className="mt-1 hidden shrink-0 sm:block"><Logo size={26} /></div>
                   <div className="min-w-0 flex-1 space-y-2">
                     {m.parts.map((p, k) => p.kind === "text" ? <Md key={k}>{p.text}</Md>
-                      : p.kind === "thinking" ? <Thinking key={k} text={p.text} live={busy && i === msgs.length - 1 && k === m.parts.length - 1} />
-                      : <ToolStep key={k} p={p} sid={sid} />)}
+                      : <ToolStep key={k} p={p} sid={sid} showJob={latestJobs.get(toolJobId(p) ?? "") === `${i}:${k}`} />)}
                     {busy && i === msgs.length - 1 && !m.error && m.parts.length === 0 && (
                       <div className="flex items-center gap-2 text-sm text-muted"><Loader2 size={14} className="animate-spin" /> 正在思考…</div>)}
                     {m.error && (
@@ -217,38 +228,28 @@ function UserBubble({ text }: { text: string }) {
     </div>);
 }
 
-function Thinking({ text, live }: { text: string; live: boolean }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="rounded-xl border border-line/70 bg-panel2/40">
-      <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-muted">
-        {live ? <Loader2 size={13} className="animate-spin" /> : <Brain size={13} />}
-        {live ? "正在思考…" : `思考过程（${text.length} 字）`}
-        <span className="ml-auto">{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
-      </button>
-      {open && <div className="whitespace-pre-wrap border-t border-line/70 px-3 py-2 text-xs leading-5 text-muted">{text}</div>}
-    </div>);
-}
-
-function ToolStep({ p, sid }: { p: Extract<Part, { kind: "tool" }>; sid: string | null }) {
+function ToolStep({ p, sid, showJob }: { p: Extract<Part, { kind: "tool" }>; sid: string | null; showJob: boolean }) {
   const [open, setOpen] = useState(false);
   const done = p.result !== undefined;
   const err = done && p.result && typeof p.result === "object" && "error" in p.result;
-  const jobId = p.result?.job_id;
+  const jobId = toolJobId(p);
   return (
     <div className="text-sm">
-      <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left text-muted hover:text-fg">
+      <div className="flex items-center gap-2">
+      <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-1 text-left text-muted hover:text-fg">
         {!done ? <Loader2 size={14} className="animate-spin text-run" /> : err ? <XCircle size={14} className="text-bad" /> : <CheckCircle2 size={14} className="text-ok" />}
         <span>{TOOL_LABEL[p.name] ?? p.name}{err ? "（出错）" : ""}</span>
-        {jobId && <Link to={`/jobs/${jobId}`} onClick={(e) => e.stopPropagation()} className="chip bg-accent/15 text-accent">打开任务 <ExternalLink size={11} /></Link>}
         <span className="ml-auto text-faint">{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
       </button>
+      {jobId && !showJob && <Link to={`/jobs/${encodeURIComponent(jobId)}`} className="chip shrink-0 bg-accent/15 text-accent">打开任务 <ExternalLink size={11} /></Link>}
+      </div>
       {open && (
         <>
         <pre className="mt-1 max-h-72 overflow-auto rounded-xl bg-panel2 px-3 py-2 font-mono text-[11.5px] leading-5 text-muted">
           {"参数 " + JSON.stringify(p.args, null, 2) + (done ? "\n\n结果 " + JSON.stringify(p.result, null, 2) : "")}</pre>
         {sid && p.output_ref && <ToolOutputView key={sid + p.output_ref.artifact_id} sid={sid} output={p.output_ref} />}
         </>)}
+      {jobId && showJob && <JobProgress key={jobId} jobId={jobId} />}
     </div>
   );
 }
