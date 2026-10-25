@@ -1,29 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { Send, Paperclip, X, ChevronDown, ChevronRight, Plus, MessageSquare, ExternalLink, AlertCircle,
-         Loader2, CheckCircle2, XCircle, History } from "lucide-react";
-import { api, chatStream, ToolOutputRef } from "../lib/api";
-import { Md, Logo } from "../components/ui";
-import { ToolOutputView } from "../components/ToolOutputView";
-import { JobProgress } from "../components/JobProgress";
+import { useSearchParams } from "react-router-dom";
+import { Send, Paperclip, X, Plus, MessageSquare, Loader2, History } from "lucide-react";
+import { api, chatStream } from "../lib/api";
+import { Logo } from "../components/ui";
+import { ConversationRun, ConversationPart, toolJobId } from "../components/ConversationRun";
 
-type Part =
-  | { kind: "text"; text: string }
-  | { kind: "tool"; id: string; name: string; args: any; result?: any; output_ref?: ToolOutputRef };
+type Part = ConversationPart;
 type Msg = { role: "user" | "assistant"; parts: Part[]; error?: string };
 
-function toolJobId(p: Extract<Part, { kind: "tool" }>): string | null {
-  if (!p.result || typeof p.result !== "object" || p.result.error) return null;
-  return typeof p.result.job_id === "string" && p.result.job_id ? p.result.job_id : null;
-}
-
-const TOOL_LABEL: Record<string, string> = {
-  read_tool_output: "读取已保存的工具结果",
-  list_examples: "查看内置示例", start_job: "提交任务", job_status: "查询任务进度", list_jobs: "列出任务",
-  design_detail: "查看设计详情", read_log: "读取日志", diagnose: "请修复引擎诊断", knowledge_lookup: "查询故障知识库",
-  cancel_job: "取消任务", dataset_info: "查询数据集", check_environment: "检查工具链", read_rtl: "读取源码",
-  search_rtl: "在 GitHub 上搜索 RTL", fetch_rtl: "下载仓库并列出设计", disk_usage: "查看磁盘占用",
-};
 const SUGGEST = [
   "帮我在 GitHub 上找一个小的 UART 设计，跑一遍生成图数据集",
   "最近的任务进展怎么样？",
@@ -67,12 +51,12 @@ export default function Chat() {
   const dirInput = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   // Keep one live card per task at its most recent mention in this conversation.
-  const latestJobs = new Map<string, string>();
+  const latestJobs = new Map<string, number>();
   msgs.forEach((m, i) => {
-    m.parts.forEach((p, k) => {
+    m.parts.forEach((p) => {
       if (p.kind !== "tool") return;
       const id = toolJobId(p);
-      if (id) latestJobs.set(id, `${i}:${k}`);
+      if (id) latestJobs.set(id, i);
     });
   });
 
@@ -178,15 +162,8 @@ export default function Chat() {
                 <div key={i} className="flex gap-3">
                   <div className="mt-1 hidden shrink-0 sm:block"><Logo size={26} /></div>
                   <div className="min-w-0 flex-1 space-y-2">
-                    {m.parts.map((p, k) => p.kind === "text" ? <Md key={k}>{p.text}</Md>
-                      : <ToolStep key={k} p={p} sid={sid} showJob={latestJobs.get(toolJobId(p) ?? "") === `${i}:${k}`} />)}
-                    {busy && i === msgs.length - 1 && !m.error && m.parts.length === 0 && (
-                      <div className="flex items-center gap-2 text-sm text-muted"><Loader2 size={14} className="animate-spin" /> 正在思考…</div>)}
-                    {m.error && (
-                      <div className="flex items-start gap-2 rounded-xl bg-bad/10 px-3 py-2 text-sm text-bad">
-                        <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                        <div>{m.error}<div className="mt-1 text-xs text-muted">请核对任务状态或 <Link to="/settings" className="underline">设置</Link>，再决定是否重试。</div></div>
-                      </div>)}
+                    <ConversationRun parts={m.parts} sid={sid} busy={busy && i === msgs.length - 1}
+                      error={m.error} jobIds={[...latestJobs].filter(([, owner]) => owner === i).map(([id]) => id)} />
                   </div>
                 </div>))}
             </div>
@@ -226,30 +203,4 @@ function UserBubble({ text }: { text: string }) {
       {m && <div className="chip bg-panel/70 text-muted"><Paperclip size={12} />{m[1]} · {m[2]} 个文件</div>}
       <div className="whitespace-pre-wrap">{m ? m[3] : text}</div>
     </div>);
-}
-
-function ToolStep({ p, sid, showJob }: { p: Extract<Part, { kind: "tool" }>; sid: string | null; showJob: boolean }) {
-  const [open, setOpen] = useState(false);
-  const done = p.result !== undefined;
-  const err = done && p.result && typeof p.result === "object" && "error" in p.result;
-  const jobId = toolJobId(p);
-  return (
-    <div className="text-sm">
-      <div className="flex items-center gap-2">
-      <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-1 text-left text-muted hover:text-fg">
-        {!done ? <Loader2 size={14} className="animate-spin text-run" /> : err ? <XCircle size={14} className="text-bad" /> : <CheckCircle2 size={14} className="text-ok" />}
-        <span>{TOOL_LABEL[p.name] ?? p.name}{err ? "（出错）" : ""}</span>
-        <span className="ml-auto text-faint">{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
-      </button>
-      {jobId && !showJob && <Link to={`/jobs/${encodeURIComponent(jobId)}`} className="chip shrink-0 bg-accent/15 text-accent">打开任务 <ExternalLink size={11} /></Link>}
-      </div>
-      {open && (
-        <>
-        <pre className="mt-1 max-h-72 overflow-auto rounded-xl bg-panel2 px-3 py-2 font-mono text-[11.5px] leading-5 text-muted">
-          {"参数 " + JSON.stringify(p.args, null, 2) + (done ? "\n\n结果 " + JSON.stringify(p.result, null, 2) : "")}</pre>
-        {sid && p.output_ref && <ToolOutputView key={sid + p.output_ref.artifact_id} sid={sid} output={p.output_ref} />}
-        </>)}
-      {jobId && showJob && <JobProgress key={jobId} jobId={jobId} />}
-    </div>
-  );
 }

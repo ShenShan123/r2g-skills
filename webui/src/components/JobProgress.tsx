@@ -1,79 +1,70 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, Download, ExternalLink, Loader2, RefreshCw } from "lucide-react";
-import { api, Job } from "../lib/api";
-import { DesignProgressCard } from "./DesignProgressCard";
-import { isActive, StatusBadge } from "./ui";
+import { AlertTriangle, CheckCircle2, Download, ExternalLink, XCircle } from "lucide-react";
+import { askAgent, Design, Job, JobEvent } from "../lib/api";
+import { DesignProgressCard, STAGE_ZH } from "./DesignProgressCard";
+import { StatusBadge } from "./ui";
 
-const SUMMARY: Record<string, string> = {
-  pending: "任务已提交，等待空闲算力。", running: "任务正在执行，进度自动更新。",
-  finalizing: "设计检查已结束，正在打包数据集。",
-  cancelling: "取消请求已保存，正在确认执行进程停止。",
-  cancelled: "任务已取消，已有日志与结果仍可查看。",
-  recovery_required: "需要核对旧执行状态，尚未自动重跑。",
-  failed: "任务失败，请查看设计状态与报告。",
-};
-const PRIORITY: Record<string, number> = { running: 0, recovery_required: 1, failed: 2, pending: 3 };
+export const jobFinished = (job: Job) => ["done", "failed", "cancelled", "partial"].includes(job.status);
 
-/** Poll durable task state independently of the model's text or tool snapshot. */
-export function JobProgress({ jobId }: { jobId: string }) {
-  const [job, setJob] = useState<Job | null>(null);
-  const [error, setError] = useState(false);
-  const [refresh, setRefresh] = useState(0);
-
-  useEffect(() => {
-    let alive = true, inFlight = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const tick = async () => {
-      if (!alive || inFlight) return;
-      clearTimeout(timer);
-      inFlight = true;
-      try {
-        const current = await api.job(jobId);
-        if (!alive) return;
-        setJob(current); setError(false);
-        if (isActive(current.status)) timer = setTimeout(tick, current.status === "recovery_required" || (current.designs?.length ?? 0) > 12 ? 5000 : 2000);
-      } catch {
-        if (!alive) return;
-        setError(true);
-        timer = setTimeout(tick, 5000);
-      } finally { inFlight = false; }
-    };
-    const visible = () => { if (document.visibilityState === "visible") void tick(); };
-    void tick();
-    window.addEventListener("focus", visible);
-    window.addEventListener("online", visible);
-    document.addEventListener("visibilitychange", visible);
-    return () => {
-      alive = false; clearTimeout(timer);
-      window.removeEventListener("focus", visible);
-      window.removeEventListener("online", visible);
-      document.removeEventListener("visibilitychange", visible);
-    };
-  }, [jobId, refresh]);
-
-  const ds = job?.designs ?? [];
-  const passed = ds.filter((d) => d.status === "passed").length;
-  const shown = ds.length > 6 ? [...ds].sort((a, b) => (PRIORITY[a.status] ?? 4) - (PRIORITY[b.status] ?? 4)).slice(0, 6) : ds;
-  const detailsUrl = `/jobs/${encodeURIComponent(jobId)}`;
+/** This is a view of recorded job state, independent of the model's narrative. */
+export function JobProgress({ job }: { job: Job }) {
+  const designs = job.designs ?? [];
+  const shown = designs.length > 6 ? [...designs].sort((a, b) =>
+    Number(["passed", "cancelled"].includes(a.status)) - Number(["passed", "cancelled"].includes(b.status))).slice(0, 6) : designs;
   return (
-    <section aria-label="任务进度" data-job-id={jobId} className="my-3 min-w-0 space-y-3 rounded-2xl bg-panel2/40 p-2 sm:p-3">
-      <div className="flex flex-wrap items-center gap-2 px-1">
-        <h3 className="min-w-0 flex-1 truncate font-medium" title={job?.title}>{job?.title || "任务进度"}</h3>
-        {job && <StatusBadge status={job.status} />}
-        <Link to={detailsUrl} className="inline-flex items-center gap-1 text-xs text-accent hover:underline">查看任务 <ExternalLink size={12} /></Link>
+    <section aria-label="任务进度" data-job-id={job.id} className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+        <span className="min-w-0 flex-1 truncate">{job.title}</span>
+        <StatusBadge status={job.status} />
+        <Link to={`/jobs/${encodeURIComponent(job.id)}`} className="inline-flex items-center gap-1 text-accent">查看任务 <ExternalLink size={12} /></Link>
       </div>
-      {!job && !error && <p className="flex items-center gap-2 px-1 text-xs text-muted"><Loader2 size={14} className="animate-spin" /> 正在读取任务进度…</p>}
-      {error && <div role="status" className="flex flex-wrap items-center gap-2 px-1 text-xs text-warn">
-        <AlertCircle size={14} /><span>{job ? "暂时无法更新，以下为上次读取的状态。" : "暂时无法读取任务状态，正在重连。"}</span>
-        <button className="inline-flex items-center gap-1 underline" onClick={() => setRefresh((n) => n + 1)}><RefreshCw size={12} /> 重试</button>
-      </div>}
-      {job && <>
-        <p className="px-1 text-xs text-muted">{job.status === "done" ? `已完成 · ${passed}/${ds.length} 个设计通过` : SUMMARY[job.status] ?? "查看设计状态与报告。"}</p>
-        {shown.map((d) => <DesignProgressCard key={d.name} jobId={jobId} d={d} jobStatus={job.status} offerAnalysis={false} />)}
-        {ds.length > shown.length && <Link to={detailsUrl} className="block px-1 text-xs text-accent hover:underline">共 {ds.length} 个设计，{passed} 个通过 · 查看全部</Link>}
-        {job.result?.package && <a className="btn-primary" href={`/api/jobs/${encodeURIComponent(jobId)}/download`}><Download size={15} /> 下载数据集</a>}
+      {shown.map((d) => <DesignProgressCard key={d.name} jobId={job.id} d={d} jobStatus={job.status} offerAnalysis={false} />)}
+      {designs.length > shown.length && <Link to={`/jobs/${encodeURIComponent(job.id)}`} className="text-xs text-accent">查看全部 {designs.length} 个设计</Link>}
+    </section>
+  );
+}
+
+function failureReason(d: Design, events: JobEvent[]): string {
+  const failure = [...events].reverse().find((e) => e.design === d.name && e.kind === "fail");
+  const log = String(failure?.data?.log_tail ?? "");
+  if (/cannot create directory[^\n]*Permission denied/i.test(log)) {
+    return "工具链工作目录不可写，流程在综合前停止。请检查工具链路径和写入权限。";
+  }
+  return d.detail?.reason || failure?.message || "请查看该阶段的日志与报告。";
+}
+
+export function JobResult({ job, events }: { job: Job; events: JobEvent[] }) {
+  if (!jobFinished(job)) return null;
+  const designs = job.designs ?? [];
+  const passed = designs.filter((d) => d.status === "passed");
+  const failed = designs.filter((d) => d.status === "failed");
+  const cancelled = job.status === "cancelled";
+  const success = job.status === "done" && passed.length === designs.length && designs.length > 0;
+  const title = cancelled ? "任务已取消" : success ? "任务已完成" : job.status === "failed" ? "任务失败" : passed.length ? "任务部分完成" : "任务已结束";
+  const Icon = success ? CheckCircle2 : cancelled ? AlertTriangle : XCircle;
+  return (
+    <section aria-label="任务结果" data-job-id={job.id} className="space-y-3 py-1">
+      <div className={`flex items-center gap-2 font-semibold ${success ? "text-ok" : cancelled ? "text-warn" : "text-bad"}`}><Icon size={18} /><h3>{title}</h3></div>
+      {passed.length > 0 && <>
+        <p className="text-sm">{passed.length}/{designs.length} 个设计通过签核和数据集校验。</p>
+        <ul className="space-y-1 text-sm text-muted">
+          {passed.slice(0, 5).map((d) => <li key={d.name}><span className="font-mono text-fg">{d.name}</span>
+            {d.detail?.verify && <> · 数据集校验 {d.detail.verify.passed}/{d.detail.verify.total} 项通过</>}</li>)}
+        </ul>
       </>}
+      {failed.length > 0 && <ul className="space-y-3 text-sm">
+        {failed.slice(0, 5).map((d) => <li key={d.name} className="space-y-1">
+          <p><span className="font-mono font-medium">{d.name}</span> · {STAGE_ZH[d.detail?.failed_stage ?? d.stage] ?? d.stage}阶段失败</p>
+          <p className="break-words text-muted">{failureReason(d, events)}</p>
+        </li>)}
+      </ul>}
+      {!passed.length && !cancelled && <p className="text-sm text-muted">本次未生成可交付的数据集。</p>}
+      {cancelled && <p className="text-sm text-muted">已确认取消，已有执行记录可在过程中查看。</p>}
+      <div className="flex flex-wrap items-center gap-3">
+        {job.result?.package && <a className="btn-primary" href={`/api/jobs/${encodeURIComponent(job.id)}/download`}><Download size={15} /> 下载数据集</a>}
+        <Link to={`/jobs/${encodeURIComponent(job.id)}`} className="inline-flex items-center gap-1 text-sm text-accent hover:underline">查看报告 <ExternalLink size={13} /></Link>
+        {failed.length > 0 && <Link to={askAgent(`任务 ${job.id} 执行失败，请读取失败日志，说明实际原因和下一步处理方法。`)} className="text-sm text-accent hover:underline">分析失败原因</Link>}
+      </div>
     </section>
   );
 }

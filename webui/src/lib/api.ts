@@ -45,8 +45,9 @@ export const api = {
   testModel: () => fetch("/api/config/test", { method: "POST" }).then(j<any>),
   examples: () => fetch("/api/examples").then(j<{ examples: { name: string; top: string; description: string }[] }>),
   jobs: () => fetch("/api/jobs").then(j<Job[]>),
-  job: (id: string) => fetch(`/api/jobs/${id}`).then(j<Job>),
-  events: (id: string, after = 0, tail = 0) => fetch(`/api/jobs/${id}/events?after=${after}&tail=${tail}`).then(j<JobEvent[]>),
+  job: (id: string, signal?: AbortSignal) => fetch(`/api/jobs/${encodeURIComponent(id)}`, { signal }).then(j<Job>),
+  events: (id: string, after = 0, tail = 0, signal?: AbortSignal) =>
+    fetch(`/api/jobs/${encodeURIComponent(id)}/events?after=${after}&tail=${tail}`, { signal }).then(j<JobEvent[]>),
   scan: (path: string) =>
     fetch("/api/batch/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) })
       .then(j<Scan>),
