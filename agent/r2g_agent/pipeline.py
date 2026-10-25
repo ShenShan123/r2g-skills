@@ -150,7 +150,7 @@ class Pipeline:
 
     # -- public -------------------------------------------------------------
     def submit(self, sources: list[dict], platform: str = "nangate45", title: str = "",
-               output: str = "graph", params: dict | None = None) -> str:
+               output: str = "graph", params: dict | None = None, *, submission: dict | None = None) -> str:
         """sources: [{"name":..., "path":..., "top": optional}]"""
         if output not in OUTPUTS:
             raise ValueError("output must be one of %s" % ", ".join(OUTPUTS))
@@ -163,8 +163,20 @@ class Pipeline:
             seen.add(name)
             designs.append({"name": name, "detail": {"source": str(s["path"]), "top": s.get("top")}})
         spec = {"platform": platform, "output": output, "sources": sources, "params": params or {}}
-        jid = self.store.create_job(title or "%d 个设计 · %s · %s" % (len(designs), platform, output),
-                                    spec, designs)
+        if submission:
+            from .submissions import source_snapshot
+            from .turns import digest
+            submission = {**submission, "source_snapshot": source_snapshot(sources)}
+            submission["request_hash"] = digest({"spec": spec, "title": title,
+                                                  "source_snapshot": submission["source_snapshot"],
+                                                  "session_id": submission.get("session_id"),
+                                                  "turn_id": submission.get("turn_id"),
+                                                  "action_id": submission.get("action_id")})
+            spec["source_snapshot"] = submission["source_snapshot"]
+        jid, created = self.store.create_submission(
+            title or "%d 个设计 · %s · %s" % (len(designs), platform, output), spec, designs, submission)
+        if not created:
+            return jid
         ws = r2g_home() / "workspace" / jid
         for d in designs:
             # FLOW_VARIANT comes from the project folder name, so it carries the
@@ -339,6 +351,17 @@ class Pipeline:
     def _sh(self, jid: str, name: str, stage: str, cmd: list[str], project: Path,
             env: dict | None = None, timeout: int | None = None) -> int:
         self._check_cancel(jid)
+        from .input_snapshots import capture, reference, write_json
+        bound = None
+        if (project / "metadata.json").is_file():
+            try:
+                bound = reference(capture(project))
+            except (OSError, ValueError) as exc:
+                bound = {"unavailable": type(exc).__name__}
+            bindings = (self.store.design(jid, name) or {}).get("detail", {}).get("input_bindings", {})
+            bindings[stage] = {"before": bound, "unchanged": False}
+            self._update(jid, name, detail={"input_bindings": bindings})
+            write_json(project / "reports" / "input_bindings.json", bindings)
         invocation = self.store.begin_execution(jid, name, stage, OWNER, BOOT_ID, cmd)
         if invocation is None:
             self._check_cancel(jid)
@@ -385,6 +408,16 @@ class Pipeline:
                     rc = 124
                 if not self.store.update_execution(invocation, OWNER, "exited", exit_code=rc):
                     raise LostOwnership("execution owner changed before completion")
+                if bound is not None:
+                    try:
+                        after = reference(capture(project))
+                    except (OSError, ValueError) as exc:
+                        after = {"unavailable": type(exc).__name__}
+                    bindings[stage] = {"before": bound, "after": after,
+                                       "unchanged": "sha256" in bound and after == bound,
+                                       "execution_id": invocation, "exit_code": rc}
+                    self._update(jid, name, detail={"input_bindings": bindings})
+                    write_json(project / "reports" / "input_bindings.json", bindings)
                 self._check_cancel(jid)
                 return rc
         finally:
@@ -475,6 +508,8 @@ class Pipeline:
         self._stage(jid, name, "prepare")
         params = (self.store.job(jid) or {}).get("spec", {}).get("params") or {}
         meta = proj.create(src, pdir, platform, top=top, name=name, params=params)
+        from .repairs import prepare_child_receipt
+        prepare_child_receipt(self.store, jid, name, pdir)
         if meta["profile_changed"]:
             self._ok(jid, name, "prepare", "使用自定义参数：%s" % "、".join(
                 profile.FIELDS[k][0] if k in profile.FIELDS else k for k in meta["profile_changed"]))
@@ -633,6 +668,8 @@ class Pipeline:
         self._ok(jid, name, "verify", "数据集校验通过：%d/%d 项" % (n_ok, len(res)),
                  {"checks": len(res)})
         self._preview(jid, name, pdir)
+        from .repairs import validate_child
+        validate_child(self.store, jid, name, pdir)
         self._update(jid, name, status=PASSED, stage="done",
                      detail={"verify": {"passed": n_ok, "total": len(res)}},
                      event=("done", "ok", "完成：签核通过，数据集已校验", {}))

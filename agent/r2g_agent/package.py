@@ -23,6 +23,7 @@ REPORTS = ("drc.json", "lvs.json", "rcx.json", "route.json", "ppa.json",
            "timing_check.json", "signoff_manifest.json", "signoff_gate.json",
            "graph_dataset.json", "image_dataset.json", "verify.json",
            "fix_log.jsonl", "layout.png")
+REPAIR_REPORTS = ("agent_repair.json", "agent_repair.diff", "functional_check.json", "input_bindings.json")
 LOG_STAGES = ("prepare", "synth", "size", "flow", "signoff", "repair", "graph", "verify", "preview")
 # Limits apply to uncompressed bytes, including generated manifests. They bound
 # individual downloads and multi-design jobs independently of compression.
@@ -177,7 +178,7 @@ def _add_design(archive: _Archive, job: dict, d: dict, root: str, *, index=None)
             paths.extend(_tree(project, "dataset", budget=archive, required=True))
         for folder in ("rtl", "constraints"):
             paths.extend(_tree(project, folder, budget=archive))
-        optional.extend("reports/" + report for report in REPORTS)
+        optional.extend("reports/" + report for report in (*REPORTS, *REPAIR_REPORTS))
         optional.append("metadata.json")
         for relative in paths:
             members.append(archive.file(project, relative, root))
@@ -226,6 +227,29 @@ def _add_design(archive: _Archive, job: dict, d: dict, root: str, *, index=None)
         manifest["unverified"].append("input_files_missing")
     if missing_reports:
         manifest["unverified"].append("required_reports_missing")
+    binding = details.get("repair_validation")
+    if binding:
+        from .input_snapshots import digest
+        from .repair_checks import oracle_policy
+        if binding.get("status") != "verified" or missing_reports:
+            raise ValueError("repair delivery lacks required verified evidence")
+        if digest(oracle_policy()) != binding["policy_sha256"]:
+            raise ValueError("repair acceptance policy changed before packaging")
+        for directory in ("rtl", "constraints"):
+            recorded = sorted(({**entry, "path": entry["path"][len(directory) + 1:]}
+                               for entry in inputs if entry["path"].startswith(directory + "/")),
+                              key=lambda entry: entry["path"])
+            if digest(recorded) != binding["snapshot"][directory]["sha256"]:
+                raise ValueError("repair inputs changed between validation and packaging")
+        if not all("reports/" + name in present for name in REPAIR_REPORTS):
+            raise ValueError("repair delivery lacks patch, functional check or input binding")
+        manifest.update(source_snapshot_id=binding["snapshot"]["sha256"],
+                        acceptance_policy_sha256=binding["policy_sha256"],
+                        repair_proposal_id=binding["proposal_id"])
+        manifest["capture"].update(authority="bound_execution_inputs",
+                                   pre_execution_source_verification="verified",
+                                   cross_file_snapshot="matched_by_content_hash")
+        manifest["unverified"] = ["base_commit_not_bound", "checks_outside_recorded_scope"]
     archive.document(root + "/delivery_manifest.json", manifest)
 
 

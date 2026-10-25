@@ -14,6 +14,7 @@ import stat
 import tempfile
 import time
 import uuid
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,12 +30,12 @@ _SECRET_TEXT = re.compile(
 )
 
 
-def _redact(value):
+def redact(value):
     if isinstance(value, dict):
-        return {str(k): "[REDACTED]" if _SECRET_KEY.match(str(k)) else _redact(v)
+        return {str(k): "[REDACTED]" if _SECRET_KEY.match(str(k)) else redact(v)
                 for k, v in value.items()}
     if isinstance(value, (list, tuple)):
-        return [_redact(v) for v in value]
+        return [redact(v) for v in value]
     if isinstance(value, str):
         return _SECRET_TEXT.sub(lambda m: m[1] + "[REDACTED]", value)
     return value
@@ -52,6 +53,12 @@ class ToolOutputError(Exception):
 class ToolContext:
     session_id: str
     outputs: "ToolOutputStore"
+    history: Callable[[str, int, int, str], dict] | None = None
+    turn_id: str | None = None
+    action_id: str | None = None
+    job_id: str | None = None
+    read_only: bool = False
+    grant_id: str | None = None
 
 
 class ToolOutputStore:
@@ -82,7 +89,7 @@ class ToolOutputStore:
         if original_bytes > MAX_OUTPUT_BYTES:
             raise ToolOutputError("tool output exceeds the 8 MiB storage limit")
         # Normalize before redaction so custom objects cannot bypass string filtering.
-        clean = _redact(json.loads(raw))
+        clean = redact(json.loads(raw))
         text = _json(clean)
         data = text.encode("utf-8")
         if len(data) > MAX_OUTPUT_BYTES:
@@ -132,6 +139,11 @@ class ToolOutputStore:
                        "head": text[:keep], "tail": text[-keep:],
                        "omitted_chars": len(text) - 2 * keep,
                        "read_with": "read_tool_output(artifact_id, offset, limit, query)"}
+            # Task identity must survive clipping a large submission receipt.
+            # Chat progress and the next request's runtime context use this ID.
+            if isinstance(clean, dict) and isinstance(clean.get("job_id"), str) and re.fullmatch(
+                    r"[a-zA-Z0-9_-]{1,100}", clean["job_id"]):
+                preview["job_id"] = clean["job_id"]
             if isinstance(clean, dict) and "error" in clean:
                 preview["error"] = str(clean["error"])[:256]
             if len(_json(preview)) <= MAX_INLINE_CHARS:

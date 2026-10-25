@@ -76,3 +76,40 @@ def test_tool_output_api_survives_session_reload_and_enforces_scope(monkeypatch,
     path = server.STATE["sessions"].outputs.directory / (aid + ".json")
     path.write_text("corrupted")
     assert c.get(url).status_code == 404
+
+
+def test_chat_refreshes_job_context_and_keeps_runtime_data_out_of_history(monkeypatch, fake_adapter):
+    import json
+    from r2g_agent import tools
+    fake = fake_adapter([[], []])
+    c = _client(monkeypatch, fake)
+    ss, st = server.STATE["sessions"], tools.RT.store
+    sid = ss.create()
+    jid = st.create_job("API_CONTEXT_JOB", {}, [{"name": "top"}])
+    ss.save(sid, [{"role": "user", "content": "run"},
+                  {"role": "assistant", "content": "", "tool_calls": [
+                      {"id": "submit", "name": "start_job", "arguments": {}}]},
+                  {"role": "tool", "name": "start_job", "tool_call_id": "submit",
+                   "content": json.dumps({"job_id": jid})},
+                  {"role": "assistant", "content": "submitted"}])
+    assert '"type": "done"' in c.post("/api/chat", json={"session_id": sid, "message": "status?"}).text
+    st.set_design(jid, "top", status="failed", detail={"reason": "API_FAILURE_CAUSE"})
+    st.set_job(jid, "failed")
+    assert '"type": "done"' in c.post("/api/chat", json={"session_id": sid, "message": "now?"}).text
+    record = c.get(f"/api/sessions/{sid}").json()
+    snapshots = [r["context"]["job_observations"][0] for r in record["model_calls"]]
+    assert [s["status"] for s in snapshots] == ["pending", "failed"]
+    assert "API_FAILURE_CAUSE" in json.dumps(fake.seen[-1])
+    assert "运行时上下文" not in json.dumps(record["messages"], ensure_ascii=False)
+
+
+def test_context_config_api_validates_and_preserves_existing_values(monkeypatch):
+    c = _client(monkeypatch)
+    valid = {"context_max_chars": 48000, "context_recent_turns": 2}
+    saved = c.post("/api/config", json={"model": valid})
+    assert saved.status_code == 200
+    assert all(saved.json()["model"][k] == v for k, v in valid.items())
+    for invalid in ({"context_max_chars": 1}, {"context_recent_turns": 9}, {"context_recent_turns": True}):
+        assert c.post("/api/config", json={"model": invalid}).status_code == 422
+    c.post("/api/config", json={"model": {"thinking": False}})
+    assert all(config.load().model.resolved().__dict__[k] == v for k, v in valid.items())

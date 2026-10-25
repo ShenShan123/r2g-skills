@@ -61,6 +61,7 @@ export const api = {
   log: (id: string, d: string, stage: string) => fetch(`/api/jobs/${id}/designs/${d}/log/${stage}?lines=300`).then(j<any>),
   sessions: () => fetch("/api/sessions").then(j<any[]>),
   session: (id: string) => fetch(`/api/sessions/${id}`).then(j<any>),
+  turnEvents: (id: string, after = 0) => fetch(`/api/turns/${encodeURIComponent(id)}/events?after=${after}`).then(j<any>),
   toolOutput: (sid: string, id: string, offset = 0, query = "") =>
     fetch(`/api/sessions/${encodeURIComponent(sid)}/tool-outputs/${encodeURIComponent(id)}?` +
       new URLSearchParams({ offset: String(offset), limit: "4000", query })).then(j<ToolOutputPage>),
@@ -71,22 +72,23 @@ export const api = {
   },
 };
 
-export type ChatEvent =
-  | { type: "session"; session_id: string }
+export type ChatEvent = ({ session_id?: string; turn_id?: string; event_id?: number } & (
+  | { type: "session"; session_id: string; turn_id: string }
   | { type: "text"; delta: string }
-  | { type: "thinking"; delta: string }
+  | { type: "model_response"; id: string; metadata: Record<string, any> }
   | { type: "tool_call"; id: string; name: string; arguments: any }
   | { type: "tool_result"; id: string; name: string; result: any; output_ref?: ToolOutputRef }
   | { type: "error"; message: string }
-  | { type: "done" };
+  | { type: "done" }));
 
 /** POST a chat turn and read the SSE stream event by event. */
-export async function chatStream(message: string, sessionId: string | null, on: (e: ChatEvent) => void) {
-  const r = await fetch("/api/chat", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, session_id: sessionId }),
-  });
-  if (!r.ok || !r.body) throw new Error(`HTTP ${r.status}`);
+export async function chatStream(message: string, sessionId: string | null, on: (e: ChatEvent) => void,
+  options: { requestId?: string; signal?: AbortSignal } = {}) {
+  const requestId = options.requestId ?? crypto.randomUUID();
+  let turnId: string | null = null, cursor = 0, terminal = false;
+  const consume = async (r: Response) => {
+  if (!r.ok) { await j(r); return; }
+  if (!r.body) throw new Error("响应没有事件流");
   const reader = r.body.getReader();
   const dec = new TextDecoder();
   let buf = "";
@@ -98,9 +100,40 @@ export async function chatStream(message: string, sessionId: string | null, on: 
     while ((i = buf.indexOf("\n\n")) >= 0) {
       const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
       const line = chunk.split("\n").find((l) => l.startsWith("data:"));
-      if (line) { try { on(JSON.parse(line.slice(5))); } catch { /* partial */ } }
+      if (line) {
+        const event = JSON.parse(line.slice(5)) as ChatEvent;
+        if (event.type === "session") {
+          if (turnId && turnId !== event.turn_id) throw new Error("响应轮次不匹配");
+          turnId = event.turn_id;
+        } else if (event.turn_id !== turnId) throw new Error("事件不属于当前轮次");
+        if (event.event_id && event.event_id <= cursor) continue;
+        if (event.event_id) cursor = event.event_id;
+        on(event);
+        if (event.type === "done" || event.type === "error") terminal = true;
+      }
     }
   }
+  };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let permanentFailure = false;
+    try {
+      const response = turnId
+        ? await fetch(`/api/turns/${encodeURIComponent(turnId)}/stream?after=${cursor}`, { signal: options.signal })
+        : await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message, session_id: sessionId, request_id: requestId }), signal: options.signal });
+      // Submission conflicts are not transport retries.
+      if (!response.ok) { permanentFailure = true; await j(response); return; }
+      await consume(response);
+      if (terminal) return;
+      if (turnId) {
+        const state = await api.turnEvents(turnId, cursor);
+        if (["complete", "error", "recovery_required"].includes(state.turn.status)) return;
+      }
+    } catch (error) {
+      if (permanentFailure || options.signal?.aborted || attempt === 2) throw error;
+    }
+  }
+  throw new Error("连接已中断；已接受的任务会继续，重新打开本会话可读取已保存的进度。");
 }
 
 export const fmtTime = (ts: number) =>

@@ -27,8 +27,12 @@ def connect(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
-def connect_read_only(db_path: Path) -> sqlite3.Connection:
-    """Open an existing frozen TEHM snapshot without any filesystem writes."""
+def connect_read_only(db_path: Path, *, immutable: bool = True) -> sqlite3.Connection:
+    """Read existing TEHM records without initializing or migrating the store.
+
+    Frozen snapshots retain the immutable default. Live readers must pass
+    ``immutable=False`` so committed WAL changes, including demotions, are seen.
+    """
     db_path = Path(db_path)
     config.validate_backend_lock(db_path)
     if not db_path.is_file():
@@ -37,7 +41,8 @@ def connect_read_only(db_path: Path) -> sqlite3.Connection:
     # create ``-wal``/``-shm`` sidecars while auditing a supposedly read-only
     # bundle, because those sidecars would invalidate its deterministic file
     # membership and could be mistaken for mutation.
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True, timeout=30)
+    uri = db_path.resolve().as_uri() + "?mode=ro" + ("&immutable=1" if immutable else "")
+    conn = sqlite3.connect(uri, uri=True, timeout=30)
     conn.row_factory = sqlite3.Row
     # Make the connection's read-only intent visible to additive shadow
     # schemas.  An immutable SQLite URI forbids writes, but does not set the

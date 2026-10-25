@@ -8,7 +8,9 @@ imported as TEHM authority. Every skill subprocess receives the same selection.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -185,3 +187,160 @@ def summary() -> dict:
     except sqlite3.Error:
         n = None
     return {"backend": name, "db": str(p["db"]), "runs": n, "heuristics": p["heuristics"].is_file()}
+
+
+def lookup(query: str, *, context: dict | None = None, limit: int = 5) -> dict:
+    """Keep legacy documentation matches separate from typed action proposals."""
+    doc = skills_dir() / "signoff-loop" / "references" / "failure-patterns.md"
+    sections = re.split(r"(?m)^(?=#{2,4} )", doc.read_text(errors="replace"))
+    words = [word.lower() for word in query.split()]
+    hits = [(sum(section.lower().count(word) for word in words), section)
+            for section in sections if words and all(word in section.lower() for word in words)]
+    hits.sort(key=lambda item: -item[0])
+    return {"matches": [{"heading": section.splitlines()[0].lstrip("# "), "excerpt": section[:1500]}
+                        for _, section in hits[:3]], "total": len(hits),
+            "reference_kind": "documentation_only", "memory": lookup_actions(context or {}, limit=limit)}
+
+
+def lookup_actions(context: dict, *, limit: int = 5) -> dict:
+    """Consult existing TEHM retrieval/binding without activating or writing.
+
+    The controller supplies RepairContext fields from its current task evidence,
+    plus target_scope and source_snapshot_id. A model's prose is not evidence.
+    Returned actions are proposals: execution must re-check source snapshot,
+    rule status_version, policy, budget and the independent verification plan.
+    expected_rule_versions can pin a previously selected rule on re-consultation.
+    """
+    name = backend_name()
+    result = {"schema_version": 1, "backend": name, "decision": "ABSTAIN",
+              "execution_authorized": False, "candidates": [], "reasons": []}
+    if name != "tehm":
+        result.update(decision="NO_SKILL", reasons=["typed_actions_unavailable_for_backend"])
+        return result
+    if not isinstance(context, dict):
+        raise ValueError("memory context must be an object")
+    required = ("project_dir", "design_id", "platform", "check", "target_scope",
+                "source_snapshot_id", "compatibility_profile")
+    missing = [key for key in required if not isinstance(context.get(key), str) or not context[key].strip()]
+    if missing:
+        result.update(reasons=["missing_context:" + key for key in missing])
+        return result
+    if type(limit) is not int or not 1 <= limit <= 20:
+        raise ValueError("memory lookup limit must be between 1 and 20")
+    versions = context.get("expected_rule_versions") or {}
+    if not isinstance(versions, dict) or any(not isinstance(key, str) or type(value) is not int or value < 1
+                                             for key, value in versions.items()):
+        raise ValueError("expected_rule_versions must map rule IDs to positive integers")
+    memory_path = str(repo_root() / "memory")
+    if memory_path not in sys.path:
+        sys.path.insert(0, memory_path)
+    from contracts import RepairContext
+    from tehm import db as tehm_db
+    from tehm.ids import stable_dumps
+    from tehm.lifecycle.rule_status import get_status
+    from tehm.retrieval.index import build_index
+    from tehm.retrieval.recall import high_recall
+    from tehm.retrieval.symbolic_filter import apply_symbolic_filter
+    from tehm_backend import TehmMemoryBackend, SCHEMA_VERSION
+
+    fields = {key: context[key] for key in RepairContext.__dataclass_fields__ if key in context}
+    fields["project_dir"] = Path(fields["project_dir"])
+    for key in ("reports", "cfg", "situation", "structural_graph", "symptom_signature", "mechanism_signature"):
+        if fields.get(key) is not None and not isinstance(fields[key], dict):
+            raise ValueError("memory context " + key + " must be an object")
+    if fields.get("situation"):
+        # UNKNOWN is missing evidence, never a concrete predicate mismatch.
+        fields["situation"] = {key: None if isinstance(value, str) and value.upper() == "UNKNOWN" else value
+                               for key, value in fields["situation"].items()}
+    current = RepairContext(**fields)
+    paths_ = tehm_paths()
+    backend = TehmMemoryBackend(db_path=paths_["db"], artifact_root=paths_["artifacts"],
+                                read_only_eval=True, trial_candidates=False, immutable_snapshot=False)
+    try:
+        conn, _ = backend._open()
+        conn.execute("BEGIN")  # lifecycle, evidence and proposal share one read view
+        query = backend.build_query(current)
+        result["binding"] = {"target_scope": context["target_scope"],
+                             "source_snapshot_id": context["source_snapshot_id"],
+                             "compatibility_profile": context["compatibility_profile"],
+                             "context_digest": "sha256:" + hashlib.sha256(
+                                 stable_dumps(current.to_dict()).encode()).hexdigest(),
+                             "memory_schema_version": SCHEMA_VERSION,
+                             "memory_read_watermark": tehm_db.read_watermark(conn)}
+        index = build_index(conn, lifecycle_statuses=frozenset({"promoted"}))
+        stale_versions = []
+        for rule_id, expected in versions.items():
+            status = get_status(conn, rule_id=rule_id, target_scope=context["target_scope"])
+            if not status or status["status"] != "promoted" or status["status_version"] != expected:
+                stale_versions.append(rule_id)
+        result["stale_rule_versions"] = sorted(stale_versions)
+        retrieved = {candidate.payload["rule_id"]: candidate
+                     for candidate in backend.retrieve(query, limit=limit)}
+        result["rejected_rules"] = [{"memory_id": key, "reason": reason}
+                                     for key, reason in sorted(index.rejected.items())[:limit]]
+        for recalled in high_recall(index, query, limit=limit * 3):
+            rule, rule_id = recalled.rule, recalled.rule_id
+            status = get_status(conn, rule_id=rule_id, target_scope=context["target_scope"])
+            profile = rule["before_pattern"].get("compatibility_profile") or rule["context_predicates"].get("compatibility_profile")
+            applicability = apply_symbolic_filter(rule, query)
+            item = {"memory_id": rule_id, "source": "tehm_rule", "applicability": applicability,
+                    "target_scope": context["target_scope"], "lifecycle": status,
+                    "conditions": {"hard_preconditions": rule["hard_preconditions"],
+                                   "compatibility_profile": profile,
+                                   "target_check": rule["before_pattern"].get("target_check")},
+                    "source_evidence": {"episodes": rule["source_episodes"]},
+                    "action": None, "reasons": [], "execution_authorized": False}
+            if not status or status["status"] != "promoted":
+                item["reasons"].append("not_promoted_in_target_scope")
+            if stale_versions:
+                item["reasons"].append("prior_decision_version_stale")
+            if rule_id in versions and (not status or status["status_version"] != versions[rule_id]):
+                item["reasons"].append("rule_status_version_changed")
+            if not profile or profile.startswith("$H"):
+                item["applicability"] = "UNRESOLVED"
+                item["reasons"].append("rule_compatibility_profile_unresolved")
+            elif profile != context["compatibility_profile"]:
+                item["reasons"].append("compatibility_profile_mismatch")
+            if applicability != "APPLICABLE":
+                item["reasons"].append("symbolic_" + applicability.lower())
+            if not rule["source_episodes"]:
+                item["reasons"].append("source_evidence_missing")
+            candidate = retrieved.get(rule_id)
+            if candidate is None:
+                item["reasons"].append("not_selected_by_retrieval")
+            if not item["reasons"]:
+                proposal = backend.propose_activation(candidate, current, target_scope=context["target_scope"])
+                if proposal is None:
+                    item["reasons"].append("activation_proposal_refused")
+                else:
+                    item["proposal"] = {"activation_id": proposal.activation_id,
+                                        "binding": proposal.binding, "obligations": proposal.obligations,
+                                        "obligation_coverage": proposal.obligation_coverage}
+                    action = (proposal.binding or {}).get("action") or {}
+                    if (proposal.binding or {}).get("status") != "BOUND":
+                        item["applicability"] = "UNRESOLVED"
+                        item["reasons"].append("binding_unresolved")
+                    elif (action.get("payload") or {}).get("unresolved_knobs"):
+                        item["applicability"] = "UNRESOLVED"
+                        item["reasons"].append("action_values_unresolved")
+                    elif not action:
+                        item["reasons"].append("no_instantiated_action")
+                    else:
+                        item["action"] = action
+            result["candidates"].append(item)
+        if stale_versions:
+            result["reasons"] = ["prior_decision_version_stale"]
+        elif any(item["action"] is not None for item in result["candidates"]):
+            result["decision"] = "CONSIDER"
+        elif any(item["applicability"] == "UNRESOLVED" for item in result["candidates"]) or index.rejected:
+            result["reasons"] = ["applicability_or_authority_unresolved"]
+        else:
+            result.update(decision="NO_SKILL", reasons=["no_applicable_promoted_action_in_scope"])
+        result["decision_digest"] = "sha256:" + hashlib.sha256(stable_dumps(result).encode()).hexdigest()
+        return result
+    except (OSError, sqlite3.Error, RuntimeError, ValueError) as exc:
+        return {"schema_version": 1, "backend": name, "decision": "ABSTAIN",
+                "execution_authorized": False, "candidates": [],
+                "reasons": ["memory_unavailable:" + type(exc).__name__]}
+    finally:
+        backend.close()

@@ -37,7 +37,8 @@ def test_model_error_stops_turn(fake_adapter):
     ad = fake_adapter([[{"type": "error", "message": "HTTP 401"}]])
     ss = agent_loop.SessionStore()
     evs = list(agent_loop.run_turn(ad, ss, ss.create(), "hi"))
-    assert evs[-1] == {"type": "error", "message": "HTTP 401"}
+    assert evs[-1]["type"] == "error" and evs[-1]["message"] == "HTTP 401"
+    assert ss.turns.get(evs[-1]["turn_id"])["status"] == "error"
 
 
 def test_step_budget(fake_adapter):
@@ -109,4 +110,6 @@ def test_unconfirmed_model_response_never_executes_tools(monkeypatch, terminal):
     assert events[-1]['type'] == 'error'
     assert not any(e['type'] in ('tool_call', 'tool_result') for e in events)
     assert ss.model_calls(sid)[0]['status'] == 'error'
-    assert ss.load(sid) == [{'role': 'user', 'content': 'run'}]
+    assert len(ss.load(sid)) == 1
+    assert ss.load(sid)[0]['role'] == 'user' and ss.load(sid)[0]['content'] == 'run'
+    assert ss.load(sid)[0]['turn_id'] == events[-1]['turn_id']

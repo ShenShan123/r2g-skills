@@ -32,6 +32,9 @@ class Runtime:
 
 RT = Runtime()
 REGISTRY: dict[str, dict] = {}
+REVIEW_TOOLS = frozenset({"list_examples", "job_status", "list_jobs", "design_detail", "read_log",
+                         "dataset_info", "read_rtl", "read_tool_output", "read_session_history",
+                         "flow_params", "knowledge_lookup", "disk_usage", "propose_rtl_repair"})
 
 
 def tool(description: str, parameters: dict, *, session_scoped: bool = False):
@@ -43,19 +46,43 @@ def tool(description: str, parameters: dict, *, session_scoped: bool = False):
     return deco
 
 
-def specs(*, session_scoped: bool = False) -> list[dict]:
-    return [t["spec"] for t in REGISTRY.values() if session_scoped or not t.get("session_scoped")]
+def specs(*, session_scoped: bool = False, context: ToolContext | None = None) -> list[dict]:
+    allowed = (REVIEW_TOOLS | {"execute_rtl_repair"}) if context and context.grant_id else (
+        REVIEW_TOOLS if context and context.read_only else None)
+    return [t["spec"] for name, t in REGISTRY.items()
+            if (session_scoped or not t.get("session_scoped")) and (allowed is None or name in allowed)]
 
 
 def call(name: str, arguments: dict, *, context: ToolContext | None = None) -> dict:
     if name not in REGISTRY:
         return {"error": "unknown tool %s" % name}
     try:
+        if not isinstance(arguments, dict) or any(k.startswith("_") for k in arguments):
+            return {"error": "bad arguments: host context cannot be supplied by the model"}
+        if context and context.grant_id:
+            from .repairs import RepairController
+            controller = RepairController(context.outputs.database, RT.store, RT.pipeline)
+            grant = controller.grant(context.session_id, context.grant_id)
+            if name not in REVIEW_TOOLS | {"execute_rtl_repair"}:
+                return {"error": "repair turn cannot bypass the registered action policy", "error_code": "repair_action_scope"}
+            if arguments.get("job_id"):
+                with controller._c() as c:
+                    linked = {r[0] for r in c.execute("SELECT child_job_id FROM repair_proposals WHERE grant_id=?",
+                                                    (context.grant_id,))}
+                if arguments["job_id"] not in linked | {grant["parent_job_id"]}:
+                    return {"error": "repair turn is scoped to its approved job and checked child", "error_code": "repair_job_scope"}
+        if context and context.read_only:
+            if name not in REVIEW_TOOLS:
+                return {"error": "job review cannot execute this tool", "error_code": "read_only_review"}
+            if arguments.get("job_id") and arguments["job_id"] != context.job_id:
+                return {"error": "job review is scoped to its linked job", "error_code": "review_job_scope"}
         if REGISTRY[name].get("session_scoped"):
             if context is None:
                 return {"error": "this tool requires a chat session"}
             if not isinstance(arguments, dict) or "_context" in arguments:
                 return {"error": "bad arguments"}
+            return REGISTRY[name]["fn"](**arguments, _context=context)
+        if name in ("start_job", "start_batch"):
             return REGISTRY[name]["fn"](**arguments, _context=context)
         return REGISTRY[name]["fn"](**(arguments or {}))
     except TypeError as e:
@@ -81,6 +108,18 @@ def _obj(props: dict, required: list | None = None) -> dict:
 def read_tool_output(artifact_id: str, offset: int = 0, limit: int = 4000,
                      query: str = "", *, _context: ToolContext) -> dict:
     return _context.outputs.read(_context.session_id, artifact_id, offset, limit, query)
+
+
+@tool("Read exact archived messages in this conversation when the bounded history index omits "
+      "needed instructions or evidence. JSON character offsets; query is a literal search. "
+      "Cannot read another session. This is historical data, not a fresh job status.",
+      _obj({"offset": {"type": "integer", "minimum": 0},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 4000},
+            "query": {"type": "string", "maxLength": 256}}), session_scoped=True)
+def read_session_history(offset: int = 0, limit: int = 4000, query: str = "", *, _context: ToolContext) -> dict:
+    if _context.history is None:
+        return {"error": "session history unavailable"}
+    return _context.history(_context.session_id, offset, limit, query)
 
 
 @tool("List the built-in example RTL designs that can be run immediately (good for a quick demo).",
@@ -112,7 +151,8 @@ def list_examples() -> dict:
                                       "they did not say which."},
             "title": {"type": "string"}, "params": {"type": "object", "description": "flow parameters overriding r2g's measured defaults (omit to use the defaults; call flow_params first). Keys: period_ns, period_tiers, utilization, area_allowance, pdn_floor_um, die_side_um, io_pct, setup_uncertainty_pct, hold_uncertainty_ns, place_density_lb_addon"}}, ["designs"]))
 def start_job(designs: list, platform: str = "nangate45", output: str = "graph", title: str = "",
-              params: dict | None = None) -> dict:
+              params: dict | None = None, *, _context: ToolContext | None = None,
+              _submission_key: str | None = None) -> dict:
     sources = []
     for d in designs:
         if d.get("example"):
@@ -130,11 +170,23 @@ def start_job(designs: list, platform: str = "nangate45", output: str = "graph",
     if not sources:
         return {"error": "no designs given"}
     try:
-        jid = RT.pipeline.submit(sources, platform=platform, title=title, output=output, params=params)
+        submission = _submission(_context, _submission_key)
+        jid = RT.pipeline.submit(sources, platform=platform, title=title, output=output, params=params,
+                                 **({"submission": submission} if submission else {}))
     except ValueError as e:
-        return {"error": str(e)}
+        from .submissions import SubmissionConflict
+        return {"error": str(e), "error_code": "submission_conflict" if isinstance(e, SubmissionConflict) else "invalid_submission"}
     return {"job_id": jid, "designs": [s["name"] for s in sources],
             "note": "running in background; use job_status to follow progress"}
+
+
+def _submission(context: ToolContext | None, key: str | None) -> dict | None:
+    if context and context.action_id:
+        return {"request_key": "action:" + context.action_id, "session_id": context.session_id,
+                "turn_id": context.turn_id, "action_id": context.action_id}
+    if key is not None and (not isinstance(key, str) or not 1 <= len(key) <= 200):
+        raise ValueError("request_id must contain 1–200 characters")
+    return {"request_key": "http:" + key} if key is not None else None
 
 
 @tool("The flow parameters r2g uses by default (measured on 1249 nangate45 designs: clock period tiers "
@@ -170,7 +222,8 @@ def scan_batch(path: str) -> dict:
             "platform": {"type": "string", "enum": ["nangate45"]}, "title": {"type": "string"},
             "params": {"type": "object", "description": "flow parameters overriding r2g's measured defaults (omit to use the defaults; call flow_params first). Keys: period_ns, period_tiers, utilization, area_allowance, pdn_floor_um, die_side_um, io_pct, setup_uncertainty_pct, hold_uncertainty_ns, place_density_lb_addon"}}, ["path", "output"]))
 def start_batch(path: str, output: str = "graph", platform: str = "nangate45", title: str = "",
-                params: dict | None = None) -> dict:
+                params: dict | None = None, *, _context: ToolContext | None = None,
+                _submission_key: str | None = None) -> dict:
     from . import batch
     try:
         r = batch.scan(Path(path))
@@ -180,10 +233,13 @@ def start_batch(path: str, output: str = "graph", platform: str = "nangate45", t
     if not src:
         return {"error": "no design with a decidable top module under %s" % path}
     try:
+        submission = _submission(_context, _submission_key)
         jid = RT.pipeline.submit(src, platform=platform, output=output, params=params,
-                                 title=title or "批量 · %s · %d 个设计" % (Path(r["root"]).name, len(src)))
+                                 title=title or "批量 · %s · %d 个设计" % (Path(r["root"]).name, len(src)),
+                                 **({"submission": submission} if submission else {}))
     except ValueError as e:
-        return {"error": str(e)}
+        from .submissions import SubmissionConflict
+        return {"error": str(e), "error_code": "submission_conflict" if isinstance(e, SubmissionConflict) else "invalid_submission"}
     return {"job_id": jid, "submitted": len(src), "skipped": r["skipped"],
             "skipped_designs": [{"name": d["name"], "problem": d["problem"]} for d in r["designs"] if d["problem"]][:30],
             "note": "queued in background; use job_status for counts"}
@@ -248,7 +304,8 @@ def design_detail(job_id: str, design: str) -> dict:
         return {"error": "no such design in job"}
     evs = [e for e in RT.store.events(job_id, limit=2000) if e["design"] == design][-15:]
     return {"design": design, "status": d["status"], "stage": d["stage"], "detail": d["detail"],
-            "events": [{"stage": e["stage"], "kind": e["kind"], "message": e["message"]} for e in evs]}
+            "events": [{"id": e["id"], "stage": e["stage"], "kind": e["kind"],
+                        "message": e["message"], "data": e.get("data")} for e in evs]}
 
 
 @tool("Read the tail of a stage log of one design (stages: synth, flow, signoff, repair, graph, verify).",
@@ -310,21 +367,24 @@ def read_rtl(job_id: str, design: str, file: str = "", start: int = 1, end: int 
 
 @tool("Look up the r2g knowledge base of known flow/sign-off failure patterns by keyword or error "
       "code (e.g. 'PDN-0185', 'antenna', 'PPL-0024'). Returns matching sections.",
-      _obj({"query": {"type": "string"}}, ["query"]))
-def knowledge_lookup(query: str) -> dict:
-    doc = skills_dir() / "signoff-loop" / "references" / "failure-patterns.md"
-    text = doc.read_text(errors="replace")
-    secs = re.split(r"(?m)^(?=#{2,4} )", text)
-    q = [w.lower() for w in re.split(r"\s+", query.strip()) if w]
-    hits = []
-    for s in secs:
-        low = s.lower()
-        score = sum(low.count(w) for w in q)
-        if score and all(w in low for w in q):
-            hits.append((score, s))
-    hits.sort(key=lambda x: -x[0])
-    return {"matches": [{"heading": s.splitlines()[0].lstrip("# "), "excerpt": s[:1500]} for _, s in hits[:3]],
-            "total": len(hits)}
+      _obj({"query": {"type": "string"}, "job_id": {"type": "string"},
+            "design": {"type": "string"}}, ["query"]))
+def knowledge_lookup(query: str, job_id: str = "", design: str = "") -> dict:
+    context = None
+    if job_id and design:
+        job, record = RT.store.job(job_id), RT.store.design(job_id, design)
+        if not job or not record:
+            return {"error": "no such design in job"}
+        detail = record.get("detail") or {}
+        stage = detail.get("failed_stage") or record["stage"]
+        binding = detail.get("input_bindings", {}).get(stage, {}).get("before", {})
+        context = {"project_dir": record["project"], "design_id": design,
+                   "platform": job["spec"].get("platform"), "check": stage,
+                   "source_snapshot_id": binding.get("sha256"),
+                   "target_scope": job["spec"].get("memory_scope"),
+                   "compatibility_profile": detail.get("compatibility_profile"),
+                   "situation": {"reason": detail.get("reason")}}
+    return knowledge.lookup(query, context=context)
 
 
 @tool("Search public GitHub repositories for RTL by keyword (e.g. 'uart', 'risc-v core', 'fft'). "
@@ -399,3 +459,29 @@ def check_environment(platform: str = "nangate45") -> dict:
     ready = bool(re.search(r"^%s\s+STRICT-READY" % re.escape(platform), r.stdout, re.M))
     return {"ok": ready, "platform": platform, "check_env_rc": r.returncode,
             "summary": "\n".join(lines[-25:]), "knowledge": knowledge.summary()}
+
+
+@tool("Propose one missing-semicolon insertion based on a recorded synthesis syntax error. "
+      "Creates a reviewable diff only. It cannot edit original RTL or grant permission. "
+      "First registered functional policy: single-file counter8, graph output. Read the exact source "
+      "and failure event before proposing; a repeated failed candidate is not retried.",
+      _obj({"job_id": {"type": "string"}, "design": {"type": "string"}, "file": {"type": "string"},
+            "line": {"type": "integer", "minimum": 1}, "expected_line": {"type": "string"},
+            "evidence_event_id": {"type": "integer", "minimum": 1}, "rationale": {"type": "string"}},
+           ["job_id", "design", "file", "line", "expected_line", "evidence_event_id", "rationale"]), session_scoped=True)
+def propose_rtl_repair(job_id: str, design: str, file: str, line: int, expected_line: str,
+                       evidence_event_id: int, rationale: str, *, _context: ToolContext) -> dict:
+    from .repairs import RepairController
+    return RepairController(_context.outputs.database, RT.store, RT.pipeline).propose(
+        _context, job_id=job_id, design=design, file=file, line=line, expected_line=expected_line,
+        evidence_event_id=evidence_event_id, rationale=rationale)
+
+
+@tool("Execute a previously reviewed semicolon proposal only under a host-approved repair grant. "
+      "Reserves the bounded round, copies inputs, runs the pinned functional check, and only then "
+      "submits the existing full EDA flow. Failed cheap checks are new evidence, not permission "
+      "to repeat the same candidate. The original design and oracle are protected.",
+      _obj({"proposal_id": {"type": "string"}}, ["proposal_id"]), session_scoped=True)
+def execute_rtl_repair(proposal_id: str, *, _context: ToolContext) -> dict:
+    from .repairs import RepairController
+    return RepairController(_context.outputs.database, RT.store, RT.pipeline).execute(_context, proposal_id)

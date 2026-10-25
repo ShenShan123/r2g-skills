@@ -11,6 +11,7 @@ import re
 import shutil
 import time
 import uuid
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -25,8 +26,12 @@ from .llm import make_adapter
 from .paths import PKG_DIR, r2g_home
 from .pipeline import STAGE_LABEL, STAGES, Pipeline
 from .tool_outputs import ToolOutputError
+from .turns import TurnConflict, TERMINAL
+from .event_bridge import BridgeWorker
+from .repair_api import router as repair_router, install as install_repairs
 
 STATE: dict = {}
+_bridge: BridgeWorker | None = None
 
 
 @asynccontextmanager
@@ -34,14 +39,20 @@ async def _lifespan(_app):
     if not STATE:
         init_runtime(resume=True)      # the long-lived process resumes unfinished designs
     yield
+    if STATE.get("bridge"):
+        STATE["bridge"].stop()
     if tools.RT.pipeline:
         tools.RT.pipeline.shutdown()
 
 
 app = FastAPI(title="r2g agent", version=__version__, lifespan=_lifespan)
+app.include_router(repair_router)
 
 
 def init_runtime(cfg: config.Config | None = None, resume: bool = False) -> None:
+    global _bridge
+    if _bridge:
+        _bridge.stop()
     cfg = cfg or config.load()
     store = JobStore()
     tools.RT.store = store
@@ -50,7 +61,11 @@ def init_runtime(cfg: config.Config | None = None, resume: bool = False) -> None
                                  keep_intermediate=cfg.keep_intermediate)
     tools.RT.pipeline.recover(resume=resume)
     tools.RT.platform = cfg.platform
-    STATE.update(cfg=cfg, sessions=agent_loop.SessionStore())
+    sessions = agent_loop.SessionStore()
+    _bridge = BridgeWorker(sessions, store, lambda: make_adapter(cfg.model))
+    STATE.update(cfg=cfg, sessions=sessions, bridge=_bridge)
+    install_repairs(STATE)
+    _bridge.start()
 
 
 def _sse(obj: dict) -> str:
@@ -76,10 +91,13 @@ async def set_config(req: Request):
     body = await req.json()
     cfg = STATE["cfg"]
     m = body.get("model") or {}
+    for field, low, high in (("context_max_chars", 8192, 1000000), ("context_recent_turns", 1, 8)):
+        if field in m and (type(m[field]) is not int or not low <= m[field] <= high):
+            raise HTTPException(422, "%s must be an integer between %d and %d" % (field, low, high))
     for k in ("provider", "model", "base_url", "api_key_env", "protocol"):
         if k in m:
             setattr(cfg.model, k, m[k] or "")
-    for k in ("temperature", "max_tokens"):
+    for k in ("temperature", "max_tokens", "context_max_chars", "context_recent_turns"):
         if k in m:
             setattr(cfg.model, k, m[k])
     if "thinking" in m:
@@ -133,7 +151,7 @@ def sessions():
 @app.get("/api/sessions/{sid}")
 def session(sid: str):
     return {"id": sid, "messages": STATE["sessions"].load(sid),
-            "model_calls": STATE["sessions"].model_calls(sid)}
+            "model_calls": STATE["sessions"].model_calls(sid), "turns": STATE["sessions"].turns.list(sid)}
 
 
 @app.get("/api/sessions/{sid}/tool-outputs/{artifact_id}")
@@ -148,23 +166,78 @@ def tool_output(sid: str, artifact_id: str, offset: int = Query(0, ge=0),
 @app.post("/api/chat")
 async def chat(req: Request):
     body = await req.json()
-    sid = body.get("session_id") or STATE["sessions"].create()
-    text = (body.get("message") or "").strip()
-    if not text:
-        raise HTTPException(400, "empty message")
+    if not isinstance(body, dict) or not isinstance(body.get("message"), str) or not body["message"].strip():
+        raise HTTPException(400, "message must be a nonempty string")
+    for name in ("request_id", "session_id", "job_id", "grant_id"):
+        if body.get(name) is not None and (not isinstance(body[name], str) or not 1 <= len(body[name]) <= 200):
+            raise HTTPException(400, name + " must contain 1–200 characters")
+    store = STATE["sessions"]
+    key = body.get("request_id") or uuid.uuid4().hex
+    previous = store.turns.by_key(key) if isinstance(key, str) else None
+    sid = body.get("session_id") or (previous["session_id"] if previous else store.create())
+    text = body["message"].strip()
     try:
-        adapter = make_adapter(STATE["cfg"].model)
+        job_id = body.get("job_id") or store.turns.latest_job(sid)
+        if previous and not body.get("job_id"):
+            job_id = previous["payload"].get("job_id")
+        if body.get("job_id"):
+            with store.turns.connection() as c:
+                if not c.execute("SELECT 1 FROM job_links WHERE session_id=? AND job_id=?", (sid, job_id)).fetchone():
+                    raise ValueError("job is not linked to this session")
+        grant_id = body.get("grant_id")
+        if grant_id:
+            from . import repairs
+            grant_id = repairs.validate_chat_grant(store.path, grant_id, sid, job_id)
+        # On a retry keep the original host job binding even if a later turn
+        # linked another job; user payload changes still conflict below.
+        turn = STATE["bridge"].enqueue(sid, text, request_id=key, job_id=job_id, grant_id=grant_id)
+    except TurnConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
     except ValueError as e:
-        def err():
-            yield _sse({"type": "session", "session_id": sid})
-            yield _sse({"type": "error", "message": str(e)})
-        return StreamingResponse(err(), media_type="text/event-stream")
+        raise HTTPException(400, str(e)) from e
+    return StreamingResponse(_turn_stream(turn["id"], req), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
-    def gen():
-        yield _sse({"type": "session", "session_id": sid})
-        for ev in agent_loop.run_turn(adapter, STATE["sessions"], sid, text):
-            yield _sse(ev)
-    return StreamingResponse(gen(), media_type="text/event-stream",
+
+async def _turn_stream(tid: str, request: Request, after: int = 0):
+    turns = STATE["sessions"].turns
+    turn = turns.get(tid)
+    yield _sse({"type": "session", "session_id": turn["session_id"], "turn_id": tid})
+    while True:
+        events = turns.events(tid, after)
+        for event in events:
+            after = event["event_id"]
+            yield "id: %d\n%s" % (after, _sse(event))
+        turn = turns.get(tid)
+        if turn["status"] in TERMINAL and not turns.events(tid, after, limit=1):
+            return
+        if await request.is_disconnected():
+            return  # The worker continues and commits events independently.
+        await asyncio.sleep(0.1)
+
+
+@app.get("/api/turns/{tid}")
+def turn_detail(tid: str):
+    turn = STATE["sessions"].turns.get(tid)
+    if not turn:
+        raise HTTPException(404, "unknown turn")
+    return {**turn, "actions": STATE["sessions"].turns.actions(tid)}
+
+
+@app.get("/api/turns/{tid}/events")
+def turn_events(tid: str, after: int = Query(0, ge=0)):
+    turns = STATE["sessions"].turns
+    turn = turns.get(tid)
+    if not turn:
+        raise HTTPException(404, "unknown turn")
+    return {"turn": turn, "events": turns.events(tid, after)}
+
+
+@app.get("/api/turns/{tid}/stream")
+def turn_stream(tid: str, req: Request, after: int = Query(0, ge=0)):
+    if not STATE["sessions"].turns.get(tid):
+        raise HTTPException(404, "unknown turn")
+    return StreamingResponse(_turn_stream(tid, req, after), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
@@ -184,9 +257,9 @@ async def create_job(req: Request):
     body = await req.json()
     r = tools.start_job(body.get("designs") or [], platform=body.get("platform", "nangate45"),
                         output=body.get("output", "graph"), title=body.get("title", ""),
-                        params=body.get("params") or None)
+                        params=body.get("params") or None, _submission_key=body.get("request_id"))
     if "error" in r:
-        raise HTTPException(400, r["error"])
+        raise HTTPException(409 if r.get("error_code") == "submission_conflict" else 400, r["error"])
     return r
 
 

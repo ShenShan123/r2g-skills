@@ -123,7 +123,8 @@ class TehmMemoryBackend:
     def __init__(self, *, db_path: Path | None = None,
                  artifact_root: Path | None = None,
                  read_only_eval: bool = False,
-                 trial_candidates: bool = True):
+                 trial_candidates: bool = True,
+                 immutable_snapshot: bool = True):
         self.db_path = Path(db_path) if db_path else tehm_config.default_db_path()
         # "Trial on first use" (Phase D-A1; the default since Phase H): runtime also
         # retrieves CANDIDATE rules (never shadow; validity gate unchanged). Their
@@ -132,13 +133,15 @@ class TehmMemoryBackend:
         self.artifact_root = (Path(artifact_root) if artifact_root
                               else tehm_config.default_artifact_root())
         self.read_only_eval = read_only_eval
+        self.immutable_snapshot = immutable_snapshot
         self._conn = None
         self._store: ArtifactStore | None = None
 
     def _open(self):
         if self._conn is None:
             if self.read_only_eval:
-                self._conn = tehm_db.connect_read_only(self.db_path)
+                self._conn = tehm_db.connect_read_only(
+                    self.db_path, immutable=self.immutable_snapshot)
             else:
                 self._conn = tehm_db.connect(self.db_path)
                 tehm_db.ensure_schema(self._conn)
@@ -415,7 +418,8 @@ class TehmMemoryBackend:
         return situation_vetoes(conn, situation)
 
     def propose_activation(self, candidate: MemoryCandidate,
-                           context: RepairContext) -> ActivationProposal | None:
+                           context: RepairContext, *,
+                           target_scope: str | None = None) -> ActivationProposal | None:
         from tehm.activation.binding import bind_rule
         from tehm.activation.instantiate import instantiate_rewrite
         from tehm.activation.obligation_transfer import transfer_obligations
@@ -430,9 +434,16 @@ class TehmMemoryBackend:
             conn, lifecycle_statuses=self.runtime_statuses()).get(rule_id)
         if rule is None:
             return None
-        status_row = conn.execute(
-            "SELECT status FROM tehm_rule_status WHERE rule_id=?", (rule_id,)).fetchone()
-        lifecycle_status = status_row[0] if status_row else None
+        if target_scope is None:
+            status_row = conn.execute(
+                "SELECT status FROM tehm_rule_status WHERE rule_id=?", (rule_id,)).fetchone()
+            lifecycle_status = status_row[0] if status_row else None
+        else:
+            from tehm.lifecycle.rule_status import get_status
+            status_row = get_status(conn, rule_id=rule_id, target_scope=target_scope)
+            lifecycle_status = status_row["status"] if status_row else None
+            if lifecycle_status not in self.runtime_statuses():
+                return None
         if not is_repair_rule(rule):
             return None
         applicability = (candidate.payload or {}).get(

@@ -41,6 +41,15 @@ CREATE TABLE IF NOT EXISTS stage_runs (
 CREATE UNIQUE INDEX IF NOT EXISTS stage_runs_active ON stage_runs(job_id, design)
   WHERE status IN ('pending', 'running', 'recovery_required');
 CREATE TABLE IF NOT EXISTS runtime_schema (component TEXT PRIMARY KEY, version INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS submissions (
+  request_key TEXT PRIMARY KEY, request_hash TEXT NOT NULL, job_id TEXT NOT NULL UNIQUE,
+  session_id TEXT, turn_id TEXT, action_id TEXT, source_snapshot TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS job_review_outbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL UNIQUE,
+  session_id TEXT NOT NULL, turn_id TEXT, status TEXT NOT NULL, created REAL NOT NULL,
+  review_turn_id TEXT
+);
 """
 
 # design.status values
@@ -68,6 +77,7 @@ class JobStore:
                 if name not in columns:
                     c.execute("ALTER TABLE jobs ADD COLUMN %s REAL" % name)
             c.execute("INSERT OR REPLACE INTO runtime_schema VALUES ('execution', 1)")
+            c.execute("INSERT OR IGNORE INTO runtime_schema VALUES ('submissions_and_reviews', 1)")
 
     @contextmanager
     def _conn(self):
@@ -82,9 +92,21 @@ class JobStore:
 
     # -- jobs -------------------------------------------------------------
     def create_job(self, title: str, spec: dict, designs: list[dict]) -> str:
+        return self.create_submission(title, spec, designs)[0]
+
+    def create_submission(self, title: str, spec: dict, designs: list[dict],
+                          submission: dict | None = None) -> tuple[str, bool]:
+        from .submissions import SubmissionConflict
         jid = time.strftime("%m%d%H%M") + "-" + uuid.uuid4().hex[:6]
         now = time.time()
         with self._lock, self._conn() as c:
+            c.execute("BEGIN IMMEDIATE")
+            if submission:
+                previous = c.execute("SELECT * FROM submissions WHERE request_key=?", (submission["request_key"],)).fetchone()
+                if previous:
+                    if previous["request_hash"] != submission["request_hash"]:
+                        raise SubmissionConflict("submission key already belongs to different inputs or source bytes")
+                    return previous["job_id"], False
             c.execute("INSERT INTO jobs (id,created,updated,status,title,spec,result) VALUES (?,?,?,?,?,?,?)",
                       (jid, now, now, PENDING, title, json.dumps(spec), None))
             for d in designs:
@@ -92,7 +114,31 @@ class JobStore:
                           (jid, d["name"], d.get("project", ""), "queued", PENDING,
                            json.dumps(d.get("detail", {})), now))
             self._event(c, jid, None, "job", "created", "任务已创建：%d 个设计" % len(designs))
-        return jid
+            if submission:
+                c.execute("INSERT INTO submissions VALUES (?,?,?,?,?,?,?)",
+                          (submission["request_key"], submission["request_hash"], jid,
+                           submission.get("session_id"), submission.get("turn_id"), submission.get("action_id"),
+                           submission["source_snapshot"]))
+        return jid, True
+
+    def review_outbox(self) -> list[dict]:
+        with self._conn() as c:
+            return [dict(r) for r in c.execute("SELECT * FROM job_review_outbox WHERE review_turn_id IS NULL ORDER BY id")]
+
+    def reviewed(self, event_id: int, turn_id: str) -> None:
+        with self._conn() as c:
+            c.execute("UPDATE job_review_outbox SET review_turn_id=? WHERE id=? AND review_turn_id IS NULL", (turn_id, event_id))
+
+    def submission(self, jid: str) -> dict | None:
+        with self._conn() as c:
+            row = c.execute("SELECT * FROM submissions WHERE job_id=?", (jid,)).fetchone()
+            return dict(row) if row else None
+
+    def job_for_submission(self, request_key: str) -> dict | None:
+        """Find the committed job binding without resubmitting an uncertain action."""
+        with self._conn() as c:
+            row = c.execute("SELECT * FROM submissions WHERE request_key=?", (request_key,)).fetchone()
+            return dict(row) if row else None
 
     def set_job(self, jid: str, status: str, result: dict | None = None, *, event=None) -> bool:
         with self._lock, self._conn() as c:
@@ -111,6 +157,10 @@ class JobStore:
                 c.execute("UPDATE jobs SET cancelled_at=? WHERE id=?", (time.time(), jid))
             if event:
                 self._event(c, jid, None, *event)
+            if status in TERMINAL_JOBS:
+                c.execute("INSERT OR IGNORE INTO job_review_outbox(job_id,session_id,turn_id,status,created) "
+                          "SELECT job_id,session_id,turn_id,?,? FROM submissions WHERE job_id=? AND session_id IS NOT NULL",
+                          (status, time.time(), jid))
             return True
 
     def request_cancel(self, jid: str) -> dict | None:
@@ -163,6 +213,60 @@ class JobStore:
         out = _row(r)
         out["designs"] = [_row(d) for d in ds]
         return out
+
+    def context_snapshot(self, jid: str) -> dict | None:
+        """Read one bounded, consistent observation for a model request.
+
+        Counts, selected designs and the event cursor belong to the same read
+        transaction. Never infer a verdict from a missing report or package.
+        """
+        with self._conn() as c:
+            c.execute("BEGIN")
+            row = c.execute("SELECT id,title,status,updated,result,cancel_requested_at "
+                            "FROM jobs WHERE id=?", (jid,)).fetchone()
+            if row is None:
+                return None
+            counts = {r[0]: r[1] for r in c.execute(
+                "SELECT status,COUNT(*) FROM designs WHERE job_id=? GROUP BY status", (jid,))}
+            cursor = c.execute("SELECT COALESCE(MAX(id),0) FROM events WHERE job_id=?", (jid,)).fetchone()[0]
+            designs = c.execute(
+                "SELECT * FROM designs WHERE job_id=? ORDER BY CASE status "
+                "WHEN 'recovery_required' THEN 0 WHEN 'failed' THEN 1 WHEN 'running' THEN 2 "
+                "ELSE 3 END, updated DESC, name LIMIT 4", (jid,)).fetchall()
+            events = c.execute(
+                "SELECT * FROM events WHERE job_id=? AND kind IN "
+                "('fail','warn','recovery_required','cancelled','done') ORDER BY id DESC LIMIT 3", (jid,)).fetchall()
+        job = _row(row)
+        result = job.get("result") or {}
+        selected = []
+        for row in designs:
+            d = _row(row)
+            detail = d.get("detail") or {}
+            signoff, verify = detail.get("signoff") or {}, detail.get("verify") or {}
+            selected.append({"name": d["name"][:160], "status": d["status"], "stage": d["stage"],
+                             "name_truncated": len(d["name"]) > 160,
+                             "failed_stage": detail.get("failed_stage"),
+                             "reason": str(detail.get("reason") or "")[:600] or None,
+                             "reason_truncated": len(str(detail.get("reason") or "")) > 600,
+                             "signoff": {k: str(signoff[k])[:256] if isinstance(signoff[k], str) else signoff[k]
+                                         for k in ("drc", "lvs", "rcx", "drc_violations", "infrastructure_error")
+                                         if k in signoff},
+                             "verify": {k: verify[k] for k in ("passed", "total") if k in verify}})
+        return {"source": "jobs.sqlite", "observed_at": time.time(),
+                "event_cursor": cursor, "updated": job["updated"],
+                "status": job["status"], "title": job["title"][:240], "counts": counts,
+                "cancel_requested": bool(job["cancel_requested_at"]),
+                "result": {k: result[k] for k in ("passed", "total") if k in result},
+                "package": str(result["package"])[:1024] if result.get("package") else None,
+                "package_path_truncated": len(str(result.get("package") or "")) > 1024,
+                "package_availability": "not_checked; use dataset_info",
+                "designs": selected, "omitted_design_count": sum(counts.values()) - len(selected),
+                "recent_events": [{"id": e["id"], "design": e["design"], "stage": e["stage"],
+                                   "kind": e["kind"], "message": e["message"][:500],
+                                   "message_truncated": len(e["message"]) > 500,
+                                   "log_tail": str((e["data"] or {}).get("log_tail") or "")[-900:],
+                                   "log_tail_truncated": len(str((e["data"] or {}).get("log_tail") or "")) > 900}
+                                  for e in map(_row, reversed(events))]}
 
     def jobs(self, limit: int = 50) -> list[dict]:
         with self._conn() as c:

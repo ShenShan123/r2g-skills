@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Send, Paperclip, X, Plus, MessageSquare, Loader2, History } from "lucide-react";
-import { api, chatStream } from "../lib/api";
+import { api, chatStream, ChatEvent } from "../lib/api";
 import { Logo } from "../components/ui";
-import { ConversationRun, ConversationPart, toolJobId } from "../components/ConversationRun";
+import { ConversationRun, ConversationPart, ConversationTurnKind, toolJobId } from "../components/ConversationRun";
 
 type Part = ConversationPart;
-type Msg = { role: "user" | "assistant"; parts: Part[]; error?: string };
+type Msg = {
+  role: "user" | "assistant"; parts: Part[]; error?: string; turnId?: string;
+  turnKind?: ConversationTurnKind; turnStatus?: string;
+};
+
+function turnKind(value: unknown): ConversationTurnKind {
+  return value === "job_review" || value === "repair_review" ? value : "user";
+}
 
 const SUGGEST = [
   "帮我在 GitHub 上找一个小的 UART 设计，跑一遍生成图数据集",
@@ -17,14 +24,33 @@ const SUGGEST = [
 // HDL plus the data files $readmem reads; nothing else in the folder is sent
 const SEND = /\.(s?v|s?vh|hex|mem|bin|txt|dat|coe|mif|init|rom|data)$/i;
 
+/** Attach a reconstructed message to its turn without moving legacy history. */
+function insertTurnMessage(messages: Msg[], message: Msg, turns: any[]) {
+  const own = messages.reduce((last, item, index) => item.turnId === message.turnId ? index : last, -1);
+  const order = new Map(turns.map((turn, index) => [turn.id, index]));
+  const position = order.get(message.turnId);
+  const next = position === undefined ? -1 : messages.findIndex((item) => {
+    const other = order.get(item.turnId);
+    return other !== undefined && other > position;
+  });
+  messages.splice(own >= 0 ? own + 1 : next >= 0 ? next : messages.length, 0, message);
+}
+
 /** Rebuild the display from a stored session (internal message format). */
-function fromStored(ms: any[]): Msg[] {
+function fromStored(ms: any[], turns: any[] = []): Msg[] {
   const out: Msg[] = [];
+  const kinds = new Map(turns.map((turn) => [turn.id, turnKind(turn.kind)]));
+  let currentKind: ConversationTurnKind = "user";
   for (const m of ms) {
-    if (m.role === "user") out.push({ role: "user", parts: [{ kind: "text", text: m.content }] });
+    if (m.role === "user") {
+      currentKind = kinds.get(m.turn_id) ?? turnKind(m.turn_kind);
+      out.push({ role: "user", parts: [{ kind: "text", text: m.content }], turnId: m.turn_id, turnKind: currentKind });
+    }
     else if (m.role === "assistant") {
       const last = out[out.length - 1];
-      const target = last && last.role === "assistant" ? last : (out.push({ role: "assistant", parts: [] }), out[out.length - 1]);
+      const target = last && last.role === "assistant" && last.turnId === m.turn_id ? last
+        : (out.push({ role: "assistant", parts: [], turnId: m.turn_id,
+          turnKind: kinds.get(m.turn_id) ?? currentKind }), out[out.length - 1]);
       if (m.content) target.parts.push({ kind: "text", text: m.content });
       for (const t of m.tool_calls ?? []) target.parts.push({ kind: "tool", id: t.id, name: t.name, args: t.arguments });
     } else if (m.role === "tool") {
@@ -33,7 +59,27 @@ function fromStored(ms: any[]): Msg[] {
       if (p) { try { p.result = JSON.parse(m.content); } catch { p.result = m.content; } p.output_ref = m.output_ref; }
     }
   }
+  for (const turn of turns) {
+    if (!["error", "recovery_required"].includes(turn.status)) continue;
+    const target = [...out].reverse().find((m) => m.role === "assistant" && m.turnId === turn.id);
+    const error = turn.error ?? "本轮需要核对执行记录。";
+    if (target) target.error = error;
+    else insertTurnMessage(out, { role: "assistant", turnId: turn.id, turnKind: turnKind(turn.kind), parts: [], error }, turns);
+  }
   return out;
+}
+
+function addEvent(message: Msg, event: ChatEvent) {
+  if (event.type === "text") {
+    const last = message.parts[message.parts.length - 1];
+    if (last?.kind === "text") message.parts[message.parts.length - 1] = { kind: "text", text: last.text + event.delta };
+    else message.parts.push({ kind: "text", text: event.delta });
+  } else if (event.type === "tool_call") {
+    message.parts.push({ kind: "tool", id: event.id, name: event.name, args: event.arguments });
+  } else if (event.type === "tool_result") {
+    message.parts = message.parts.map((p) => p.kind === "tool" && p.id === event.id
+      ? { ...p, result: event.result, output_ref: event.output_ref } : p);
+  } else if (event.type === "error") message.error = event.message;
 }
 
 export default function Chat() {
@@ -50,6 +96,9 @@ export default function Chat() {
   const end = useRef<HTMLDivElement>(null);
   const dirInput = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
+  const viewEpoch = useRef(0);
+  const activeStream = useRef<AbortController | null>(null);
+  const streaming = useRef(false);
   // Keep one live card per task at its most recent mention in this conversation.
   const latestJobs = new Map<string, number>();
   msgs.forEach((m, i) => {
@@ -64,15 +113,57 @@ export default function Chat() {
   useEffect(() => { loadSessions(); }, []);
   useEffect(() => { dirInput.current?.setAttribute("webkitdirectory", ""); }, []);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
+  useEffect(() => () => activeStream.current?.abort(), []);
+  useEffect(() => {
+    if (!sid) return;
+    const epoch = viewEpoch.current;
+    const timer = window.setInterval(() => {
+      if (!streaming.current) refreshSession(sid, epoch).catch(() => {});
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [sid]);
   // a question handed over from another page (e.g. "why did this design fail") is
   // put in the box, not sent: the user sees it and presses send
   useEffect(() => {
     const q = params.get("q");
-    if (q) { setInput(q); setSid(null); setMsgs([]); setParams({}, { replace: true }); setTimeout(() => box.current?.focus(), 0); }
+    if (q) { newChat(); setInput(q); setParams({}, { replace: true }); setTimeout(() => box.current?.focus(), 0); }
   }, [params, setParams]);
 
   async function open(id: string) {
-    setHist(false); setSid(id); const s = await api.session(id); setMsgs(fromStored(s.messages));
+    const epoch = leaveView();
+    setHist(false); setSid(id); setMsgs([]);
+    await refreshSession(id, epoch);
+  }
+
+  function leaveView() {
+    activeStream.current?.abort(); activeStream.current = null;
+    streaming.current = false; setBusy(false);
+    return ++viewEpoch.current;
+  }
+
+  function newChat() {
+    leaveView(); setSid(null); setMsgs([]); setHist(false);
+  }
+
+  async function refreshSession(id: string, epoch: number) {
+    const state = await api.session(id);
+    if (epoch !== viewEpoch.current || streaming.current) return;
+    let messages = fromStored(state.messages, state.turns);
+    const active = (state.turns ?? []).filter((turn: any) => ["queued", "running"].includes(turn.status));
+    for (const turn of active) {
+      messages = messages.filter((m) => !(m.role === "assistant" && m.turnId === turn.id));
+      if (!messages.some((m) => m.turnId === turn.id)) insertTurnMessage(messages, { role: "user", turnId: turn.id,
+        turnKind: turnKind(turn.kind), parts: [{ kind: "text", text: turn.payload.message }] }, state.turns ?? []);
+      const message: Msg = { role: "assistant", turnId: turn.id, turnKind: turnKind(turn.kind), turnStatus: turn.status, parts: [] };
+      let cursor = 0;
+      for (;;) {
+        const page = await api.turnEvents(turn.id, cursor);
+        for (const event of page.events) { addEvent(message, event); cursor = event.event_id; }
+        if (page.events.length < 500) break;
+      }
+      insertTurnMessage(messages, message, state.turns ?? []);
+    }
+    if (epoch === viewEpoch.current && !streaming.current) { setMsgs(messages); setBusy(active.length > 0); }
   }
 
   async function attach(list: File[]) {
@@ -91,33 +182,36 @@ export default function Chat() {
     if ((!typed.trim() && !att) || busy) return;
     // the model reads the attachment as a path it can pass to start_job
     const text = att ? `[附件] 已上传 RTL 文件夹 ${att.name}（${att.files} 个文件），路径：${att.path}\n${typed}` : typed;
+    const epoch = viewEpoch.current, requestId = crypto.randomUUID();
+    const abort = new AbortController(); activeStream.current = abort; streaming.current = true;
+    let turnId: string = requestId, sessionId = sid;
     setInput(""); setAtt(null); setBusy(true);
-    setMsgs((m) => [...m, { role: "user", parts: [{ kind: "text", text }] }, { role: "assistant", parts: [] }]);
+    setMsgs((m) => [...m, { role: "user", turnId: requestId, turnKind: "user", parts: [{ kind: "text", text }] },
+      { role: "assistant", turnId: requestId, turnKind: "user", parts: [] }]);
     const upd = (f: (a: Msg) => void) => setMsgs((m) => {
-      const c = m.slice(); const a = { ...c[c.length - 1], parts: c[c.length - 1].parts.slice() }; f(a); c[c.length - 1] = a; return c;
-    });
-    const append = (kind: "text", delta: string) => upd((a) => {
-      const p = a.parts[a.parts.length - 1];
-      if (p && p.kind === kind) a.parts[a.parts.length - 1] = { kind, text: (p as any).text + delta };
-      else a.parts.push({ kind, text: delta });
+      if (epoch !== viewEpoch.current) return m;
+      return m.map((message) => {
+        if (message.role !== "assistant" || message.turnId !== turnId) return message;
+        const copy = { ...message, parts: message.parts.slice() }; f(copy); return copy;
+      });
     });
     try {
       await chatStream(text, sid, (e) => {
-        if (e.type === "session") setSid(e.session_id);
-        else if (e.type === "text") append("text", e.delta);
-        else if (e.type === "tool_call") upd((a) => { a.parts.push({ kind: "tool", id: e.id, name: e.name, args: e.arguments }); });
-        else if (e.type === "tool_result") upd((a) => {
-          a.parts = a.parts.map((p) => (p.kind === "tool" && p.id === e.id ? { ...p, result: e.result, output_ref: e.output_ref } : p));
-        });
-        else if (e.type === "error") upd((a) => { a.error = e.message; });
-      });
+        if (epoch !== viewEpoch.current) return;
+        if (e.type === "session") {
+          turnId = e.turn_id; sessionId = e.session_id; setSid(e.session_id);
+          setMsgs((m) => m.map((message) => message.turnId === requestId ? { ...message, turnId } : message));
+        } else if (e.turn_id === turnId) upd((message) => addEvent(message, e));
+      }, { requestId, signal: abort.signal });
     } catch (err: any) { upd((a) => { a.error = err.message; }); }
-    setBusy(false); loadSessions();
+    if (epoch !== viewEpoch.current) return;
+    streaming.current = false; activeStream.current = null; setBusy(false); loadSessions();
+    if (sessionId) refreshSession(sessionId, epoch).catch(() => {});
   }
 
   const history = (
     <>
-      <div className="p-3"><button className="btn-ghost w-full justify-center" onClick={() => { setSid(null); setMsgs([]); setHist(false); }}>
+      <div className="p-3"><button className="btn-ghost w-full justify-center" onClick={newChat}>
         <Plus size={15} /> 新对话</button></div>
       <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
         {sessions.filter((s) => s.title).map((s) => (
@@ -138,7 +232,7 @@ export default function Chat() {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-2 border-b border-line px-3 py-2 lg:hidden">
           <button className="btn-ghost px-3 py-1.5" onClick={() => setHist(true)}><History size={15} /> 历史</button>
-          <button className="btn-ghost px-3 py-1.5" onClick={() => { setSid(null); setMsgs([]); }}><Plus size={15} /> 新对话</button>
+          <button className="btn-ghost px-3 py-1.5" onClick={newChat}><Plus size={15} /> 新对话</button>
         </div>
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
@@ -155,14 +249,16 @@ export default function Chat() {
               </div>)}
             <div className="space-y-6">
               {msgs.map((m, i) => m.role === "user" ? (
-                <div key={i} className="flex justify-end">
-                  <UserBubble text={(m.parts[0] as any).text} />
+                <div key={i} className={m.turnKind && m.turnKind !== "user" ? "text-xs text-muted" : "flex justify-end"}>
+                  {m.turnKind === "repair_review" ? "已授权的修复与验证" : m.turnKind === "job_review"
+                    ? "任务结束后的自动审查" : <UserBubble text={(m.parts[0] as any).text} />}
                 </div>
               ) : (
                 <div key={i} className="flex gap-3">
                   <div className="mt-1 hidden shrink-0 sm:block"><Logo size={26} /></div>
                   <div className="min-w-0 flex-1 space-y-2">
-                    <ConversationRun parts={m.parts} sid={sid} busy={busy && i === msgs.length - 1}
+                    <ConversationRun parts={m.parts} sid={sid} busy={m.turnStatus ? ["queued", "running"].includes(m.turnStatus) : busy && i === msgs.length - 1}
+                      queued={m.turnStatus === "queued"} turnKind={m.turnKind}
                       error={m.error} jobIds={[...latestJobs].filter(([, owner]) => owner === i).map(([id]) => id)} />
                   </div>
                 </div>))}

@@ -6,11 +6,13 @@ import { useJobProgress } from "../hooks/useJobProgress";
 import { designSummary } from "./DesignProgressCard";
 import { JobProgress, JobResult, jobFinished } from "./JobProgress";
 import { ToolOutputView } from "./ToolOutputView";
+import { RepairProposal } from "./RepairProposal";
 import { Md } from "./ui";
 
 export type ConversationPart =
   | { kind: "text"; text: string }
   | { kind: "tool"; id: string; name: string; args: any; result?: any; output_ref?: ToolOutputRef };
+export type ConversationTurnKind = "user" | "job_review" | "repair_review";
 
 export function toolJobId(p: Extract<ConversationPart, { kind: "tool" }>): string | null {
   if (!p.result || typeof p.result !== "object" || p.result.error) return null;
@@ -24,22 +26,30 @@ const ACTIONS: Record<string, string> = {
   list_examples: "查看内置设计", design_detail: "读取设计报告", read_log: "查看执行日志并定位报错",
   diagnose: "根据报告诊断失败原因", knowledge_lookup: "检索相关故障经验", cancel_job: "请求停止任务",
   dataset_info: "核对数据集产物", check_environment: "检查工具链环境", read_rtl: "阅读 RTL 源码",
-  read_tool_output: "查看已保存的工具结果", flow_params: "确认流程参数",
+  read_tool_output: "查看已保存的工具结果", read_session_history: "查阅本次对话的历史要求与记录",
+  flow_params: "确认流程参数",
+  propose_rtl_repair: "提出修复差异，等待审核", execute_rtl_repair: "执行已授权的有限修复",
   search_rtl: "搜索 RTL 设计", fetch_rtl: "读取仓库中的设计", disk_usage: "检查可用磁盘空间",
 };
 const PUBLIC_EVENTS = new Set(["created", "start", "ok", "warn", "fail", "done", "cancelled", "recovery_required"]);
 
-export function ConversationRun({ parts, sid, busy, error, jobIds }: {
+export function ConversationRun({ parts, sid, busy, error, jobIds, turnKind = "user", queued = false }: {
   parts: ConversationPart[]; sid: string | null; busy: boolean; error?: string; jobIds: string[];
+  turnKind?: ConversationTurnKind; queued?: boolean;
 }) {
   const { states, retry } = useJobProgress(jobIds);
   const [expanded, setExpanded] = useState(true);
   const panelId = useId();
   const hasJobReference = parts.some((p) => p.kind === "tool" && toolJobId(p));
   const hasTools = parts.some((p) => p.kind === "tool");
-  const settled = jobIds.length > 0
-    ? jobIds.every((id) => states[id]?.job && jobFinished(states[id].job!))
-    : !busy;
+  const proposalIds = [...new Set(parts.flatMap((p) => {
+    if (p.kind !== "tool" || p.name !== "propose_rtl_repair" || p.result?.error) return [];
+    const id = p.result?.repair_proposal;
+    return typeof id === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(id) ? [id] : [];
+  }))];
+  const reviewing = turnKind === "job_review" || turnKind === "repair_review";
+  const settled = reviewing && busy ? false : jobIds.length > 0
+    ? jobIds.every((id) => states[id]?.job && jobFinished(states[id].job!)) : !busy;
   useEffect(() => { setExpanded(!settled); }, [settled]);
 
   if (!hasTools && !busy) return <>
@@ -52,13 +62,17 @@ export function ConversationRun({ parts, sid, busy, error, jobIds }: {
   const needsReview = jobs.some((j) => j.status === "recovery_required");
   const failed = jobs.some((j) => ["failed", "partial"].includes(j.status));
   const disconnected = jobIds.some((id) => states[id]?.error);
-  const headline = disconnected ? "正在重新连接任务" : needsReview ? "任务需要核对" : settled
+  const headline = queued ? turnKind === "repair_review" ? "已授权修复正在排队…" : turnKind === "job_review" ? "任务审查正在排队…" : "请求正在排队…"
+    : reviewing && busy
+    ? turnKind === "repair_review" ? "正在执行已授权的有限修复…" : "正在审查任务结果…"
+    : disconnected ? "正在重新连接任务" : needsReview ? "任务需要核对" : settled
     ? jobs.some((j) => j.status === "cancelled") ? "任务已取消" : failed ? "任务已结束，未全部通过" : "处理已结束"
     : running ? designSummary(running) : jobs.some((j) => j.status === "cancelling") ? "正在确认任务停止"
     : busy ? "正在分析并执行请求…" : "正在等待任务完成…";
   const lastTool = parts.reduce((last, p, i) => p.kind === "tool" ? i : last, -1);
-  const activity = parts.filter((p, i) => p.kind === "tool" || hasJobReference || i <= lastTool);
-  const answer = hasJobReference ? [] : parts.filter((p, i) => p.kind === "text" && i > lastTool);
+  const keepAnswerInHistory = hasJobReference && !reviewing;
+  const activity = parts.filter((p, i) => p.kind === "tool" || keepAnswerInHistory || i <= lastTool);
+  const answer = keepAnswerInHistory ? [] : parts.filter((p, i) => p.kind === "text" && i > lastTool);
   const events = Object.values(states).flatMap((s) => s.events).filter((e) => PUBLIC_EVENTS.has(e.kind))
     .sort((a, b) => a.ts - b.ts).slice(-30);
   return (
@@ -95,6 +109,7 @@ export function ConversationRun({ parts, sid, busy, error, jobIds }: {
           </div>}
         </div>}
       </section>
+      {sid && proposalIds.map((id) => <RepairProposal key={id} sid={sid} proposalId={id} />)}
       {answer.map((p, i) => p.kind === "text" && <Md key={i}>{p.text}</Md>)}
       {error && <TurnError message={error} />}
       {jobIds.map((id) => states[id]?.job && <JobResult key={id} job={states[id].job!} events={states[id].events} />)}

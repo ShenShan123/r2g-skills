@@ -54,6 +54,10 @@ class ModelConfig:
     protocol: str = ""
     temperature: float = 0.2
     max_tokens: int = 4096
+    # Host context-view character budget, not a provider token/window estimate.
+    # The full transcript remains available for UI display and scoped retrieval.
+    context_max_chars: int = 64000
+    context_recent_turns: int = 3
     # deep thinking: sent with the provider's own switch (PROVIDERS[...]["thinking"]);
     # providers without a known switch use their default and the toggle is hidden
     thinking: bool = True
@@ -66,6 +70,8 @@ class ModelConfig:
                            api_key_env=self.api_key_env or pre["key_env"],
                            protocol=self.protocol or pre["protocol"],
                            temperature=self.temperature, max_tokens=self.max_tokens,
+                           context_max_chars=self.context_max_chars,
+                           context_recent_turns=self.context_recent_turns,
                            thinking=self.thinking)
 
 
