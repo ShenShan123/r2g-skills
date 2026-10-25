@@ -1,734 +1,278 @@
-# r2g —— 从 RTL 到签核版图，再到可训练的数据集
+# EDACode
 
-r2g 是一个开源 EDA 自主 agent：给它一批 Verilog，它在后台跑完综合、布局布线、DRC/LVS 签核；
-遇到失败自己读日志、诊断、选修法、重跑、复核；最后把**签核通过**的设计转成机器学习数据集
-（GNN **图数据集** 或 CNN **图像数据集**），逐项独立校验后交给你。模型由你选择：DeepSeek、通义千问、
-Kimi、智谱 GLM、豆包、OpenAI、Gemini、Claude 或本地 Ollama，配置即用。
+**从 RTL 到签核、数据集和可检查交付的 EDA 工程 Agent。**
 
-![首页](docs/agent/img/home.png)
+EDACode 以网页为主要入口，在 r2g 的既有 EDA 流程上增加任务上下文、模型决策、持久执行记录和受控修复。用户上传 RTL、描述目标后，可以在同一会话中查看进度、审核修复差异，并获取最终报告与数据集。
 
-## 一键安装
+模型读取最新证据，选择下一步；r2g 流水线执行综合、布局布线、签核和数据集生成；检查器决定是否通过。TEHM 提供有适用条件和来源的经验咨询。CLI 保留为调试与自动化入口，命令名仍为 `r2g`。
 
-需要一台 x86_64 Linux 机器（Ubuntu 22.04 及以上、Debian 12 及以上等 glibc ≥ 2.35 的发行版；不需要 root 权限）、约 10 GB 磁盘空间，以及能访问 GitHub 的网络。全新机器上安装约需 30 分钟。
+当前网页工作流支持 **nangate45**。模型发起的 RTL 修复已验收范围为 **counter8 单文件、单处分号、graph 输出**；其他设计可以运行现有 EDA 流程，但尚不能据此宣称通用自主 RTL 修复。
+
+## 现在能做什么
+
+| 能力 | 当前行为 |
+| --- | --- |
+| RTL 到数据集 | 上传单个设计或一批设计，运行综合、布局布线、DRC/LVS、RCX，生成并校验图或图像数据集 |
+| 对话中的任务进度 | 展示公开操作说明、工具结果和阶段状态；成功、失败或确认取消后收起过程，保留结果、原因和下载入口 |
+| 按任务组织上下文 | 保留原始历史，为模型选择近期完整工具组、带来源的历史索引、用户要求、未决动作和最新作业状态 |
+| 后台结果审查 | 与会话关联的作业结束后，自动创建去重的只读审查回合，依据新报告交付或提出下一步 |
+| 有限修复 | 先生成差异，用户批准后在新副本中执行，先做独立功能检查，再进入完整 EDA 流程 |
+| 中断与恢复 | 持久记录回合、动作、提交身份和流式事件；能确认状态的任务按既有规则恢复，不确定的副作用停止重放 |
+| 经验咨询 | 默认复用 TEHM，返回候选动作的适用条件、来源、绑定和拒绝原因；缺少证据时明确弃权 |
+| 结果交付 | 下载数据集、报告和文件哈希清单；已验证的受控修复还包含补丁、功能检查和执行输入绑定 |
+
+## 快速开始
+
+### 完整安装
+
+安装面向 x86_64 Linux，需要 Python 3.10+、`venv`、Git，以及下载工具链所需的网络。浏览器可以运行在 Windows、macOS 或 Linux，EDA 任务在安装 EDACode 的 Linux 机器上执行。
 
 ```bash
-git clone https://github.com/ShenShan123/r2g-skills.git
-cd r2g-skills
+git clone --branch EDACode --single-branch https://github.com/ShenShan123/r2g-skills.git EDACode
+cd EDACode
 bash install.sh
+r2g ui --port 8770
 ```
 
-`install.sh` 会依次：检查机器 → 安装 EDA 工具链（下载生成所有 r2g 数据集所用的同一套 OpenROAD、Yosys、
-KLayout 预编译包并校验 sha256，固定版本的 OpenROAD-flow-scripts，以及图数据集用的 PyTorch 环境；
-已经装好的会被识别并跳过）→ 验证 nangate45 平台可用 → 安装 agent →
-把 `r2g` 命令放进 `~/.local/bin` → 让你选择模型并填写 API 密钥（只保存在本机）→ 可选地跑一次自检
-（内置示例 counter8 从 RTL 到图数据集，约 3–5 分钟）。
+浏览器打开 **http://127.0.0.1:8770**。安装器会检测并安装或复用 EDA 工具链，验证 nangate45，安装 Python Agent 与已构建的网页，并提供模型配置和可选自检。若 `r2g` 尚未加入 PATH，可使用 `~/.local/bin/r2g`。
 
-常用参数：`--yes`（不逐项确认）、`--prefix DIR`（大文件放哪里）、`--skip-toolchain`（工具链已就绪）、
-`--provider deepseek --key-env DEEPSEEK_API_KEY`（不交互地配置模型）。完整说明：`bash install.sh --help`。
+工具链与运行产物都需要磁盘空间；运行时默认空闲磁盘门槛为 **50 GB**，批量设计需另行预留工作目录空间。安装耗时取决于网络和已有工具，完整参数见 `bash install.sh --help`。
 
-## 使用
-
-**任务在装了 r2g 的那台机器上跑，浏览器只是看和操作的窗口。** r2g 只能装在 Linux 上（工具链是 Linux
-预编译包），所以 Windows / Mac 用户把它装在 Linux 服务器上，自己电脑只开浏览器。
-
-| 装在哪里 | 任务在哪里跑 | 怎么打开网页 |
-|---|---|---|
-| 自己的 Linux 电脑 | 本机 | `r2g ui`，浏览器打开 `http://127.0.0.1:8770` |
-| 服务器（推荐，算力大） | 服务器 | 服务器上 `r2g ui` 常驻，自己电脑转发端口后打开（见下） |
-
-### 在服务器上使用
-
-1. 服务器上启动服务，并让它一直开着（放进 tmux，或者后台运行）：
-
-   ```bash
-   nohup r2g ui > ~/r2g_ui.log 2>&1 &      # 默认端口 8770；换端口：r2g ui --port 9000
-   ```
-
-2. 在自己电脑上把服务器的端口转发到本机，任选一种：
-   - **VS Code 远程连着服务器**：底部「端口 / PORTS」面板里转发 `8770`，点地球图标打开。最省事。
-   - **SSH 隧道**（Windows PowerShell、Mac、Linux 都一样）：
-
-     ```bash
-     ssh -N -L 8888:127.0.0.1:8770 用户名@服务器地址
-     ```
-
-     输入密码后窗口不动是正常的，别关；然后浏览器打开 `http://127.0.0.1:8888`。
-     如果报 `bind [127.0.0.1]:8888: Permission denied`，说明本机这个端口被占用或被系统保留，
-     把 8888 换成别的数字（如 7070）再试；Windows 上可用
-     `netsh interface ipv4 show excludedportrange protocol=tcp` 查看保留端口。
-
-几点说明：
-- 服务只在服务器本机（127.0.0.1）上监听，别人不能直接访问，必须经过 SSH 或 VS Code 转发。
-- 关掉浏览器或断开 SSH 不影响任务；服务重启后，没跑完的设计会自动接着跑。
-- 每个用户的任务、设置、密钥和修复经验库都在自己的 `~/.r2g/` 下，互不影响。新仓库不附带历史实验数据或预装经验记录。
-- 同时运行几个设计、每个用几个核，在「设置 → 算力」里改；网页、命令行、对话共用这个上限。
-
-### 三个页面
-
-- **开始**：四步——选设计（上传一个设计的文件夹；或「批量」：一个文件夹里每个子文件夹一个设计，可上传也可直接填服务器上的路径）
-  → 选数据集类型（图 / 图像）→ 流程参数（默认用 r2g 在 1249 个设计上实测定下的经验参数，也可自定义时钟、利用率、die 等）
-  → 开始。不需要配置模型。
-- **任务**：每个设计的进度条（综合 → 布局布线 → 签核 → 修复 → 数据集 → 校验）、失败原因、自动修复记录、
-  版图与日志、数据集下载；批量任务按状态筛选、按失败原因归类，运行中也能下载已完成的部分。
-- **对话**：用一句话说要求，例如“在 GitHub 上找个小的 UART 设计跑一遍”“/data/rtl 下的设计都跑，时钟用 2 ns”
-  “这个任务失败的设计是什么原因”。需要先在「设置」里配置模型（DeepSeek、通义千问、Kimi、GLM、OpenAI、
-  Claude、Gemini 或本地模型）。
-
-| 开始 | 任务 | 对话 |
-|---|---|---|
-| ![开始](docs/agent/img/home.png) | ![任务](docs/agent/img/job.png) | ![对话](docs/agent/img/chat.png) |
-
-命令行与其他客户端：
+已有完整工具链时可跳过下载，仍会检查平台是否就绪：
 
 ```bash
-r2g config --provider qwen --set-key     # 更换模型
-r2g check-model                          # 测试模型连通与工具调用
-r2g run --example counter8               # 不经过对话，直接跑
-r2g status                               # 查看任务
-r2g chat                                 # 终端里对话
-r2g mcp                                  # 作为 MCP 服务器，接入 Claude Code、Cursor 等客户端
+bash install.sh --skip-toolchain
 ```
 
-## 记忆后端
+### 从源码运行
 
-本地集成版的 agent 默认使用 Typed Executable Hardware Memory（TEHM）。新经验写入
-`$R2G_HOME/memory/tehm.sqlite`，内容寻址的证据放在 `$R2G_HOME/memory/artifacts/`；
-`R2G_HOME` 默认是 `~/.r2g`。TEHM 不把随仓库发布的旧知识库当作自身证据。
+已有 EDA 环境、希望直接使用仓库代码时，在仓库根目录执行：
 
 ```bash
-r2g ui                                # agent 默认 tehm
-R2G_MEMORY_BACKEND=legacy r2g ui        # 使用原有用户知识库
-R2G_MEMORY_BACKEND=none r2g ui          # 禁用经验检索与写回，保留通用修复目录
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ./agent
+PYTHONPATH=agent:memory .venv/bin/python -m r2g_agent.cli ui --port 8770
 ```
 
-设置 `TEHM_DB`、`TEHM_ARTIFACTS_ROOT` 可指定已有的独立存储。后端在进程内锁定，切换后需要重启。
-直接调用 skill 脚本仍默认 `legacy`；调用时显式设置 `R2G_MEMORY_BACKEND=tehm` 及存储路径即可使用 TEHM。
-没有修复迭代的干净运行不会产生虚构的修复 transition，任务进度和签核报告仍保留在原任务目录。
-本次集成的接口兼容检查结果与已知限制记录在分支的提交说明中。
+已有 `.venv` 时复用即可。源码运行不会替代 EDA 工具链安装；网页构建产物已随源码提供，启动服务无需先安装 Node.js。
 
-## 两种数据集
+### 在远程服务器上打开网页
 
-| | 图数据集（graph） | 图像数据集（image） |
-|---|---|---|
-| 形式 | PyTorch Geometric：五种视图（b–f）+ 网表图，`HeteroData` | GCell 网格上的多通道数组（`.npz`，[x][y]）+ 预览图 |
-| 特征 | 单元、线网、引脚的几何与电气特征 | 单元密度、宏单元区域、RUDY、引脚 RUDY、引脚密度 —— **只取自放置后的版图**，不含布线信息 |
-| 标签 | 拥塞、线长、时序、IR drop、RC 寄生参数 | 拥塞、IR drop |
-| 校验 | `tools/verify_graph_dataset.py`（数百项） | `verify_images.py`（17 项，含与图数据集拥塞标签的逐单元对齐） |
-
-## 结论为什么可信
-
-- **模型负责判断，代码负责判定。** 通过与否只由 DRC/LVS 和数据集校验器决定；模型调用的工具里没有任何
-  一个能宣布“通过”。检查器崩溃或超时不算通过。
-- **只收签核通过的设计。** 数据集构建前有签核门，版图与报告按内容摘要绑定，换了版图旧报告就失效。
-- **每个数据集都经过独立复算。** 校验程序不复用生成代码，自行解析 DEF/LEF/SPEF 重新计算并比对。
-- **失败分得清。** agent 区分“你的 RTL 有问题”和“工具/流程问题”，并引用真实的报错码。
-
-当前版本支持 **nangate45**（45 nm）平台；sky130hd、gf180 正在适配。设计文档：
-[`docs/agent/AGENT_DESIGN.md`](docs/agent/AGENT_DESIGN.md)。
-
----
-
-# 作为 Claude Code 技能使用
-
-
-A Claude Code skill that drives an open-source RTL-to-GDS flow — from natural-language spec (or existing RTL) through synthesis, place-and-route, and full signoff (DRC, LVS, RCX) — using Yosys, OpenROAD-flow-scripts, KLayout, and OpenRCX.
-
-Install the `r2g-skills` skills (`eda-install` to set up the toolchain, `rtl-acquire` to grow an RTL corpus at scale, `signoff-loop` for RTL→GDS + signoff, `def-graph` for graph datasets), then ask Claude: *"set up the EDA tools"* followed by *"synthesize this UART at 100 MHz on nangate45"* — it handles everything from provisioning to GDSII. Recent changes: see [CHANGELOG.md](CHANGELOG.md).
-
----
-
-## Prerequisites
-
-| Tool | Required | Purpose |
-|------|----------|---------|
-| Python 3.10+ | yes | skill scripts |
-| Yosys | yes | synthesis |
-| iverilog / vvp | yes | simulation |
-| OpenROAD + ORFS | yes | place & route, RCX |
-| Verilator | optional | faster lint |
-| KLayout | optional | GDS viewer, DRC, LVS |
-| Magic + Netgen | optional | sky130 DRC / LVS |
-| OpenSTA | optional | standalone STA |
-| sky130A PDK | optional | sky130 signoff |
-| torch + torch_geometric + pandas | optional | PyG graph datasets (`run_graphs.sh`; venv on /proj, `R2G_GRAPH_PYTHON`) |
-
----
-
-## Install the skill
+在服务器启动服务并保持进程运行：
 
 ```bash
-git clone https://github.com/ShenShan123/r2g-skills.git
-cd r2g-skills
-bash r2g-skills/install.sh --user   # installs eda-install + rtl-acquire + signoff-loop + def-graph into ~/.claude/skills/
+r2g ui --port 8770
 ```
 
-Restart Claude Code (or run `/reload`) after install.
-
-**Other options:**
+在自己的电脑建立 SSH 隧道：
 
 ```bash
-bash r2g-skills/install.sh --user            # global — available in every Claude Code session (default)
-bash r2g-skills/install.sh --project .       # local  — scoped to the current project directory
-bash r2g-skills/install.sh --link --user     # symlink — edits are picked up without reinstalling
-bash r2g-skills/install.sh --force --user    # overwrite an existing install
-bash r2g-skills/install.sh --uninstall       # remove all sub-skills
+ssh -N -L 8889:127.0.0.1:8770 用户名@服务器地址
 ```
 
-**Installing from the skill collection directory alone** (no full repo clone needed):
+随后打开 **http://127.0.0.1:8889**。也可以使用 VS Code 的端口转发。长时间运行建议把服务放在 tmux 中。
 
-```bash
-cd r2g-skills
-./install.sh --user
-```
+服务默认只监听 `127.0.0.1`。若服务器提示 `address already in use`，先确认是否已有 EDACode 服务；需要另开实例时换端口，例如 `--port 8771`，并将隧道右侧端口同步改为 `8771`。本机转发端口被占用时，只需更换左侧的 `8889`。
 
----
+## 网页工作流
 
-## Configure the OpenROAD toolchain
+- **开始**：上传设计或选择内置示例，确定 graph / image、平台与流程参数后提交；直接运行 EDA 不要求配置模型。
+- **任务**：查看每个设计的阶段状态、签核结果、日志、版图和下载；支持批量筛选与取消，取消完成以实际状态为准。
+- **对话**：上传 RTL 并说明目标，模型调用工具、解释证据、提出受控修复；需要先配置支持工具调用的模型。
 
-The skill autodetects every tool on first use. No `source` or `export` is required if your tools land in standard locations. Use `check_env.sh` to see exactly what was found (see [Verify](#verify-the-setup)).
+例如，在对话中上传 RTL 后输入：
 
-**Quick start — let the `eda-install` skill detect your machine and provision the toolchain:**
-
-```bash
-bash r2g-skills/bootstrap.sh --dry-run     # detect tools + PDK + torch venv → per-tier plan, install nothing
-```
-
-This is a shim to the dedicated **`eda-install`** sub-skill (`r2g-skills/eda-install/bootstrap.sh`) —
-in a Claude Code session you can just say *"set up the EDA tools"*. It reports what's present vs
-missing and, without root, automatically selects a **no-sudo path** (pre-built conda `litex-hub`
-binaries + a torch venv on a big volume — never a full `$HOME`). Drop `--dry-run` to install the
-missing tiers and auto-generate `references/env.local.sh`; add `--prefix /big/volume` to steer where
-the PDK and venv land. The manual paths below remain available if you prefer to install by hand.
-
-Choose the path that matches your situation.
-
----
-
-### Path A — Shared EDA server with a pre-built toolchain (fastest)
-
-If `/opt/openroad_tools_env.sh` exists (e.g. a shared EDA workstation), the skill sources it automatically. Jump straight to [Verify](#verify-the-setup).
-
----
-
-### Path B — Build ORFS from source (recommended for a clean Linux install)
-
-OpenROAD-flow-scripts builds its own `openroad` and `yosys`, so one clone gives you the whole flow.
-
-**1. System packages** (run once as root — Debian / Ubuntu):
-
-```bash
-sudo apt update
-sudo apt install build-essential cmake git python3 python3-pip \
-     iverilog klayout tcl-dev libboost-dev flex bison
-```
-
-For RHEL / Fedora / CentOS, replace `apt` with `dnf` / `yum` and adjust package names accordingly.
-
-**2. Clone and build ORFS** (~30 min on 8 cores):
-
-```bash
-git clone --recursive https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts \
-    ~/OpenROAD-flow-scripts
-cd ~/OpenROAD-flow-scripts
-sudo ./etc/DependencyInstaller.sh   # installs remaining build deps
-./build_openroad.sh --local         # builds openroad + yosys under tools/install/
-```
-
-After the build, the skill autodetects both binaries from `$ORFS_ROOT/tools/install/` if you set `ORFS_ROOT`. Do that in `env.local.sh` (one line):
-
-```bash
-cp ~/.claude/skills/signoff-loop/references/env.local.sh.template \
-   ~/.claude/skills/signoff-loop/references/env.local.sh
-
-# Add this one line to env.local.sh:
-echo 'export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"' \
-  >> ~/.claude/skills/signoff-loop/references/env.local.sh
-```
-
----
-
-### Path C — OSS-CAD-Suite + separate OpenROAD binary
-
-OSS-CAD-Suite provides pre-built Yosys, iverilog, and Verilator. Pair it with a pre-built OpenROAD binary (from the OpenROAD releases page or your distro).
-
-```bash
-# Download OSS-CAD-Suite (check https://github.com/YosysHQ/oss-cad-suite-build for latest tag)
-curl -LO https://github.com/YosysHQ/oss-cad-suite-build/releases/latest/download/oss-cad-suite-linux-x64.tgz
-tar -xf oss-cad-suite-linux-x64.tgz -C "$HOME"        # extracts to ~/oss-cad-suite
-
-# Install OpenROAD binary (Debian / Ubuntu)
-sudo apt install openroad
-
-# Clone ORFS for the flow Makefile (no build needed here)
-git clone --recursive https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts \
-    ~/OpenROAD-flow-scripts
-```
-
-Then set all paths in `env.local.sh`:
-
-```bash
-export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"
-export YOSYS_EXE="$HOME/oss-cad-suite/bin/yosys"
-export IVERILOG_EXE="$HOME/oss-cad-suite/bin/iverilog"
-export VVP_EXE="$HOME/oss-cad-suite/bin/vvp"
-export VERILATOR_EXE="$HOME/oss-cad-suite/bin/verilator"
-export OPENROAD_EXE="/usr/bin/openroad"
-export KLAYOUT_CMD="/usr/bin/klayout"
-```
-
----
-
-### `env.local.sh` — full reference
-
-The file lives at `~/.claude/skills/signoff-loop/references/env.local.sh`. Copy it from the template and edit:
-
-```bash
-cp ~/.claude/skills/signoff-loop/references/env.local.sh.template \
-   ~/.claude/skills/signoff-loop/references/env.local.sh
-```
-
-All keys are optional — uncomment only the lines that the autodetect gets wrong.
-
-```bash
-# ── ORFS checkout ─────────────────────────────────────────────────────────────
-# Required. Must contain flow/Makefile. Set this and everything else is found.
-export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"
-
-# ── Required tool binaries ────────────────────────────────────────────────────
-# Autodetected from $ORFS_ROOT/tools/install/, $PATH, and well-known paths.
-# Uncomment only if autodetect picks the wrong binary.
-# export OPENROAD_EXE="$ORFS_ROOT/tools/install/OpenROAD/bin/openroad"
-# export YOSYS_EXE="$ORFS_ROOT/tools/install/yosys/bin/yosys"
-# export IVERILOG_EXE="/usr/bin/iverilog"
-# export VVP_EXE="/usr/bin/vvp"
-
-# ── Optional tool binaries ────────────────────────────────────────────────────
-# export VERILATOR_EXE="/usr/local/bin/verilator"
-# export KLAYOUT_CMD="/usr/bin/klayout"
-# export MAGIC_EXE="/usr/bin/magic"
-# export NETGEN_EXE="/usr/bin/netgen-lvs"
-# export STA_EXE="/usr/local/bin/opensta"
-
-# ── PDK root (sky130 DRC/LVS with Magic / Netgen only) ────────────────────────
-# export PDK_ROOT="$HOME/pdks"     # must contain sky130A/
-```
-
-The file is sourced automatically by every flow script. Alternatively, point to a file anywhere on disk:
-
-```bash
-export R2G_ENV_FILE=/path/to/your-env.sh   # add to ~/.bashrc or ~/.zshrc
-```
-
-**Autodetected locations** (checked in order if the variable is not set):
-
-| Variable | Checked paths (first hit wins) |
-|----------|-------------------------------|
-| `ORFS_ROOT` | `$HOME/OpenROAD-flow-scripts`, `/opt/OpenROAD-flow-scripts`, `/opt/EDA4AI/OpenROAD-flow-scripts`, sibling of skill dir |
-| `OPENROAD_EXE` | `$ORFS_ROOT/tools/install/OpenROAD/bin/openroad`, `/usr/local/bin/openroad`, `/usr/bin/openroad` |
-| `YOSYS_EXE` | `$ORFS_ROOT/tools/install/yosys/bin/yosys`, `/opt/pdk_klayout_openroad/oss-cad-suite/bin/yosys`, `/usr/local/bin/yosys`, `/usr/bin/yosys` |
-| `IVERILOG_EXE` | `/opt/pdk_klayout_openroad/oss-cad-suite/bin/iverilog`, `/usr/bin/iverilog` |
-| `VVP_EXE` | `/opt/pdk_klayout_openroad/oss-cad-suite/bin/vvp`, `/usr/bin/vvp` |
-| `KLAYOUT_CMD` | `/usr/local/bin/klayout`, `/usr/bin/klayout` |
-| `MAGIC_EXE` | `/usr/local/bin/magic`, `/usr/bin/magic` |
-| `NETGEN_EXE` | `netgen-lvs` or `netgen` on `$PATH`, `/usr/bin/netgen-lvs`, `/usr/local/bin/netgen` |
-| `STA_EXE` | `sta` or `opensta` on `$PATH`, `/usr/local/bin/opensta`, `/usr/bin/opensta` |
-| `PDK_ROOT` | `/opt/pdks`, `$HOME/pdks`, `/usr/local/share/pdks` |
-
----
-
-### Installing the signoff toolchain without sudo (Miniconda)
-
-If `iverilog`/`vvp`, `magic`, `netgen`, or the sky130A PDK are missing and you do not have
-root, install them at user level from the [litex-hub](https://anaconda.org/litex-hub) channel:
-
-```bash
-# 1. Miniconda (user-level, no sudo)
-curl -sL -o /tmp/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-bash /tmp/miniconda.sh -b -p "$HOME/miniconda3"
-
-# 2. Tools — note --override-channels (the conda 'defaults' channel now requires
-#    interactive Terms-of-Service acceptance and will abort a non-interactive create).
-"$HOME/miniconda3/bin/conda" create -y -n eda --override-channels \
-    -c litex-hub -c conda-forge  magic netgen iverilog
-
-# 3. sky130A PDK (~8GB extracted; put it on a volume with space, NOT a full $HOME).
-#    The package installs the tree under <prefix>/share/pdk/sky130A. If $HOME is small,
-#    extract the cached tarball to a big volume instead and point PDK_ROOT there:
-"$HOME/miniconda3/bin/conda" install -y -n eda --override-channels \
-    -c litex-hub -c conda-forge  open_pdks.sky130a
-```
-
-Then pin the paths in `references/env.local.sh`:
-
-```bash
-_eda="$HOME/miniconda3/envs/eda/bin"
-export IVERILOG_EXE="$_eda/iverilog"
-export VVP_EXE="$_eda/vvp"
-export MAGIC_EXE="$_eda/magic"
-export NETGEN_EXE="$_eda/netgen"
-export PDK_ROOT="$HOME/miniconda3/envs/eda/share/pdk"   # or wherever sky130A/ lives
-```
-
-(Avoid `volare` for the PDK behind a SOCKS proxy: its `httpx` client needs the `socksio`
-package and the GitHub release API rate-limits unauthenticated listing — the conda
-`open_pdks.sky130a` package sidesteps both.)
-
----
-
-### Verify the setup
-
-```bash
-bash ~/.claude/skills/signoff-loop/scripts/flow/check_env.sh
-```
-
-Expected output when all required tools are found:
-
-```
-[ORFS]
-ok   ORFS_ROOT      /home/you/OpenROAD-flow-scripts
-ok   FLOW_DIR       /home/you/OpenROAD-flow-scripts/flow
-skip PDK_ROOT       (optional, not found)
-skip SKY130A_DIR    (optional, not found)
-
-[required tools]
-ok   OPENROAD_EXE   /home/you/OpenROAD-flow-scripts/tools/install/OpenROAD/bin/openroad
-ok   YOSYS_EXE      /home/you/OpenROAD-flow-scripts/tools/install/yosys/bin/yosys
-ok   IVERILOG_EXE   /usr/bin/iverilog
-ok   VVP_EXE        /usr/bin/vvp
-ok   python3        /usr/bin/python3
-
-[optional tools]
-ok   KLAYOUT_CMD    /usr/bin/klayout
-skip VERILATOR_EXE  (optional, not found)
-skip MAGIC_EXE      (optional, not found)
-skip NETGEN_EXE     (optional, not found)
-skip STA_EXE        (optional, not found)
-skip gtkwave        (optional, not found)
-
-[platforms]
-ok    nangate45
-ok    sky130hd
-ok    sky130hs
-ok    asap7
-ok    gf180
-ok    ihp-sg13g2
-```
-
-**All required lines must show `ok` before running a flow.** Optional `skip` lines are fine — nangate45 (the default platform) only needs the required tools and KLayout.
-
-Common fixes:
-
-| Symptom | Fix |
-|---------|-----|
-| `MISS ORFS_ROOT` | Set `ORFS_ROOT` in `env.local.sh` pointing to your ORFS clone |
-| `MISS OPENROAD_EXE` | Add `OPENROAD_EXE` to `env.local.sh`, or run `build_openroad.sh --local` first |
-| `MISS YOSYS_EXE` | Same as OpenROAD — built together by `build_openroad.sh` |
-| `MISS IVERILOG_EXE` | `sudo apt install iverilog` (or set `IVERILOG_EXE` in `env.local.sh`) |
-| `MISS python3` | `sudo apt install python3` |
-| Platforms list empty | `ORFS_ROOT` set but `flow/platforms/` not present — check ORFS clone is complete |
-
----
-
-## First use
-
-With tools verified, open any Claude Code session and ask something like:
-
-> *"Take this RTL through to GDS on nangate45"*
-> *"Synthesize this UART at 100 MHz"*
-> *"Run DRC and LVS on my design"*
-> *"Generate a simple arbiter and produce a GDS"*
-
-Claude matches these requests to the `signoff-loop` skill and drives every stage — spec normalization, RTL generation, lint, simulation, synthesis, place-and-route, timing gate, and signoff. Optional ML dataset extraction (label/feature CSVs and training-ready PyG graphs) from the signed-off result is handled by the companion `def-graph` skill — which refuses to build a dataset on a design that is not signed off (the automatic signoff gate; `R2G_SIGNOFF_GATE=warn` overrides with the reasons recorded in the manifest). Corpus-scale RTL acquisition and synth-only netlist graphs are the `rtl-acquire` skill; its `scripts/promote/promote_candidates.py` promotes a synth-proven candidate into a ready-to-run signoff-loop full-flow project in one command.
-
-The skill works from **existing RTL** (drop your file into `rtl/design.v`) or from a **natural-language spec** (Claude writes the RTL for you).
-
----
-
-## EDA Flow
-
-End-to-end pipeline from a natural-language spec (or existing RTL) to a fully signed-off GDSII:
+> 为这个设计生成 graph 数据集，时钟周期 1 ns。保留原始 RTL 和接口；如果失败，先解释原因并给出可审核的修复差异。
 
 ```mermaid
 flowchart TD
-    A["Spec (natural language)\nor existing RTL"] --> B["normalize_spec.py\n→ normalized-spec.yaml"]
-    B --> C["init_project.py\n→ project dir (rtl/ tb/ constraints/)"]
-    C --> D["run_lint.sh\nrun_sim.sh\nrun_synth.sh"]
-    D --> E["run_orfs.sh\nsynth → floorplan → place → CTS → route → finish"]
-    E --> RouteOK{"Route\nstage OK?"}
-    RouteOK -- "fail / timeout" --> ER["extract_route.py → route.json\nroute_relief: lower CORE_UTIL, re-run"]
-    ER --> E
-    RouteOK -- "pass" --> S["run_drc.sh  run_lvs.sh  run_rcx.sh"]
-    S --> R["reports/\ndrc.json  lvs.json  rcx.json  ppa.json"]
-    R --> OK{"Signoff\nclean?"}
-    OK -- "violations" --> F["fix_signoff.sh\nbaseline DRC/LVS if no report (never skip a check)\n→ diagnose → apply strategy → re-run (≤3 iter)"]
-    F --> S
-    OK -- "clean" --> G["GDSII ✓  full signoff"]
+    A[上传 RTL 并明确目标] --> B[现有 EDA 流程]
+    B --> C[最新状态与失败证据]
+    C --> D[模型审查并选择下一步]
+    D --> E{是否满足交付条件}
+    E -->|通过| F[报告与数据集下载]
+    E -->|需修复且在支持范围内| G[具体差异与用户授权]
+    G --> H[隔离副本与独立功能检查]
+    H -->|通过| B
+    H -->|失败| I[新证据与剩余预算]
+    I --> D
+    E -->|证据不足或超出范围| J[报告原因并停止或等待补充]
 ```
 
-Key scripts involved:
+与聊天会话关联的作业完成或失败后，任务事件桥会发起一次持久的结果审查，不需要用户不断追问进度。只读审查可以读取证据或提出修复提案，不能自行启动、修改或取消作业。若模型服务不可用，审查错误会保留，已有 EDA 结果不因此失效。
 
-| Stage | Script | Output |
-|-------|--------|--------|
-| Normalize | `scripts/project/normalize_spec.py` | `input/normalized-spec.yaml` |
-| Init | `scripts/project/init_project.py` | project directory scaffold |
-| Lint / Sim / Synth | `scripts/flow/run_{lint,sim,synth}.sh` | `lint/` `sim/` `synth/` |
-| Place & Route | `scripts/flow/run_orfs.sh` | `backend/RUN_*/results/6_final.{gds,odb}` |
-| Route abort check | `scripts/extract/extract_route.py` | `reports/route.json` |
-| Signoff | `scripts/flow/run_{drc,lvs,rcx}.sh` | `reports/{drc,lvs,rcx}.json` |
-| PPA extract | `scripts/extract/extract_ppa.py` | `reports/ppa.json` |
-| Timing gate | `scripts/reports/check_timing.py` | pass / minor-fix / escalate |
-| Signoff fix | `scripts/flow/fix_signoff.sh` | `reports/fix_log.jsonl` |
-| Dataset labels (Y) | `scripts/flow/run_labels.sh` | `labels/*.csv` (congestion · wirelength · timing · irdrop · RC parasitics from SPEF) + `reports/labels_stats.json` |
-| Dataset features (X) | `scripts/flow/run_features.sh` | `features/*.csv` + `reports/features_stats.json` |
-| PyG graph datasets | `scripts/flow/run_graphs.sh` | `dataset/{b..f}_graph.pt` (`HeteroData` by default; `R2G_GRAPH_KIND=homo` for the flat format), `netlist_graph.pt`, `graph_manifest.json` |
+界面展示的是操作说明、工具反馈和实际阶段记录。任务结束后这些内容自动折叠，仍可手动展开；最终结果和失败原因保留在外部。模型隐藏推理不作为页面或执行接口。
 
-Signoff robustness + provenance (2026-07-24, failure-patterns #55): every signoff checker
-(KLayout DRC, KLayout LVS, Netgen LVS incl. its Magic extraction, the advisory Magic DRC) runs
-under a bounded process-group supervisor (`scripts/flow/_bounded_run.sh`) — own session, output
-straight to the run log, TERM→grace→KILL of the whole tree on timeout, so no orphaned tool can
-outlive its script or hang a campaign. Repair/resume runs are digest-complete: `run_orfs.sh`
-records per-stage artifact digests (`stage_artifact_manifest.jsonl`), a `FROM_STAGE` resume
-stops before mutating anything unless every reused stage's bytes match a recorded parent digest
-(`resume_lineage.py`), and the def-graph signoff gate independently re-verifies the chain —
-blocking graph publication on any null, mismatched, foreign, or cyclic lineage.
+## 受控修复与授权
 
----
+EDACode 保留 r2g 原有的确定性前端处理和签核修复；模型根据证据提出的 RTL 修改使用独立的受控动作与审批路径。
 
-## Closed Learning Loop & `engineer_loop`
+首个已注册动作是 **`counter8_contract_v1` 下的缺失分号修复**：
 
-**Every run teaches the skill.** Two memory databases record all experience; `engineer_loop.py`
-drives the full cycle unattended.
+1. 读取当前作业记录的综合语法错误、准确源码和经验查询结果。
+2. 提交一个现有文件中、具体行末的分号差异；版本不匹配时拒绝提案。
+3. 在网页展示 diff、源码快照和预算，等待用户明确批准。
+4. 在新副本中应用候选，保护原始 RTL、接口、约束和功能检查标准。
+5. 使用 Icarus Verilog 编译、仿真独立功能合同；失败则保存新证据，不提交完整 EDA。
+6. 便宜检查通过后运行完整流程；验收与打包再次核对输入和策略版本，满足条件才交付。
 
-### Two memory databases
+当前策略要求 graph 输出、单个不超过 64 KiB 的 `.v` / `.sv` 源文件及受支持的 counter8 功能合同，并会拒绝不支持的输入构造。工具不开放任意 shell、任意补丁或通用文件写入。
 
-| Database | Role | Tracked in git |
-|----------|------|---------------|
-| `knowledge/knowledge.sqlite` | What *resulted* — `runs`, `failure_events`, `run_violations`, `fix_events`, `fix_trajectories`, `symptoms`, `lessons`, `config_lineage`, `ab_trials`, `recipe_status` | **yes** (ships pre-trained) |
-| `knowledge/journal.sqlite` | What was *done* and why — the comprehensive decision + telemetry ledger: `actions` (`tool_invoke`, `config_knob_delta`, `stage_rerun`, `ab_launch`, `promote`/`demote`, `escalate` — symptom- and trial-linked), `log_summaries`, `tool_bugs` | no (local evidence) |
+网页默认授权上限是 **2 轮修复、6 次模型调用、15 分钟**，从批准时开始计时；批准前诊断和终态只读审查有各自的回合预算。授权绑定本次会话、作业、文件、源码、参数和验证策略，模型不能自行授予权限。预算耗尽后停止新动作；子作业超时会请求取消，未确认停止时仍保留不确定状态。
 
-> The journal is **operator forensics only** — best-effort writes, gitignored, and read by **no** learner. `knowledge.sqlite` stays the sole learner input and the only honesty-gate source (the firewall). Decision-journaling (A/B launches, promotions/demotions, escalations, stage reruns, with `symptom_id`/`parent_action_id` linkage) lets `observe.py trace` answer "what was tried for symptom X, and how did it resolve?" forward of the change.
+失败后只能在授权范围和剩余预算内选择不同候选，或明确停止。同一失败候选不会被原样重复执行。
 
-### Autonomous campaign driver
+## 上下文、持久执行与恢复
 
-`scripts/loop/engineer_loop.py` drives the wheel unattended: pull design → flow → signoff fix →
-ingest → learn → A/B gate → promote/demote → escalate unknowns.
+**原始会话保留，模型读取的是按任务组织的视图。** `ContextBuilder` 每轮组合当前目标、保护的用户要求、未决动作、批准记录、最新 JobContext、近期完整工具组和较早历史的来源索引。旧记录和工具大输出可以按需读取；旧作业失败保留为历史证据，不作为新作业的当前故障。
 
-```mermaid
-flowchart TD
-    L["campaign.jsonl ledger\n(resumable JSONL — last-state-wins)"]
-    L --> EL["engineer_loop.py run"]
+默认 `context_max_chars=64000`、`context_recent_turns=3`。这是本地字符预算与近期回合策略，不是精确的供应商 token 窗口估算；必要约束或工具配对无法安全保留时，会停止模型调用。
 
-    EL --> FL["run_orfs.sh + run_drc.sh\n+ run_lvs.sh + run_rcx.sh"]
-    FL --> FX["fix_signoff.sh\nbaseline DRC/LVS if no report (never skip)\ndiagnose → apply → re-run, ≤3 iter"]
-    FX --> IN["ingest_run.py"]
-    IN --> KDB[("knowledge.sqlite\nruns · failure_events\nfix_events · ab_trials\n— sole learner input + honesty gate")]
-    IN --> JDB[("journal.sqlite — operator forensics\nactions: tool_invoke · config_knob_delta\nab_launch · promote/demote · escalate · stage_rerun\nlog_summaries · tool_bugs (best-effort, no learner reads it)")]
+执行记录连接 session、turn、action 和 job：
 
-    KDB --> LH["learn_heuristics.py\n→ heuristics.json"]
-    LH --> RL["recipe_lifecycle.diff_and_enqueue\n(new/changed recipe → candidate)"]
+- 请求与任务提交使用幂等身份，同一身份改变输入会冲突；同一会话的活动回合按持久状态控制。
+- 工具先登记动作意图，再执行，最后保存真实结果；任务提交后尚未写回聊天的窗口通过持久记录核对。
+- 流式事件先保存，网页按回合和事件位置续读；关闭浏览器不等于取消后台任务。
+- 服务重启后先核对旧进程与执行记录。能确认安全的 EDA 任务可恢复；无法确认的执行标为 `recovery_required`，不直接重放模型调用或工具副作用。
 
-    RL --> ABD["ab-drain\narm A (control)  vs  arm B (ranked strategy)\nk=2 repeats — LCB verdict  (Win 2)"]
-    ABD --> V{"Verdict"}
-    V -- "win" --> PR["recipe: candidate → promoted\n(live ranking via suggest_config.py)"]
-    V -- "loss / inconclusive" --> SH["recipe: → shadow (inert)"]
+持久记录和提交幂等不能替代对未知副作用的核对，也不构成对所有外部动作“恰好执行一次”的承诺。
 
-    PR --> SC["suggest_config.py\n(Win 5: presynth KNN + promoted recipes)"]
-    SC --> EL
+## 模型配置
 
-    EL --> ESC{"Unknown symptom /\ncatalog exhausted?"}
-    ESC -- yes --> EQ["escalations queue"]
-    EQ --> AT["agent tier\nauthor shadow strategy + predicates"]
-    AT --> RL
-
-    %% decision-journaling (Tiers A/B, 2026-06-17) — best-effort side-writes, symptom/trial linked
-    FX -. "config_knob_delta · stage_rerun\n(symptom_id, parent chain)" .-> JDB
-    ABD -. "ab_launch (per arm)" .-> JDB
-    V -. "promote / demote (trial_id)" .-> JDB
-    EQ -. "escalate (symptom_id)" .-> JDB
-```
-
-### Recipe lifecycle states
-
-```
-shadow  ──(Gate A: learner enqueues)──►  candidate  ──(A/B win)──►  promoted
-                                                     ◄──(A/B loss)── shadow
-```
-
-Gate A fires automatically every time `learn_heuristics.learn()` runs (batch or loop).
-Gate B (seeding the dense-reward gradient) is an operator procedure — see `references/engineer-loop.md`.
-
-## Repository layout
-
-```
-agent-r2g/
-├── r2g-skills/                        # ★ The skill collection — install into ~/.claude/skills/
-│   ├── install.sh                     #   Installs all three sub-skills (symlink/copy)
-│   ├── bootstrap.sh                   #   Shim → eda-install/bootstrap.sh (one-command setup)
-│   ├── eda-install/                   # SKILL 0 — detect + install + verify the EDA toolchain
-│   │   ├── SKILL.md                   #     detect → plan → install → pin env.local.sh → verify
-│   │   ├── bootstrap.sh               #     Orchestrator (--dry-run plans; --yes installs; no-sudo default)
-│   │   └── scripts/{setup,flow}/      #     detect_env.sh · write_env_local.sh · _env.sh · check_env.sh
-│   ├── signoff-loop/                  # SKILL 1 — RTL→GDS flow + signoff + self-improvement loop
-│   │   ├── SKILL.md                   #   Claude Code entry point (metadata + workflow)
-│   │   ├── scripts/
-│   │   │   ├── flow/                  #   Stage runners: lint/sim/synth/orfs/drc/lvs/rcx + _env.sh
-│   │   │   │   ├── fix_signoff.sh     #     Diagnose → apply strategy → re-run loop (≤3 iter)
-│   │   │   │   └── orfs_hooks/        #     Tcl sourced into ORFS stages (PRE/POST_<STAGE>_TCL)
-│   │   │   ├── extract/               #   Parse tool output → JSON (extract_ppa/drc/lvs/rcx/route)
-│   │   │   │   ├── report_io.py       #     Shared JSON writer for the signoff extractors
-│   │   │   │   └── presynth.py        #     Pre-synthesis KNN feature extractor (Win 5)
-│   │   │   ├── project/               #   init / normalize / validate
-│   │   │   ├── reports/               #   Timing gate, diagnosis, Fmax search, history
-│   │   │   └── dashboard/             #   GDS preview + multi-project HTML dashboard
-│   │   ├── knowledge/                 #   Cross-run memory (ships pre-trained, tracked in git)
-│   │   │   ├── knowledge.sqlite       #     runs · failure_events · fix_events · ab_trials · …
-│   │   │   ├── heuristics.json        #     Learned per-symptom repair recipes (Tier-3)
-│   │   │   ├── ingest_run.py · learn_heuristics.py · ab_runner.py · suggest_config.py
-│   │   │   └── escalations.py         #     Open escalation records for the agent tier
-│   │   ├── references/                #   Failure patterns, engineer-loop runbook, PPA guide, …
-│   │   ├── assets/                    #   config.mk / constraint.sdc templates + platform rule decks
-│   │   └── tests/                     #   pytest suite (signoff-loop)
-│   └── def-graph/                     # SKILL 2 — graph datasets from signed-off DEF/LEF/SPEF
-│       ├── SKILL.md                   #   Labels → features → PyG graphs (b–f, HeteroData default)
-│       ├── scripts/
-│       │   ├── flow/                  #   run_labels/run_features/run_graphs + resolve_platform_paths + _env.sh
-│       │   └── extract/
-│       │       ├── techlib/           #     Per-platform tech/LEF/liberty/DEF parser
-│       │       ├── labels/            #     Y: congestion · wirelength · timing · irdrop · RC parasitics
-│       │       ├── features/          #     X: nodes_* · edges_* · metadata
-│       │       └── graph/             #     PyG b–f variants + netlist graph (run_graphs.sh)
-│       ├── references/                #   graph-dataset · feature-extraction · label-extraction
-│       └── tests/                     #   pytest suite (def-graph)
-├── .claude-plugin/plugin.json         #   Claude Code plugin manifest (name: r2g-skills)
-├── tools/                             #   Batch orchestration helpers (not part of skill install)
-│   ├── setup_rtl_designs.py           #     Scaffold design_cases/ from an RTL catalog
-│   ├── batch_orfs_only.sh · batch_flow.sh · fix_orfs_failures.py
-│   ├── mk_sky130_project.py           #     Source project → sky130hd materializer
-│   └── verify_graph_dataset.py        #     Independent dataset verifier (def-graph)
-└── CLAUDE.md                          #   Project instructions for this repo
-```
-
-Everything under `r2g-skills/` is what gets installed (as three skills, `eda-install` + `signoff-loop` + `def-graph`). Everything outside it (`tools/`, `rtl_designs*/`, `design_cases/`) is workspace used to validate the skills at scale.
-
----
-
-## Manual CLI usage
-
-The scripts work directly without Claude Code. Example for an existing counter RTL:
+命令名沿用 `r2g`。可在网页设置服务商、模型与密钥，也可使用 CLI。此次真实验收使用 DeepSeek Flash：
 
 ```bash
-SKILL=~/.claude/skills/signoff-loop
-PROJ=design_cases/my_counter
-
-# Scaffold
-python3 $SKILL/scripts/project/init_project.py my_counter
-cp my_counter.v  $PROJ/rtl/design.v
-cp tb_counter.v  $PROJ/tb/testbench.v
-cp $SKILL/assets/config-template.mk       $PROJ/constraints/config.mk
-cp $SKILL/assets/constraint-template.sdc  $PROJ/constraints/constraint.sdc
-# edit DESIGN_NAME, VERILOG_FILES, clk_port_name to match your RTL
-
-# Frontend
-bash    $SKILL/scripts/flow/run_lint.sh  $PROJ/rtl/design.v  $PROJ/lint/lint.log
-bash    $SKILL/scripts/flow/run_sim.sh   $PROJ/rtl/design.v  $PROJ/tb/testbench.v  $PROJ/sim
-bash    $SKILL/scripts/flow/run_synth.sh $PROJ/rtl/design.v  my_counter  $PROJ/synth
-
-# Backend (place & route → GDS)
-bash    $SKILL/scripts/flow/run_orfs.sh  $PROJ  nangate45
-
-# Timing gate — auto-fixes minor violations; stops for moderate/severe
-python3 $SKILL/scripts/extract/extract_ppa.py   $PROJ  $PROJ/reports/ppa.json
-python3 $SKILL/scripts/reports/check_timing.py  $PROJ
-
-# (optional) Fmax search — fastest closing period via cheap place-stage probes
-# Reports a predicted-signoff proxy in $PROJ/reports/fmax_search.json (--verify confirms with one full flow)
-python3 $SKILL/scripts/reports/fmax_search.py   $PROJ  nangate45
-
-# Signoff
-bash    $SKILL/scripts/flow/run_drc.sh  $PROJ  nangate45
-bash    $SKILL/scripts/flow/run_lvs.sh  $PROJ  nangate45
-bash    $SKILL/scripts/flow/run_rcx.sh  $PROJ  nangate45
-
-# (optional) ML dataset: label/feature CSVs + training-ready PyG graphs
-# run_graphs.sh auto-runs the labels/features stages when their CSVs are stale.
-# Needs a torch venv (install on /proj, never $HOME):
-#   python3 -m venv /proj/<you>/pyenvs/r2g-graph
-#   .../pip install torch --index-url https://download.pytorch.org/whl/cpu
-#   .../pip install torch_geometric pandas
-R2G_GRAPH_PYTHON=/proj/<you>/pyenvs/r2g-graph/bin/python \
-bash    $SKILL/scripts/flow/run_graphs.sh  $PROJ  nangate45
-# -> $PROJ/dataset/{b..f}_graph.pt (HeteroData by default; R2G_GRAPH_KIND=homo|both),
-#    netlist_graph.pt, graph_manifest.json
+r2g config --provider deepseek --model deepseek-flash --set-key
+r2g check-model
 ```
 
-A worked example: `r2g-skills/signoff-loop/assets/examples/simple-arbiter/`.
-
----
-
-## Batch mode
-
-`tools/` drives the skill across hundreds of designs in parallel. It is **not** installed with the skill — clone the full repo to use it.
+`--set-key` 通过不回显的输入读取密钥。若使用已导出的环境变量：
 
 ```bash
-# 1. Scaffold design_cases/ from an RTL catalog in rtl_designs/
-python3 tools/setup_rtl_designs.py
-
-# 2. Run ORFS across all projects (8-way parallel, 2 h per-stage timeout)
-bash tools/batch_orfs_only.sh 8 7200
-
-# 3. Classify failures and rewrite config.mk automatically
-#    Reads the sweep's own results file (design_cases/_batch/orfs_results.jsonl)
-python3 tools/fix_orfs_failures.py
-# ...or point it at a different sweep:
-python3 tools/fix_orfs_failures.py --results /path/to/orfs_results.jsonl
-
-# 4. Retry failures
-DESIGNS_LIST=failed.txt bash tools/batch_orfs_only.sh 8 7200
+r2g config --provider deepseek --model deepseek-flash --key-env DEEPSEEK_API_KEY
 ```
 
-`fix_orfs_failures.py` handles six failure patterns: wrong top module, `SYNTH_MEMORY_MAX_BITS` overflow, IO pin overflow, place density overflow, PDN strap width, and stage timeout. Full catalog: `r2g-skills/signoff-loop/references/failure-patterns.md`.
+EDACode 提供 DeepSeek、Qwen、Kimi、GLM、豆包、OpenAI、Gemini、Anthropic、Ollama 和自定义兼容接口的适配。具体模型需要支持所用协议和工具调用，以 `r2g check-model` 的实际结果为准。该命令会向配置的模型服务发起测试请求。
 
-It classifies straight from step 2's `orfs_results.jsonl`, so run a sweep first — with no results file it exits non-zero and tells you so rather than silently doing nothing. (Until 2026-07-25 it only read `/tmp/fail_categories.json`, a file nothing in this repo writes, which made the command above a no-op; see failure-patterns.md #57.)
+配置保存在 `$R2G_HOME/config.yaml`；通过界面或 `--set-key` 保存的密钥位于本机 `credentials.yaml`，权限为 `0600`。使用环境变量时，需由启动服务的环境提供；程序不会自动加载任意 `.env` 或 `.llm_env` 文件。
 
-**Structural gate.** RTL-level failures route to a detect-and-dump handler that also runs the anti-hollowing-out check — it fingerprints the design on the first iteration and, on every later one, verifies the edit still describes the same design instead of one gutted until the tool stopped complaining. **The exit code is the verdict**, so it composes:
+模型调用记录包含请求/实际返回的模型标识、完成状态和供应商返回的用量。缺失的 token 或费用数据保持未知，不按零消耗处理。
+
+## TEHM 记忆与本地存储
+
+TEHM 是 EDACode 默认的经验后端，具体实现位于单一的 [`memory/tehm`](memory/tehm) 包中。它沿用证据、类型视图、检索、绑定与生命周期机制，不依赖两套带版本号的实现目录。
+
+`knowledge_lookup` 同时区分故障文档参考与 TEHM 动作咨询。动作咨询复用既有后端，返回适用条件、来源、候选及拒绝原因；缺少作用域或证据时弃权。查询结果不是执行授权，候选与未验证经验不会自动成为可执行的 promoted 规则。
 
 ```bash
-# 0 = structure preserved · 2 = REJECT (revert) · 3 = flag · 1 = error/no baseline
-python3 tools/fix_orfs_failures.py --rtl-verify <case> || git checkout -- design_cases/<case>/rtl
-python3 tools/fix_orfs_failures.py --rtl-error  <case>   # dump context; also exits 2 on a reject
+r2g ui                                  # 默认 tehm
+R2G_MEMORY_BACKEND=legacy r2g ui          # 兼容原有用户知识库
+R2G_MEMORY_BACKEND=none r2g ui            # 禁用经验后端检索与写回
 ```
 
----
+后端在进程内锁定，切换后需要重启。直接调用底层 skill / factory 时兼容默认值仍为 `legacy`；需要 TEHM 时显式指定后端和存储。详细合同见 [`memory/README.md`](memory/README.md)。
 
-## Platform support
+`R2G_HOME` 默认是 `~/.r2g`，可在启动前指定其他数据目录。主要内容如下：
 
-| Platform | KLayout DRC | KLayout LVS | Magic DRC | Netgen LVS | OpenRCX |
-|----------|-------------|-------------|-----------|------------|---------|
-| `nangate45` | yes | yes | — | — | yes |
-| `sky130hd` | yes | yes | yes | yes | yes |
-| `sky130hs` | yes | yes | yes | yes | yes |
-| `gf180` | yes | yes | — | — | yes |
-| `ihp-sg13g2` | yes | yes | — | — | yes |
+| 路径（相对 `R2G_HOME`） | 内容 |
+| --- | --- |
+| `config.yaml`、`credentials.yaml` | 模型与运行配置、本机密钥 |
+| `sessions.sqlite` | 会话、模型调用、回合、动作、事件、修复提案与授权 |
+| `jobs.sqlite` | 作业、设计、阶段执行、取消与结果审查记录 |
+| `uploads/`、`workspace/` | 上传文件与 EDA 工作目录 |
+| `tool-results/` | 已保存的工具大输出 |
+| `repair-attempts/` | 隔离候选副本、补丁与便宜检查结果 |
+| `datasets/` | 可下载的数据集归档 |
+| `memory/tehm.sqlite`、`memory/artifacts/` | TEHM 记录与内容寻址证据 |
 
-**`asap7` is not supported in this version.** `run_orfs.sh` refuses it with exit 65 and the
-capability probe reports tier `unsupported`: its community KLayout deck has an irreducible
-false-violation floor, it has no LVS deck, and the authoritative Calibre deck is not
-installed — so it can never reach a clean verdict, and a platform that can never read clean
-can never promote a recipe. Set `R2G_ALLOW_UNSUPPORTED_PLATFORM=1` to experiment anyway
-(results are NOT sign-off quality).
+`TEHM_DB`、`TEHM_ARTIFACTS_ROOT` 可选择独立的 TEHM 存储。仓库不附带历史实验数据库或预装修复经验；没有修复迭代的干净运行不会生成虚构的修复 transition。
 
-LVS gracefully skips for platforms without `.lylvs` rules (reports `status: "skipped"`).
+## 数据集与交付
 
-On sky130, **Netgen LVS is the production path** (the bundled KLayout sky130 rule cannot
-reconcile flat-transistor extraction). `run_netgen_lvs.sh` handles antenna-diode designs
-automatically (Magic's diode X-subcircuit → D-device normalization) and classifies any
-mismatch (`top_pin_mismatch` / `netgen_topology` / `generic`). Designs with port-to-port
-`assign` feedthroughs additionally need the `buffer_port_feedthroughs.tcl` stage hook in
-config.mk — see `r2g-skills/signoff-loop/SKILL.md` ("Netgen LVS") and
-`references/failure-patterns.md` ("sky130 LVS").
+| | 图数据集 `graph` | 图像数据集 `image` |
+| --- | --- | --- |
+| 形式 | PyTorch Geometric 五种视图 b–f 与网表图，默认 `HeteroData` | GCell 网格上的多通道 `.npz` 与预览图 |
+| 特征 | 单元、线网、引脚的几何及电气信息 | 来自放置阶段的单元密度、宏区域、RUDY、引脚密度等 |
+| 标签 | 拥塞、线长、时序、IR drop、RC 寄生信息 | 拥塞、IR drop |
+| 校验入口 | [`verify_graph_dataset.py`](tools/verify_graph_dataset.py) | [`verify_images.py`](r2g-skills/def-graph/scripts/extract/images/verify_images.py) |
 
----
+数据集生成受签核门控制。模型说明、工具零退出码或页面状态均不能替代所需报告；缺失、超时或未完成的检查不算通过。
 
-## License
+归档中的 `delivery_manifest.json` 列出实际文件的字节数、SHA256、已记录检查及未验证范围。普通作业的归档清单不自动等于执行时输入证明。通过受控修复验证的交付还包含：
 
-See `LICENSE`.
+- `agent_repair.json`、`agent_repair.diff`：修复记录与具体差异。
+- `functional_check.json`：独立功能检查及工具/策略摘要。
+- `input_bindings.json`：阶段执行前后的源码、约束与退出状态。
+- 签核、数据集校验报告及源码/策略/提案绑定。
+
+打包时再次核对修复输入和策略。当前清单仍明确保留 `base_commit_not_bound` 与检查范围之外的未验证项，不能外推为整个项目或任意修改都已验证。
+
+## 当前验证与边界
+
+截至 **2026-10-25**，本轮工程 Agent 升级已完成：
+
+| 验证 | 结果与范围 |
+| --- | --- |
+| Agent 回归 | 383 通过、19 跳过；跳过项不计为通过 |
+| 前端 | TypeScript/Vite 构建通过；桌面与 390px 浏览器验证了授权、历史错误顺序和结束后折叠 |
+| 真实模型修复 | 公开 counter8 夹具中，DeepSeek Flash 提出差异，网页批准后自动完成副本修复、完整 EDA、终态审查和交付，无需追加聊天 |
+| 独立检查 | 候选功能检查 2048 项通过；DRC 无违规、LVS 无不匹配、RCX 完成；图数据集校验 296/296 通过 |
+| 失败后改变候选 | 脚本故意提出的错误候选被真实编译器拒绝；后续继续回合中，真实模型依据新证据提出不同候选并通过验证 |
+| 交付核对 | 两份实际修复归档各 26 个成员逐项核对字节数与 SHA256 |
+| Harness 研究 | 固定 OpenCode / OpenHands 版本执行实际框架服务与持久化轨迹；上游模型使用脚本夹具，与真实模型及 EDA 验收分开记录 |
+
+验收的初始失败由公开示例故意删除分号产生，初始提交流程使用脚本夹具；后续真实模型、授权、检查和自动结果审查分别保留记录。这不是任意 RTL 缺陷、其他平台或 TEHM 经验迁移的验证。
+
+实际 TEHM 查询未命中可用的 promoted 经验。精确 token 窗口与成本预算、更强资源隔离、运维备份恢复和更多独立修复合同仍需继续完善。实现与验收摘要见固定提交 [99a8ac3b](https://github.com/ShenShan123/r2g-skills/commit/99a8ac3bd9daa32dee9ee27c608863613bdd677f)。
+
+## 开发与自动化入口
+
+```bash
+r2g run --example counter8 --output graph --period 1.0
+r2g run --batch /path/to/designs --output graph
+r2g params
+r2g status
+r2g chat
+r2g mcp
+```
+
+网页、CLI 和 MCP 复用现有工具与流程；网页提供修复差异审核入口。开发时可运行 Agent 回归并重新构建网页：
+
+```bash
+.venv/bin/python -m pip install -e './agent[dev]'
+PYTHONPATH=agent:memory .venv/bin/python -m pytest -q agent/tests
+npm --prefix webui ci
+npm --prefix webui run build
+```
+
+Node.js/npm 用于前端开发和重新构建。构建结果写入 `agent/r2g_agent/web/dist/`。
+
+```text
+EDACode/
+├── agent/r2g_agent/   # 上下文、模型循环、回合/动作、事件桥、修复、流水线与服务
+├── agent/tests/       # Agent 维护性回归
+├── webui/            # 网页源码
+├── memory/           # TEHM 与兼容后端
+├── r2g-skills/       # 确定性 EDA、安装、RTL 获取和数据集工具
+├── tools/            # 签核与独立校验等共享工具
+└── install.sh        # 完整环境安装入口
+```
+
+底层工具也可作为独立 skills 安装到 Claude Code；这与安装 EDACode 网页 Agent 是不同入口：
+
+```bash
+bash r2g-skills/install.sh --user
+```
+
+| 底层模块 | 说明 |
+| --- | --- |
+| [`eda-install`](r2g-skills/eda-install/SKILL.md) | 检测、安装和固定工具链配置 |
+| [`rtl-acquire`](r2g-skills/rtl-acquire/README.md) | RTL 检索、获取与候选管理 |
+| [`signoff-loop`](r2g-skills/signoff-loop/SKILL.md) | 综合、物理流程、签核与确定性修复 |
+| [`def-graph`](r2g-skills/def-graph/SKILL.md) | 图与图像数据集生成 |
+
+已有工具链可通过 `R2G_ENV_FILE` 或 skill 的 `references/env.local.sh` 指定；图数据集环境使用 `R2G_GRAPH_PYTHON`。受控修复检查默认在 PATH 查找 `iverilog` / `vvp`，也可用 `R2G_IVERILOG_EXE`、`R2G_VVP_EXE` 明确指定，授权会绑定实际工具与验证策略的摘要。
+
+## 许可证
+
+[MIT License](LICENSE)。
