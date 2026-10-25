@@ -1,5 +1,14 @@
 // Thin client for the r2g agent API. All verdicts shown in the UI come from here.
 export type Stage = { id: string; label: string };
+export type ToolOutputRef = {
+  schema_version: number; artifact_id: string; sha256: string;
+  original_bytes: number; stored_bytes: number; redacted: boolean;
+};
+export type ToolOutputPage = {
+  artifact_id: string; sha256: string; text: string; offset: number;
+  next_offset: number | null; total_chars: number; stored_bytes: number;
+  redacted: boolean; match: number | null;
+};
 export type Output = "graph" | "image";
 export const OUTPUT_LABEL: Record<string, string> = { graph: "图数据集", image: "图像数据集" };
 export type Design = {
@@ -50,6 +59,9 @@ export const api = {
   log: (id: string, d: string, stage: string) => fetch(`/api/jobs/${id}/designs/${d}/log/${stage}?lines=300`).then(j<any>),
   sessions: () => fetch("/api/sessions").then(j<any[]>),
   session: (id: string) => fetch(`/api/sessions/${id}`).then(j<any>),
+  toolOutput: (sid: string, id: string, offset = 0, query = "") =>
+    fetch(`/api/sessions/${encodeURIComponent(sid)}/tool-outputs/${encodeURIComponent(id)}?` +
+      new URLSearchParams({ offset: String(offset), limit: "4000", query })).then(j<ToolOutputPage>),
   upload: (files: File[]) => {
     const fd = new FormData();
     files.forEach((f) => fd.append("files", f, (f as any).webkitRelativePath || f.name));
@@ -62,7 +74,7 @@ export type ChatEvent =
   | { type: "text"; delta: string }
   | { type: "thinking"; delta: string }
   | { type: "tool_call"; id: string; name: string; arguments: any }
-  | { type: "tool_result"; id: string; name: string; result: any }
+  | { type: "tool_result"; id: string; name: string; result: any; output_ref?: ToolOutputRef }
   | { type: "error"; message: string }
   | { type: "done" };
 

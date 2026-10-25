@@ -2,16 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Send, Paperclip, X, ChevronDown, ChevronRight, Plus, MessageSquare, ExternalLink, AlertCircle,
          Loader2, CheckCircle2, XCircle, Brain, History } from "lucide-react";
-import { api, chatStream } from "../lib/api";
+import { api, chatStream, ToolOutputRef } from "../lib/api";
 import { Md, Logo } from "../components/ui";
+import { ToolOutputView } from "../components/ToolOutputView";
 
 type Part =
   | { kind: "text"; text: string }
   | { kind: "thinking"; text: string }
-  | { kind: "tool"; id: string; name: string; args: any; result?: any };
+  | { kind: "tool"; id: string; name: string; args: any; result?: any; output_ref?: ToolOutputRef };
 type Msg = { role: "user" | "assistant"; parts: Part[]; error?: string };
 
 const TOOL_LABEL: Record<string, string> = {
+  read_tool_output: "读取已保存的工具结果",
   list_examples: "查看内置示例", start_job: "提交任务", job_status: "查询任务进度", list_jobs: "列出任务",
   design_detail: "查看设计详情", read_log: "读取日志", diagnose: "请修复引擎诊断", knowledge_lookup: "查询故障知识库",
   cancel_job: "取消任务", dataset_info: "查询数据集", check_environment: "检查工具链", read_rtl: "读取源码",
@@ -40,7 +42,7 @@ function fromStored(ms: any[]): Msg[] {
     } else if (m.role === "tool") {
       const last = out[out.length - 1];
       const p = last?.parts.find((x) => x.kind === "tool" && x.id === m.tool_call_id) as any;
-      if (p) { try { p.result = JSON.parse(m.content); } catch { p.result = m.content; } }
+      if (p) { try { p.result = JSON.parse(m.content); } catch { p.result = m.content; } p.output_ref = m.output_ref; }
     }
   }
   return out;
@@ -109,7 +111,7 @@ export default function Chat() {
         else if (e.type === "thinking") append("thinking", e.delta);
         else if (e.type === "tool_call") upd((a) => { a.parts.push({ kind: "tool", id: e.id, name: e.name, args: e.arguments }); });
         else if (e.type === "tool_result") upd((a) => {
-          a.parts = a.parts.map((p) => (p.kind === "tool" && p.id === e.id ? { ...p, result: e.result } : p));
+          a.parts = a.parts.map((p) => (p.kind === "tool" && p.id === e.id ? { ...p, result: e.result, output_ref: e.output_ref } : p));
         });
         else if (e.type === "error") upd((a) => { a.error = e.message; });
       });
@@ -166,13 +168,13 @@ export default function Chat() {
                   <div className="min-w-0 flex-1 space-y-2">
                     {m.parts.map((p, k) => p.kind === "text" ? <Md key={k}>{p.text}</Md>
                       : p.kind === "thinking" ? <Thinking key={k} text={p.text} live={busy && i === msgs.length - 1 && k === m.parts.length - 1} />
-                      : <ToolStep key={k} p={p} />)}
+                      : <ToolStep key={k} p={p} sid={sid} />)}
                     {busy && i === msgs.length - 1 && !m.error && m.parts.length === 0 && (
                       <div className="flex items-center gap-2 text-sm text-muted"><Loader2 size={14} className="animate-spin" /> 正在思考…</div>)}
                     {m.error && (
                       <div className="flex items-start gap-2 rounded-xl bg-bad/10 px-3 py-2 text-sm text-bad">
                         <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                        <div>{m.error}<div className="mt-1 text-xs text-muted">请到 <Link to="/settings" className="underline">设置</Link> 检查模型与密钥。</div></div>
+                        <div>{m.error}<div className="mt-1 text-xs text-muted">请核对任务状态或 <Link to="/settings" className="underline">设置</Link>，再决定是否重试。</div></div>
                       </div>)}
                   </div>
                 </div>))}
@@ -228,7 +230,7 @@ function Thinking({ text, live }: { text: string; live: boolean }) {
     </div>);
 }
 
-function ToolStep({ p }: { p: Extract<Part, { kind: "tool" }> }) {
+function ToolStep({ p, sid }: { p: Extract<Part, { kind: "tool" }>; sid: string | null }) {
   const [open, setOpen] = useState(false);
   const done = p.result !== undefined;
   const err = done && p.result && typeof p.result === "object" && "error" in p.result;
@@ -242,8 +244,11 @@ function ToolStep({ p }: { p: Extract<Part, { kind: "tool" }> }) {
         <span className="ml-auto text-faint">{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
       </button>
       {open && (
+        <>
         <pre className="mt-1 max-h-72 overflow-auto rounded-xl bg-panel2 px-3 py-2 font-mono text-[11.5px] leading-5 text-muted">
-          {"参数 " + JSON.stringify(p.args, null, 2) + (done ? "\n\n结果 " + JSON.stringify(p.result, null, 2) : "")}</pre>)}
+          {"参数 " + JSON.stringify(p.args, null, 2) + (done ? "\n\n结果 " + JSON.stringify(p.result, null, 2) : "")}</pre>
+        {sid && p.output_ref && <ToolOutputView key={sid + p.output_ref.artifact_id} sid={sid} output={p.output_ref} />}
+        </>)}
     </div>
   );
 }

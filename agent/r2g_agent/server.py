@@ -14,7 +14,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -24,6 +24,7 @@ from .jobs import JobStore
 from .llm import make_adapter
 from .paths import PKG_DIR, r2g_home
 from .pipeline import STAGE_LABEL, STAGES, Pipeline
+from .tool_outputs import ToolOutputError
 
 STATE: dict = {}
 
@@ -132,6 +133,15 @@ def sessions():
 @app.get("/api/sessions/{sid}")
 def session(sid: str):
     return {"id": sid, "messages": STATE["sessions"].load(sid)}
+
+
+@app.get("/api/sessions/{sid}/tool-outputs/{artifact_id}")
+def tool_output(sid: str, artifact_id: str, offset: int = Query(0, ge=0),
+                limit: int = Query(4000, ge=1, le=4000), query: str = Query("", max_length=256)):
+    try:
+        return STATE["sessions"].outputs.read(sid, artifact_id, offset, limit, query)
+    except ToolOutputError as e:
+        raise HTTPException(404, str(e)) from e
 
 
 @app.post("/api/chat")

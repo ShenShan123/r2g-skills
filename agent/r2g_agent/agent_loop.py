@@ -17,6 +17,7 @@ from pathlib import Path
 
 from . import tools
 from .paths import PKG_DIR, r2g_home
+from .tool_outputs import ToolContext, ToolOutputError, ToolOutputStore
 
 MAX_STEPS = 12
 MAX_TOOL_RESULT_CHARS = 12000
@@ -32,6 +33,7 @@ class SessionStore:
         with self._c() as c:
             c.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, created REAL, "
                       "updated REAL, title TEXT, messages TEXT)")
+        self.outputs = ToolOutputStore(self.path)
 
     def _c(self):
         c = sqlite3.connect(self.path, timeout=30, isolation_level=None)
@@ -70,12 +72,18 @@ def _clip(obj) -> str:
 
 def run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
     """Generator of UI events for one user turn."""
+    with sessions._c() as conn:
+        if not conn.execute("SELECT 1 FROM sessions WHERE id=?", (sid,)).fetchone():
+            yield {"type": "error", "message": "unknown session"}
+            return
     messages = sessions.load(sid)
     messages.append({"role": "user", "content": user_text})
     title = user_text[:40]
+    sessions.save(sid, messages, title)
+    context = ToolContext(sid, sessions.outputs)
     for step in range(MAX_STEPS):
         text, thinking, calls, err = "", "", [], None
-        for ev in adapter.stream(messages, tools.specs(), system_prompt()):
+        for ev in adapter.stream(messages, tools.specs(session_scoped=True), system_prompt()):
             if ev["type"] == "text":
                 text += ev["delta"]
                 yield ev
@@ -95,11 +103,31 @@ def run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
                                         for c in calls]})
         if not calls:
             break
-        for c in calls:
+        for index, c in enumerate(calls):
             yield {"type": "tool_call", "id": c["id"], "name": c["name"], "arguments": c["arguments"]}
-            result = tools.call(c["name"], c["arguments"])
-            yield {"type": "tool_result", "id": c["id"], "name": c["name"], "result": result}
-            messages.append({"role": "tool", "tool_call_id": c["id"], "name": c["name"], "content": _clip(result)})
+            result = tools.call(c["name"], c["arguments"], context=context)
+            try:
+                view, ref = sessions.outputs.record(sid, c["id"], c["name"], result)
+            except ToolOutputError as e:
+                # The tool may already have had side effects. Do not call it again.
+                failure = {"error": str(e), "error_code": "tool_output_not_recorded",
+                           "execution_may_have_completed": True}
+                messages.append({"role": "tool", "tool_call_id": c["id"], "name": c["name"],
+                                 "content": json.dumps(failure)})
+                for pending in calls[index + 1:]:
+                    messages.append({"role": "tool", "tool_call_id": pending["id"],
+                                     "name": pending["name"], "content": json.dumps({
+                                         "error": "not executed: tool observation storage failed",
+                                         "error_code": "not_executed"})})
+                sessions.save(sid, messages, title)
+                yield {"type": "tool_result", "id": c["id"], "name": c["name"], "result": failure}
+                yield {"type": "error", "message": "工具结果未能保存，本轮已停止；请核对任务状态后再决定下一步。"}
+                return
+            messages.append({"role": "tool", "tool_call_id": c["id"], "name": c["name"],
+                             "content": json.dumps(view, ensure_ascii=False, default=str), "output_ref": ref})
+            sessions.save(sid, messages, title)
+            yield {"type": "tool_result", "id": c["id"], "name": c["name"], "result": view,
+                   "output_ref": ref}
         sessions.save(sid, messages, title)
     else:
         yield {"type": "text", "delta": "\n\n（已达到单轮工具调用上限，先停在这里。）"}
