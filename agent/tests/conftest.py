@@ -21,9 +21,12 @@ class FakeAdapter:
 
     def stream(self, messages, tools, system=""):
         self.seen.append([dict(m) for m in messages])
-        for ev in (self.turns.pop(0) if self.turns else [{"type": "text", "delta": "done"}]):
+        events = self.turns.pop(0) if self.turns else [{"type": "text", "delta": "done"}]
+        for ev in events:
             yield ev
-        yield {"type": "done", "stop_reason": "end"}
+        if not any(ev["type"] in ("done", "error") for ev in events):
+            yield {"type": "done", "stop_reason": "end", "metadata": {
+                "stream_complete": True, "usage": {"status": "unresolved"}}}
 
 
 @pytest.fixture

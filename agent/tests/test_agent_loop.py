@@ -1,3 +1,7 @@
+import json
+
+import pytest
+
 from r2g_agent import agent_loop
 
 
@@ -58,3 +62,51 @@ def test_read_rtl_is_confined_to_the_design(tmp_path):
     assert tools.read_rtl(jid, "a")["files"] == ["a.v"]
     assert "    2  endmodule" in tools.read_rtl(jid, "a", "a.v")["text"]
     assert "error" in tools.read_rtl(jid, "a", "../secret.txt")
+
+
+def test_private_reasoning_is_neither_streamed_stored_nor_replayed(fake_adapter):
+    ss = agent_loop.SessionStore()
+    sid = ss.create()
+    ss.save(sid, [{'role': 'assistant', 'content': 'public history', 'thinking': 'PRIVATE_OLD'}])
+    metadata = {'model_requested': 'alias', 'model_observed': 'revision', 'stream_complete': True,
+                'usage': {'status': 'reported', 'input_tokens': 12, 'output_tokens': 3}}
+    ad = fake_adapter([[{'type': 'thinking', 'delta': 'PRIVATE_NEW'},
+                        {'type': 'text', 'delta': 'public explanation'},
+                        {'type': 'done', 'metadata': metadata}]])
+    events = list(agent_loop.run_turn(ad, ss, sid, 'explain'))
+    reopened = agent_loop.SessionStore(ss.path)
+    records = reopened.model_calls(sid)
+    assert len(records) == 1 and records[0]['status'] == 'complete'
+    assert records[0]['metadata'] == metadata
+    assert reopened.load(sid)[-1]['model_call_id'] == records[0]['id']
+    visible = json.dumps([events, reopened.load(sid), records, ad.seen])
+    assert 'PRIVATE_' not in visible
+    assert 'public explanation' in visible and 'public history' in visible
+    assert reopened.model_calls(ss.create()) == []
+
+
+@pytest.mark.parametrize('terminal', ['incomplete', 'missing_metadata', 'missing_completion', 'error', 'eof'])
+def test_unconfirmed_model_response_never_executes_tools(monkeypatch, terminal):
+    from r2g_agent import tools
+    ss = agent_loop.SessionStore()
+    sid = ss.create()
+    monkeypatch.setattr(tools, 'call', lambda *a, **kw: pytest.fail('unconfirmed call must not execute'))
+    class Adapter:
+        def stream(self, *args):
+            records = ss.model_calls(sid)
+            assert len(records) == 1 and records[0]['status'] == 'pending'
+            assert records[0]['metadata']['usage']['status'] == 'unresolved'
+            yield {'type': 'tool_call', 'id': 'c1', 'name': 'start_job', 'arguments': {}}
+            if terminal == 'incomplete':
+                yield {'type': 'done', 'metadata': {'stream_complete': False, 'usage': {'status': 'partial'}}}
+            elif terminal == 'missing_metadata':
+                yield {'type': 'done'}
+            elif terminal == 'missing_completion':
+                yield {'type': 'done', 'metadata': {'usage': {'status': 'unresolved'}}}
+            elif terminal == 'error':
+                yield {'type': 'error', 'message': 'HTTP 429', 'metadata': {'usage': {'status': 'unresolved'}}}
+    events = list(agent_loop.run_turn(Adapter(), ss, sid, 'run'))
+    assert events[-1]['type'] == 'error'
+    assert not any(e['type'] in ('tool_call', 'tool_result') for e in events)
+    assert ss.model_calls(sid)[0]['status'] == 'error'
+    assert ss.load(sid) == [{'role': 'user', 'content': 'run'}]

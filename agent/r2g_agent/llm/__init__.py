@@ -10,8 +10,16 @@ Messages use one internal shape regardless of provider:
 
   {"type": "text", "delta": str}
   {"type": "tool_call", "id": str, "name": str, "arguments": dict}
-  {"type": "done", "stop_reason": str}
-  {"type": "error", "message": str}
+  {"type": "done", "stop_reason": str, "metadata": dict}
+  {"type": "error", "message": str, "metadata": dict}
+
+Terminal metadata records provider, model_requested, model_observed, response_id,
+request_id, stream_complete and usage. Unknown identities/counts are None. Usage
+status is reported only when input/output counts and the stream terminator were
+received; partial/unresolved usage must not be treated as zero cost. Counts are
+provider-reported values, including separate cache counts where available.
+Metadata contains no message content or hidden reasoning. Compatible endpoints
+may omit usage; request parameters are not changed to force usage support.
 
 Tools are given as JSON-schema function specs: {"name", "description", "parameters"}.
 """

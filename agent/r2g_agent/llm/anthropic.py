@@ -5,6 +5,8 @@ import json
 
 import httpx
 
+from .metadata import ResponseMetadata
+
 
 class AnthropicAdapter:
     VERSION = "2023-06-01"
@@ -47,11 +49,15 @@ class AnthropicAdapter:
                    "content-type": "application/json"}
         blocks: dict[int, dict] = {}
         stop = "end_turn"
+        metadata = ResponseMetadata(self.mc.provider, self.mc.model)
+        stream_complete = False
         try:
             with httpx.stream("POST", self.mc.base_url + "/v1/messages", headers=headers, json=body,
                               timeout=httpx.Timeout(180, connect=20)) as r:
+                metadata.headers(getattr(r, "headers", {}))
                 if r.status_code >= 400:
-                    yield {"type": "error", "message": "HTTP %d: %s" % (r.status_code, r.read().decode(errors="replace")[:500])}
+                    yield {"type": "error", "message": "HTTP %d: %s" % (r.status_code, r.read().decode(errors="replace")[:500]),
+                           "metadata": metadata.snapshot()}
                     return
                 for line in r.iter_lines():
                     if not line.startswith("data:"):
@@ -61,7 +67,11 @@ class AnthropicAdapter:
                     except ValueError:
                         continue
                     t = ev.get("type")
-                    if t == "content_block_start":
+                    if t == "message_start":
+                        message = ev.get("message") or {}
+                        metadata.identity(message)
+                        metadata.anthropic_usage(message.get("usage"))
+                    elif t == "content_block_start":
                         cb = ev["content_block"]
                         blocks[ev["index"]] = {"type": cb["type"], "id": cb.get("id"), "name": cb.get("name"),
                                                "json": ""}
@@ -73,16 +83,20 @@ class AnthropicAdapter:
                             blocks[ev["index"]]["json"] += d.get("partial_json", "")
                     elif t == "message_delta":
                         stop = (ev.get("delta") or {}).get("stop_reason") or stop
+                        metadata.anthropic_usage(ev.get("usage"), final=True)
+                    elif t == "message_stop":
+                        stream_complete = True
                     elif t == "error":
-                        yield {"type": "error", "message": str(ev.get("error"))}
+                        yield {"type": "error", "message": str(ev.get("error")), "metadata": metadata.snapshot()}
                         return
         except httpx.HTTPError as e:
-            yield {"type": "error", "message": "连接模型失败：%s" % e}
+            yield {"type": "error", "message": "连接模型失败：%s" % e, "metadata": metadata.snapshot()}
             return
         except Exception as e:                                  # noqa: BLE001
             # e.g. a SOCKS proxy in the environment without socksio installed:
             # report it in the conversation instead of failing the request
-            yield {"type": "error", "message": "调用模型出错：%s: %s" % (type(e).__name__, e)}
+            yield {"type": "error", "message": "调用模型出错：%s: %s" % (type(e).__name__, e),
+                   "metadata": metadata.snapshot()}
             return
         for i in sorted(blocks):
             b = blocks[i]
@@ -92,4 +106,4 @@ class AnthropicAdapter:
                 except ValueError:
                     args = {"_unparsed": b["json"]}
                 yield {"type": "tool_call", "id": b["id"], "name": b["name"], "arguments": args}
-        yield {"type": "done", "stop_reason": stop}
+        yield {"type": "done", "stop_reason": stop, "metadata": metadata.snapshot(stream_complete=stream_complete)}

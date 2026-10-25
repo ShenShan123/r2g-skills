@@ -132,7 +132,8 @@ def sessions():
 
 @app.get("/api/sessions/{sid}")
 def session(sid: str):
-    return {"id": sid, "messages": STATE["sessions"].load(sid)}
+    return {"id": sid, "messages": STATE["sessions"].load(sid),
+            "model_calls": STATE["sessions"].model_calls(sid)}
 
 
 @app.get("/api/sessions/{sid}/tool-outputs/{artifact_id}")

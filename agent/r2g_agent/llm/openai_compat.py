@@ -6,6 +6,8 @@ import json
 
 import httpx
 
+from .metadata import ResponseMetadata
+
 
 def thinking_params(mc) -> dict:
     """The provider's own deep-thinking switch (verified 2026-10-23 on deepseek-flash
@@ -55,26 +57,31 @@ class OpenAICompatAdapter:
         body.update(thinking_params(self.mc))
         calls: dict[int, dict] = {}
         stop = "stop"
+        metadata = ResponseMetadata(self.mc.provider, self.mc.model)
+        stream_complete = False
         try:
             with httpx.stream("POST", self.mc.base_url + "/chat/completions", headers=self._headers(),
                               json=body, timeout=httpx.Timeout(180, connect=20)) as r:
+                metadata.headers(getattr(r, "headers", {}))
                 if r.status_code >= 400:
-                    yield {"type": "error", "message": "HTTP %d: %s" % (r.status_code, r.read().decode(errors="replace")[:500])}
+                    yield {"type": "error", "message": "HTTP %d: %s" % (r.status_code, r.read().decode(errors="replace")[:500]),
+                           "metadata": metadata.snapshot()}
                     return
                 for line in r.iter_lines():
                     if not line.startswith("data:"):
                         continue
                     data = line[5:].strip()
                     if data == "[DONE]":
+                        stream_complete = True
                         break
                     try:
                         ev = json.loads(data)
                     except ValueError:
                         continue
+                    metadata.identity(ev)
+                    metadata.openai_usage(ev.get("usage"))
                     for ch in ev.get("choices") or []:
                         d = ch.get("delta") or {}
-                        if d.get("reasoning_content"):
-                            yield {"type": "thinking", "delta": d["reasoning_content"]}
                         if d.get("content"):
                             yield {"type": "text", "delta": d["content"]}
                         for tc in d.get("tool_calls") or []:
@@ -86,12 +93,13 @@ class OpenAICompatAdapter:
                         if ch.get("finish_reason"):
                             stop = ch["finish_reason"]
         except httpx.HTTPError as e:
-            yield {"type": "error", "message": "连接模型失败：%s" % e}
+            yield {"type": "error", "message": "连接模型失败：%s" % e, "metadata": metadata.snapshot()}
             return
         except Exception as e:                                  # noqa: BLE001
             # e.g. a SOCKS proxy in the environment without socksio installed:
             # report it in the conversation instead of failing the request
-            yield {"type": "error", "message": "调用模型出错：%s: %s" % (type(e).__name__, e)}
+            yield {"type": "error", "message": "调用模型出错：%s: %s" % (type(e).__name__, e),
+                   "metadata": metadata.snapshot()}
             return
         for i in sorted(calls):
             c = calls[i]
@@ -100,4 +108,5 @@ class OpenAICompatAdapter:
             except ValueError:
                 args = {"_unparsed": c["args"]}
             yield {"type": "tool_call", "id": c["id"] or "call_%d" % i, "name": c["name"], "arguments": args}
-        yield {"type": "done", "stop_reason": "tool_calls" if calls else stop}
+        yield {"type": "done", "stop_reason": "tool_calls" if calls else stop,
+               "metadata": metadata.snapshot(stream_complete=stream_complete)}
