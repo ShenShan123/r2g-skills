@@ -80,11 +80,9 @@ r2g-skills/                     # The skill collection — installs THREE Claude
     scripts/skill_env.py  scripts/flow/_env.sh  # thin env delegate over the shared _env.sh
     references/  tests/           # policy JSONs, operation matrix, failure KB; pytest suite
 tools/                          # Operator tooling the SKILLS call + installers (incl. verify_graph_dataset.py)
-experiments/                    # Paper-evidence machinery (E1-E5 runners + tests). Split out of tools/
-                                #   2026-10-04: nothing under r2g-skills/ references it, and the
-                                #   dependency runs one way (experiments -> skills), so it is a leaf.
-                                #   A script belongs in tools/ if a skill calls it, in experiments/ if
-                                #   it only produces evidence for a claim in EXPERIMENT_PLAN.md.
+memory/                         # Backend factory and unified TEHM runtime
+  tehm/policy/                  # Type/applicability gates, evidence ranking and task constraints
+  tests/                        # Isolated memory unit tests
 design_cases/                   # All design runs + built datasets (gitignored); _batch/, _dashboard/
 ```
 
@@ -127,7 +125,7 @@ tools (magic, netgen) and the sky130A PDK in `/home/yangao/.conda/envs/eda` (`sh
 iverilog in `/opt/OpenROAD/oss-cad-suite/bin`. All pinned in `references/env.local.sh`.
 The graph-stage torch venv is `/home/yangao/r2g_toolchain/pyenvs/r2g-graph` (torch 2.13.0+cpu, PyG
 2.8.0, pandas 3.0.3) — `R2G_GRAPH_PYTHON` points at the `bin/r2g_graph_python` wrapper. It needs
-`pytest`+`jsonschema` to run the `tools/`, `experiments/` and def-graph suites (installed 2026-10-04;
+`pytest`+`jsonschema` to run the `tools/`, memory and def-graph suites (installed 2026-10-04;
 without them 11 test files fail to collect on numpy/torch and 3 more on jsonschema), and `pyg-lib` or
 `torch-sparse` for `gnn-node`'s NeighborSampler (still absent — 4 gnn-node tests are gated on it).
 `$HOME` here had ~1.4 TB free on 2026-10-04 and **387 GB on 2026-10-18** — still installable, but
@@ -479,9 +477,8 @@ This skill's failure mode is a plausible-looking CSV with **wrong values**. Full
 | Fmax search (loose-first fastest period; place-proxy + deterioration model) | `r2g-skills/signoff-loop/references/orfs-playbook.md` ("Fmax Search") + `SKILL.md` step 5a |
 | A specific flow/signoff failure (DRC stuck, route congestion, CDL, …) | `r2g-skills/signoff-loop/references/failure-patterns.md`  |
 | What each platform CHECKS, what is official vs r2g-supplied, what counts as a pass | `r2g-skills/signoff-loop/references/signoff-contract.md` |
-| The FROZEN baseline parameters (period/utilization/die/PDN floor) + why each is what it is | `experiments/make_spec_table.py` (the ONE place the die is computed) |
-| The frozen SDC constants + what a pass is | `experiments/conformance_check.py`, `experiments/rerun_tally.py` |
-| The frozen dev / held-out split required by E2 | `experiments/splits/README.md` |
+| The FROZEN baseline parameters (period/utilization/die/PDN floor) + why each is what it is | `agent/r2g_agent/platforms.py` + `project.py` (the ONE place the die is computed) |
+| The frozen SDC constants + what a pass is | `agent/r2g_agent/profile.py`, `project.py` |
 | Historical debug narratives + corpus results                        | `r2g-skills/signoff-loop/references/lessons-learned.md`   |
 | How to read PPA / signoff JSON                                      | `r2g-skills/signoff-loop/references/ppa-report-guide.md`  |
 | How does def-graph build the dataset (labels → features → graphs)?  | `r2g-skills/def-graph/SKILL.md`                   |

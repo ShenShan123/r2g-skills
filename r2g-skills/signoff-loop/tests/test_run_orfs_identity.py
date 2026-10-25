@@ -104,3 +104,19 @@ def test_workspace_lock_distinct_variants_do_not_contend(tmp_path):
     a = _source_call("_r2g_workspace_lockfile nangate45 top varA", env_extra).stdout.strip()
     b = _source_call("_r2g_workspace_lockfile nangate45 top varB", env_extra).stdout.strip()
     assert a and b and a != b, (a, b)
+
+
+def test_independent_orfs_checkouts_do_not_share_a_workspace_lock(tmp_path):
+    """A held lock in one installation must not block another installation."""
+    lockdir = tmp_path / 'locks'
+    lockdir.mkdir()
+    first = {'R2G_LOCK_DIR': str(lockdir), 'FLOW_DIR': str(tmp_path / 'first/flow')}
+    second = {**first, 'FLOW_DIR': str(tmp_path / 'second/flow')}
+    q = _source_call('_r2g_workspace_lockfile nangate45 top base', first)
+    assert q.returncode == 0, q.stderr
+    with open(q.stdout.strip(), 'w') as holder:
+        fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        r = _source_call('_r2g_acquire_workspace_lock nangate45 top base', second)
+        assert r.returncode == 0, r.stderr
+        blocked = _source_call('_r2g_acquire_workspace_lock nangate45 top base', first)
+        assert blocked.returncode != 0 and 'another run holds' in blocked.stderr

@@ -1,0 +1,21 @@
+{
+  "schema_version": "activation-v1",
+  "description": "Activation record: Applicable | Executable | Verifiable stored SEPARATELY (design doc 11, 19.5). Populated by Phase 8.",
+  "required": ["activation_id", "rule_id", "target_state_id"],
+  "properties": {
+    "activation_id": {"type": "string"},
+    "rule_id": {"type": "string"},
+    "target_state_id": {"type": "string"},
+    "query_plan": {"type": ["object", "null"]},
+    "retrieval_receipt": {"type": "object"},
+    "applicability_status": {"enum": ["APPLICABLE", "INAPPLICABLE", "UNRESOLVED"]},
+    "binding_status": {"enum": ["BOUND", "UNRESOLVED"]},
+    "executability_status": {"enum": ["EXECUTABLE", "NOT_EXECUTABLE", "UNKNOWN"]},
+    "obligation_transfer": {"type": ["object", "null"]},
+    "obligation_coverage": {"type": ["number", "null"]},
+    "verification_status": {"enum": ["PASS", "FAIL", "UNKNOWN"]},
+    "outcome": {"enum": ["PASS", "PARTIAL", "NEUTRAL", "UNKNOWN", "FAIL", "REGRESSION"]},
+    "produced_transition_id": {"type": ["string", "null"]},
+    "rollback_receipt": {"type": ["object", "null"]}
+  }
+}

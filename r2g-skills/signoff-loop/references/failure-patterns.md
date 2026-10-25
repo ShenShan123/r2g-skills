@@ -183,6 +183,18 @@ strategy_ids: [route_relief]
   the two apart by whether GPL routability converges < 1.0 at a lower util: timeout-victim (clears)
   vs layer-limited (honest residual).
 
+### Sub-variant: global-route congestion abort survives one `route_relief` step → ladder (2026-10-05)
+
+**Symptom.** GRT-0116 on a 74–89 % die. `route_relief` lowers `CORE_UTILIZATION` by 8 (79 → 71), the rerun aborts again with GRT-0116, and `fix_signoff` printed `run_orfs failed (rc=2); aborting this check`. Since `route_relief` was then excluded, it could never take a second step.
+
+**Fix.**
+- `_route_strategies` steps ×0.8 for a global-route abort (no detailed-route result: `total_violations` is null), e.g. 79 → 63 → 50 → 40. It keeps −8 for a route that completed with violations; that one-shot step is excluded after its try, so a rolled-back step is never retried. Only the abort ladder is `repeatable`: a still-congested rerun keeps its config, so each repeat is a new, lower utilisation.
+- `fix_signoff` treats a still-congested rerun (rc ≠ 0, not a 124 timeout) as non-improving: it re-extracts `route.json`, logs `rerun_failed_still_congested` (ingested as inconclusive), and continues.
+- The ladder is bounded by the floor, `MAX_ITERS` and the two-non-improving stop. A timeout keeps its one jump to the floor.
+- **`route_layer_relief` rung** (amendment R-A1): `ROUTING_LAYER_ADJUSTMENT = 0.10`, rerun from route, one try. This is the lever `run_orfs.sh`'s own GRT-0116 hint names; ORFS documents that low values reduce global-route failure. It comes **first** on a sparse die (utilisation ≤ 20, e.g. the sky130hs variants), where the utilisation ladder only jumps to the floor without effect (chacha_core u16: 16 → 8, still GRT-0116). On a dense die it comes after the utilisation ladder. Detailed routing and DRC still decide.
+
+Test: `tests/test_baseline_repairs.py`.
+
 ### Sub-variant: a SUCCESSFUL recipe is unreachable by the A/B planner (2026-06-22, loop-closure bug)
 
 The route_relief story above worked because a route-congestion abort leaves a **residual** —
@@ -265,6 +277,16 @@ class of recipe — one that **fully clears** its symptom — silently broke the
   divergence (density floor too low → raise `PLACE_DENSITY_LB_ADDON`). They share the `place`
   stage but have opposite fixes; conflating both into `unseen_crash` blinds the learner to a
   recoverable class. (Mirrors the `route_congestion_residual` re-label.)
+
+### Sub-variant: FLW-0024 on an ALREADY auto-sized die → live utilisation relief (2026-10-05)
+
+**Symptom.** `[ERROR FLW-0024] Place density exceeds 1.0` on a config that already has `CORE_UTILIZATION = N`, e.g. the 74–89 % sky130hd variants. The live loop escalated `place_density_residual` after ONE flow.
+
+**Root cause.** The live recovery `_resize_to_core_util` only converts a fixed `DIE_AREA`, and is a deliberate no-op when `CORE_UTILIZATION` is already set. The A/B arm path already lowered an existing utilisation (`_lower_core_util`, ×0.6, floor 10); the live path did not.
+
+**Fix.** `process_one` now applies `_lower_core_util` live, at most `_PLACE_RELIEF_MAX = 2` times (89 → 53 → 32), recorded as `core_util_relief`. `_resized` is passed through unchanged, so a design that now places keeps its route and DRC recoveries. `PLACE_DENSITY_LB_ADDON` is untouched (hard rule). Test: `tests/test_baseline_repairs.py`.
+
+**Why it matters.** This is the no-memory baseline's capability. Before the fix, 5 of 13 Phase H sky130hd tasks and 5 of 9 Phase F sky130hd tasks stopped here without any attempt (Phase S, 2026-10-05).
 
 ## Place_gp Stuck on Timing-Driven Iteration (>1M-net BOOM-class designs)
 
@@ -851,6 +873,41 @@ The setup-time floor above only protects projects materialized by `mk_sky130_pro
   - Insufficient spacing → increase `DIE_AREA`/`CORE_AREA`
   - Metal width violations → may indicate congestion, try lower utilization
 - **Tool:** `scripts/flow/run_drc.sh` → `scripts/extract/extract_drc.py` for detailed category breakdown
+
+### Memory step blocks the catalogue's repair (2026-10-06, Phase R amendments R-A3/R-A4)
+
+**Symptom.** Against the repaired baseline, 4 sky130hs li.3 tasks the no-memory loop accepts were lost by memory arms (sha256_core u9, u11, u18). Nothing went wrong with the catalogue: its `cell_pad_relief` ladder was simply never offered.
+
+**Root cause** (smoke test R-A3 Part 1 reconstructed every plan):
+
+1. **Precedence:** TEHM strategies are prepended to the plan (`diagnose_signoff_fix.py`, "TEHM consultation ... prepended"), including UNVALIDATED trial candidates and compositions: 1–4 of them ahead of `cell_pad_relief_2`.
+2. **Shared budget:** their regressions and no-improvements counted toward `fix_one`'s non-improvement stop (u9: three memory regressions, then "3 non-improving past base 3; stopping").
+3. **No fallback:** a memory step whose rerun failed aborted the check without rollback. The failed edit stayed, and the next pass added the rule's delta again (u11: utilisation 11 → 26 → 41).
+4. **Weak trial admission:** a rule became a candidate with ANY positive source (`rule_9007ebbc`: 1 positive, 1 harmful, 30 neutral).
+5. **Broken witness invariant:** numeric holes were filled from the median of ALL source transitions, including NEUTRAL/REGRESSION ones and other situations (`rule_d3dcee0e` mixed an li.3 and an m3.2 delta), with deltas of both signs.
+
+**Fix.**
+- **Containment** (`fix_signoff.sh`; acts only on `tehm_*` strategies; catalogue-only sessions are unchanged): a failed memory step is rolled back, including a failed rerun, and never consumes the catalogue's budget. After `R2G_MEMORY_FAIL_BUDGET` (2) failures, memory is suspended for the rest of the fix session.
+- **F1** (`tehm_backend._trial_admissible`): an unpromoted rule is trialled only if its source outcomes are net positive. Applied at runtime; stores unchanged.
+  - Count only the rule's OWN applications (`_source_outcome_profile(own_only=True)`), not every step of its source episodes. Those steps include the failure the rule then repaired. The first version made this mistake and blocked 19 of 24 sky130hs rules (R-A6).
+- **F2** (`_hole_witnesses`, `_situation_holes`): only PASS/PARTIAL source transitions whose holed situation slots match the current situation vote.
+- **F3** (`instantiate._coherent_median`): mixed-sign witness deltas leave the knob unresolved, so the action is refused.
+
+Tests: `tests/test_baseline_repairs.py` (containment), `memory/tests/test_memory_harm_fixes.py` (F1–F3).
+
+**Why it surfaced only now.** On the old toolchain the catalogue had no working li.3 repair, so a memory trial that went first cost nothing. Once the baseline could fix the task, memory's untested trials took that repair away.
+
+### Local-interconnect spacing DRC (sky130 `li.3`, `licon.*`, `mcon.*`) → `cell_pad_relief` (2026-10-05)
+
+**Symptom.** sky130hs variants at 8–19 % utilisation end with 2–12 `li.3` violations after the flow. `density_relief` lowers utilisation further, reduces the count at best, and reaches its floor (Phase S: 4 of 5 Phase H and 5 of 8 Phase F sky130hs tasks).
+
+**Root cause.** Local-interconnect spacing is violated inside and between abutting cells, i.e. by placement, not by routing congestion. Lowering utilisation on an already sparse die is the wrong lever.
+
+**Fix.** `diagnose_signoff_fix` offers `cell_pad_relief_2` → `cell_pad_relief_4` (`CELL_PAD_IN_SITES_GLOBAL_PLACEMENT` and `..._DETAIL_PLACEMENT`, rerun from floorplan; one strategy id per rung, so a rejected and rolled-back rung stays excluded and the ladder advances instead of retrying it, a defect found in Phase R S2) whenever a local-interconnect class is present. It comes first when that class dominates, and after `density_relief` when a routing class such as `m3.2` dominates. Metal-only DRC never gets it. Test: `tests/test_baseline_repairs.py`.
+
+**Apply-time plan (R-A2).** `fix_signoff` passed `--exclude` to `--next` but not to `--apply`. After a rolled-back rung the apply-time plan offered a different rung, and the chosen one failed as `not in current plan` (sha256_core u8 on v3). This affects every rung ladder (`cell_pad_relief_*`, `drv_route_margin_*`). Both calls now carry the same exclusions. Test: `tests/test_baseline_repairs.py::test_real_diagnose_*`.
+
+**Scope note.** Cell padding is the generic ORFS lever for placement-induced spacing. The memory system's learned li.3 fix (RAISING utilisation) is deliberately NOT built into the baseline: it is learned knowledge, and is measured as memory's contribution.
 
 ### KLayout DRC Stuck on `or` (FreePDK45.lydrc, nangate45)
 
@@ -1688,6 +1745,199 @@ strategy_ids: [netgen_diode_normalize, buffer_port_feedthroughs]
    re-enabling parasitics. NOTE: when Magic still produces no SPICE, `run_netgen_lvs.sh` writes
    `{"status":"error",...}` and the driver should record an honest `lvs_incomplete`/`lvs_error`
    residual — never the ambiguous `lvs_none`.
+
+### sky130hd Netgen LVS: `netgen_property` on EVERY design when the PDK ships the transistor SPICE (2026-09-30)
+
+**Symptom:** on a host whose open_pdks install has `libs.ref/sky130_fd_sc_hd/spice/sky130_fd_sc_hd.spice`,
+every sky130hd design fails Netgen LVS with class `netgen_property`. The errors are all inside **standard
+cells**:
+- MOS devices become placeholder subcircuits with `proxy` pins;
+- `diode_2` area 0.4347 vs 4.347e11;
+- `conb_1` resistor `l` 0.045 vs 0.5;
+- "Top level cell failed pin matching".
+
+Historically (the CDL-only host), sky130hd LVS was clean in 543 runs and this class never occurred.
+
+**Root cause:** `run_netgen_lvs.sh` preferred the open_pdks **transistor SPICE** over any CDL, and used a CDL
+only as a fallback. `normalize_sky130_lvs_spice.py` is written for the **CDL** representation: `M` devices
+with short model names, and `short` tie proxies. The SPICE library uses `X` devices with full model names,
+unit-less diode area and conb `l=0.5`, so none of the library transforms fired
+(`library_mos_model_qualified: 0`). sky130hs was unaffected: its PDK SPICE already uses the CDL-style `M`
+form.
+
+**Fix:**
+- **Library precedence:** ORFS platform CDL (matches the platform GDS) → PDK `libs.ref/.../cdl` → transistor
+  SPICE.
+- **Two normaliser gaps found once the CDL was in use:**
+  - map the CDL's `special_nfet_01v8` to `sky130_fd_pr__nfet_01v8`, mirroring the existing layout-side
+    mapping (256 unmatched devices otherwise);
+  - extend the `conb_1` two-terminal `short` → poly-resistor transform from hs to **hd**, with the extracted hd
+    geometry `w=0.48 l=0.045`.
+
+**Revalidated** (Magic 8.3.682, Netgen 1.5.323):
+- `eth_demux` sky130hd: **Circuits match uniquely** (was `netgen_property`).
+- `des_area` sky130hs: still clean.
+
+**Residual (open):** `des_area` sky130hd still fails on one cell, `sky130_fd_sc_hd__a21oi_2`.
+- Magic extracts its NMOS A1–A2 path as **two series stacks with separate internal nodes**: 8 devices and 11
+  nets after merging.
+- The CDL has one stack with `m=2` and a shared node: 6 devices and 10 nets.
+- The two are logically equivalent but topologically different, because this flow compares transistor-level
+  cell internals extracted from GDS.
+- **Options, which are a methodology decision:** compare standard cells as black boxes (gate-level LVS), or a
+  reviewed per-cell equivalence. The skill expects Magic 8.3.411 (receipt `magic_required`); 8.3.682 is
+  installed here.
+
+#### Residual resolved: CDL topology override (2026-10-04)
+
+**Scope found:** not one cell. A cell-level sweep of all 437 `sky130_fd_sc_hd` cells (each extracted alone from
+the ORFS platform GDS with the flow's Magic options, compared by Netgen with the flow's compat setup):
+
+| Result vs CDL / vs open_pdks transistor SPICE | Cells |
+|---|---|
+| match / match | 412 |
+| **mismatch / match** | **10**: `a2111oi_2`, `a211oi_4`, `a21boi_2`, `a21oi_2`, `a31o_4`, `dlrtp_1`, `ha_4`, `o2111a_4`, `o211a_4`, `o211ai_4` |
+| mismatch / mismatch | 5: `dfbbp_1`, `xor3_4`, `probe_p_8`, `probec_p_8`, `lpflow_lsbuf_lh_isowell_4` (not overridden; open) |
+| no devices in the CDL (fill, tap, `diode_2`) | 10 (not checked) |
+
+- In 109 sky130hd LVS runs (R2G memory Phase H), **all 98 failures** flattened at least one of the 10 cells and
+  **none of the 11 passes** did. The failure is a property of the reference, not of the designs.
+- The open_pdks transistor SPICE describes these cells with the layout's split stacks (same internal node
+  names as Magic's extraction). The standalone extraction equals the in-design extraction, so the mismatch
+  is context-independent.
+- **Not the Magic version:** the PDK SPICE agrees with Magic 8.3.682's extraction.
+
+**Fix:** `scripts/flow/apply_sky130_cell_overrides.py`, called by `run_netgen_lvs.sh` after library
+normalisation.
+- For the cells listed in `scripts/flow/sky130_cdl_topology_overrides.json` (with the sweep's provenance),
+  the normalised CDL definition is replaced by the open_pdks SPICE definition, normalised with the flow's
+  layout-side normaliser.
+- Every other definition stays byte-identical. A listed cell missing from either netlist keeps its CDL
+  definition (fails closed).
+- The receipt `lvs/cell_overrides.json` (per-cell before/after digests) is referenced in
+  `netgen_lvs_result.json`.
+- Regression test: `tests/test_sky130_cell_overrides.py`.
+
+**Methodology note:** for these 10 cells the reference is the vendor's transistor-level SPICE, which is itself
+derived from the cell layout. Their internals are therefore checked against the vendor netlist, not an
+independent schematic. Every other cell, and all inter-cell connectivity, is checked as before.
+
+**Revalidated** (Magic 8.3.682, Netgen 1.5.323; the LVS step only, on copies of existing layouts, same GDS and
+powered netlist bytes):
+- `riscv_core` sky130hd (uses `a21oi_2`, `a21boi_2`, `a2111oi_2`): **Circuits match uniquely**, 24,553/24,553
+  devices and 26,392/26,392 nets, 0 flattened cells (was `netgen_topology`).
+- `eth_demux` sky130hd (uses none of them): still clean.
+- Single-cell checks: all 10 overridden cells match; controls `a21oi_1`/`a21oi_4` still match; `xor3_4` (not
+  overridden) still mismatches.
+
+### Fix that worsens its own target recorded as `no_change` (learner blind to harm) (2026-10-01)
+
+**Symptom:** a repair raises the very count it targets, for example sky130hs `li.3` density_relief 4→6. `fix_signoff.sh`
+labels it `no_improvement`, ingest maps it to `no_change`, and nothing is rolled back.
+- The committed store held 56 `fix_events` with `after > before` labelled `no_change`: 39 drc, 16 timing and 1
+  orfs_stage. On sky130hs `li.3` the average was 7.5 → 10.9 violations.
+- Auto-demotion (`ab_runner.auto_demote_on_regression`) only counts `regression`, so a harmful recipe was never
+  demoted and the next design repeated it. This is one root cause in the R2G memory diagnosis
+  (`memory/evaluation/r2g_memory_mechanism_diagnosis_20261001.md`).
+
+**Fix:**
+- `fix_signoff.sh` appends `<check>_target_regression:<before>-><after>` to the iteration's regression signals.
+  It then takes the existing global-regression path: verdict `regression`, transactional rollback of config,
+  reports and run pointer.
+- `ingest_run._normalize_verdict` and `backfill_fix_events._verdict` map `no_change` with `after > before` to
+  `regression`, which covers every other fix_log writer.
+- An equal count stays `no_improvement` → `no_change`.
+- **Not done:** historical rows are not rewritten in the tracked store.
+- **Tests:** `tests/test_target_count_regression.py`.
+
+### TEHM consultation never ran from diagnose (off-by-one memory path) (2026-10-01)
+
+**Symptom:** under `R2G_MEMORY_BACKEND=tehm`, every `fix_signoff.sh` iteration logged
+`WARNING: TEHM consultation skipped (fail-closed): No module named 'runtime_router'`, and only catalogue
+strategies were tried. Found by the R2G memory Phase D2 smoke run (sha256_core u75, sky130hd).
+
+**Root cause:** `diagnose_signoff_fix.py` lives in `scripts/reports/`, one level deeper than
+`knowledge/`. It used `Path(__file__).parents[3] / "memory"` (= `r2g-skills/memory`, which does not
+exist) instead of `parents[4]`. In-process tests stubbed `runtime_router` in `sys.modules`, so they
+never exercised the import.
+
+**Fix:** use `parents[4]`. `tests/test_memory_gates.py::test_diagnose_subprocess_reaches_the_real_tehm_router`
+runs diagnose as a subprocess against the real router; it fails on the old path.
+
+### Lifecycle gate keyed on a design_class no stored row carries (2026-10-01)
+
+**Symptom:** on `run_orfs.sh` projects, `diagnose_signoff_fix` always keyed `recipe_status` lookups as
+`<type>/unknown`. The rows ingest stores are keyed `<type>/<band>` (for example `logic/small`), so the
+lifecycle gate never matched a stored row and never blocked anything.
+
+**Root cause:** two derivations. Diagnose sized the class from `proj/synth/synth.log` (Yosys stats), which
+`run_orfs.sh` never writes. Ingest sized it from `reports/ppa.json` `geometry.instance_count`, pinned to
+the project's prior count on an abort.
+
+**Fix (R2G memory redesign A3):** `ingest_run.project_design_class` is the one derivation, and both call
+it. Diagnose opens the store read-only for the prior-count fallback.
+
+**Expected consequence:** under the legacy backend the gate now really gates. A shadow/candidate row for
+the matching class can STOP a strategy that would have worked (des_area `m3.2` / density_relief). That
+scoping problem is why the TEHM backend scopes by situation instead (redesign B3/B5). Tests:
+`tests/test_design_class_shared.py`.
+
+### TEHM memory strategies bypassed `--exclude` and every safety gate (2026-10-01)
+
+**Symptom:** under `R2G_MEMORY_BACKEND=tehm`, a memory rule's strategy could be re-applied on every iteration
+of one fix session. Any edit the rule carried reached `config.mk` unchecked, including empty edits, unfilled
+holes, or a `PLACE_DENSITY_LB_ADDON` below the 0.10 hard floor.
+
+**Root cause:** `diagnose_signoff_fix` prepended `runtime_router.signoff_strategies` output AFTER
+`build_plan` had applied `--exclude`. No knob policy existed for memory edits. The router also proposed
+rules crystallised from FAIL episodes.
+
+**Fix (R2G memory redesign B4/B5):**
+- The router rejects empty edits, unfilled knobs and unbound holes, and proposes PASS rules only
+  (`tehm_backend.is_repair_rule`).
+- `diagnose._gate_memory_strategies` applies the session exclusion and the already-in-effect check, then
+  enforces the ONE hard knob policy `knowledge/knob_policy.py`: an edit outside it is dropped, never clamped.
+- `diagnose._apply_vetoes` drops catalogue and memory strategies that the verified evidence vetoes in the
+  current situation. Every drop is logged with its reason.
+
+Tests: `tests/test_memory_gates.py`.
+
+### Test suite migrated the TRACKED knowledge.sqlite in place (2026-10-01)
+
+**Symptom:** after the knowledge schema gained additive columns (situation signature, redesign A2), one
+full `pytest` run left `knowledge/knowledge.sqlite` modified. The new columns and the `situations` table
+had been added to the shipped binary. No rows changed.
+
+**Root cause:** `conftest.py` isolated the journal (`R2G_JOURNAL_DB`) but not the knowledge store. Tests
+that reach a no-argument `knowledge_db.connect()` (directly, or through a `diagnose_signoff_fix` /
+`fix_signoff.sh` subprocess) opened the shipped store, and its `ensure_schema` ran the additive migration.
+While the schema was static the migration was a no-op, so the leak stayed invisible.
+
+**Fix:** an autouse fixture points `R2G_KNOWLEDGE_DB` at a per-session copy of the shipped store, copied
+with `shutil.copyfile` (content only, so a read-only source does not make a read-only copy). Reads see
+identical content; nothing can rewrite the tracked binary.
+
+**Verification:** run the full suite with `knowledge.sqlite` and `heuristics.json` set `chmod 444`. The
+result must match the baseline exactly, and the hashes must be unchanged.
+
+**Related fix:** `knowledge_sync.export_bundle` exports a not-yet-migrated store's pending additive
+columns as NULL, the column-level twin of its missing-table branch. A bundle therefore depends on content,
+not on whether a newer schema has opened the store.
+
+### Route dead-fix gate never fired (check_type mismatch) (2026-10-01)
+
+**Symptom:** a `route_relief` that kept failing on the same design was re-tried in every session. The per-design
+dead-fix gate (`R2G_FIX_DEAD_AFTER`) never blocked it.
+
+**Root cause:** `fix_signoff.sh` stores route iterations as `check_type='orfs_stage'` with the route symptom
+(`_log_iter` remaps them). `diagnose_signoff_fix._annotate_live_gates`, however, queried
+`fix_events WHERE check_type='route'`. The store had 0 `route` rows against 358 `orfs_stage` rows, so the gate
+always read zero.
+
+**Fix:** for `--check route`, the dead-gate query uses `check_type='orfs_stage'` and the stored route symptom id,
+so place-stage failures don't count. This change is scoped to the dead gate only: route still does not consult
+`recipe_status`. Routing the lifecycle through it would flip `route_relief` to STOP wherever it is shadow, which is
+a separate decision. Tests: `tests/test_negative_evidence_gates.py::test_route_dead_gate_reads_orfs_stage_rows`.
 
 ### LVS CDL_FILE Override by Platform Config
 
@@ -3012,6 +3262,16 @@ The SDC `clk_port_name` doesn't match the actual RTL clock port. OpenROAD silent
 - Re-run synthesis and backend
 - Prevention: add a pre-flight check in `run_orfs.sh` that warns if SDC clock port is not found in RTL
 
+#### Setup-time cause: clock detected from a submodule (2026-10-02)
+
+`tools/setup_rtl_designs.py:detect_clock_port` collected `posedge`/`negedge` signals from **all** RTL
+files. For freecores `i2c_master_top` it returned the byte controller's `clk` (a submodule port) instead
+of the top's `wb_clk_i`. Every variant then ran unconstrained (`timing_tier: unconstrained`), and a
+DRC/LVS-clean layout could never count as physically clean. Seen in R2G memory Phase H (amendment H-A3).
+**Fix:** edge-triggered candidates are restricted to the top module's input ports
+(`_top_input_ports`); regression test `tests/test_setup_clock_port.py`. Projects generated before the
+fix keep the wrong SDC; regenerate them (`--force`) or correct `clk_port_name`.
+
 ### Setup Timing Violations (Tiered WNS + TNS Response)
 
 <!-- r2g-lesson:
@@ -3073,6 +3333,55 @@ strategy_ids: [period_relax, utilization_reduce, backend_aware_synth_retune]
 - **Severe:** Always escalate to user immediately. Do not attempt auto-tuning.
 - **Large TNS with small WNS:** Indicates widespread shallow violations. Increasing clock period is usually effective (all paths get more margin). This is noted in the options.
 - **Large WNS with small TNS:** Indicates one deep critical path. Clock period increase alone may not help — RTL restructuring may be needed.
+
+### Finish-stage max-slew / max-capacitance violations (2026-10-04, `drv_route_margin`)
+
+**Symptom.** Setup and hold met, DRC/LVS clean, but `ppa.json` `summary.timing.max_slew_violations` /
+`max_cap_violations` > 0. These come from OpenROAD's finish-stage `report_check_types -max_slew -max_cap`
+(`finish__timing__drv__max_slew/cap`). Typically one or two driver pins a few percent over the Liberty
+limit, e.g. slew 1.61 against 1.48. Before this entry nothing looked at them: `check_timing.py`'s tier is
+WNS/TNS only, so these designs were "clean". Under acceptance check A8
+(`memory/evaluation/r2g_acceptance_checklist_v1_20261004.md`) they are not. 23 of the 59 physically closed Phase H
+attempts failed A8; for 22 it was the only failed check.
+
+**Root cause.** ORFS's `repair_design` passes (floorplan, resize, global route) fix to the Liberty limit
+under estimated parasitics. Detailed-route parasitics push a few near-limit nets over it, and no pass runs
+after detailed routing.
+
+**What does NOT work.** `SLEW_MARGIN` / `CAP_MARGIN` in `config.mk` applies the over-fix to EVERY
+`repair_design` pass. On 74–89 %-utilization sky130hd variants, the resize stage upsized ~900 instances
+(aes_core u89: 939 against 1 before) and global routing failed with GRT-0116 congestion.
+
+**Fix.** Apply the margin to the global-route-stage `repair_design` only. That pass uses routing
+parasitics and touches only nets already near their limit:
+- `check_timing.py` writes `drv` {max_slew_violations, max_cap_violations, total, status} beside the tier;
+- `engineer_loop._signoff_status` reports timing `drv` when the tier is clean but `drv.status == fail`,
+  so the loop gives it the existing timing repair turn;
+- `fix_signoff` timing badness = negative-WNS ps + DRV violators, so a step that trades DRV for a setup
+  miss is rejected and rolled back;
+- `diagnose_signoff_fix` offers `drv_route_margin_10` → `_20` → `_40` (one strategy id per step, so a
+  rolled-back step is not retried). Requires clean routing. Edits `R2G_ROUTE_SLEW_MARGIN` /
+  `R2G_ROUTE_CAP_MARGIN`, `rerun_from: route`;
+- `run_orfs.sh` exports those knobs as `SLEW_MARGIN` / `CAP_MARGIN` for the route stage's make call
+  alone. Placement-stage repair is untouched.
+
+**Validation (2026-10-04).** Phase H final layouts, resumed from route on copies with the pinned TEHM
+toolchain (OpenROAD 26Q2-1846). A zero-margin control reproduced every original exactly (same counts,
+byte-identical WNS), so each change is the margin's.
+
+| Design (sky130hd) | Original slew/cap, setup WNS | Margin 10 % | Margin 20 % |
+|---|---|---|---|
+| picorv32 u89 | 2 / 1, +3.859 ns | **0 / 0**, +3.863 | **0 / 0**, +3.847 |
+| riscv_core u79 | 2 / 1, +0.061 ns | **0 / 0**, +0.033 | 0 / 0 but **−0.0047** (setup miss) |
+| chacha_core u79 | 2 / 1, +0.089 ns | 2 / 1 (no net within 10 %) | **0 / 0**, +0.091 |
+| aes_core u89 | 6 / 2, +0.312 ns | **0 / 0**, +0.330 | **0 / 0**, +0.838 |
+
+Under the ladder every design ends at 0 / 0 with setup met (10 % for three, 20 % for chacha_core).
+Hold stayed positive everywhere. Global route inserted about a dozen buffers (picorv32 at 20 %: 12
+buffers, 5 resizes). Hence the ascending ladder: the smallest margin that clears costs the least slack.
+
+**Not a catalogue recipe gated on A/B.** It is a deterministic repair validated above, offered to every
+arm, so the no-memory baseline can reach acceptance too.
 
 ### Severe IR-Drop (>10% VDD)
 

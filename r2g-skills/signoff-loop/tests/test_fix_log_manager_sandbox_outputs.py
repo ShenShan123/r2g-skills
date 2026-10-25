@@ -20,7 +20,7 @@ import knowledge_db  # noqa: E402
 
 def test_manage_on_sandbox_db_writes_sibling_outputs(tmp_path):
     shipped = KNOWLEDGE_DIR / "heuristics.json"
-    shipped_bytes = shipped.read_bytes()
+    shipped_bytes = shipped.read_bytes() if shipped.exists() else None
 
     db_path = tmp_path / "knowledge.sqlite"
     conn = knowledge_db.connect(db_path)
@@ -33,7 +33,7 @@ def test_manage_on_sandbox_db_writes_sibling_outputs(tmp_path):
     assert (tmp_path / "heuristics.json").exists(), \
         "manage() on a sandbox db must write heuristics.json beside that db"
     # ...and the shipped store outputs are untouched.
-    assert shipped.read_bytes() == shipped_bytes, \
+    assert (shipped.read_bytes() if shipped.exists() else None) == shipped_bytes, \
         "manage() on a sandbox db clobbered the SHIPPED heuristics.json"
 
 

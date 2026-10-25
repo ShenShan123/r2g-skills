@@ -54,15 +54,19 @@ def _common_stubs(tmp_path, *, argfile):
     on the /tmp marker the --apply branch touches)."""
     bindir = tmp_path / "bin"
     bindir.mkdir(exist_ok=True)
+    # The apply marker lives INSIDE tmp_path. It used to be /tmp/_tm_$$ (a different pid per
+    # stub call) read back by glob("/tmp/_tm_*"): any stale marker on the host made timing
+    # read clean from the start, so the test passed vacuously on a 0 -> 0 "cleared" step.
+    marker = tmp_path / "_tm_applied"
     # diagnose: log every invocation's args; --next yields period_relax once
     # (until the apply marker exists), then STOP; --apply rewrites the SDC period
     # and touches the marker + echoes config/sdc edits.
     _stub(bindir / "diagnose.py",
           f'echo "$*" >> "{argfile}"\n'
           'if [[ "$*" == *"--next"* ]]; then\n'
-          '  if [[ -f /tmp/_tm_$$ ]]; then echo -e "STOP\\tclean\\tdone";\n'
+          f'  if [[ -f "{marker}" ]]; then echo -e "STOP\\tclean\\tdone";\n'
           '  else echo -e "period_relax\\tsynth\\ttiming"; fi\n'
-          'elif [[ "$*" == *"--apply"* ]]; then touch /tmp/_tm_$$;\n'
+          f'elif [[ "$*" == *"--apply"* ]]; then touch "{marker}";\n'
           '  echo "{\\"applied\\":\\"period_relax\\",\\"config_edits\\":{},'
           '\\"sdc_edits\\":{\\"CLOCK_PERIOD\\":\\"5.4\\"}}"; fi')
     # run_orfs: no-op (a real rerun would re-synthesize at the relaxed period).
@@ -74,7 +78,7 @@ def _common_stubs(tmp_path, *, argfile):
     _stub(bindir / "check_timing.py",
           'python3 - "$@" <<\'PY\'\nimport json,sys,os,glob\n'
           'proj=sys.argv[1]\n'
-          'marker=glob.glob("/tmp/_tm_*")\n'
+          f'marker=os.path.exists({str(marker)!r})\n'
           'if marker:\n'
           '    d={"tier":"clean","wns":0.05,"wns_ns":0.05,"clock_period":5.4,"clock_period_ns":5.4}\n'
           'else:\n'

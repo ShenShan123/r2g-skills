@@ -1,0 +1,850 @@
+"""``tehm`` backend: the TEHM replacement memory plane (design doc 17.2, 21.2).
+
+Completely bypasses the legacy learner / ranking / lifecycle. Ingestion goes
+through the canonical capture adapter into ``tehm.sqlite`` + content-addressed
+artifacts. Retrieval and activation proposals use the typed Phase 7/8 modules;
+they never consult legacy authority.
+"""
+from __future__ import annotations
+
+import hashlib
+import inspect
+import json
+from pathlib import Path
+
+from contracts import (
+    ActivationProposal,
+    ActivationResult,
+    BuildReport,
+    ExecutionRecord,
+    IngestReceipt,
+    MemoryCandidate,
+    MemoryQuery,
+    MemoryRoutingDecision,
+    MemorySnapshot,
+    RepairContext,
+)
+from tehm import config as tehm_config
+from tehm import db as tehm_db
+from tehm import honesty as tehm_honesty
+from tehm.artifact_store import ArtifactStore
+from tehm.canonical.capture import capture as tehm_capture
+from tehm.canonical.transition import OUTCOMES
+from tehm.ids import stable_dumps
+
+SCHEMA_VERSION = "tehm-v4"
+
+
+def _backend_crystallize(crystallize_all, conn):
+    """Call a crystallizer without breaking older injected seams.
+
+    The backend owns the rebuild savepoint and therefore passes ``commit=False``
+    to the v4 crystallizer.  A few downstream integrations (and deliberately
+    small test doubles) still expose the pre-v4 ``crystallize_all(conn)``
+    signature.  Inspect the callable before invoking it so that compatibility
+    does not depend on catching an arbitrary ``TypeError`` from inside the
+    crystallizer, which could otherwise hide a real rebuild failure.
+    """
+    try:
+        parameters = inspect.signature(crystallize_all).parameters.values()
+        accepts_commit = any(
+            parameter.name == "commit" or
+            parameter.kind is inspect.Parameter.VAR_KEYWORD
+            for parameter in parameters)
+    except (TypeError, ValueError):
+        # Unknown callables are treated conservatively as legacy seams.  The
+        # surrounding backend savepoint still protects the derived projection.
+        accepts_commit = False
+    return (crystallize_all(conn, commit=False) if accepts_commit
+            else crystallize_all(conn))
+
+
+def _validate_activation_result(result: ActivationResult) -> None:
+    """Validate the backend-neutral result before it reaches SQLite."""
+    if not result.activation_id:
+        raise ValueError("activation result requires activation_id")
+    if result.outcome not in OUTCOMES:
+        raise ValueError(
+            f"activation outcome must be one of {OUTCOMES}, got {result.outcome!r}")
+    if not isinstance(result.created_regressions, (list, tuple)):
+        raise ValueError("created_regressions must be a list")
+    if any(not isinstance(item, str) or not item
+           for item in result.created_regressions):
+        raise ValueError("created_regressions must contain non-empty strings")
+    if result.produced_transition_id is not None and (
+            not isinstance(result.produced_transition_id, str)
+            or not result.produced_transition_id):
+        raise ValueError("produced_transition_id must be a non-empty string or None")
+    if result.rollback_receipt is not None and not isinstance(
+            result.rollback_receipt, dict):
+        raise ValueError("rollback_receipt must be a dict or None")
+
+
+def _stored_activation_list(raw: str | None, *, field: str) -> list:
+    if raw is None:
+        return []
+    try:
+        value = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"activation {field} is not valid JSON") from exc
+    if not isinstance(value, list) or any(
+            not isinstance(item, str) or not item for item in value):
+        raise ValueError(f"activation {field} must be a list of non-empty strings")
+    return value
+
+
+def _stored_activation_rollback(raw: str | None) -> dict | None:
+    if raw is None:
+        return None
+    try:
+        value = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("activation rollback_receipt_json is not valid JSON") from exc
+    if not isinstance(value, dict):
+        raise ValueError("activation rollback_receipt_json must be a JSON object")
+    return value
+
+
+def _require_transition(conn, transition_id: str, activation_id: str) -> None:
+    row = conn.execute(
+        "SELECT transition_id FROM tehm_transitions WHERE transition_id=?",
+        (transition_id,)).fetchone()
+    if row is None:
+        raise ValueError(
+            "activation result references missing canonical transition "
+            f"{transition_id} ({activation_id})")
+
+
+class TehmMemoryBackend:
+    """The complete-replacement TEHM backend."""
+
+    name = "tehm"
+
+    def __init__(self, *, db_path: Path | None = None,
+                 artifact_root: Path | None = None,
+                 read_only_eval: bool = False,
+                 trial_candidates: bool = True):
+        self.db_path = Path(db_path) if db_path else tehm_config.default_db_path()
+        # "Trial on first use" (Phase D-A1; the default since Phase H): runtime also
+        # retrieves CANDIDATE rules (never shadow; validity gate unchanged). Their
+        # application is a verified trial; promotion still only via the authority path.
+        self.trial_candidates = bool(trial_candidates)
+        self.artifact_root = (Path(artifact_root) if artifact_root
+                              else tehm_config.default_artifact_root())
+        self.read_only_eval = read_only_eval
+        self._conn = None
+        self._store: ArtifactStore | None = None
+
+    def _open(self):
+        if self._conn is None:
+            if self.read_only_eval:
+                self._conn = tehm_db.connect_read_only(self.db_path)
+            else:
+                self._conn = tehm_db.connect(self.db_path)
+                tehm_db.ensure_schema(self._conn)
+        if self._store is None:
+            self._store = ArtifactStore(self.artifact_root)
+        return self._conn, self._store
+
+    def ingest_execution(self, record: ExecutionRecord) -> IngestReceipt:
+        if self.read_only_eval:
+            raise RuntimeError("cannot ingest into a read-only TEHM evaluation snapshot")
+        conn, store = self._open()
+        receipt = tehm_capture(conn, store, record)
+        return IngestReceipt(
+            record_id=receipt.record_id,
+            transition_id=receipt.transition_id,
+            state_ids=receipt.state_ids,
+            episode_id=receipt.episode_id,
+            outcome=receipt.outcome,
+            backend="tehm",
+        )
+
+    def ingest_project(self, project_dir: Path | str) -> list[IngestReceipt]:
+        """Capture a real R2G project without touching legacy ``runs`` tables."""
+        if self.read_only_eval:
+            raise RuntimeError("cannot ingest into a read-only TEHM evaluation snapshot")
+        from tehm.adapters.r2g_evidence import capture_r2g_project
+
+        conn, store = self._open()
+        receipts = capture_r2g_project(conn, store, Path(project_dir))
+        return [IngestReceipt(
+            record_id=r.record_id, transition_id=r.transition_id,
+            state_ids=r.state_ids, episode_id=r.episode_id,
+            outcome=r.outcome, backend="tehm") for r in receipts]
+
+    def build_query(self, context: RepairContext) -> MemoryQuery:
+        """Typed query plan (design doc 9.2, Stage 0)."""
+        from tehm.retrieval.query_planner import plan_query
+
+        return plan_query(context)
+
+    def retrieve(self, query: MemoryQuery, *, limit: int) -> list[MemoryCandidate]:
+        """Run the typed retrieval pipeline (Phase 7) over admissible rules.
+
+        The already-planned query is passed through unchanged so structural and
+        compatibility context cannot be lost at the backend seam. Honest empty
+        result only when no admissible rule matches (never fabricated).
+        """
+        from tehm.retrieval.pipeline import retrieve_query
+
+        conn, _ = self._open()
+        receipt = retrieve_query(conn, query, limit=limit,
+                                 lifecycle_statuses=self.runtime_statuses())
+        return [
+            MemoryCandidate(
+                candidate_id=r.candidate_id,
+                source="tehm_rule",
+                payload={
+                    "rule_id": r.rule_id,
+                    "transformation_family": r.transformation_family,
+                    "applicability_status": r.applicability_status,
+                    "similarity": r.similarity,
+                },
+                score=r.score,
+                provenance={"tehm_rule": r.rule_id,
+                            "source_episodes": r.source_episodes},
+            )
+            for r in receipt.results
+        ]
+
+    def resolve_state(self, context: RepairContext):
+        """Resolve the current shadow state before any memory routing.
+
+        The resolver consumes immutable evidence and derived lifecycle rows. It
+        may persist a replayable resolution snapshot, but it never changes
+        canonical evidence or production authority.
+        """
+        if not isinstance(context, RepairContext):
+            raise TypeError("resolve_state requires RepairContext")
+        from tehm.retrieval.memory_router import scope_for_query
+        from tehm.state import resolve_current_state
+
+        conn, _ = self._open()
+        query = self.build_query(context)
+        return resolve_current_state(
+            conn, scope_for_query(query), mode="shadow", persist=True, commit=True)
+
+    def route_memory(
+            self, query: MemoryQuery | RepairContext, *,
+            no_memory_budget: int = 3, memory_budget: int = 0,
+    ) -> MemoryRoutingDecision:
+        """Return a P5 shadow decision without altering production retrieval."""
+        if self.read_only_eval:
+            persist_state = False
+            commit = False
+        else:
+            persist_state = True
+            commit = True
+        from tehm.retrieval.memory_router import route_memory
+
+        conn, _ = self._open()
+        return route_memory(
+            conn, query, no_memory_budget=no_memory_budget,
+            memory_budget=memory_budget, mode="shadow",
+            persist_state=persist_state, commit=commit)
+
+    def retrieve_assets(self, decision: MemoryRoutingDecision) -> list[MemoryCandidate]:
+        """Keep asset candidates out of the backend source enum until P9."""
+        if not isinstance(decision, MemoryRoutingDecision):
+            raise TypeError("retrieve_assets requires MemoryRoutingDecision")
+        from tehm.retrieval.memory_router import retrieve_assets
+
+        conn, _ = self._open()
+        return retrieve_assets(conn, decision)
+
+    def select_assets(
+            self, query: MemoryQuery | RepairContext, *,
+            routing: MemoryRoutingDecision | None = None,
+            candidate_budget: int = 1,
+            compatibility_mode: bool = False,
+            rtl_source_text: str | None = None,
+            design_id: str | None = None):
+        """Run the P7 knowledge-grounded asset selector in shadow mode.
+
+        The returned ``AssetSelection`` is an advisory registry view plus a
+        replayable receipt.  It is intentionally separate from ``retrieve``
+        and ``propose_activation``: no ``tehm_asset`` candidate source or
+        executable asset can enter production runtime through this seam.
+        """
+        from tehm.retrieval.asset_selector import select_knowledge_grounded_assets
+
+        conn, _ = self._open()
+        return select_knowledge_grounded_assets(
+            conn, query, routing=routing, candidate_budget=candidate_budget,
+            mode="shadow", compatibility_mode=compatibility_mode,
+            rtl_source_text=rtl_source_text, design_id=design_id)
+
+    def build_structured_candidate(
+            self, query: MemoryQuery | RepairContext,
+            routing: MemoryRoutingDecision, asset_selection, runtime_binding):
+        """Build a P11 evaluation-only structured candidate.
+
+        This seam is deliberately separate from ``retrieve`` and activation;
+        it cannot enter the production candidate source enum.
+        """
+        from tehm.retrieval.structured_candidate import build_structured_candidate
+
+        return build_structured_candidate(
+            query, routing, asset_selection, runtime_binding)
+
+    def evaluate_production_gate(self, evidence=None, **kwargs):
+        """Evaluate P9 evidence without enabling production memory routing.
+
+        This is a pure audit seam.  It deliberately does not open or mutate
+        the TEHM database, and ``route_memory(..., mode='production')`` stays
+        fail-closed until an independently reviewed receipt is acted upon by
+        a future lifecycle operation.
+        """
+        from tehm.retrieval.production_gate import evaluate_production_gate
+
+        return evaluate_production_gate(evidence, **kwargs)
+
+    def build_candidate_pool(
+            self, query: MemoryQuery | RepairContext,
+            no_memory_candidates, memory_candidates, *,
+            arm: str = "CAUSAL_NO_SKILL", routing: MemoryRoutingDecision | None = None,
+            candidate_budget: int = 3, case_id: str | None = None,
+    ):
+        """Compose a P6 evaluation pool without entering runtime selection.
+
+        This is intentionally a separate backend helper rather than a change
+        to :meth:`retrieve` or :meth:`propose_activation`.  It accepts an
+        already computed routing receipt for the causal arm, making the
+        resolver/authority evidence explicit and keeping A/B artifacts
+        attributable to that receipt.
+        """
+        if isinstance(query, RepairContext):
+            query = self.build_query(query)
+        if not isinstance(query, MemoryQuery):
+            raise TypeError("build_candidate_pool requires MemoryQuery or RepairContext")
+        from tehm.retrieval.candidate_pool import build_candidate_pool
+
+        return build_candidate_pool(
+            query, no_memory_candidates, memory_candidates, arm=arm,
+            routing=routing, candidate_budget=candidate_budget, case_id=case_id)
+
+    def record_memory_outcome(
+            self, routing_receipt_id: str, execution_receipt: dict,
+    ):
+        """Attribute a routed outcome without granting a memory update.
+
+        P5 has no routing ledger or automatic update primitive.  This seam only
+        reuses the deterministic P4 attribution classifier when an execution
+        receipt names a canonical transition/activation; all lifecycle changes
+        remain an explicit later operation.
+        """
+        if self.read_only_eval:
+            raise RuntimeError("cannot record memory outcome in a read-only snapshot")
+        if type(routing_receipt_id) is not str or not routing_receipt_id.startswith("routing_"):
+            raise ValueError("routing_receipt_id is malformed")
+        if not isinstance(execution_receipt, dict):
+            raise TypeError("execution_receipt must be an object")
+        claimed_routing_id = execution_receipt.get("routing_receipt_id")
+        if (claimed_routing_id is not None and
+                claimed_routing_id != routing_receipt_id):
+            raise ValueError("execution receipt routing ID does not match decision")
+        transition_id = execution_receipt.get("transition_id")
+        activation_id = execution_receipt.get("activation_id")
+        if transition_id is None and activation_id is None:
+            return None
+        from tehm.evolution.attribution import attribute_failure
+
+        conn, _ = self._open()
+        return attribute_failure(
+            conn, transition_id=transition_id, activation_id=activation_id,
+            value_receipt=execution_receipt.get("value_receipt"),
+            state_resolution=execution_receipt.get("state_resolution"),
+        )
+
+    def get_causal_paths(self, query: MemoryQuery, *, campaign_id: str = "live",
+                         limit: int = 10, evaluation_only: bool = False) -> list[dict]:
+        """Read causal shadow paths only through an explicit evaluation lane.
+
+        This deliberately cannot be mistaken for ``retrieve``: production
+        runtime remains promoted-rule-only and never consumes causal score as
+        lifecycle authority.
+        """
+        if not evaluation_only:
+            raise RuntimeError("causal path recall is evaluation-only")
+        from tehm.retrieval.causal_recall import retrieve_causal_paths
+
+        conn, _ = self._open()
+        return [match.to_dict() for match in retrieve_causal_paths(
+            conn, query, campaign_id=campaign_id, limit=limit,
+            include_shadow=True)]
+
+    def observe_transition(self, transition_id: str, *,
+                          campaign_id: str = "live"):
+        """Append an online shadow observation; never promote or mutate rules."""
+        if self.read_only_eval:
+            raise RuntimeError("cannot evolve a read-only TEHM evaluation snapshot")
+        from tehm.evolution.manager import observe_transition
+
+        conn, _ = self._open()
+        return observe_transition(conn, transition_id, campaign_id)
+
+    def get_capability_snapshot(self, policy_snapshot_id: str) -> dict:
+        """Read a content-addressed policy snapshot for attribution audits."""
+        from tehm.capability.policy_snapshot import load_policy_snapshot
+
+        conn, _ = self._open()
+        return load_policy_snapshot(conn, policy_snapshot_id)
+
+    def record_policy_load(self, policy_snapshot_id: str, *, runtime_id: str,
+                           loaded: bool = True, receipt: dict | None = None):
+        """Persist a runtime policy-load receipt for capability attribution."""
+        if self.read_only_eval:
+            raise RuntimeError("cannot record policy load in a read-only snapshot")
+        from tehm.capability.policy_snapshot import record_policy_load
+
+        conn, _ = self._open()
+        return record_policy_load(
+            conn, policy_snapshot_id=policy_snapshot_id, runtime_id=runtime_id,
+            loaded=loaded, receipt=receipt)
+
+    def runtime_statuses(self) -> frozenset[str]:
+        return (frozenset({"candidate", "promoted"}) if self.trial_candidates
+                else frozenset({"promoted"}))
+
+    def situation_vetoes(self, situation: dict | None) -> dict[str, dict]:
+        """B5: strategies the verified evidence vetoes in ``situation``."""
+        from tehm.retrieval.vetoes import situation_vetoes
+
+        conn, _ = self._open()
+        return situation_vetoes(conn, situation)
+
+    def propose_activation(self, candidate: MemoryCandidate,
+                           context: RepairContext) -> ActivationProposal | None:
+        from tehm.activation.binding import bind_rule
+        from tehm.activation.instantiate import instantiate_rewrite
+        from tehm.activation.obligation_transfer import transfer_obligations
+        from tehm.ids import activation_id, stable_dumps
+        from tehm.retrieval.index import build_index
+
+        if candidate.source != "tehm_rule":
+            return None
+        conn, _ = self._open()
+        rule_id = (candidate.payload or {}).get("rule_id") or candidate.candidate_id
+        rule = build_index(
+            conn, lifecycle_statuses=self.runtime_statuses()).get(rule_id)
+        if rule is None:
+            return None
+        status_row = conn.execute(
+            "SELECT status FROM tehm_rule_status WHERE rule_id=?", (rule_id,)).fetchone()
+        lifecycle_status = status_row[0] if status_row else None
+        if not is_repair_rule(rule):
+            return None
+        applicability = (candidate.payload or {}).get(
+            "applicability_status", "UNRESOLVED")
+        if applicability != "APPLICABLE":
+            return None
+        # F1 (Phase R amendment R-A3/R-A4): an UNPROMOTED rule is trialled only when its own source
+        # outcomes are net positive. "Any positive source" admitted rules whose evidence was as often
+        # harmful as helpful (rule_9007ebbc: 1 positive, 1 harmful, 30 neutral), and as a trial it went
+        # ahead of the catalogue. Promoted rules are unaffected; the store is not changed.
+        if not _trial_admissible(conn, rule_id, lifecycle_status):
+            return None
+        binding = bind_rule(rule, context)
+        # F2: witnesses are computed AFTER binding, so a numeric hole is filled only from verified
+        # (PASS/PARTIAL) source transitions consistent with THIS situation: the rule's holed
+        # situation slots (situation.violation_class = $H1, situation.util_band = $H0, ...) take the
+        # current situation's values, and only witnesses with the same values vote.
+        bound = dict(binding.substitutions) if binding else {}
+        bound.update(_situation_holes(rule, context.situation))
+        rule = {**rule, "hole_witnesses": _hole_witnesses(conn, rule_id, bound=bound)}
+        action = instantiate_rewrite(rule, binding, context)
+        transfer = transfer_obligations(rule, context)
+        target_ref = "query_state_" + hashlib.sha1(
+            stable_dumps(context.to_dict()).encode()).hexdigest()[:16]
+        act_id = activation_id(
+            rule_id_=rule_id, target_state_id=target_ref,
+            retrieval_receipt={"candidate_id": candidate.candidate_id,
+                               "score": candidate.score})
+        return ActivationProposal(
+            candidate_id=candidate.candidate_id,
+            activation_id=act_id,
+            applicability_status=applicability,
+            binding={"status": binding.status,
+                     "substitutions": binding.substitutions,
+                     "bound_entities": binding.bound_entities,
+                     "proof": binding.proof,
+                     "action": action,
+                     "lifecycle_status": lifecycle_status,
+                     "transformation_family": rule.get("transformation_family"),
+                     "value_tolerated": _v4_value_tolerated(rule)},
+            obligations=transfer["results"],
+            obligation_coverage=transfer["obligation_coverage"],
+        )
+
+    def record_activation(self, result: ActivationResult) -> None:
+        """Record a backend-level activation result idempotently.
+
+        The full Phase-8 pipeline owns the rich activation row.  This seam is
+        still authoritative for callers that only have the backend-neutral
+        result: it finalizes an UNKNOWN row and bumps utility exactly once
+        when the row has not already been finalized by the pipeline.  A
+        finalized receipt is immutable at this seam: exact replays are a
+        no-op, while changed outcome, regression, rollback, or transition
+        linkage is rejected rather than silently erased.
+        """
+        if self.read_only_eval:
+            raise RuntimeError("cannot record activation in a read-only TEHM evaluation snapshot")
+        _validate_activation_result(result)
+        conn, _ = self._open()
+        row = conn.execute(
+            """SELECT rule_id, outcome, created_regressions_json,
+                      produced_transition_id, rollback_receipt_json
+                 FROM tehm_activations WHERE activation_id=?""",
+            (result.activation_id,)).fetchone()
+        if row is None:
+            raise KeyError(f"unknown TEHM activation: {result.activation_id}")
+
+        prior = row["outcome"]
+        if prior is not None and prior not in OUTCOMES:
+            raise ValueError(
+                f"activation {result.activation_id} has invalid stored outcome")
+        stored_regressions = _stored_activation_list(
+            row["created_regressions_json"],
+            field="created_regressions_json")
+        stored_rollback = _stored_activation_rollback(
+            row["rollback_receipt_json"])
+        stored_transition = row["produced_transition_id"]
+        if stored_transition is not None:
+            _require_transition(conn, str(stored_transition), result.activation_id)
+
+        incoming = (
+            result.outcome,
+            stable_dumps(result.created_regressions),
+            result.produced_transition_id,
+            stable_dumps(result.rollback_receipt)
+            if result.rollback_receipt is not None else None,
+        )
+        existing = (
+            prior,
+            stable_dumps(stored_regressions),
+            stored_transition,
+            stable_dumps(stored_rollback)
+            if stored_rollback is not None else None,
+        )
+        # Activation IDs are replay keys, never overwrite keys.  UNKNOWN is
+        # the sole provisional state that may be finalized by this seam.
+        if prior not in (None, "UNKNOWN"):
+            if incoming != existing:
+                raise ValueError(
+                    "activation replay conflicts with finalized receipt "
+                    f"{result.activation_id}")
+            return
+        if incoming == existing:
+            return
+        if result.produced_transition_id is not None:
+            _require_transition(
+                conn, result.produced_transition_id, result.activation_id)
+
+        had_outer_transaction = conn.in_transaction
+        savepoint = "tehm_backend_activation_v1"
+        conn.execute(f"SAVEPOINT {savepoint}")
+        savepoint_active = True
+        try:
+            conn.execute(
+                """UPDATE tehm_activations
+                      SET outcome=?, created_regressions_json=?,
+                          produced_transition_id=?, rollback_receipt_json=?
+                    WHERE activation_id=?""",
+                (result.outcome,
+                 stable_dumps(result.created_regressions),
+                 result.produced_transition_id,
+                 stable_dumps(result.rollback_receipt)
+                 if result.rollback_receipt is not None else None,
+                 result.activation_id))
+            if prior in (None, "UNKNOWN") and result.outcome != "UNKNOWN":
+                from tehm.activation.update import update_rule_utility
+                update_rule_utility(
+                    conn, row["rule_id"], result.outcome,
+                    activation_id=result.activation_id,
+                    created_regressions=result.created_regressions,
+                    commit=False)
+            tehm_db.bump_watermark(conn)            # P1b / D3: a committed write batch
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            savepoint_active = False
+            if not had_outer_transaction:
+                conn.commit()
+        except Exception:
+            if savepoint_active:
+                conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            raise
+
+
+    def rebuild(self, *, frozen_source: bool = False) -> BuildReport:
+        conn, _ = self._open()
+        if self.read_only_eval:
+            ok, report = tehm_honesty.run_all(conn, self._store, self.db_path)
+            return BuildReport(
+                backend="tehm", frozen_source=True,
+                rebuilt={"honesty": report, "rules": "frozen"}, ok=ok,
+                detail="read-only evaluation snapshot: rebuild skipped")
+
+        from tehm.crystallization.build_rules import crystallize_all
+        from tehm.lifecycle.rule_status import enter_shadow, get_status, set_status
+
+        # Rebuild and lifecycle enrollment are one derived projection.  A
+        # failure while enrolling a later rule must not leave a prefix of
+        # rules/status rows visible, and an existing caller transaction must
+        # remain owned by that caller.
+        had_outer_transaction = conn.in_transaction
+        savepoint = "tehm_backend_rebuild_v1"
+        conn.execute(f"SAVEPOINT {savepoint}")
+        savepoint_active = True
+        try:
+            rules = _backend_crystallize(crystallize_all, conn)
+            entered = skipped_inadmissible = 0
+            for rule in rules:
+                rule_id = rule["rule_id"]
+                # H6 is a lifecycle admission rule, not an exception-driven
+                # assertion.  Crystallization intentionally returns auditable
+                # INSTANCE/UNSTABLE/REJECTED candidates too; they remain in
+                # tehm_rules but must never be enrolled into shadow/candidate.
+                if rule.get("validity_status") not in {
+                        "PROVISIONAL_VALID", "VALIDATED"}:
+                    skipped_inadmissible += 1
+                    continue
+                scope = str((rule.get("before_pattern") or {}).get(
+                    "target_check") or "signoff")
+                # P1b: the SAME evidence count and admission rule as the runtime gate
+                # (tehm.evidence): canonical own units; rebuild never grants or revokes
+                # production authority (promoted is left untouched).
+                from tehm import evidence
+                source_profile = {**evidence.rule_evidence(conn, rule_id), "caliber": evidence.caliber()}
+                current = get_status(conn, rule_id=rule_id, target_scope=scope)
+                ok = evidence.admissible(source_profile, current["status"] if current else None)
+                if current is None:
+                    enter_shadow(
+                        conn, rule_id=rule_id, target_scope=scope,
+                        provenance={"authority": "backend_rebuild",
+                                    "source_evidence": source_profile},
+                        commit=False)
+                    if ok:
+                        set_status(
+                            conn, rule_id=rule_id, target_scope=scope,
+                            status="candidate",
+                            provenance={"authority": "backend_rebuild",
+                                        "source_evidence": source_profile},
+                            commit=False)
+                        entered += 1
+                elif current["status"] == "candidate" and not ok:
+                    set_status(
+                        conn, rule_id=rule_id, target_scope=scope,
+                        status="shadow",
+                        provenance={"authority": "backend_rebuild",
+                                    "reason": "not_admissible_by_own_evidence",
+                                    "source_evidence": source_profile},
+                        commit=False)
+                elif (current["status"] in ("retired", "quarantined")
+                      and (current.get("provenance") or {}).get("authority") == "crystallize_all"):
+                    # P1c (X1 on SOURCE-v1): a rule a rebuild retired ("not_rebuilt_in_campaign") or quarantined
+                    # ("revalidated_below_lifecycle_threshold") and that a later rebuild produces again with
+                    # admissible validity re-enters -- otherwise online growth loses it for good while a
+                    # one-shot build keeps it. Retirements by any other authority are never touched.
+                    set_status(
+                        conn, rule_id=rule_id, target_scope=scope, status="shadow",
+                        provenance={"authority": "backend_rebuild", "reason": "reproduced_by_rebuild",
+                                    "previous": current["status"], "source_evidence": source_profile},
+                        commit=False)
+                    if ok:
+                        set_status(
+                            conn, rule_id=rule_id, target_scope=scope, status="candidate",
+                            provenance={"authority": "backend_rebuild", "reason": "admissible_by_own_evidence",
+                                        "source_evidence": source_profile},
+                            commit=False)
+                        entered += 1
+                elif current["status"] == "shadow" and ok:
+                    set_status(
+                        conn, rule_id=rule_id, target_scope=scope,
+                        status="candidate",
+                        provenance={"authority": "backend_rebuild",
+                                    "reason": "admissible_by_own_evidence",
+                                    "source_evidence": source_profile},
+                        commit=False)
+                    entered += 1
+            ok, report = tehm_honesty.run_all(conn, self._store, self.db_path)
+            tehm_db.bump_watermark(conn)        # P1b / D3: a committed rebuild is a new store version
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            savepoint_active = False
+            if not had_outer_transaction:
+                conn.commit()
+            return BuildReport(
+                backend="tehm", frozen_source=frozen_source,
+                rebuilt={"honesty": report, "rules": len(rules),
+                         "lifecycle_candidates_entered": entered,
+                         "lifecycle_inadmissible_skipped": skipped_inadmissible},
+                ok=ok,
+                detail="crystallized canonical experience and enrolled new valid rules")
+        except Exception:
+            if savepoint_active:
+                conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            raise
+
+    def run_orfs_trials(self, *, base_entries: list[dict],
+                        run_flow_script: Path, fix_signoff_script: Path,
+                        n_designs: int = 1, repeats: int = 2,
+                        work_root: Path | None = None,
+                        env: dict | None = None,
+                        provided_bindings: dict[str, dict] | None = None,
+                        lifecycle_statuses: frozenset[str] = frozenset({"candidate"}),
+                        mutate_lifecycle: bool = True,
+                        promotion_gate_inputs: dict[str, dict] | None = None,
+                        production_authority: bool = True) -> list[dict]:
+        """Execute pending TEHM candidates on the shared real ORFS base."""
+        if self.read_only_eval:
+            raise RuntimeError("cannot run lifecycle trials on a read-only snapshot")
+        from tehm.lifecycle.orfs_trial import run_pending_orfs_trials
+
+        conn, store = self._open()
+        return run_pending_orfs_trials(
+            conn, store, base_entries=base_entries,
+            run_flow_script=run_flow_script,
+            fix_signoff_script=fix_signoff_script,
+            n_designs=n_designs, repeats=repeats, work_root=work_root,
+            env=env, provided_bindings=provided_bindings,
+            lifecycle_statuses=lifecycle_statuses,
+            mutate_lifecycle=mutate_lifecycle,
+            promotion_gate_inputs=promotion_gate_inputs,
+            production_authority=production_authority)
+
+    def snapshot(self) -> MemorySnapshot:
+        conn, _ = self._open()
+        counts = {
+            "states": tehm_db.count_rows(conn, "tehm_states"),
+            "transitions": tehm_db.count_rows(conn, "tehm_transitions"),
+            "episodes": tehm_db.count_rows(conn, "tehm_episodes"),
+            "views": tehm_db.count_rows(conn, "tehm_views"),
+            "rules": tehm_db.count_rows(conn, "tehm_rules"),
+            "activations": tehm_db.count_rows(conn, "tehm_activations"),
+            "causal_nodes": tehm_db.count_rows(conn, "tehm_causal_nodes"),
+            "causal_edges": tehm_db.count_rows(conn, "tehm_causal_edges"),
+            "causal_paths": tehm_db.count_rows(conn, "tehm_causal_paths"),
+            "memory_events": tehm_db.count_rows(conn, "tehm_memory_events"),
+            "rule_revisions": tehm_db.count_rows(conn, "tehm_rule_revisions"),
+            "assets": tehm_db.count_rows(conn, "tehm_assets"),
+            "capabilities": tehm_db.count_rows(conn, "tehm_capabilities"),
+        }
+        return MemorySnapshot(
+            backend="tehm",
+            snapshot_id=f"tehm:db:{self.db_path}:sha256:{self._store_digest()}",
+            schema_version=SCHEMA_VERSION,
+            counts=counts,
+        )
+
+    def _store_digest(self) -> str:
+        """Logical content digest (``iterdump`` through the OPEN connection) for
+        frozen-resume identity.
+
+        It used to hash the database file and its WAL by opening a second file
+        descriptor. Closing ANY descriptor on a SQLite file drops every POSIX lock
+        this process holds on it ("How To Corrupt An SQLite Database File", 2.2),
+        so the process silently lost its shared lock on the TEHM store. Another
+        process's close then won the exclusive lock, judged itself the last
+        connection, and deleted the WAL/SHM under live connections: "database
+        disk image is malformed" in engineer_loop's write-back rebuild (R2G
+        memory Phase D2 smoke 2, 2026-10-01). Logical content is also
+        checkpoint-invariant, which the file image never was.
+        """
+        conn, _ = self._open()
+        h = hashlib.sha256()
+        for line in conn.iterdump():
+            h.update(line.encode("utf-8"))
+            h.update(b"\n")
+        return h.hexdigest()
+
+    def close(self) -> None:
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
+
+def _hole_witnesses(conn, rule_id: str, bound: dict | None = None) -> dict[str, list]:
+    """{hole: [value per source transition]} from the rule's crystallisation-time witnesses
+    (tehm_rule_sources); D-A1 instantiates a numeric hole from their median.
+
+    F2 (Phase R amendment R-A4, failure-patterns "memory step blocks the catalogue"): only a
+    verified fix is a witness. A source transition counts only if its outcome is PASS/PARTIAL,
+    and, when ``bound`` (the current binding) gives a categorical hole a value, only if the
+    transition's value for that hole is the same (e.g. the same violation class). Before this,
+    every source transition voted, including NEUTRAL/REGRESSION ones and other classes
+    (rule_d3dcee0e mixed an li.3 and an m3.2 delta into one median)."""
+    from tehm.evidence import positive_rule_substitutions
+    categorical = {h: str(v) for h, v in (bound or {}).items()
+                   if v is not None and _num(v) is None}
+    out: dict[str, list] = {}
+    for subs in positive_rule_substitutions(conn,rule_id):
+        if any(h not in subs or str(subs[h])!=v for h,v in categorical.items()):
+            continue
+        for hole,value in subs.items():
+            out.setdefault(hole,[]).append(value)
+    return out
+
+
+def _trial_admissible(conn, rule_id: str, lifecycle_status: str | None) -> bool:
+    """Runtime trial admission: the SAME evidence count and rule as rebuild (tehm.evidence, P1b).
+    Canonical own units only; UNKNOWN never a failure, NEUTRAL / no improvement never a success,
+    a rolled-back result never positive; a promoted rule stays admissible."""
+    from tehm import evidence
+    return evidence.admissible(evidence.rule_evidence(conn, rule_id), lifecycle_status)
+
+
+def _situation_holes(rule: dict, situation: dict | None) -> dict:
+    """{hole: current value} for every ``situation.<key>`` slot of the rule that is a hole."""
+    from tehm.ids import is_hole
+    out = {}
+    for slot, hole in (rule.get("before_pattern") or {}).items():
+        if slot.startswith("situation.") and isinstance(hole, str) and is_hole(hole):
+            value = (situation or {}).get(slot[len("situation."):])
+            if value is not None:
+                out[hole] = str(value)
+    return out
+
+
+def _num(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _v4_value_tolerated(rule: dict) -> bool:
+    """Phase H attribution: did V4 accept this rule only thanks to numeric-value tolerance?"""
+    gates = ((rule.get("validity_profile") or {}).get("gates") or [])
+    return any(g.get("name") == "V4" and (g.get("detail") or {}).get("value_tolerated")
+               for g in gates if isinstance(g, dict))
+
+
+def is_repair_rule(rule: dict) -> bool:
+    """B4 (R2G memory redesign 2026-10-01): a flow/signoff rule crystallised from
+    FAIL episodes (no_change or regression) is negative evidence — veto material
+    (B5) — never a repair to propose. Only a concrete PASS rewrite qualifies;
+    other domains are unaffected."""
+    if rule.get("domain") != "flow.signoff":
+        return True
+    return (rule.get("after_pattern") or {}).get("verification.verdict") == "PASS"
+
+
+def _source_outcome_profile(conn, rule_id: str, *, own_only: bool = False) -> dict:
+    """Outcomes of the rule's source episodes. ``own_only`` keeps only the rule's OWN applications
+    (the transitions its source substitutions were recorded for), not every step of those episodes:
+    an episode's other steps include the very failure the rule went on to repair (rule_1955d380's
+    two FAILs precede its two PASSes), which is not evidence against the rule (R-A5 finding)."""
+    rows = conn.execute(
+        """SELECT t.transition_id, t.outcome, rs.source_substitution_json
+           FROM tehm_rule_sources rs
+           JOIN tehm_episode_steps es ON es.episode_id=rs.episode_id
+           JOIN tehm_transitions t ON t.transition_id=es.transition_id
+           WHERE rs.rule_id=?""", (rule_id,)).fetchall()
+    outcomes = [r["outcome"] for r in rows
+                if not own_only or r["transition_id"] in (tehm_db.read_json(r["source_substitution_json"]) or {})]
+    return {"observed": bool(outcomes),
+            "positive": sum(o in {"PASS", "PARTIAL"} for o in outcomes),
+            "harmful": sum(o in {"FAIL", "REGRESSION"} for o in outcomes),
+            "neutral": sum(o in {"NEUTRAL", "UNKNOWN"} for o in outcomes),
+            "outcomes": sorted(set(outcomes))}

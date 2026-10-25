@@ -1,7 +1,7 @@
 """Per-platform sizing and timing rules.
 
 These are the rules the nangate45 frozen-spec campaign validated on 1249
-designs (experiments/make_spec_table.py, the one place they were derived), so a
+designs (r2g_agent/project.py, the one place they were derived), so a
 design entering through the agent is sized exactly like the designs the
 knowledge base learned from:
 

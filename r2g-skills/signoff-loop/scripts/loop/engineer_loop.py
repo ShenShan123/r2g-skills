@@ -17,6 +17,7 @@ diagnose/suggest and are never touched here.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -26,6 +27,7 @@ import subprocess
 import sys
 import threading
 import traceback
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -33,14 +35,17 @@ SKILL_ROOT = Path(__file__).resolve().parents[2]
 KNOWLEDGE = SKILL_ROOT / "knowledge"
 FLOW = SKILL_ROOT / "scripts" / "flow"
 REPORTS = SKILL_ROOT / "scripts" / "reports"
+MEMORY_ROOT = SKILL_ROOT.parents[1] / "memory"
 sys.path.insert(0, str(KNOWLEDGE))
 # scripts/reports/ is needed in PRODUCTION for `import fmax_model` in the Fmax pre-pass.
 # conftest.py injects this under pytest, which previously MASKED its absence here — the
 # fmax-drain SDC stamp was silently inert off-test (2026-06-24 review L4-01, the same
 # fixture!=production class as the 22f3e67 fmax pilot bug). Set it at module load.
 sys.path.insert(0, str(REPORTS))
+sys.path.insert(0, str(MEMORY_ROOT))
 from knowledge_db import now_local as _now  # invariant 32: the ONE stamp
 import action_domain                        # RMD-HO-P1-02: stage-scoped eligibility
+import situation                            # sit-v1 failure context (redesign A2)
 
 STATES = ("pending", "flow", "signoff", "fixing", "clean", "escalated",
           "abandoned")
@@ -58,6 +63,7 @@ class Ledger:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._entries: dict[str, dict] = {}
+        self._memory_session: dict | None = None
         # Guards _entries + the JSONL append so parallel A/B arm workers
         # (R2G_AB_WORKERS > 1) can update the ledger concurrently without
         # interleaving lines or racing the dict (2026-06-17 parallel ab_drain).
@@ -74,6 +80,9 @@ class Ledger:
                     # re-establishes its state (2026-07-04 audit M6).
                     print(f"[ledger] WARNING: skipping corrupt line in "
                           f"{self.path}: {ln[:120]!r}", file=sys.stderr)
+                    continue
+                if e.get("event") == "memory_session":
+                    self._memory_session = e
                     continue
                 cur = self._entries.setdefault(e["design"], {})
                 cur.update(e)
@@ -125,6 +134,41 @@ class Ledger:
 
     def pending(self) -> list[dict]:
         return [e for e in self._entries.values() if e["state"] == "pending"]
+
+    def bind_memory(self, snapshot, *, read_only_eval: bool = False) -> None:
+        """Bind this resumable ledger to one backend/snapshot (design doc 17.3).
+
+        Online learning may change backend contents, so snapshot equality is a
+        hard resume gate only for a frozen read-only evaluation. Backend and
+        schema identity are always immutable for the lifetime of the ledger.
+        """
+        current = self._memory_session
+        if current is not None:
+            if current.get("memory_backend") != snapshot.backend:
+                raise RuntimeError(
+                    f"ledger memory backend is {current.get('memory_backend')!r}; "
+                    f"refusing resume as {snapshot.backend!r}")
+            if current.get("memory_schema_version") != snapshot.schema_version:
+                raise RuntimeError(
+                    "ledger memory schema changed; refusing unsafe resume")
+            if (read_only_eval and
+                    current.get("memory_snapshot_id") != snapshot.snapshot_id):
+                raise RuntimeError(
+                    "frozen evaluation memory snapshot changed; refusing resume")
+            return
+        event = {
+            "event": "memory_session", "ts": _now(),
+            "memory_backend": snapshot.backend,
+            "memory_snapshot_id": snapshot.snapshot_id,
+            "memory_schema_version": snapshot.schema_version,
+            "memory_read_only_eval": bool(read_only_eval),
+        }
+        with self._lock:
+            self._memory_session = event
+            self._append(event)
+
+    def memory_session(self) -> dict | None:
+        return dict(self._memory_session) if self._memory_session else None
 
     def reclaim_orphans(self) -> list[str]:
         """Reset designs stranded in a TRANSIENT state (flow/signoff/fixing) back to
@@ -247,6 +291,10 @@ def _run_flow(entry: dict) -> int:
         except OSError:
             pass
     env = os.environ.copy()
+    # A recursive recovery reflow is not another initial flow, even when the
+    # harness passed component=initial to the whole engineer loop.
+    if env.get("R2G_BUDGET_COMPONENT", "initial") == "initial":
+        env["R2G_BUDGET_COMPONENT"] = "recovery" if _has_backend_run(entry) else "initial"
     # A SYNTH backend-abort A/B arm is judged ONLY on 'synth cleared' (_arm_metric synth=True),
     # so it does NOT need to flow place/route -- run synth-ONLY. arm B (recipe) clears synth in
     # MINUTES, vs the HOURS the FF-expanded memory takes to place/route -- which it route-fails
@@ -270,7 +318,9 @@ def _run_flow(entry: dict) -> int:
 # multi-hour signoff per repeat (2026-06-24 audit, bugs #1/#3).
 _PLACE_STRATEGIES = frozenset({"core_util_relief", "pin_perimeter_floor"})
 _TIMING_STRATEGIES = frozenset({"hierarchical_place_timing_repair", "setup_slack_margin", "period_relax", "utilization_reduce",
-                                "backend_aware_synth_retune", "abc_area_physical_mapping"})
+                                "backend_aware_synth_retune", "abc_area_physical_mapping",
+                                "drv_route_margin_10", "drv_route_margin_20",
+                                "drv_route_margin_40"})
 # synth_memory_relax is a SYNTH backend-abort recovery (raise SYNTH_MEMORY_MAX_BITS +
 # pair a die auto-size): its A/B arm applies the recipe up-front and flows once, like the
 # place/route backend-abort arms, and is judged on 'synth cleared' (2026-06-28).
@@ -279,8 +329,7 @@ _SYNTH_STRATEGIES = frozenset({"synth_memory_relax"})
 # for them (it can only ever be inconclusive). Canonical set lives in
 # recipe_lifecycle.NONDIVERGENT_STRATEGIES (the lifecycle refuses them at enqueue
 # time too, 2026-07-04); this alias keeps the plan-time coverage guard in sync.
-import recipe_lifecycle as _recipe_lifecycle_mod
-_NONDIVERGENT_STRATEGIES = _recipe_lifecycle_mod.NONDIVERGENT_STRATEGIES
+_NONDIVERGENT_STRATEGIES = frozenset({"lvs_resolve_unknown"})
 # A candidate that accrues this many inconclusive trials with ZERO decisive verdicts is
 # not learnable from the available subjects/harness — stop re-planning it (bug #1)
 # WITHOUT demoting it (bug #2: inconclusive is non-terminal); surface it once instead.
@@ -297,6 +346,7 @@ _KNOWN_APPLY_STRATEGIES = frozenset({
     "antenna_diode_repair", "antenna_diode_iters", "antenna_density_relief",
     "density_relief", "pin_side_rebalance", "route_relief", "lvs_resolve_unknown", "lvs_macro_cdl",
     "beol_only_drc", "rerun_from_stage", "pdn_die_floor", "lvs_port_feedthrough_buffer",
+    "cell_pad_relief_2", "cell_pad_relief_4", "route_layer_relief",
 }) | _PLACE_STRATEGIES | _TIMING_STRATEGIES | _SYNTH_STRATEGIES
 
 
@@ -447,6 +497,21 @@ def _enqueue_check_mismatch(conn, symptom_id: str, strategy: str) -> str | None:
         return (f"symptom {symptom_id} is {row[0]}|{row[1]} but {strategy} repairs "
                 f"{want}; enqueue it under the {want} symptom of the failing check")
     return None
+
+
+def _technical_stop(led, conn, entry: dict, fix_rc: int) -> bool:
+    """A technical failure (invalid candidate, crashed diagnose/consultation) stops this
+    design: no further repair path runs and it is never escalated as an ordinary residual
+    (failure-patterns "Memory candidate broke the executor contract", 2026-10-17)."""
+    import technical_failure
+    from candidate_contract import TECHNICAL_EXIT
+    rows = technical_failure.load(entry["project_path"])
+    if fix_rc != TECHNICAL_EXIT and not rows:
+        return False
+    design = entry.get("design") or Path(entry["project_path"]).name
+    led.set_state(design, "escalated", reason="technical_failure")
+    print(f"[loop] {design}: technical failure, design stopped ({len(rows)} recorded)", file=sys.stderr)
+    return True
 
 
 def _run_fix(entry: dict) -> int:
@@ -764,6 +829,59 @@ def _newest_stage_log(project_path: str) -> Path | None:
     return max(runs, key=lambda d: d.stat().st_mtime) / "stage_log.jsonl"
 
 
+# Chain log v1 (T2 design draft §8d; failure-patterns "History annotator cited a row field that
+# no on-disk row has", 2026-10-17). A recovery's retry is launched under an explicit action id;
+# run_orfs records it in the run it creates (backend/RUN_*/r2g_action.json). The recorder's row
+# names the run the recovery responded to (the run this loop diagnosed, read BEFORE the retry)
+# and the run the retry produced (the unique run naming the action). The live recovery path has
+# no revert (restores exist only in A/B arm setup), so rolled_back is recorded false. The
+# SOURCE-v1 recorder rows had none of this, which is why no place abort could be bound.
+@contextlib.contextmanager
+def _chain_action(entry: dict):
+    log = _newest_stage_log(entry["project_path"])
+    ctx = {"action_id": "elp_" + uuid.uuid4().hex[:16],
+           "pre_run_tag": log.parent.name if log is not None else None}
+    prev = os.environ.get("R2G_ACTION_ID")
+    os.environ["R2G_ACTION_ID"] = ctx["action_id"]
+    try:
+        yield ctx
+    finally:
+        if prev is None:
+            os.environ.pop("R2G_ACTION_ID", None)
+        else:
+            os.environ["R2G_ACTION_ID"] = prev
+
+
+def _chain_fields(proj: Path, chain: dict | None, stage: str | None) -> dict:
+    if not chain:
+        return {}
+    own = []
+    for m in proj.glob("backend/RUN_*/r2g_action.json"):
+        try:
+            if json.loads(m.read_text()).get("action_id") == chain["action_id"]:
+                own.append(m.parent.name)
+        except (OSError, ValueError):
+            pass
+    own.sort()
+    post = own[0] if len(own) == 1 else None
+    out = {"chain_version": 1, "action_id": chain["action_id"], "parent_action": None,
+           "pre_run_tag": chain.get("pre_run_tag"), "post_run_tag": post,
+           "rolled_back": False, "rollback_reason": None, "step_check": None}
+    if len(own) > 1:
+        out["post_run_ambiguous"] = own
+    if post is not None:
+        last = {}
+        try:
+            rows = [json.loads(l) for l in (proj / "backend" / post / "stage_log.jsonl").read_text().splitlines()
+                    if l.strip()]
+            last = rows[-1] if rows else {}
+        except (OSError, ValueError):
+            pass
+        out["step_check"] = {"check": "orfs_stage", "stage": stage, "graded_run_tag": post,
+                             "last_stage": last.get("stage"), "last_status": last.get("status")}
+    return out
+
+
 def _fail_stage(entry: dict) -> str | None:
     """The backend stage that aborted in the newest run's stage_log (its LAST
     line — run_orfs.sh stops at the first failing stage), or None. Lets the loop
@@ -893,6 +1011,7 @@ def _resize_to_core_util(entry: dict, util: int = 30) -> bool:
 # core_util_relief on a subject that ALREADY auto-sizes: how far arm B lowers util.
 _CORE_UTIL_RELIEF_FACTOR = 0.6   # lower an existing CORE_UTILIZATION=N to ~60% of N
 _CORE_UTIL_FLOOR = 10            # never below 10% (the die is already huge; lower is moot)
+_PLACE_RELIEF_MAX = 2            # live FLW-0024 relief steps on an auto-sized die (e.g. 89 -> 53 -> 32)
 
 
 def _lower_core_util(entry: dict, *, factor: float = _CORE_UTIL_RELIEF_FACTOR,
@@ -1070,6 +1189,16 @@ def _config_effect(before: dict[str, str], after: dict[str, str]) -> dict:
     }
 
 
+def _severity_fields(entry: dict, stage: str | None) -> dict:
+    """Graded severity before (captured at the abort) and after (the retry's newest run)."""
+    try:
+        import severity
+        after = severity.from_project(entry["project_path"], "orfs_stage", stage)
+    except Exception:
+        after = None
+    return {"severity_before": entry.get("_r2g_severity_before"), "severity_after": after}
+
+
 def _effect_fields(entry: dict, *, cleared: bool) -> dict:
     effect = entry.pop("_r2g_config_effect", None) or {}
     delta = effect.get("delta") or {}
@@ -1083,7 +1212,8 @@ def _effect_fields(entry: dict, *, cleared: bool) -> dict:
     }
 
 
-def _record_pdn_fix(entry: dict, *, cleared: bool) -> None:
+def _record_pdn_fix(entry: dict, *, cleared: bool,
+                    situation_: dict | None = None, chain: dict | None = None) -> None:
     """Record the PDN-0185 die-floor (CORE_UTILIZATION -> explicit PDN-feasible DIE_AREA) as a
     fix_log row so the NEXT _ingest projects it into fix_events -> fix_trajectories -> a Tier-3
     recipe, making the recovery VISIBLE to learning (mirrors _record_resize_fix). Keyed
@@ -1104,12 +1234,17 @@ def _record_pdn_fix(entry: dict, *, cleared: bool) -> None:
         "before_status": "fail", "after_status": "clean" if cleared else "fail",
         "ts": _now(),
         **_effect_fields(entry, cleared=cleared),
+        **_severity_fields(entry, "floorplan"),
     }
+    if situation_:
+        row["situation"] = situation_
+    row.update(_chain_fields(proj, chain, row.get("violation_class")))
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
-def _record_resize_fix(entry: dict, *, cleared: bool) -> None:
+def _record_resize_fix(entry: dict, *, cleared: bool,
+                       situation_: dict | None = None, chain: dict | None = None) -> None:
     """Record the FLW-0024 die-resize (DIE_AREA -> CORE_UTILIZATION) as a fix_log row
     so the NEXT _ingest projects it into fix_events -> fix_trajectories -> a Tier-3
     recipe — making the recovery VISIBLE to learning (honest accounting, a
@@ -1144,12 +1279,17 @@ def _record_resize_fix(entry: dict, *, cleared: bool) -> None:
         "before_status": "fail", "after_status": "clean" if cleared else "fail",
         "ts": _now(),
         **_effect_fields(entry, cleared=cleared),
+        **_severity_fields(entry, "place"),
     }
+    if situation_:
+        row["situation"] = situation_
+    row.update(_chain_fields(proj, chain, row.get("violation_class")))
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
-def _record_pin_perimeter_fix(entry: dict, *, cleared: bool) -> None:
+def _record_pin_perimeter_fix(entry: dict, *, cleared: bool,
+                              situation_: dict | None = None, chain: dict | None = None) -> None:
     """Record the PPL-0024 perimeter-targeted die action under its own identity.
 
     PPL-0024 is pin-capacity limited and sets an explicit die from the IO placer's
@@ -1171,7 +1311,11 @@ def _record_pin_perimeter_fix(entry: dict, *, cleared: bool) -> None:
         "before_status": "fail", "after_status": "clean" if cleared else "fail",
         "ts": _now(),
         **_effect_fields(entry, cleared=cleared),
+        **_severity_fields(entry, "place"),
     }
+    if situation_:
+        row["situation"] = situation_
+    row.update(_chain_fields(proj, chain, row.get("violation_class")))
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
 
@@ -1290,7 +1434,8 @@ def _raise_synth_memory_cap(entry: dict, bits: int = _SYNTH_MEM_BITS_RETRY) -> b
     return raised
 
 
-def _record_synth_mem_fix(entry: dict, *, cleared: bool) -> None:
+def _record_synth_mem_fix(entry: dict, *, cleared: bool,
+                          situation_: dict | None = None, chain: dict | None = None) -> None:
     """Record the SYNTH_MEMORY_MAX_BITS raise as a fix_log row so the next _ingest
     projects it into fix_events -> a Tier-3 'synth_memory_relax' recipe -- the synth
     memory-cap recovery becomes VISIBLE to learning (a cross-design prior keyed to the
@@ -1311,9 +1456,182 @@ def _record_synth_mem_fix(entry: dict, *, cleared: bool) -> None:
         "before_status": "fail", "after_status": "clean" if cleared else "fail",
         "ts": _now(),
         **_effect_fields(entry, cleared=cleared),
+        **_severity_fields(entry, "synth"),
     }
+    if situation_:
+        row["situation"] = situation_
+    row.update(_chain_fields(proj, chain, row.get("violation_class")))
     with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+# ── Memory before escalation (R2G memory redesign B6, 2026-10-01) ───────────────
+# A backend residual (FLW-0024 / PPL-0024 that survived the hard-coded die recovery)
+# used to escalate straight to the operator queue: memory was never asked, so a fix
+# verified on another design in the SAME situation could not help. Under the TEHM
+# backend, ask it once — at most one promoted, situation-applicable, policy-safe,
+# non-vetoed rule — re-flow, verify by stage completion, and record the attempt as
+# a fix_log row (negative evidence on failure); otherwise escalate as before. Route
+# residuals need no hook here: _run_fix(check=route) already consults TEHM through
+# fix_signoff.sh -> diagnose_signoff_fix. The legacy `conn` is None under TEHM, so
+# this goes through the backend router, never the legacy store.
+def _memory_family(strategy_id) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "_", str(strategy_id or "")).strip("_").upper()
+
+
+def _place_abort_memory_source() -> str | None:
+    """Which executable memory serves the place-abort hook: TEHM (R2G_MEMORY_BACKEND=tehm)
+    or the SOURCE recipe library (R2G_RECIPE_FILE, unless R2G_RECIPE_SUSPENDED). A shared
+    entry, not a TEHM privilege (failure-patterns "Memory candidate broke the executor
+    contract", follow-up 2026-10-17): the arms keep their own retrieval and ranking."""
+    if os.environ.get("R2G_MEMORY_BACKEND", "legacy").strip().lower() == "tehm":
+        return "tehm"
+    if os.environ.get("R2G_RECIPE_FILE") and os.environ.get("R2G_RECIPE_SUSPENDED") != "1":
+        return "recipe"
+    return None
+
+
+def _memory_technical_failure(entry: dict, kind: str, source: str, detail: str) -> None:
+    """Record a place-abort memory technical failure; _memory_recovery then stops the design."""
+    entry["_r2g_memory_technical"] = kind
+    print(f"[loop] memory {source} technical failure ({kind}): {detail}", file=sys.stderr)
+    try:
+        import technical_failure
+        technical_failure.record(entry["project_path"], kind, source="engineer_loop",
+                                 detail=f"{source}: {detail}", check="orfs_stage")
+    except Exception as rec_exc:           # recording must never mask the original stop
+        print(f"[loop] could not record technical failure: {rec_exc}", file=sys.stderr)
+
+
+def _pick_memory_strategy(entry: dict, stage: str) -> tuple[dict | None, dict | None]:
+    """(strategy, situation) of the first usable executable-memory candidate for this
+    backend abort. TEHM and RECIPE share this entry, the contract gate, the knob policy and
+    the already-in-effect check; TEHM vetoes apply to TEHM only (RECIPE has no veto
+    knowledge by design). An invalid candidate or a crashed consultation is a technical
+    failure, never a silent "no memory"."""
+    source = _place_abort_memory_source()
+    if source is None or entry.get("kind") == "ab_arm" or entry.get("_r2g_memory_tried"):
+        return None, None
+    entry["_r2g_memory_tried"] = True          # once per design visit (survives the retry)
+    proj = Path(entry["project_path"])
+    cfg = _config_snapshot(entry)
+    try:
+        import knob_policy
+        from candidate_contract import contract_errors
+        sit = situation.from_project(proj, "orfs_stage", stage)
+        vetoed = set()
+        if source == "tehm":
+            from runtime_router import signoff_strategies, signoff_vetoes
+            try:
+                import severity
+                cur_sev = severity.from_project(proj, "orfs_stage", stage)
+            except Exception:
+                cur_sev = None
+            strategies = signoff_strategies(
+                project_dir=proj, check="orfs_stage", design_id=cfg.get("DESIGN_NAME"),
+                platform=cfg.get("PLATFORM"), cfg=cfg, reports={}, situation=sit, severity=cur_sev)
+            vetoed = {_memory_family(k) for k in signoff_vetoes(situation=sit)}
+        else:
+            if str(MEMORY_ROOT) not in sys.path:
+                sys.path.insert(0, str(MEMORY_ROOT))
+            from tehm.policy.recipes import recipe_strategies
+            strategies = recipe_strategies(os.environ["R2G_RECIPE_FILE"], sit, cfg)
+    except Exception as exc:                   # fail-closed, and surfaced
+        _memory_technical_failure(entry, "consultation_crash", source, f"{type(exc).__name__}: {exc}")
+        return None, None
+    for st in strategies:
+        errors = contract_errors(st) + ([st["contract_error"]] if st.get("contract_error") else [])
+        if errors:
+            _memory_technical_failure(entry, "invalid_candidate", source,
+                                      f"{st.get('id')}: {'; '.join(errors)}")
+            return None, sit
+        edits = st.get("config_edits") or {}
+        why = None
+        if _memory_family(st.get("transformation_family") or st.get("id")) in vetoed:
+            why = "vetoed in this situation"
+        elif knob_policy.edits_violations(edits):
+            why = "knob policy: " + "; ".join(knob_policy.edits_violations(edits))
+        elif all((k not in cfg) if str(v) == knob_policy.UNSET else cfg.get(k) == str(v)
+                 for k, v in edits.items()):
+            why = "edits already in effect"
+        if why:
+            print(f"[loop] memory strategy {st.get('id')} dropped: {why}", file=sys.stderr)
+            continue
+        return st, sit
+    return None, sit
+
+
+def _apply_memory_edits(entry: dict, edits: dict) -> None:
+    """Merge ``edits`` into the signoff-fix auto block (earlier auto edits kept)."""
+    import diagnose_signoff_fix as dsf
+    cfg_path = Path(entry["project_path"]) / "constraints" / "config.mk"
+    text = cfg_path.read_text(encoding="utf-8")
+    block, inside = {}, False
+    for ln in text.splitlines():
+        if ln.strip() == dsf.BLOCK_START:
+            inside = True
+        elif ln.strip() == dsf.BLOCK_END:
+            inside = False
+        elif inside and _config_knob(ln):
+            block[_config_knob(ln)] = ln.split("=", 1)[1].strip()
+    cfg_path.write_text(dsf.apply_edits(text, {**block, **{k: str(v) for k, v in edits.items()}}),
+                        encoding="utf-8")
+
+
+def _record_memory_fix(entry: dict, strategy: dict, stage: str, *, cleared: bool,
+                       situation_: dict | None, chain: dict | None = None) -> None:
+    """fix_log row for a memory-rule recovery (same contract as _record_resize_fix:
+    honest stage-completion outcome, before=1 after=0|1, effect fields)."""
+    proj = Path(entry["project_path"])
+    reports = proj / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
+    runs = sorted(proj.glob("backend/RUN_*"))
+    run_tag = runs[-1].name if runs else "norun"
+    sid = "memfix_" + hashlib.sha1(f"{proj}:{run_tag}".encode("utf-8")).hexdigest()[:12]
+    row = {
+        "fix_session_id": sid, "iter": 1,
+        "strategy": _memory_family(strategy.get("transformation_family")
+                                   or strategy.get("id")).lower(),
+        "memory_rule": strategy.get("rule_id"),
+        "memory_trial": bool(strategy.get("memory_trial")),
+        "witness_selected": strategy.get("witness_selected") or [],
+        "memory_mechanisms": strategy.get("mechanisms") or [],   # Phase H attribution
+        "check": "orfs_stage", "violation_class": stage, "from_stage": stage,
+        "before": 1, "after": 0 if cleared else 1,
+        "before_status": "fail", "after_status": "clean" if cleared else "fail",
+        "ts": _now(),
+        **_effect_fields(entry, cleared=cleared),
+        **_severity_fields(entry, stage),
+    }
+    if situation_:
+        row["situation"] = situation_
+    row.update(_chain_fields(proj, chain, row.get("violation_class")))
+    with (reports / "fix_log.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+def _memory_recovery(led, entry: dict, conn, stage: str) -> str | None:
+    """B6: try ONE memory rule before escalating a backend residual at ``stage``.
+    Returns the retry's process_one result, or None to escalate as before."""
+    strategy, sit = _pick_memory_strategy(entry, stage)
+    if entry.get("_r2g_memory_technical"):
+        led.set_state(entry["design"], "escalated", reason="technical_failure")
+        return "technical_failure"
+    if strategy is None:
+        return None
+    print(f"[loop] memory {strategy.get('source') or 'rule'} "
+          f"{strategy.get('rule_id')} before escalation: "
+          f"{strategy.get('config_edits')}", file=sys.stderr)
+    before = _config_snapshot(entry)
+    _apply_memory_edits(entry, strategy["config_edits"])
+    entry["_r2g_config_effect"] = _config_effect(before, _config_snapshot(entry))
+    led.set_state(entry["design"], "fixing")
+    with _chain_action(entry) as chain:
+        result = process_one(led, entry, conn, _resized=True)
+    _record_memory_fix(entry, strategy, stage, cleared=(_fail_stage(entry) != stage),
+                       situation_=sit, chain=chain)
+    _ingest(entry)
+    return result
 
 
 def _signoff_status(entry: dict) -> dict:
@@ -1344,6 +1662,10 @@ def _signoff_status(entry: dict) -> dict:
         # cannot override a measured negative WNS.
         if tier == "clean" and isinstance(wns, (int, float)) and wns < 0:
             tier = "fail"
+        # Setup met but a max-slew/max-cap limit exceeded: not signoff-clean (acceptance
+        # A8). 'drv' sends the design through the timing repair turn (drv_route_margin).
+        if tier == "clean" and (timing.get("drv") or {}).get("status") == "fail":
+            tier = "drv"
         out["timing"] = tier
     except Exception:
         out["timing"] = "unknown"
@@ -1384,6 +1706,27 @@ def _learn() -> dict:
         return {}
 
 
+def _open_runtime_memory_backend():
+    """Open and process-lock the selected memory backend."""
+    from factory import open_memory_backend
+
+    read_only = os.environ.get("R2G_MEMORY_READ_ONLY_EVAL", "0") == "1"
+    return open_memory_backend(read_only_eval=read_only), read_only
+
+
+def _backend_learn_cycle(backend) -> dict:
+    """Rebuild only the selected memory plane; never cross-call a learner."""
+    if backend.name == "none":
+        return {"backend": "none", "ok": True}
+    report = backend.rebuild(
+        frozen_source=os.environ.get("R2G_MEMORY_READ_ONLY_EVAL", "0") == "1")
+    if not report.ok:
+        print(f"[loop] WARNING: {backend.name} memory rebuild reported unhealthy: "
+              f"{report.detail}", file=sys.stderr)
+    return {"backend": backend.name, "ok": report.ok,
+            "rebuilt": report.rebuilt}
+
+
 # ---- the loop ---------------------------------------------------------------
 
 def _mark_clean(led: Ledger, conn, design: str, note: str) -> None:
@@ -1403,7 +1746,7 @@ def _mark_clean(led: Ledger, conn, design: str, note: str) -> None:
 
 
 def process_one(led: Ledger, entry: dict, conn, *,
-                _resized: bool = False) -> str | None:
+                _resized: bool = False, _place_relief: int = 0) -> str | None:
     """Run one design end-to-end. Returns the TERMINAL status it reached —
     'clean' | 'escalated' (or None for an A/B arm handled out-of-band) — so a
     caller (e.g. the FLW-0024 resize retry) can record the honest outcome without
@@ -1462,6 +1805,20 @@ def process_one(led: Ledger, entry: dict, conn, *,
         # (synth/place/cts crashes, or a route fix that still fails) escalate.
         _ingest(entry)                      # partial runs still teach
         repair_config_before = _config_snapshot(entry)
+        # The abort's situation (error code, die mode, util band) BEFORE any recovery
+        # edits config.mk; the recoveries below record it on their fix_log row. A local,
+        # not an entry key: the recursive retry may abort again and must not overwrite it.
+        try:
+            pre_sit = situation.from_project(entry["project_path"], "orfs_stage",
+                                             _fail_stage(entry))
+        except Exception:
+            pre_sit = None
+        try:                                # graded severity before any recovery (Phase G0)
+            import severity
+            entry["_r2g_severity_before"] = severity.from_project(
+                entry["project_path"], "orfs_stage", _fail_stage(entry))
+        except Exception:
+            entry["_r2g_severity_before"] = None
         # FLW-0024 (place density > 1.0): the die is too small for the synthesized
         # cells -- a RECOVERABLE over-pack (the fixed DIE_AREA was sized from an RTL
         # line-count proxy, not gate count), NOT the irrecoverable NesterovSolve
@@ -1474,14 +1831,34 @@ def process_one(led: Ledger, entry: dict, conn, *,
             entry["_r2g_config_effect"] = _config_effect(
                 repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
-            result = process_one(led, entry, conn, _resized=True)
+            with _chain_action(entry) as chain:
+                result = process_one(led, entry, conn, _resized=True)
             # Record the die-resize as a learnable fix attempt so the recovery is
             # not invisible to the loop (2026-06-23 audit, bug #6). The retry's
             # returned terminal status is the honest outcome (clean -> the resize
             # cleared the abort); re-ingest projects the appended fix_log row into a
             # fix_event (idempotent UPSERT on the retry's run row — same ppa.json
             # mtime -> same run_id).
-            _record_resize_fix(entry, cleared=(result == "clean"))
+            _record_resize_fix(entry, cleared=(result == "clean"), situation_=pre_sit, chain=chain)
+            _ingest(entry)
+            return result
+        # FLW-0024 on an ALREADY auto-sized die (CORE_UTILIZATION=N, so the resize above is
+        # a no-op): the cells do not fit at N. Lower N (the A/B arm's core_util_relief,
+        # _lower_core_util: x0.6, floor 10) and retry, at most _PLACE_RELIEF_MAX times.
+        # Before 2026-10-05 the live loop escalated place_density_residual after ONE flow
+        # here (failure-patterns "FLW-0024 ... already auto-sized die"). _resized is passed
+        # through unchanged so a design that now places keeps its route/DRC recoveries.
+        if (entry.get("kind") != "ab_arm" and _place_relief < _PLACE_RELIEF_MAX
+                and not _strategy_excluded("core_util_relief")
+                and _fail_stage(entry) == "place" and _is_flw0024(entry)
+                and _lower_core_util(entry)):
+            entry["_r2g_config_effect"] = _config_effect(
+                repair_config_before, _config_snapshot(entry))
+            led.set_state(design, "fixing")
+            with _chain_action(entry) as chain:
+                result = process_one(led, entry, conn, _resized=_resized,
+                                     _place_relief=_place_relief + 1)
+            _record_resize_fix(entry, cleared=(result == "clean"), situation_=pre_sit, chain=chain)
             _ingest(entry)
             return result
         # PPL-0024 (IO pins exceed die perimeter): the die is too small in PERIMETER for
@@ -1497,8 +1874,9 @@ def process_one(led: Ledger, entry: dict, conn, *,
             entry["_r2g_config_effect"] = _config_effect(
                 repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
-            result = process_one(led, entry, conn, _resized=True)
-            _record_pin_perimeter_fix(entry, cleared=(result == "clean"))
+            with _chain_action(entry) as chain:
+                result = process_one(led, entry, conn, _resized=True)
+            _record_pin_perimeter_fix(entry, cleared=(result == "clean"), situation_=pre_sit, chain=chain)
             _ingest(entry)
             return result
         # Synth memory-cap (Yosys refuses to infer a memory larger than the default
@@ -1523,7 +1901,8 @@ def process_one(led: Ledger, entry: dict, conn, *,
             entry["_r2g_config_effect"] = _config_effect(
                 repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
-            result = process_one(led, entry, conn, _resized=True)
+            with _chain_action(entry) as chain:
+                result = process_one(led, entry, conn, _resized=True)
             # The synth fix's verdict is whether the SYNTH abort cleared (the re-flow got
             # PAST synth), NOT whether the whole flow reached clean. Raising the cap expands
             # the RAM to flip-flops, so a memcap design can clear synth yet over-pack at
@@ -1531,7 +1910,7 @@ def process_one(led: Ledger, entry: dict, conn, *,
             # failure as the synth fix FAILING (false negative learning that teaches the loop
             # synth_memory_relax does not work when it does). _fail_stage reflects the retry.
             synth_cleared = _fail_stage(entry) != "synth"
-            _record_synth_mem_fix(entry, cleared=synth_cleared)
+            _record_synth_mem_fix(entry, cleared=synth_cleared, situation_=pre_sit, chain=chain)
             _ingest(entry)
             return result
         # PDN-0185 (floorplan pdngen: die too NARROW for met4/met5 power straps): a tiny
@@ -1548,8 +1927,9 @@ def process_one(led: Ledger, entry: dict, conn, *,
             entry["_r2g_config_effect"] = _config_effect(
                 repair_config_before, _config_snapshot(entry))
             led.set_state(design, "fixing")
-            result = process_one(led, entry, conn, _resized=True)
-            _record_pdn_fix(entry, cleared=(result == "clean"))
+            with _chain_action(entry) as chain:
+                result = process_one(led, entry, conn, _resized=True)
+            _record_pdn_fix(entry, cleared=(result == "clean"), situation_=pre_sit, chain=chain)
             _ingest(entry)
             return result
         reason, notes = "unseen_crash", f"run_orfs rc={rc}"
@@ -1558,6 +1938,8 @@ def process_one(led: Ledger, entry: dict, conn, *,
             led.set_state(design, "fixing")
             fix_rc = _run_fix({**entry, "check": "route"})
             _ingest(entry)
+            if _technical_stop(led, conn, entry, fix_rc):
+                return "technical_failure"
             if fix_rc == 0:
                 # Route abort cleared -> the fix's re-flow built a FRESH GDS, but "the
                 # flow completes" is a strictly WEAKER contract than the platform's
@@ -1581,6 +1963,10 @@ def process_one(led: Ledger, entry: dict, conn, *,
               and _is_flw0024(entry)):
             # FLW-0024 that survived the auto-resize retry (cells exceed even the
             # auto-sized routable die): an honest residual, NOT an unseen crash.
+            # Memory first (B6); escalate only if it has nothing usable.
+            mem_result = _memory_recovery(led, entry, conn, "place")
+            if mem_result is not None:
+                return mem_result
             reason = "place_density_residual"
             notes = (f"FLW-0024 place-density overflow (rc={rc}); auto-resize to "
                      f"CORE_UTILIZATION did not clear")
@@ -1590,6 +1976,9 @@ def process_one(led: Ledger, entry: dict, conn, *,
             # perimeter -- a genuinely pin-dense design): an honest residual, NOT an unseen
             # crash. A proper pin-aware floorplan (CORE_ASPECT_RATIO / explicit pad ring) is
             # the next lever; labeled honestly so the operator runbook can route it.
+            mem_result = _memory_recovery(led, entry, conn, "place")
+            if mem_result is not None:
+                return mem_result
             reason = "pin_overflow_residual"
             notes = (f"PPL-0024 IO pins exceed die perimeter (rc={rc}); die enlargement "
                      f"(lower CORE_UTILIZATION) did not create enough pin positions")
@@ -1663,6 +2052,8 @@ def process_one(led: Ledger, entry: dict, conn, *,
     led.set_state(design, "fixing")
     fix_rc = _run_fix(entry)
     _ingest(entry)
+    if _technical_stop(led, conn, entry, fix_rc):
+        return "technical_failure"
     post_fix_status = _signoff_status(entry)
     if fix_rc == 0 and _all_signoff_clean(post_fix_status):
         _mark_clean(led, conn, design, "signoff fix cleared residual")
@@ -1671,12 +2062,17 @@ def process_one(led: Ledger, entry: dict, conn, *,
     # DRC/LVS/route/RCX are clean, but timing is still violated. Do not fabricate
     # clean from the local checker return code; give the timing catalog its own
     # bounded repair turn, then require the full global vector to be clean.
+    # Unconstrained timing (no constrained path) is a task configuration error: no timing
+    # repair can constrain it, so it escalates (timing_unconstrained) instead of spending a
+    # repair turn (failure-patterns "Unconstrained timing passed strict acceptance").
     if (entry.get("kind") != "ab_arm"
-            and post_fix_status.get("timing") not in ("clean", "clean_beol", "skipped")
+            and post_fix_status.get("timing") not in ("clean", "clean_beol", "skipped", "unconstrained")
             and _physical_signoff_clean(post_fix_status)):
         timing_entry = {**entry, "check": "timing"}
         timing_rc = _run_fix(timing_entry)
         _ingest(timing_entry)
+        if _technical_stop(led, conn, entry, timing_rc):
+            return "technical_failure"
         post_fix_status = _signoff_status(entry)
         if timing_rc == 0 and _all_signoff_clean(post_fix_status):
             _mark_clean(led, conn, design, "timing repair passed full signoff recheck")
@@ -1721,6 +2117,8 @@ def _signoff_escalation_reason(residual: dict) -> str:
     DRC comes back stuck")."""
     if any(v == "stuck" for v in (residual or {}).values()):
         return "signoff_stuck_scan"
+    if (residual or {}).get("timing") == "unconstrained":
+        return "timing_unconstrained"
     return "catalog_exhausted"
 
 
@@ -2477,9 +2875,11 @@ def plan_arms_for_candidates(led: Ledger, conn, *, n_ab_designs: int = 2,
 
 
 def learn_cycle(led: Ledger, conn, *, prev_heur: dict | None,
-                n_ab_designs: int = 2) -> dict:
+                n_ab_designs: int = 2, backend=None) -> dict:
     """learn -> diff -> enqueue candidates -> plan A/B trials -> append arm
     entries to the ledger (the SAME loop executes them)."""
+    if backend is not None and backend.name != "legacy":
+        return _backend_learn_cycle(backend)
     import recipe_lifecycle
     heur = _learn()
     # diff_and_enqueue here is idempotent with learn()'s own enqueue (Gate A):
@@ -3205,6 +3605,11 @@ def _drain_arm(led: "Ledger", entry: dict, db_path: Path | str | None) -> None:
     thread-shareable, and the heavy work (flow/fix/ingest) is subprocess-based, so
     each worker thread just needs a private conn for the occasional escalation
     write. The Ledger is lock-guarded (thread-safe)."""
+    backend_name = os.environ.get("R2G_MEMORY_BACKEND", "legacy").strip().lower()
+    if (backend_name != "legacy" or
+            os.environ.get("R2G_MEMORY_READ_ONLY_EVAL", "0") == "1"):
+        process_one(led, entry, None)
+        return
     import knowledge_db
     conn = knowledge_db.connect(db_path) if db_path else knowledge_db.connect()
     try:
@@ -3224,8 +3629,39 @@ def ab_drain(ledger_path: Path, *, n_ab_designs: int = 2,
     arms are independent ORFS flows, so parallelism turns sum-of-arms wall-clock
     into slowest-batch wall-clock on the multi-core host. Returns trials judged.
     """
-    import knowledge_db
     led = Ledger(ledger_path)
+    backend, read_only = _open_runtime_memory_backend()
+    led.bind_memory(backend.snapshot(), read_only_eval=read_only)
+    if read_only:
+        print("[loop] frozen evaluation: A/B lifecycle mutation disabled",
+              file=sys.stderr)
+        backend.close()
+        return 0
+    if backend.name != "legacy":
+        # TEHM lifecycle enrollment happens in rebuild, then its independent
+        # ORFS trial executor writes tehm_trials/tehm_rule_status only.
+        _backend_learn_cycle(backend)
+        if backend.name == "none":
+            backend.close()
+            return 0
+        try:
+            bindings = json.loads(os.environ.get("R2G_TEHM_AB_BINDINGS", "{}"))
+        except json.JSONDecodeError as exc:
+            backend.close()
+            raise RuntimeError(f"invalid R2G_TEHM_AB_BINDINGS JSON: {exc}") from exc
+        repeats = max(1, int(os.environ.get("R2G_TEHM_AB_REPEATS", "2")))
+        trials = backend.run_orfs_trials(
+            base_entries=led.entries(),
+            run_flow_script=Path(_script("R2G_LOOP_RUN_FLOW", FLOW / "run_orfs.sh")),
+            fix_signoff_script=Path(_script("R2G_LOOP_FIX", FLOW / "fix_signoff.sh")),
+            n_designs=n_ab_designs, repeats=repeats,
+            work_root=Path(ledger_path).parent / "tehm_ab",
+            provided_bindings=bindings)
+        print(f"[loop] TEHM A/B: {len(trials)} trial(s) recorded; "
+              "legacy recipe_status/ab_trials untouched", file=sys.stderr)
+        backend.close()
+        return sum(1 for trial in trials if not trial.get("reused"))
+    import knowledge_db
     led.reclaim_orphans()          # crash-orphaned A/B arms re-run + re-judge (#31)
     led.reroot_project_paths()     # a moved/renamed corpus heals itself (#57)
     conn = knowledge_db.connect(db_path) if db_path else knowledge_db.connect()
@@ -3255,6 +3691,7 @@ def ab_drain(ledger_path: Path, *, n_ab_designs: int = 2,
     judge_finished_trials(led, conn)                 # final sweep (covers the empty-pending case)
     after = conn.execute("SELECT COUNT(*) FROM ab_trials").fetchone()[0]
     conn.close()
+    backend.close()
     return after - before
 
 
@@ -3509,8 +3946,29 @@ def run(ledger_path: Path, *, max_designs: int | None = None,
         max_workers: int = 1, learn: bool = True) -> None:
     import knowledge_db
     led = Ledger(ledger_path)
+    backend, read_only = _open_runtime_memory_backend()
+    led.bind_memory(backend.snapshot(), read_only_eval=read_only)
     led.reclaim_orphans()          # crash-orphaned transients rejoin the drain (#31)
     led.reroot_project_paths()     # a moved/renamed corpus heals itself (#57)
+    if backend.name != "legacy" or read_only:
+        pending = [e for e in led.pending()
+                   if e.get("kind", "normal") == "normal"]
+        if max_designs:
+            pending = pending[:max_designs]
+        if max_workers and max_workers > 1 and len(pending) > 1:
+            with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                list(ex.map(lambda e: _safe_process(led, e), pending))
+            if not read_only:
+                _backend_learn_cycle(backend)
+        else:
+            for entry in pending:
+                process_one(led, entry, None)
+                if not read_only:
+                    _backend_learn_cycle(backend)
+        backend.close()
+        return
+
+    import knowledge_db
     conn = knowledge_db.connect()
     knowledge_db.ensure_schema(conn)
     prev_heur = None
@@ -3524,6 +3982,7 @@ def run(ledger_path: Path, *, max_designs: int | None = None,
         _run_parallel(led, conn, prev_heur, max_designs=max_designs,
                       max_workers=max_workers, learn=learn)
         conn.close()
+        backend.close()
         return
     done = 0
     while True:
@@ -3538,6 +3997,7 @@ def run(ledger_path: Path, *, max_designs: int | None = None,
             judge_finished_trials(led, conn)
             prev_heur = heur
     conn.close()
+    backend.close()
 
 
 def main(argv=None) -> int:
@@ -3606,6 +4066,12 @@ def main(argv=None) -> int:
     pm.add_argument("--strategy", required=True)
     pm.add_argument("--reason", required=True)
     args = ap.parse_args(argv)
+    backend_name = os.environ.get("R2G_MEMORY_BACKEND", "legacy").strip().lower()
+    if backend_name not in {"none", "legacy", "tehm"}:
+        ap.error(f"invalid R2G_MEMORY_BACKEND={backend_name!r}")
+    if args.cmd in {"ab-enqueue", "demote"} and backend_name != "legacy":
+        ap.error(f"{args.cmd} addresses legacy recipe lifecycle and is unavailable "
+                 f"for memory backend {backend_name!r}")
     if args.cmd == "run":
         run(args.ledger, max_designs=args.max, max_workers=args.workers,
             learn=not args.no_learn)

@@ -9,6 +9,11 @@ REAL_DB, REAL_HEUR = knowledge.shipped_store()
 pytestmark = pytest.mark.skipif(not REAL_DB.is_file(), reason="no shipped knowledge store")
 
 
+@pytest.fixture(autouse=True)
+def legacy_backend(monkeypatch):
+    monkeypatch.setenv("R2G_MEMORY_BACKEND", "legacy")
+
+
 @pytest.fixture
 def shipped(tmp_path, monkeypatch):
     """A private copy of the shipped store, so a test can change it."""
@@ -31,7 +36,7 @@ def _runs(db):
 def test_env_never_points_at_the_shipped_store():
     e = knowledge.env()
     assert e["R2G_KNOWLEDGE_DB"] != str(REAL_DB) and e["R2G_HEURISTICS_PATH"] != str(REAL_HEUR)
-    assert all(v.startswith(str(knowledge.store_dir())) for v in e.values())
+    assert all(v.startswith(str(knowledge.store_dir())) for k, v in e.items() if k != "R2G_MEMORY_BACKEND")
 
 
 def test_seed_then_up_to_date(shipped):

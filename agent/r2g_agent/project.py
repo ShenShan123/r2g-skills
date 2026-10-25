@@ -47,7 +47,7 @@ if {{[llength $cand] > 0}} {{
   create_clock -name virtual_clk -period $_per
 }}
 # setup uncertainty a share of the period; hold a fixed margin (skew does not
-# scale with the period). Defaults 5 % / 20 ps / 15 %: experiments/conformance_check.py FROZEN
+# scale with the period). Defaults 5 % / 20 ps / 15 %: r2g_agent/project.py FROZEN
 set_clock_uncertainty -setup [expr {{$_per * {unc}}}] [get_clocks *]
 set_clock_uncertainty -hold {hold} [get_clocks *]
 # I/O delay as a share of the period so port paths are constrained too
@@ -302,7 +302,7 @@ def ppl_corrected_die(project: Path, log_text: str) -> dict | None:
     place_pins reports the pins, the positions the current perimeter offers and
     that perimeter. Positions scale with the perimeter, so the side that fits is
     perimeter * pins / positions / 4, plus 1 % -- the per-design correction
-    experiments/make_spec_table.py applies (the derived 1.80 positions/um is
+    r2g_agent/project.py applies (the derived 1.80 positions/um is
     slightly optimistic on small dies). Only the die grows; the rest of the spec
     is untouched. None when there is no such refusal or nothing to grow."""
     m = None

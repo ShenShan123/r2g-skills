@@ -4,6 +4,10 @@ import pytest
 @pytest.fixture(autouse=True)
 def r2g_home(tmp_path, monkeypatch):
     monkeypatch.setenv("R2G_HOME", str(tmp_path / "home"))
+    from r2g_agent import knowledge
+    monkeypatch.setattr(knowledge, "_BACKEND_NAME", None)
+    for key in ("R2G_MEMORY_BACKEND", "TEHM_DB", "TEHM_ARTIFACTS_ROOT"):
+        monkeypatch.delenv(key, raising=False)
     for k in ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"):
         monkeypatch.delenv(k, raising=False)
     return tmp_path / "home"

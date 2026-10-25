@@ -9,7 +9,16 @@ import os as _os
 from knowledge_db import now_local as _now  # invariant 32: the ONE stamp
 
 REASONS = ("unknown_symptom", "catalog_exhausted", "unseen_crash",
+           # Timing has no constrained path (e.g. the SDC clock names a port the design does
+           # not have): a task configuration error, never a repair target (failure-patterns
+           # "Unconstrained timing passed strict acceptance", 2026-10-18).
+           "timing_unconstrained",
            "repeated_regression",
+           # An invalid repair candidate or a crashed diagnose/memory consultation stopped
+           # the design (knowledge/candidate_contract.py, technical_failure.py). Not a design
+           # symptom and not an ordinary residual (failure-patterns "Memory candidate broke
+           # the executor contract", 2026-10-17).
+           "technical_failure",
            # A training/replay caller requested baseline reuse but supplied a malformed
            # return code. This is orchestration evidence failure, not a design symptom.
            "invalid_reused_flow_evidence",

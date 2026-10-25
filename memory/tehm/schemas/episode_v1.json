@@ -1,0 +1,24 @@
+{
+  "schema_version": "episode-v1",
+  "description": "Canonical repair episode graph (design doc 4.2)",
+  "required": ["episode_id", "domain", "initial_state_id", "ordered_transition_ids"],
+  "properties": {
+    "episode_id": {"type": "string", "description": "content-addressed sha1 over steps"},
+    "domain": {"type": "string"},
+    "initial_state_id": {"type": "string"},
+    "terminal_state_id": {"type": ["string", "null"]},
+    "terminal_status": {"enum": ["VERIFIED_REPAIR", "VERIFIED_OBSERVATION", "PARTIAL", "ABANDONED", "FAILED", "OPEN"]},
+    "mechanism_family": {"type": ["string", "null"]},
+    "lineage_id": {"type": ["string", "null"]},
+    "ordered_transition_ids": {"type": "array", "items": {"type": "string"}},
+    "trajectory_summary": {
+      "properties": {
+        "steps": {"type": "integer"},
+        "positive_transitions": {"type": "integer"},
+        "neutral_transitions": {"type": "integer"},
+        "harmful_transitions": {"type": "integer"},
+        "oracle_calls": {"type": ["integer", "null"]}
+      }
+    }
+  }
+}

@@ -39,7 +39,7 @@ def test_route_live_path_is_single_strategy_and_guards_growth(tmp_path, monkeypa
     assert "P1-2" not in capsys.readouterr().err
 
     # grown catalog: >1 route strategy -> the self-announcing guard fires
-    monkeypatch.setattr(dsf, "_route_strategies", lambda cfg, exclude, to_floor=False: [
+    monkeypatch.setattr(dsf, "_route_strategies", lambda cfg, exclude, to_floor=False, **_kw: [
         {"id": "route_relief", "config_edits": {"CORE_UTILIZATION": "40"},
          "rerun_from": "floorplan", "recheck": "route", "auto_apply": True, "rationale": "x"},
         {"id": "route_relief_v2", "config_edits": {"CORE_UTILIZATION": "35"},

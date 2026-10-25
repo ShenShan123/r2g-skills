@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 import knowledge_db
+import situation
 import symptom
 import tool_versions
 
@@ -201,6 +202,12 @@ def _normalize_verdict(raw: str | None, before: Any, after: Any,
             return "regression"
         if v == "win" and before is not None and after is not None and after == before:
             return "no_change"
+        # A non-improving verdict whose measured count went UP is harm, not a no-op
+        # (56 committed fix_events were 'no_change' with after > before, e.g. sky130hs
+        # li.3 density_relief 7.5 -> 10.9 avg). Guards fix_log writers other than
+        # fix_signoff.sh, which now emits 'regression' itself.
+        if v == "no_change" and before is not None and after is not None and after > before:
+            return "regression"
         # RMD3-P0-01 (failure-patterns.md #58): a row carrying MEASURED global
         # regressions (result_vector.compare fired on a fresh good->bad flip)
         # can never be positive evidence, whatever its raw verdict claims —
@@ -322,6 +329,33 @@ def _load_bench_designs(path: Path | None = None) -> set[str]:
             if d.get("design_name")}
 
 
+def prior_cell_count(conn: sqlite3.Connection, project: Path) -> int | None:
+    """This project's most-recent PRIOR non-null runs.cell_count (pins the size band
+    across an abort re-ingest — see the design_class note in ingest())."""
+    row = conn.execute(
+        "SELECT cell_count FROM runs WHERE project_path=? AND cell_count IS NOT NULL "
+        "ORDER BY julianday(ingested_at) DESC, run_id DESC LIMIT 1",
+        (str(project.resolve()),)).fetchone()
+    return row[0] if row and row[0] else None
+
+
+def project_design_class(project: Path, cfg: dict[str, str], *,
+                         cell_count: int | None = None,
+                         conn: sqlite3.Connection | None = None) -> str:
+    """THE design_class derivation, shared by ingest and diagnose_signoff_fix
+    (R2G memory redesign A3): suggest_config.detect_design_class (PPA geometry,
+    else synthesis stats). When the project carries no size evidence, the given
+    cell_count, else this project's prior stored cell_count, keeps the band stable
+    instead of spawning a '<type>/unknown' lifecycle key."""
+    import suggest_config
+    dtype, _, size = suggest_config.detect_design_class(project, cfg).partition("/")
+    if size == "unknown":
+        if cell_count is None and conn is not None:
+            cell_count = prior_cell_count(conn, project)
+        size = suggest_config.size_class(cell_count)
+    return f"{dtype}/{size}"
+
+
 def _heuristics_generation() -> int | None:
     import os
     hp = Path(os.environ.get("R2G_HEURISTICS_PATH",
@@ -438,6 +472,14 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
                 verdict = "inconclusive"
         sig, symptom_id_ = symptom.from_fix_log_row(r)
         _upsert_symptom(conn, sig, symptom_id_)
+        sit, sit_source = situation.from_fix_log_row(r, project, platform)
+        sit_id = situation.situation_id(sit) if sit else None
+        if sit:
+            conn.execute(
+                "INSERT OR IGNORE INTO situations "
+                "(situation_id, situation_json, version, first_seen) VALUES (?,?,?,?)",
+                (sit_id, json.dumps(sit, sort_keys=True), sit.get("v"),
+                 knowledge_db.now_local()))
         row_versions = r.get("tool_versions")
         tv_json = (json.dumps(row_versions, sort_keys=True)
                    if isinstance(row_versions, dict) else ambient_versions)
@@ -448,15 +490,24 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
             " before_count, after_count, before_categories_json, after_categories_json, "
             " before_status, after_status, verdict, cumulative_config_json, "
             " config_delta_json, env_flags_json, tool_versions_json, "
-            " symptom_id, signature_json, ts, provenance) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            " symptom_id, signature_json, ts, provenance, "
+            " situation_id, situation_json, situation_source) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(fix_session_id, iter, strategy) DO UPDATE SET "
             "  config_delta_json=excluded.config_delta_json, "
             "  env_flags_json=excluded.env_flags_json, "
             "  tool_versions_json=COALESCE(fix_events.tool_versions_json, "
             "                              excluded.tool_versions_json), "
             "  symptom_id=excluded.symptom_id, "
-            "  signature_json=excluded.signature_json",
+            "  signature_json=excluded.signature_json, "
+            # A pre-fix snapshot is authoritative: re-ingest never downgrades it to
+            # an ingest-time derivation (the project config may since be post-fix).
+            "  situation_id=CASE WHEN fix_events.situation_source='snapshot' "
+            "    THEN fix_events.situation_id ELSE excluded.situation_id END, "
+            "  situation_json=CASE WHEN fix_events.situation_source='snapshot' "
+            "    THEN fix_events.situation_json ELSE excluded.situation_json END, "
+            "  situation_source=CASE WHEN fix_events.situation_source='snapshot' "
+            "    THEN 'snapshot' ELSE excluded.situation_source END",
             (sid, str(project.resolve()), design_name, design_family, platform,
              r.get("check"), r.get("violation_class"), _to_int(r.get("iter")),
              r.get("strategy"), r.get("from_stage"), before, after,
@@ -465,7 +516,8 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
              verdict,
              r.get("cumulative_config"), r.get("config_delta"), r.get("env_flags"),
              tv_json, symptom_id_, json.dumps(sig, sort_keys=True),
-             r.get("ts"), "live"))
+             r.get("ts"), "live",
+             sit_id, json.dumps(sit, sort_keys=True) if sit else None, sit_source))
         n += 1
     return n
 
@@ -572,7 +624,7 @@ def _effective_stage_upgrade(run_dir: Path, flow_scope: str):
         return None
 
 
-_ORFS_ERRCODE_RE = re.compile(r"\[ERROR\s+([A-Z]{2,5}-\d{3,4})\]")
+_ORFS_ERRCODE_RE = situation.ORFS_ERRCODE_RE   # one tool-error regex for both keys
 
 
 def _orfs_fail_detail(run_dir: Path | None) -> tuple[str | None, str | None]:
@@ -1065,23 +1117,9 @@ def ingest(project: Path,
     # recipe for that symptom ever promotes (2026-06-23 audit, bug #9 — proximate
     # trigger). Pin the band from this project's most-recent PRIOR non-null cell_count;
     # the stored runs.cell_count for THIS run stays honest (NULL on an abort).
-    class_cell_count = cell_count
-    if class_cell_count is None:
-        prior = conn.execute(
-            "SELECT cell_count FROM runs WHERE project_path=? AND cell_count IS NOT NULL "
-            "ORDER BY julianday(ingested_at) DESC, run_id DESC LIMIT 1",
-            (str(project.resolve()),)).fetchone()
-        if prior and prior[0]:
-            class_cell_count = prior[0]
-    import suggest_config
-    detected_class = suggest_config.detect_design_class(project, cfg)
-    detected_type, _, detected_size = detected_class.partition("/")
-    # Preserve the existing failed-run stabilization rule: if this attempt has
-    # no current size evidence, retain the most recent known size for the same
-    # project rather than spawning a new lifecycle key.
-    if detected_size == "unknown" and class_cell_count is not None:
-        detected_size = suggest_config.size_class(class_cell_count)
-    design_class = f"{detected_type}/{detected_size}"
+    # Preserve the failed-run stabilization rule: an attempt with no current size
+    # evidence keeps the project's most recent known size (no new lifecycle key).
+    design_class = project_design_class(project, cfg, cell_count=cell_count, conn=conn)
     # Win 3 r2g-bench: flag held-out designs (by DESIGN_NAME or project basename).
     # Filtered ONLY at the learning read — failure_events/run_violations below are
     # still written for bench runs (honesty invariant H3).
@@ -1254,6 +1292,42 @@ def main() -> int:
                         "already-ingested projects under this dir, then exit.")
     args = p.parse_args()
 
+    import os
+    backend_name = os.environ.get("R2G_MEMORY_BACKEND", "legacy").strip().lower()
+    if backend_name not in {"none", "legacy", "tehm"}:
+        print(f"ERROR: invalid R2G_MEMORY_BACKEND={backend_name!r}; "
+              "refusing silent fallback", file=sys.stderr)
+        return 2
+    if os.environ.get("R2G_MEMORY_READ_ONLY_EVAL", "0") == "1":
+        if args.project is None:
+            p.error("project is required for read-only evaluation evidence")
+        # Evaluation metrics live outside the frozen memory authority.  This
+        # ingest touchpoint must not mutate either legacy or TEHM stores.
+        print(f"Ingested run_id=frozen:{args.project.name} from {args.project} "
+              f"(memory_backend={backend_name}, read_only_eval=true, receipts=0)")
+        return 0
+    if backend_name != "legacy":
+        if args.backfill is not None:
+            print(f"ERROR: --backfill is legacy-only, not valid for backend "
+                  f"{backend_name}", file=sys.stderr)
+            return 2
+        if args.project is None:
+            p.error("project is required unless --backfill is given")
+        memory_root = Path(os.environ.get("R2G_TEHM_ROOT") or
+                           Path(__file__).resolve().parents[3] / "memory")
+        if str(memory_root) not in sys.path:
+            sys.path.insert(0, str(memory_root))
+        try:
+            from runtime_router import ingest_project
+            receipt = ingest_project(args.project)
+        except Exception as exc:
+            print(f"ERROR: {backend_name} ingest unavailable (fail-closed; no "
+                  f"legacy fallback): {exc}", file=sys.stderr)
+            return 1
+        print(f"Ingested run_id={receipt['record_id']} from {args.project} "
+              f"(memory_backend={backend_name}, receipts={receipt['receipts']})")
+        return 0
+
     conn = knowledge_db.connect(args.db)
     knowledge_db.ensure_schema(conn, schema_path=args.schema)
     if args.backfill is not None:
@@ -1280,7 +1354,6 @@ def main() -> int:
     print(f"Ingested run_id={run_id} from {args.project}")
     # Autonomous post-ingest: re-derive Tier-2/Tier-3 and enforce the size policy
     # (env-gated; a failure here must never break the flow ingest above).
-    import os
     if os.environ.get("R2G_FIX_AUTOLEARN", "1") == "1":
         try:
             import fix_log_manager

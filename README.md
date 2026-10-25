@@ -60,7 +60,7 @@ KLayout 预编译包并校验 sha256，固定版本的 OpenROAD-flow-scripts，�
 几点说明：
 - 服务只在服务器本机（127.0.0.1）上监听，别人不能直接访问，必须经过 SSH 或 VS Code 转发。
 - 关掉浏览器或断开 SSH 不影响任务；服务重启后，没跑完的设计会自动接着跑。
-- 每个用户的任务、设置、密钥和修复经验库都在自己的 `~/.r2g/` 下，互不影响。
+- 每个用户的任务、设置、密钥和修复经验库都在自己的 `~/.r2g/` 下，互不影响。新仓库不附带历史实验数据或预装经验记录。
 - 同时运行几个设计、每个用几个核，在「设置 → 算力」里改；网页、命令行、对话共用这个上限。
 
 ### 三个页面
@@ -88,6 +88,23 @@ r2g status                               # 查看任务
 r2g chat                                 # 终端里对话
 r2g mcp                                  # 作为 MCP 服务器，接入 Claude Code、Cursor 等客户端
 ```
+
+## 记忆后端
+
+本地集成版的 agent 默认使用 Typed Executable Hardware Memory（TEHM）。新经验写入
+`$R2G_HOME/memory/tehm.sqlite`，内容寻址的证据放在 `$R2G_HOME/memory/artifacts/`；
+`R2G_HOME` 默认是 `~/.r2g`。TEHM 不把随仓库发布的旧知识库当作自身证据。
+
+```bash
+r2g ui                                # agent 默认 tehm
+R2G_MEMORY_BACKEND=legacy r2g ui        # 使用原有用户知识库
+R2G_MEMORY_BACKEND=none r2g ui          # 禁用经验检索与写回，保留通用修复目录
+```
+
+设置 `TEHM_DB`、`TEHM_ARTIFACTS_ROOT` 可指定已有的独立存储。后端在进程内锁定，切换后需要重启。
+直接调用 skill 脚本仍默认 `legacy`；调用时显式设置 `R2G_MEMORY_BACKEND=tehm` 及存储路径即可使用 TEHM。
+没有修复迭代的干净运行不会产生虚构的修复 transition，任务进度和签核报告仍保留在原任务目录。
+本次集成的接口兼容检查结果与已知限制记录在分支的提交说明中。
 
 ## 两种数据集
 
@@ -540,63 +557,6 @@ shadow  ──(Gate A: learner enqueues)──►  candidate  ──(A/B win)─
 Gate A fires automatically every time `learn_heuristics.learn()` runs (batch or loop).
 Gate B (seeding the dense-reward gradient) is an operator procedure — see `references/engineer-loop.md`.
 
-### Loop-closure correctness (2026-06-24 audit)
-
-An adversarial audit found the loop was **DEGRADED**: it recorded fixes and ran A/B trials but
-**never promoted a nangate45 recipe** (`promoted` flat at 2, both sky130hd, across 8 waves). Root
-cause: A/B arm dirs inherited the subject's *clean* `reports/`, so `process_one` marked each arm
-clean **before the fixer ran** — both arms did byte-identical work and the verdict was wall-clock
-noise. Eight fixes (TDD, two adversarial review rounds) closed it; the first **nangate45 promotion
-ever** (`antenna_diode_repair`, a robust cost win) followed live. Key invariants now enforced:
-
-- A/B arm copytree excludes `reports/`; a signoff `ab_arm` always runs `_run_fix` (arms genuinely diverge).
-- The success-tie cost tiebreak is **variance-aware** (no win/loss flips on jitter; `se==0` = maximal confidence).
-- Incomplete arms **escalate** instead of ingesting junk `orfs_status='unknown'` rows that poison verdicts.
-- FLW-0024 die-resize recoveries are recorded as `fix_events` (visible to learning).
-- `design_class` size band is stable across re-ingest (no candidate respawn).
-
-Known follow-ups: the A/B arm router exercises only **DRC/LVS + route** recipes — **timing/place**
-recipes (period_relax, core_util) are inert in A/B until the router is extended. Full detail:
-`references/failure-patterns.md` ("Learning-Loop Closure Failures") and
-`docs/superpowers/plans/r2g-loop-closure-audit-2026-06-23.md`.
-
-### Paper-absorption wins (branch `feat/paper-absorption`)
-
-Six capability improvements derived from published AI-EDA literature, all A/B-gated:
-
-| Win | Feature | Default |
-|-----|---------|---------|
-| **Win 1** | `outcome_score` — dense reward with Violation-Reduction Rate term; replaces pass/fail binary | on |
-| **Win 2** | Variance-aware (LCB, k=2) A/B verdict — one lucky run cannot promote a recipe | on |
-| **Win 3** | r2g-bench held-out checkpoint — `eval_heuristics.py bench` measures recipe quality on unseen designs | on |
-| **Win 4** | Vision-assisted DRC diagnosis — screenshot → Claude analysis → targeted fix | `R2G_VISION_DRC=1` |
-| **Win 5** | Pre-synthesis KNN retrieval — `suggest_config.py` finds the k nearest neighbours by pre-route features | on |
-| **Win 6** | Backend-aware synthesis retune — shadow recipe that lowers synth effort when route congests | shadow |
-
-**Route relief (route-abort as a first-class signal):** `extract_route.py` gives the fix loop
-visibility into detailed-route stage failures (congestion abort, wall-clock timeout). The
-`route_relief` strategy lowers `CORE_UTILIZATION`, re-runs from floorplan, and clears the
-congestion that would otherwise produce a silent backend abort. Validated on 18/25 sky130hd
-route-congestion designs (route-fails 33→15 across the corpus).
-
-CLI buttons:
-
-```bash
-# Fire A/B trials for pending candidates (drain the Gate A queue)
-python3 scripts/loop/engineer_loop.py ab-drain \
-    --ledger design_cases/_batch/ab.jsonl [--n-designs 2]
-
-# Parallel A/B arm flows (cap NUM_CORES so N×cores ≈ host cores)
-R2G_AB_WORKERS=4 python3 scripts/loop/engineer_loop.py ab-drain ...
-
-# Force a grandfathered recipe into candidate for explicit re-validation
-python3 scripts/loop/engineer_loop.py ab-enqueue \
-    --symptom <sid> --design-class crypto/small \
-    --platform sky130hd --strategy density_relief
-```
-
----
-
 ## Repository layout
 
 ```
@@ -766,44 +726,6 @@ mismatch (`top_pin_mismatch` / `netgen_topology` / `generic`). Designs with port
 `assign` feedthroughs additionally need the `buffer_port_feedthroughs.tcl` stage hook in
 config.mk — see `r2g-skills/signoff-loop/SKILL.md` ("Netgen LVS") and
 `references/failure-patterns.md` ("sky130 LVS").
-
----
-
-## Validated scale
-
-The skills have been validated on **682 RTL designs** spanning ICCAD benchmarks, RISC-V cores, BOOM/Chipyard, VTR, zipcpu, verilog-ethernet, wb2axip, and more. The test suite covers **1,390 tests** (pytest, as of 2026-07-16; run per-skill — `signoff-loop` 878, `def-graph` 420, `rtl-acquire` 63, `eda-install` 29), including an end-to-end synthetic corner-case suite that drives the real feature/label/graph extractors and asserts all five PyG graph views (b–f) against hand-derived ground truth. The five views are emitted as `HeteroData` by default (per-type node stores + `(src,relation,dst)` edge stores; `R2G_GRAPH_KIND=homo` for the legacy flat tensors); the verified homogeneous form remains the internal source of truth and the verifier reconstructs it independently to certify the conversion. The graph datasets carry a dedicated ground-truth harness (`tools/verify_graph_dataset.py --batch`) that verifies correctness across three dimensions — **topology** (all five views: node/edge counts, folding, block-positional order, fwd/rev edge interleaving — or hetero per-store alignment + reverse-relation symmetry), **feature statistics** (independent column re-derivation + stats-gate honesty + categorical vocab coverage), and **labels ↔ sign-off reports** (DRC/LVS clean-provenance gate, `ppa.json` geometry, the timing↔SDC clock-period transform, and RC/`C_total` vs an independent SPEF re-parse; an opt-in `--signoff-recheck` re-runs OpenROAD PDNSim to independently re-derive the IR-drop label). Every check is negative-control-tested — proven to fail on a deliberate corruption.
-
-**ORFS backend (place & route → GDS):** 476 / 495 designs from the original `rtl_designs/` batch pass (96.2%); 19 remaining have understood root causes (megadesign synthesis budgets, missing netlists, zero-logic stubs).
-
-| Pass | Outcome | Cumulative |
-|------|---------|------------|
-| Initial ORFS sweep | 402 / 495 pass | 81.2% |
-| `fix_orfs_failures.py` + retries | +59 rescued | 93.1% |
-| Long-tail (timeouts, macros, includes) | +15 rescued | **96.2%** (476 / 495) |
-
-**Signoff (682-design corpus, 2026-06-03):**
-
-| Check | Clean | Rate | Notes |
-|-------|------:|-----:|-------|
-| LVS | 607 / 674 | **90%** | 15 `fail` are KLayout-0.30.7 symmetric-matcher limits (layout correct, tool can't prove it); only 2 genuine defects (both wb2axip); 44 `incomplete` are comparer bugs or extraction timeouts, not layout errors |
-| DRC | 675 / 682 honest-verdict | **99%** coverage | `clean_beol` (BEOL-only pass) counts as clean; 7 stuck designs are verified-intractable (≥465K cells, CONTACT-op hang) |
-| RCX | 681 / 682 | **99.85%** | 1 intractable (boom_smallseboom) |
-
-A curated 70-design subset (7 families including macro designs) achieves **100% ORFS + LVS + RCX pass rate**.
-
-**sky130hd campaign (450 designs, ongoing as of 2026-06-17):**
-
-| Wave | Designs done | Pass | Notes |
-|------|------------:|-----:|-------|
-| Wave 1 (50 designs, 2026-06-11) | 50 | 50 | All signoff-clean; 13 LVS residuals root-caused and fixed (8 antenna-diode X→D; 5 port-feedthrough hook) |
-| Waves 2–5 (126 more, 2026-06-13) | 176 | 174 | 2 genuine route-congestion intractables (AES/DES on 5-layer sky130hd at min util) |
-| Route-relief campaign (2026-06-17) | 25 route-fail | **18 cleared** | `route_relief` strategy (lower CORE_UTIL) cleared 18/25 route-congestion designs; route-fail count 33→15 across corpus |
-
-274 sky130hd candidates remain queued in the resumable ledger (`tools/sky130_campaign.py status`).
-
-**Knowledge store health (live, 2026-06-17):** `fail`-rows == `orfs-fail`-events (51/51 honesty
-check); `ab_trials` non-empty (Gate A + Gate B both fired end-to-end); `density_relief` and
-`route_relief` recipes both `candidate → promoted` via real A/B verdicts.
 
 ---
 

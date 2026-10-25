@@ -1,0 +1,1067 @@
+"""Isolated executor for localized online shadow updates (P13).
+
+``local_revision`` deliberately stops at a plan.  This module is the next
+boundary: it applies a typed plan only to an in-memory SQLite backup, resolves
+the resulting shadow state, and discards that backup.  The source connection,
+canonical evidence, lifecycle authority, and production runtime are never
+mutated.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import sqlite3
+from collections.abc import Mapping, Sequence
+from dataclasses import replace
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+
+from tehm.assets.registry import register_asset, set_asset_status
+from tehm.capability.registry import register_capability
+from tehm.ids import stable_dumps
+from tehm.state.relations import record_relation
+from tehm.state.resolver import resolve_current_state
+from tehm.state.schema import ensure_state_schema
+from tehm.state.validation import RELATION_TYPES
+from tehm.verified_execution import scoped_learning_replay
+from tehm.knowledge import MechanismKnowledge
+from tehm.knowledge.revision import (
+    merge_knowledge,
+    revise_knowledge,
+    split_knowledge,
+)
+
+from .anti_forgetting import AntiForgettingWitness, raw_evidence_digest
+from .incremental_crystallize import crystallize_affected_groups
+from .local_revision import LocalizedUpdatePlan
+from .p12_shadow_trigger import P12ShadowTriggerError, P12ShadowUpdateTriggerReceipt
+from .verification import require_verified_transition
+
+
+SHADOW_UPDATE_VERSION = "shadow-update-v0.1"
+_MUTATING_TARGETS = frozenset({
+    "UPDATE_STATE_RELATION", "UPDATE_CAUSAL_KNOWLEDGE", "UPDATE_RULE",
+    "UPDATE_ASSET", "UPDATE_CAPABILITY",
+})
+_RELATION_FOR_OPERATION = {
+    "SUPERSEDE": "SUPERSEDES",
+    "INVALIDATE": "INVALIDATES",
+}
+
+
+class ShadowUpdateError(RuntimeError):
+    """A localized update cannot be applied inside the shadow boundary."""
+
+
+def _digest(value: object) -> str:
+    return "sha256:" + hashlib.sha256(stable_dumps(value).encode()).hexdigest()
+
+
+def _connection_digest(conn: sqlite3.Connection) -> str:
+    """Hash the logical SQLite state, including derived shadow rows."""
+    return _digest("\n".join(conn.iterdump()))
+
+
+def _staging_copy(conn: sqlite3.Connection) -> sqlite3.Connection:
+    staging = sqlite3.connect(":memory:")
+    staging.row_factory = sqlite3.Row
+    staging.execute("PRAGMA foreign_keys=ON")
+    conn.backup(staging)
+    return staging
+
+
+def _staging_snapshot_bytes(staging: sqlite3.Connection) -> bytes:
+    """Export a single-file snapshot and prove its full SQL state roundtrip.
+
+    SQLite deserialize cannot reopen WAL-marked input. Normalize only the
+    generated serialization's documented file-format bytes, never the source:
+    https://www.sqlite.org/c3ref/deserialize.html
+    """
+    raw = staging.serialize()
+    if len(raw) < 100 or raw[:16] != b"SQLite format 3\x00" or raw[18:20] not in (b"\x01\x01", b"\x02\x02"):
+        raise ShadowUpdateError("staging snapshot has an unsupported SQLite file header")
+    if raw[18:20] == b"\x02\x02":
+        raw = raw[:18] + b"\x01\x01" + raw[20:]
+    replay = sqlite3.connect(":memory:")
+    replay.row_factory = sqlite3.Row
+    try:
+        replay.deserialize(raw)
+        if (replay.execute("PRAGMA integrity_check").fetchone()[0] != "ok" or
+                _connection_digest(replay) != _connection_digest(staging)):
+            raise ShadowUpdateError("staging artifact did not preserve its full SQL state")
+    finally:
+        replay.close()
+    return raw
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone() is not None
+
+
+def _inventory(conn: sqlite3.Connection) -> set[str]:
+    tables = {
+        "state": ("tehm_states", "state_id"),
+        "transition": ("tehm_transitions", "transition_id"),
+        "episode": ("tehm_episodes", "episode_id"),
+        "rule": ("tehm_rules", "rule_id"),
+        "rule_revision": ("tehm_rule_revisions", "revision_id"),
+        "causal_path": ("tehm_causal_paths", "path_id"),
+        "knowledge": ("tehm_mechanism_knowledge", "knowledge_id"),
+        "asset": ("tehm_assets", "asset_id"),
+        "capability": ("tehm_capabilities", "capability_id"),
+    }
+    found: set[str] = set()
+    for object_type, (table, column) in tables.items():
+        if not _table_exists(conn, table):
+            continue
+        if object_type == "knowledge":
+            # Knowledge versions are immutable objects.  Inventorying only
+            # knowledge_id would hide a same-claim REVISE because the new
+            # version intentionally keeps the stable claim identity.
+            found.update(
+                f"knowledge:{row['knowledge_id']}@{row['version']}"
+                for row in conn.execute(
+                    "SELECT knowledge_id, version FROM tehm_mechanism_knowledge")
+            )
+        else:
+            found.update(
+                f"{object_type}:{row[0]}"
+                for row in conn.execute(f"SELECT {column} FROM {table}")
+            )
+    return found
+
+
+def _relation_inventory(conn: sqlite3.Connection) -> set[str]:
+    if not _table_exists(conn, "tehm_memory_relations"):
+        return set()
+    return {str(row[0]) for row in conn.execute(
+        "SELECT relation_id FROM tehm_memory_relations")}
+
+
+def _strings(value: object, name: str, *, allow_empty: bool = False) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple)):
+        raise ShadowUpdateError(f"shadow update {name} must be a sequence")
+    values = tuple(value)
+    if any(type(item) is not str or not item.strip() for item in values):
+        raise ShadowUpdateError(f"shadow update {name} contains invalid IDs")
+    values = tuple(sorted(item.strip() for item in values))
+    if not allow_empty and not values:
+        raise ShadowUpdateError(f"shadow update {name} must not be empty")
+    if len(set(values)) != len(values):
+        raise ShadowUpdateError(f"shadow update {name} contains duplicates")
+    return values
+
+
+def _transition_ids(plan: LocalizedUpdatePlan, evidence: Mapping) -> tuple[str, ...]:
+    raw = evidence.get("transition_ids")
+    if raw is None:
+        raw = plan.evidence_refs
+    ids = _strings(raw, "transition_ids")
+    if plan.evidence_refs and not set(ids) <= set(plan.evidence_refs):
+        raise ShadowUpdateError(
+            "shadow update transition evidence is outside the plan witness")
+    return ids
+
+
+def _verify_training_transitions(conn: sqlite3.Connection,
+                                 transition_ids: Sequence[str],
+                                 campaign_id: str,
+                                 *,
+                                 campaign_by_transition: Mapping[str, str] | None = None,
+                                 ) -> dict[str, str]:
+    ids = tuple(transition_ids)
+    if campaign_by_transition is None:
+        campaigns = {transition_id: campaign_id for transition_id in ids}
+    else:
+        campaigns = dict(campaign_by_transition)
+        if set(campaigns) != set(ids) or any(
+                type(value) is not str or not value.strip()
+                for value in campaigns.values()):
+            raise ShadowUpdateError(
+                "shadow update transition campaigns must exactly cover evidence")
+        campaigns = {
+            transition_id: value.strip()
+            for transition_id, value in campaigns.items()
+        }
+    by_id = {}
+    for transition_id in ids:
+        row = conn.execute(
+            """SELECT transition_id, split, learner_eligible
+                 FROM tehm_dataset_membership
+                WHERE campaign_id=? AND transition_id=?""",
+            (campaigns[transition_id], transition_id)).fetchone()
+        if row is None:
+            raise ShadowUpdateError(
+                "shadow update evidence lacks campaign membership")
+        by_id[transition_id] = row
+    for transition_id in transition_ids:
+        row = by_id[transition_id]
+        if row["split"] != "training" or row["learner_eligible"] != 1:
+            raise ShadowUpdateError(
+                "shadow update evidence must be learner-eligible training data")
+        try:
+            require_verified_transition(conn, transition_id)
+        except ValueError as exc:
+            raise ShadowUpdateError(str(exc)) from exc
+    return campaigns
+
+
+def _transition_campaigns(
+        evidence: Mapping, transition_ids: Sequence[str]) -> dict[str, str] | None:
+    """Decode explicit evidence-origin campaigns for structural revision.
+
+    The plan campaign identifies the evolution decision. Earlier immutable
+    training evidence may belong to a different campaign, but its membership
+    must be supplied explicitly and verified in the source database.
+    """
+    raw = evidence.get("transition_campaigns")
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise ShadowUpdateError(
+            "shadow update transition_campaigns must be an object")
+    ids = set(transition_ids)
+    if set(raw) != ids:
+        raise ShadowUpdateError(
+            "shadow update transition campaigns must exactly cover evidence")
+    result = {}
+    for transition_id, campaign in raw.items():
+        if type(campaign) is not str or not campaign.strip():
+            raise ShadowUpdateError(
+                "shadow update transition campaign is invalid")
+        result[str(transition_id)] = campaign.strip()
+    return result
+
+
+@contextmanager
+def _scoped_replay(staging: sqlite3.Connection, evidence: Mapping):
+    """Authorize frozen scoped-execution replay only on the RAM staging copy."""
+    raw = evidence.get("scoped_learning_replay")
+    if raw is None:
+        yield
+        return
+    if not isinstance(raw, Mapping):
+        raise ShadowUpdateError(
+            "shadow update scoped_learning_replay must be an object")
+    campaign_id = raw.get("campaign_id")
+    acquisitions = raw.get("acquisitions")
+    expected_digest = raw.get("expected_digest")
+    if (type(campaign_id) is not str or not campaign_id.strip() or
+            not isinstance(acquisitions, dict) or not acquisitions or
+            type(expected_digest) is not str or
+            not expected_digest.startswith("sha256:")):
+        raise ShadowUpdateError(
+            "shadow update scoped_learning_replay is incomplete")
+    try:
+        with scoped_learning_replay(
+                staging, campaign_id=campaign_id.strip(),
+                acquisitions=acquisitions,
+                expected_digest=expected_digest):
+            yield
+    except (TypeError, ValueError) as exc:
+        raise ShadowUpdateError(str(exc)) from exc
+
+
+def _knowledge_claim(value: object, name: str) -> MechanismKnowledge:
+    """Decode one immutable Knowledge claim for a shadow revision.
+
+    The evidence boundary accepts only the typed claim payload.  In
+    particular, a caller cannot smuggle an already validated/promoted status
+    through this P13 lane or rely on ``from_dict`` silently ignoring unknown
+    answer-like fields.
+    """
+    if not isinstance(value, Mapping):
+        raise ShadowUpdateError(f"shadow update {name} must be a Knowledge object")
+    forbidden = {"fix", "gold_patch", "repaired_rtl", "heldout_answer"}
+
+    def contains_forbidden(node: object) -> bool:
+        if isinstance(node, Mapping):
+            return any(key in forbidden or contains_forbidden(child)
+                       for key, child in node.items())
+        if isinstance(node, (list, tuple)):
+            return any(contains_forbidden(child) for child in node)
+        return False
+
+    if contains_forbidden(value):
+        raise ShadowUpdateError(f"shadow update {name} contains gold-answer fields")
+    try:
+        claim = MechanismKnowledge.from_dict(value)
+    except (TypeError, ValueError, KeyError) as exc:
+        raise ShadowUpdateError(f"shadow update {name} is invalid: {exc}") from exc
+    if claim.status not in {"shadow", "candidate"}:
+        raise ShadowUpdateError(
+            f"shadow update {name} cannot grant validated/production status")
+    return claim
+
+
+def _knowledge_evidence_refs(evidence: Mapping) -> tuple[dict, ...] | None:
+    """Return explicit typed evidence refs for a Knowledge revision.
+
+    Revision APIs intentionally require evidence IDs.  P13 must not invent
+    split/lineage metadata from arbitrary plan strings, so callers performing
+    a structural Knowledge update must provide the mapping form explicitly.
+    """
+    raw = evidence.get("knowledge_evidence_refs")
+    if raw is None:
+        raise ShadowUpdateError(
+            "shadow update knowledge_evidence_refs are required")
+    if isinstance(raw, (str, bytes)) or not isinstance(raw, (list, tuple)) or not raw:
+        raise ShadowUpdateError(
+            "shadow update knowledge_evidence_refs must be a non-empty sequence")
+    refs: list[dict] = []
+    for item in raw:
+        if not isinstance(item, Mapping):
+            raise ShadowUpdateError(
+                "shadow update knowledge evidence ref must be an object")
+        required = {"evidence_type", "evidence_id", "split"}
+        if not required <= set(item):
+            raise ShadowUpdateError(
+                "shadow update knowledge evidence ref is incomplete")
+        if item.get("split") != "training":
+            raise ShadowUpdateError(
+                "shadow update knowledge evidence must be training evidence")
+        refs.append(dict(item))
+    return tuple(refs)
+
+
+def _knowledge_parent_ids(plan: LocalizedUpdatePlan, evidence: Mapping,
+                          *, minimum: int = 1) -> tuple[str, ...]:
+    """Resolve and validate parent object IDs from the plan/evidence boundary."""
+    raw = evidence.get("parent_object_id")
+    if raw is None:
+        raw = evidence.get("parent_object_ids")
+    if raw is None:
+        raw = plan.knowledge_refs
+    if isinstance(raw, str):
+        raw = (raw,)
+    if not isinstance(raw, (list, tuple)):
+        raise ShadowUpdateError("shadow update knowledge parent IDs are required")
+    values = tuple(item.strip() if isinstance(item, str) else item for item in raw)
+    if any(type(item) is not str or not item for item in values):
+        raise ShadowUpdateError("shadow update knowledge parent IDs are invalid")
+    if len(set(values)) != len(values) or len(values) < minimum:
+        raise ShadowUpdateError("shadow update knowledge parent IDs are incomplete")
+    if plan.knowledge_refs and set(values) != set(plan.knowledge_refs):
+        raise ShadowUpdateError(
+            "shadow update knowledge parent IDs differ from plan knowledge_refs")
+    return tuple(values)
+
+
+def _apply_knowledge_revision(staging: sqlite3.Connection,
+                              plan: LocalizedUpdatePlan,
+                              evidence: Mapping) -> None:
+    """Apply a typed Knowledge revision only inside the staging database."""
+    operation = plan.operation
+    refs = _knowledge_evidence_refs(evidence)
+    target_scope = str(_scope(evidence).get("target_scope") or "global")
+    provenance = evidence.get("provenance")
+    created_at = evidence.get("created_at")
+    if provenance is not None and not isinstance(provenance, Mapping):
+        raise ShadowUpdateError("shadow update knowledge provenance must be an object")
+    if created_at is not None and (type(created_at) is not str or not created_at):
+        raise ShadowUpdateError("shadow update created_at must be a timestamp string")
+
+    if operation in {"REVISE", "SPECIALIZE", "GENERALIZE"}:
+        parent_ids = _knowledge_parent_ids(plan, evidence)
+        replacement = _knowledge_claim(
+            evidence.get("knowledge", evidence.get("replacement")),
+            "knowledge")
+        if operation in {"SPECIALIZE", "GENERALIZE"} and replacement.knowledge_id in {
+                parent_ids[0].rsplit("@", 1)[0]}:
+            raise ShadowUpdateError(
+                f"shadow update {operation} must create a new Knowledge identity")
+        try:
+            revise_knowledge(
+                staging, parent_object_id=parent_ids[0], replacement=replacement,
+                operation=operation, target_scope=target_scope,
+                evidence_refs=refs, provenance=provenance,
+                created_at=created_at, commit=False)
+        except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
+            raise ShadowUpdateError(str(exc)) from exc
+        return
+
+    if operation == "SPLIT":
+        parent_ids = _knowledge_parent_ids(plan, evidence)
+        raw_children = evidence.get("knowledge_children", evidence.get("children"))
+        if isinstance(raw_children, (str, bytes)) or not isinstance(raw_children, (list, tuple)):
+            raise ShadowUpdateError("shadow update knowledge split requires children")
+        children = tuple(_knowledge_claim(item, "knowledge child")
+                         for item in raw_children)
+        raw_partition = evidence.get("partition_evidence")
+        if not isinstance(raw_partition, Mapping):
+            raise ShadowUpdateError(
+                "shadow update knowledge split requires partition_evidence")
+        partition = {}
+        for child in children:
+            values = raw_partition.get(child.object_id)
+            if not isinstance(values, (list, tuple)) or not values:
+                raise ShadowUpdateError(
+                    "shadow update knowledge split partition is incomplete")
+            partition[child.object_id] = tuple(values)
+        try:
+            split_knowledge(
+                staging, parent_object_id=parent_ids[0], children=children,
+                target_scope=target_scope, partition_evidence=partition,
+                evidence_refs=refs, provenance=provenance,
+                created_at=created_at, commit=False)
+        except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
+            raise ShadowUpdateError(str(exc)) from exc
+        return
+
+    if operation == "MERGE":
+        parent_ids = _knowledge_parent_ids(plan, evidence, minimum=2)
+        replacement = _knowledge_claim(
+            evidence.get("knowledge", evidence.get("replacement")),
+            "knowledge")
+        raw_witness = evidence.get("merge_witness")
+        if not isinstance(raw_witness, Mapping):
+            raise ShadowUpdateError("shadow update knowledge merge requires merge_witness")
+        witness = {}
+        for parent_id in parent_ids:
+            values = raw_witness.get(parent_id)
+            if not isinstance(values, (list, tuple)) or not values:
+                raise ShadowUpdateError(
+                    "shadow update knowledge merge witness is incomplete")
+            witness[parent_id] = tuple(values)
+        try:
+            merge_knowledge(
+                staging, parent_object_ids=parent_ids, replacement=replacement,
+                target_scope=target_scope, merge_witness=witness,
+                evidence_refs=refs, provenance=provenance,
+                created_at=created_at, commit=False)
+        except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
+            raise ShadowUpdateError(str(exc)) from exc
+        return
+
+    raise ShadowUpdateError(
+        f"shadow update Knowledge operation is unsupported: {operation}")
+
+
+def _scope(evidence: Mapping) -> dict:
+    value = evidence.get("scope") or {}
+    if not isinstance(value, Mapping):
+        raise ShadowUpdateError("shadow update scope must be an object")
+    try:
+        decoded = json.loads(stable_dumps(dict(value)))
+    except (TypeError, ValueError) as exc:
+        raise ShadowUpdateError("shadow update scope is not JSON-serializable") from exc
+    if not isinstance(decoded, dict):  # pragma: no cover
+        raise ShadowUpdateError("shadow update scope must be an object")
+    return decoded
+
+
+def _p12_shadow_trigger(plan: LocalizedUpdatePlan,
+                        evidence: Mapping) -> P12ShadowUpdateTriggerReceipt | None:
+    """Validate the explicit P12 witness before applying a P13 shadow plan."""
+    raw = evidence.get("p12_shadow_trigger")
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise ShadowUpdateError("shadow update P12 trigger must be an object")
+    try:
+        trigger = P12ShadowUpdateTriggerReceipt.from_dict(raw)
+    except P12ShadowTriggerError as exc:
+        raise ShadowUpdateError(str(exc)) from exc
+    if trigger.triggered is not True:
+        raise ShadowUpdateError(
+            "shadow update cannot consume a non-triggering P12 receipt")
+    if not trigger.evolution_reasons:
+        raise ShadowUpdateError(
+            "shadow update P12 trigger lacks an evolution signal")
+    if trigger.campaign_id != plan.campaign_id:
+        raise ShadowUpdateError(
+            "shadow update P12 trigger campaign does not match plan")
+    if trigger.learner_eligible is not True or plan.learner_eligible is not True:
+        raise ShadowUpdateError(
+            "shadow update P12 trigger requires learner-eligible plan evidence")
+    if trigger.receipt_digest not in plan.evidence_refs:
+        raise ShadowUpdateError(
+            "shadow update plan must explicitly witness the P12 trigger digest")
+    return trigger
+
+
+def _anti_forgetting_witness(
+        plan: LocalizedUpdatePlan,
+        evidence: Mapping,
+        ) -> AntiForgettingWitness | None:
+    """Validate the four independent anti-forgetting gates for a mutation."""
+    raw = evidence.get("anti_forgetting")
+    if raw is None:
+        return None
+    try:
+        witness = AntiForgettingWitness.from_dict(raw)
+    except (TypeError, ValueError) as exc:
+        raise ShadowUpdateError(str(exc)) from exc
+    if witness.receipt_digest not in plan.evidence_refs:
+        raise ShadowUpdateError(
+            "shadow update plan must explicitly witness the anti-forgetting digest")
+    if witness.eligible is not True:
+        raise ShadowUpdateError(
+            "shadow update anti-forgetting witness is not eligible")
+    return witness
+
+
+def _relation_payload(plan: LocalizedUpdatePlan, evidence: Mapping) -> dict:
+    raw = evidence.get("relation")
+    if not isinstance(raw, Mapping):
+        raise ShadowUpdateError(
+            "shadow update relation evidence is required for this target")
+    relation = dict(raw)
+    required = {"source_type", "source_id", "relation_type", "target_type", "target_id"}
+    if not required <= set(relation):
+        raise ShadowUpdateError("shadow update relation evidence is incomplete")
+    relation_type = relation["relation_type"]
+    if relation_type not in RELATION_TYPES:
+        raise ShadowUpdateError("shadow update relation type is invalid")
+    expected = _RELATION_FOR_OPERATION.get(plan.operation)
+    if expected is not None and relation_type != expected:
+        raise ShadowUpdateError(
+            f"shadow update {plan.operation} requires relation {expected}")
+    refs = relation.get("evidence_refs", plan.evidence_refs)
+    relation["evidence_refs"] = list(_strings(refs, "relation evidence_refs"))
+    relation["scope"] = relation.get("scope", evidence.get("scope") or {})
+    relation["authority_ref"] = None
+    return relation
+
+
+def _apply_relation(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
+                    evidence: Mapping) -> str:
+    relation = _relation_payload(plan, evidence)
+    try:
+        receipt = record_relation(
+            staging, source_type=relation["source_type"],
+            source_id=relation["source_id"], relation_type=relation["relation_type"],
+            target_type=relation["target_type"], target_id=relation["target_id"],
+            scope=relation["scope"], evidence_refs=relation["evidence_refs"],
+            authority_ref=None, created_at=evidence.get("created_at"), commit=False)
+    except (TypeError, ValueError, KeyError) as exc:
+        raise ShadowUpdateError(str(exc)) from exc
+    return receipt.relation_id
+
+
+def _apply_asset(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
+                 evidence: Mapping) -> tuple[str, ...]:
+    if plan.operation in {"ADD", "REVISE"}:
+        raw = evidence.get("asset")
+        if not isinstance(raw, Mapping):
+            raise ShadowUpdateError("shadow asset update requires asset evidence")
+        required = {
+            "asset_type", "name", "version", "definition", "input_contract",
+            "output_contract", "verifier_contract", "compatibility",
+        }
+        if not required <= set(raw):
+            raise ShadowUpdateError("shadow asset evidence is incomplete")
+        data = dict(raw)
+        try:
+            receipt = register_asset(
+                staging, asset_type=data["asset_type"], name=data["name"],
+                version=data["version"], definition=dict(data["definition"]),
+                input_contract=dict(data["input_contract"]),
+                output_contract=dict(data["output_contract"]),
+                verifier_contract=dict(data["verifier_contract"]),
+                compatibility=dict(data["compatibility"]),
+                provenance={**dict(data.get("provenance") or {}),
+                            "shadow_update": plan.plan_digest},
+                target_scope=data.get("target_scope"), commit=False)
+            set_asset_status(
+                staging, asset_id=receipt.asset_id, target_scope=receipt.target_scope,
+                status="shadow", provenance={
+                    "authority": "shadow_update", "plan_digest": plan.plan_digest,
+                    "campaign_id": plan.campaign_id,
+                }, commit=False)
+        except (TypeError, ValueError, KeyError) as exc:
+            raise ShadowUpdateError(str(exc)) from exc
+        return (f"asset:{receipt.asset_id}",)
+    if plan.operation in {"SUPERSEDE", "INVALIDATE"}:
+        asset_id = evidence.get("asset_id")
+        if asset_id is None and plan.asset_refs:
+            asset_id = plan.asset_refs[0]
+        if type(asset_id) is not str or not asset_id:
+            raise ShadowUpdateError("shadow asset invalidation requires asset_id")
+        return (_apply_relation(staging, plan, {
+            **dict(evidence),
+            "relation": {
+                "source_type": "transition", "source_id": plan.transition_id,
+                "relation_type": "INVALIDATES", "target_type": "asset",
+                "target_id": asset_id, "evidence_refs": list(plan.evidence_refs),
+            },
+        }),)
+    if plan.operation == "REACTIVATE":
+        asset_id = evidence.get("asset_id")
+        if asset_id is None and plan.asset_refs:
+            asset_id = plan.asset_refs[0]
+        target_scope = evidence.get("target_scope") or "global"
+        if type(asset_id) is not str or not asset_id:
+            raise ShadowUpdateError("shadow asset reactivation requires asset_id")
+        try:
+            set_asset_status(
+                staging, asset_id=asset_id, target_scope=target_scope, status="shadow",
+                provenance={"authority": "shadow_update", "plan_digest": plan.plan_digest},
+                commit=False)
+        except (TypeError, ValueError, KeyError) as exc:
+            raise ShadowUpdateError(str(exc)) from exc
+        return (f"asset:{asset_id}",)
+    raise ShadowUpdateError(
+        f"shadow asset operation is unsupported: {plan.operation}")
+
+
+def _apply_capability(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
+                      evidence: Mapping) -> tuple[str, ...]:
+    if plan.operation in {"ADD", "REVISE"}:
+        raw = evidence.get("capability")
+        if not isinstance(raw, Mapping):
+            raise ShadowUpdateError(
+                "shadow capability update requires capability evidence")
+        required = {"mechanism_family", "applicability"}
+        if not required <= set(raw):
+            raise ShadowUpdateError("shadow capability evidence is incomplete")
+        try:
+            receipt = register_capability(
+                staging, mechanism_family=raw["mechanism_family"],
+                applicability=raw["applicability"],
+                required_rules=list(raw.get("required_rules") or ()),
+                required_assets=list(raw.get("required_assets") or ()),
+                obligations=dict(raw.get("obligations") or {}),
+                budget=dict(raw.get("budget") or {}), status="candidate",
+                version=raw.get("version", 1),
+                provenance={**dict(raw.get("provenance") or {}),
+                            "shadow_update": plan.plan_digest}, commit=False)
+        except (TypeError, ValueError, KeyError) as exc:
+            raise ShadowUpdateError(str(exc)) from exc
+        return (f"capability:{receipt.capability_id}",)
+    if plan.operation in {"SUPERSEDE", "INVALIDATE"}:
+        capability_id = evidence.get("capability_id")
+        if capability_id is None and plan.capability_refs:
+            capability_id = plan.capability_refs[0]
+        if type(capability_id) is not str or not capability_id:
+            raise ShadowUpdateError("shadow capability invalidation requires capability_id")
+        return (_apply_relation(staging, plan, {
+            **dict(evidence),
+            "relation": {
+                "source_type": "transition", "source_id": plan.transition_id,
+                "relation_type": "INVALIDATES", "target_type": "capability",
+                "target_id": capability_id, "evidence_refs": list(plan.evidence_refs),
+            },
+        }),)
+    raise ShadowUpdateError(
+        f"shadow capability operation is unsupported: {plan.operation}")
+
+
+@dataclass(frozen=True)
+class AppliedShadowUpdateReceipt:
+    """Content-addressed evidence that a plan was applied and discarded in staging."""
+
+    plan_digest: str
+    transition_id: str
+    campaign_id: str
+    update_target: str
+    operation: str
+    created_object_ids: tuple[str, ...]
+    created_relation_ids: tuple[str, ...]
+    before_resolution_id: str
+    after_resolution_id: str
+    canonical_rows_changed: bool
+    production_authority_changed: bool
+    replay_digest: str
+    source_digest_before: str
+    source_digest_after: str
+    staging_digest_before: str
+    staging_digest_after: str
+    raw_evidence_before_digest: str
+    raw_evidence_after_digest: str
+    raw_evidence_preserved: bool
+    staging_discarded: bool = True
+    canonical_memory_mutation: str = "none"
+    lifecycle_mutation: str = "isolated_staging_only"
+    production_runtime_imported: bool = False
+    version: str = SHADOW_UPDATE_VERSION
+    metadata: dict = field(default_factory=dict)
+
+    def _payload(self) -> dict:
+        return {
+            "version": self.version, "plan_digest": self.plan_digest,
+            "transition_id": self.transition_id, "campaign_id": self.campaign_id,
+            "update_target": self.update_target, "operation": self.operation,
+            "created_object_ids": list(self.created_object_ids),
+            "created_relation_ids": list(self.created_relation_ids),
+            "before_resolution_id": self.before_resolution_id,
+            "after_resolution_id": self.after_resolution_id,
+            "canonical_rows_changed": self.canonical_rows_changed,
+            "production_authority_changed": self.production_authority_changed,
+            "source_digest_before": self.source_digest_before,
+            "source_digest_after": self.source_digest_after,
+            "staging_digest_before": self.staging_digest_before,
+            "staging_digest_after": self.staging_digest_after,
+            "raw_evidence_before_digest": self.raw_evidence_before_digest,
+            "raw_evidence_after_digest": self.raw_evidence_after_digest,
+            "raw_evidence_preserved": self.raw_evidence_preserved,
+            "staging_discarded": self.staging_discarded,
+            "canonical_memory_mutation": self.canonical_memory_mutation,
+            "lifecycle_mutation": self.lifecycle_mutation,
+            "production_runtime_imported": self.production_runtime_imported,
+            "metadata": self.metadata,
+        }
+
+    def __post_init__(self) -> None:
+        for name in ("plan_digest", "source_digest_before", "source_digest_after",
+                     "staging_digest_before", "staging_digest_after",
+                     "raw_evidence_before_digest", "raw_evidence_after_digest",
+                     "before_resolution_id", "after_resolution_id",
+                     "transition_id", "campaign_id", "update_target", "operation"):
+            if type(getattr(self, name)) is not str or not getattr(self, name):
+                raise ShadowUpdateError(f"shadow update receipt {name} is invalid")
+        if self.update_target not in _MUTATING_TARGETS | {"UPDATE_NONE"}:
+            raise ShadowUpdateError("shadow update receipt target is invalid")
+        if self.canonical_rows_changed or self.production_authority_changed:
+            raise ShadowUpdateError("shadow update receipt crosses authority boundary")
+        if self.staging_discarded is not True or self.production_runtime_imported is not False:
+            raise ShadowUpdateError("shadow update staging safety flags are invalid")
+        if self.canonical_memory_mutation != "none" or self.lifecycle_mutation != "isolated_staging_only":
+            raise ShadowUpdateError("shadow update mutation scope is invalid")
+        if self.raw_evidence_preserved is not True:
+            raise ShadowUpdateError("shadow update did not preserve canonical evidence")
+        if not isinstance(self.created_object_ids, tuple) or not isinstance(self.created_relation_ids, tuple):
+            raise ShadowUpdateError("shadow update receipt IDs are invalid")
+        if not isinstance(self.metadata, dict):
+            raise ShadowUpdateError("shadow update receipt metadata is invalid")
+        expected = _digest(self._payload())
+        if self.replay_digest != expected:
+            raise ShadowUpdateError("shadow update receipt replay digest mismatch")
+
+    @property
+    def receipt_digest(self) -> str:
+        # Do not hash ``to_dict()`` here: that method includes this property.
+        return _digest({**self._payload(), "replay_digest": self.replay_digest})
+
+    def to_dict(self) -> dict:
+        return {**self._payload(), "replay_digest": self.replay_digest,
+                "receipt_digest": self.receipt_digest}
+
+    @classmethod
+    def from_dict(cls, payload: object) -> "AppliedShadowUpdateReceipt":
+        if not isinstance(payload, Mapping):
+            raise ShadowUpdateError("shadow update receipt must be an object")
+        required = set(cls.__dataclass_fields__) - {"version", "metadata"}
+        if not required <= set(payload):
+            raise ShadowUpdateError("shadow update receipt is missing fields")
+        receipt = cls(
+            plan_digest=payload["plan_digest"], transition_id=payload["transition_id"],
+            campaign_id=payload["campaign_id"], update_target=payload["update_target"],
+            operation=payload["operation"],
+            created_object_ids=tuple(payload["created_object_ids"]),
+            created_relation_ids=tuple(payload["created_relation_ids"]),
+            before_resolution_id=payload["before_resolution_id"],
+            after_resolution_id=payload["after_resolution_id"],
+            canonical_rows_changed=payload["canonical_rows_changed"],
+            production_authority_changed=payload["production_authority_changed"],
+            replay_digest=payload["replay_digest"],
+            source_digest_before=payload["source_digest_before"],
+            source_digest_after=payload["source_digest_after"],
+            staging_digest_before=payload["staging_digest_before"],
+            staging_digest_after=payload["staging_digest_after"],
+            raw_evidence_before_digest=payload["raw_evidence_before_digest"],
+            raw_evidence_after_digest=payload["raw_evidence_after_digest"],
+            raw_evidence_preserved=payload["raw_evidence_preserved"],
+            staging_discarded=payload["staging_discarded"],
+            canonical_memory_mutation=payload["canonical_memory_mutation"],
+            lifecycle_mutation=payload["lifecycle_mutation"],
+            production_runtime_imported=payload["production_runtime_imported"],
+            version=payload.get("version", SHADOW_UPDATE_VERSION),
+            metadata=dict(payload.get("metadata") or {}),
+        )
+        supplied = payload.get("receipt_digest")
+        if supplied is not None and supplied != receipt.receipt_digest:
+            raise ShadowUpdateError("shadow update receipt digest mismatch")
+        return receipt
+
+
+def _gap_source_for_plan(plan: LocalizedUpdatePlan, source: sqlite3.Connection,
+                         evidence: Mapping):
+    """Require independent pre-update source replay before staging writes."""
+    from .gap_source import CapabilityGapSourceReceipt, verify_capability_gap_source
+    from .reason_derivation import EvolutionReasonDerivationReceipt
+    from .admission import EvolutionAdmissionReceipt
+
+    raw = evidence.get("capability_gap_source")
+    gap_add = plan.update_target == "UPDATE_CAUSAL_KNOWLEDGE" and plan.operation == "ADD"
+    if raw is None and not gap_add and plan.failure_type != "CAPABILITY_GAP":
+        return None
+    if not gap_add or plan.failure_type != "CAPABILITY_GAP":
+        raise ShadowUpdateError("capability gap requires Knowledge/Asset ADD, not rule or revision")
+    try:
+        mapped = raw.to_dict() if isinstance(raw, CapabilityGapSourceReceipt) else raw
+        receipt = CapabilityGapSourceReceipt.from_dict(mapped)
+        checked = verify_capability_gap_source(source, receipt)
+        reason = EvolutionReasonDerivationReceipt.from_dict(receipt.reason)
+        admission = EvolutionAdmissionReceipt.from_dict(receipt.admission)
+    except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
+        raise ShadowUpdateError("Knowledge ADD requires a valid capability-gap source witness") from exc
+    if not checked.get("verified") or not checked.get("eligible"):
+        raise ShadowUpdateError("capability-gap source witness does not replay the pre-update DB")
+    if (plan.campaign_id != receipt.campaign_id or plan.transition_id not in receipt.transition_ids or
+            plan.knowledge_refs or plan.rule_refs):
+        raise ShadowUpdateError("capability-gap ADD plan is not bound to its independent source")
+    required = {receipt.receipt_digest, reason.receipt_digest, admission.receipt_digest, *receipt.transition_ids}
+    if not required <= set(plan.evidence_refs):
+        raise ShadowUpdateError("capability-gap ADD plan must witness source/reason/admission digests")
+    return receipt
+
+
+def _apply_gap_knowledge_add(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
+                             evidence: Mapping) -> dict[str, str]:
+    """Derive an actual new claim from a verified replicated training path.
+
+    The paired asset must replay the core template builder and the actual
+    intervention action. Neither a replacement claim nor an arbitrary asset
+    payload is an authority input. All changes belong to one staging savepoint.
+    """
+    from tehm.assets.receipts import CapabilityGapReceipt
+    from tehm.assets.synthesis import AssetProposal, build_rtl_asset_proposal
+    from tehm.assets.registry import asset_content_digest
+    from tehm.assets.guard_binding import CONTRACT, SPEC
+    from tehm.causal.mechanism import load_transition_facts
+    from tehm.causal.evidence_level import evidence_rank
+    from tehm.knowledge.builder import build_knowledge_from_path
+    from tehm.knowledge.registry import register_knowledge
+    from .gap_source import CapabilityGapSourceReceipt
+
+    raw = evidence["capability_gap_source"]
+    source = CapabilityGapSourceReceipt.from_dict(raw.to_dict() if isinstance(raw, CapabilityGapSourceReceipt) else raw)
+    gap = CapabilityGapReceipt.from_dict(source.gap)
+    ids = _transition_ids(plan, evidence)
+    campaigns = _verify_training_transitions(staging, ids, plan.campaign_id,
+        campaign_by_transition=_transition_campaigns(evidence, ids))
+    if any(campaign != source.campaign_id for campaign in campaigns.values()):
+        raise ShadowUpdateError("gap ADD path must use the witnessed training campaign")
+    path_id = evidence.get("knowledge_path_id")
+    if type(path_id) is not str or path_id not in plan.evidence_refs:
+        raise ShadowUpdateError("gap ADD requires an explicitly witnessed training causal path")
+    row = staging.execute("SELECT * FROM tehm_causal_paths WHERE path_id=?", (path_id,)).fetchone()
+    if row is None:
+        raise ShadowUpdateError("gap ADD training causal path is missing")
+    try:
+        path_sources = tuple(json.loads(row["source_transitions_json"]))
+        if (len(path_sources) != len(set(path_sources)) or set(path_sources) != set(ids) or
+                not set(source.transition_ids) <= set(ids)):
+            raise ValueError("gap ADD path source set differs from its verified training evidence")
+        knowledge = build_knowledge_from_path(staging, path_id, status="candidate")
+        if (knowledge.mechanism_family != gap.mechanism_family or
+                knowledge.compatibility_profile != gap.compatibility_profile or
+                evidence_rank(knowledge.evidence_level) < evidence_rank("L3_REPLICATED_EFFECT") or
+                tuple(knowledge.support_lineages) != tuple(gap.evidence_lineages) or knowledge.version != 1):
+            raise ValueError("gap ADD requires a new source-matched replicated Knowledge identity")
+        if staging.execute("SELECT 1 FROM tehm_mechanism_knowledge WHERE knowledge_id=?",
+                (knowledge.knowledge_id,)).fetchone() is not None:
+            raise ValueError("gap ADD cannot revise an existing Knowledge identity")
+        first = load_transition_facts(staging, source.transition_ids[0])
+        supplied = evidence.get("asset")
+        proposal = supplied if isinstance(supplied, AssetProposal) else AssetProposal(**dict(supplied))
+        expected = build_rtl_asset_proposal(gap, name=proposal.name,
+            transformation_family=first.action["transformation_family"],
+            action_payload_template=first.action["payload"], compatibility_profile=gap.compatibility_profile,
+            verifier_obligations=("RTL_COMPILE_PASS", "RTL_TARGET_TEST_PASS", "RTL_FROZEN_REGRESSION_PASS"),
+            mechanism_knowledge_ids=(knowledge.object_id,))
+        if proposal.definition.get("binding_template") is not None:
+            if first.action["domain"] != SPEC["domain"] or gap.compatibility_profile != SPEC["profile"]:
+                raise ValueError("gap ADD asset has an unsupported source binding template")
+            expected = replace(expected, definition={**expected.definition, "binding_template": {
+                "contract": CONTRACT, "spec": dict(SPEC), "spec_digest": _digest(SPEC)}})
+        if proposal.to_dict() != expected.to_dict():
+            raise ValueError("gap ADD asset does not replay the core source-grounded template builder")
+        asset_digest = asset_content_digest(expected.to_dict())
+        asset_id = "asset_" + asset_digest.split(":", 1)[1][:24]
+        if staging.execute("SELECT 1 FROM tehm_assets WHERE asset_id=?", (asset_id,)).fetchone() is not None:
+            raise ValueError("gap ADD cannot substitute an existing Asset")
+        if plan.asset_refs and plan.asset_refs != (asset_id,):
+            raise ValueError("gap ADD asset differs from the plan's explicit object identity")
+        provenance = {"authority": "capability-gap-shadow-add", "plan_digest": plan.plan_digest,
+            "source_witness_digest": source.receipt_digest, "source_memory_digest": source.source_memory_digest,
+            "reason_digest": _digest(source.reason), "admission_digest": _digest(source.admission)}
+        register_knowledge(staging, knowledge, target_scope=str(_scope(evidence).get("target_scope") or "global"),
+            provenance=provenance, created_at=evidence.get("created_at"), commit=False,
+            evidence_refs=[{"evidence_type": "causal_path", "evidence_id": path_id, "split": "training",
+                # One replicated path is one immutable evidence object. Its
+                # verified sources and support_lineages carry the independent
+                # lineage witnesses; the registry key does not include lineage.
+                "lineage_id": None, "evidence_level": knowledge.evidence_level}])
+        asset_evidence = {**evidence, "asset": {**expected.to_dict(), "provenance": {
+            **expected.provenance, **provenance}, "target_scope": _scope(evidence).get("target_scope")}}
+        _apply_asset(staging, plan, asset_evidence)
+    except (TypeError, ValueError, KeyError, sqlite3.Error) as exc:
+        raise ShadowUpdateError(str(exc)) from exc
+    return campaigns
+
+
+def _apply_plan(staging: sqlite3.Connection, plan: LocalizedUpdatePlan,
+                evidence: Mapping) -> dict[str, str]:
+    if plan.update_target == "UPDATE_NONE":
+        if plan.operation != "RETAIN":
+            raise ShadowUpdateError("UPDATE_NONE must remain RETAIN")
+        return {}
+    if plan.update_target not in _MUTATING_TARGETS:
+        raise ShadowUpdateError("shadow update target is invalid")
+    if plan.operation == "RETAIN":
+        raise ShadowUpdateError("mutating shadow target cannot use RETAIN")
+    if plan.update_target == "UPDATE_CAUSAL_KNOWLEDGE" and plan.operation == "ADD":
+        return _apply_gap_knowledge_add(staging, plan, evidence)
+    if plan.update_target == "UPDATE_CAUSAL_KNOWLEDGE" and plan.operation in {
+            "REVISE", "SPECIALIZE", "GENERALIZE", "SPLIT", "MERGE"}:
+        # Structural Knowledge operations are distinct from rule
+        # crystallization.  They create immutable claim objects and semantic
+        # relation edges in staging; no lifecycle/authority row is promoted.
+        ids = _transition_ids(plan, evidence)
+        campaigns = _verify_training_transitions(
+            staging, ids, plan.campaign_id,
+            campaign_by_transition=_transition_campaigns(evidence, ids))
+        _apply_knowledge_revision(staging, plan, evidence)
+        return campaigns
+    if plan.update_target == "UPDATE_RULE":
+        ids = _transition_ids(plan, evidence)
+        _verify_training_transitions(staging, ids, plan.campaign_id)
+        if plan.operation not in {"ADD", "REVISE"}:
+            raise ShadowUpdateError(
+                "causal/rule shadow crystallization supports ADD or REVISE only")
+        try:
+            report = crystallize_affected_groups(
+                staging, ids, campaign_id=plan.campaign_id, created_at=evidence.get("created_at"))
+        except (TypeError, ValueError, RuntimeError) as exc:
+            raise ShadowUpdateError(str(exc)) from exc
+        if not report.rules:
+            raise ShadowUpdateError("shadow crystallization produced no rule")
+        return {transition_id: plan.campaign_id for transition_id in ids}
+    if plan.update_target == "UPDATE_STATE_RELATION":
+        _apply_relation(staging, plan, evidence)
+        return {}
+    if plan.update_target == "UPDATE_ASSET":
+        _apply_asset(staging, plan, evidence)
+        return {}
+    if plan.update_target == "UPDATE_CAPABILITY":
+        _apply_capability(staging, plan, evidence)
+        return {}
+    raise ShadowUpdateError("unsupported shadow update target")
+
+
+def apply_localized_update_shadow(
+        plan: LocalizedUpdatePlan,
+        current_state: sqlite3.Connection,
+        evidence: Mapping | None = None, *,
+        staging_artifact_sink=None) -> AppliedShadowUpdateReceipt:
+    """Apply one localized plan to staging and discard it.
+
+    ``evidence`` is intentionally explicit.  Causal/rule updates require
+    learner-eligible verified ``transition_ids``; relation/asset/capability
+    updates require typed payloads.  Caller booleans are never interpreted as
+    authority, and the source connection is checked byte-for-byte by logical
+    SQLite digest before returning. Optional staging_artifact_sink receives
+    serialized immutable bytes only, never the mutable staging connection.
+    This enables subsequent isolated runtime trials without granting authority.
+    """
+    if not isinstance(plan, LocalizedUpdatePlan):
+        raise TypeError("shadow update requires LocalizedUpdatePlan")
+    if plan.shadow_only is not True:
+        raise ShadowUpdateError("shadow update plan must be shadow-only")
+    if plan.update_target != "UPDATE_NONE" and plan.learner_eligible is not True:
+        raise ShadowUpdateError(
+            "mutating shadow update requires learner-eligible evidence")
+    if not isinstance(current_state, sqlite3.Connection):
+        raise TypeError("shadow update current_state must be sqlite3.Connection")
+    if evidence is None:
+        evidence = {}
+    if not isinstance(evidence, Mapping):
+        raise ShadowUpdateError("shadow update evidence must be an object")
+    if staging_artifact_sink is not None and not callable(staging_artifact_sink):
+        raise TypeError("staging artifact sink must be callable")
+    gap_source = _gap_source_for_plan(plan, current_state, evidence)
+    p12_trigger = _p12_shadow_trigger(plan, evidence)
+    anti_forgetting = _anti_forgetting_witness(plan, evidence)
+    if plan.update_target != "UPDATE_NONE" and anti_forgetting is None:
+        raise ShadowUpdateError(
+            "mutating shadow update requires an anti-forgetting witness")
+    source_before = _connection_digest(current_state)
+    if gap_source is not None and source_before != gap_source.source_memory_digest:
+        raise ShadowUpdateError("capability-gap source changed before staging")
+    raw_before = raw_evidence_digest(current_state)
+    staging = _staging_copy(current_state)
+    ensure_state_schema(staging, commit=False)
+    staging_before = _connection_digest(staging)
+    inventory_before = _inventory(staging)
+    relation_before = _relation_inventory(staging)
+    scope = _scope(evidence)
+    savepoint = "tehm_shadow_update_v1"
+    staging.execute(f"SAVEPOINT {savepoint}")
+    try:
+        before = resolve_current_state(staging, scope, mode="shadow", persist=False)
+        if (plan.state_resolution_id is not None and
+                plan.state_resolution_id != before.resolution_id):
+            raise ShadowUpdateError(
+                "shadow update plan state resolution does not match current state")
+        with _scoped_replay(staging, evidence):
+            training_campaigns = _apply_plan(staging, plan, evidence)
+        after = resolve_current_state(staging, scope, mode="shadow", persist=False)
+        raw_after = raw_evidence_digest(staging)
+        if raw_after != raw_before:
+            raise ShadowUpdateError("shadow update changed canonical evidence in staging")
+        staging.execute(f"RELEASE SAVEPOINT {savepoint}")
+    except Exception:
+        staging.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        staging.execute(f"RELEASE SAVEPOINT {savepoint}")
+        staging.close()
+        raise
+    staging_after = _connection_digest(staging)
+    created_objects = tuple(sorted(_inventory(staging) - inventory_before))
+    created_relations = tuple(sorted(_relation_inventory(staging) - relation_before))
+    try:
+        if staging_artifact_sink is not None:
+            staging_artifact_sink(_staging_snapshot_bytes(staging))
+        source_after = _connection_digest(current_state)
+        raw_source_after = raw_evidence_digest(current_state)
+        if source_after != source_before:
+            raise ShadowUpdateError("source TEHM connection changed during shadow update")
+        if raw_source_after != raw_before:
+            raise ShadowUpdateError("source canonical evidence changed during shadow update")
+        payload = {
+            "version": SHADOW_UPDATE_VERSION, "plan_digest": plan.plan_digest,
+            "transition_id": plan.transition_id, "campaign_id": plan.campaign_id,
+            "update_target": plan.update_target, "operation": plan.operation,
+            "created_object_ids": tuple(created_objects),
+            "created_relation_ids": tuple(created_relations),
+            "before_resolution_id": before.resolution_id,
+            "after_resolution_id": after.resolution_id,
+            "canonical_rows_changed": False, "production_authority_changed": False,
+            "source_digest_before": source_before, "source_digest_after": source_after,
+            "staging_digest_before": staging_before, "staging_digest_after": staging_after,
+            "raw_evidence_before_digest": raw_before,
+            "raw_evidence_after_digest": raw_after,
+            "raw_evidence_preserved": True,
+            "staging_discarded": True, "canonical_memory_mutation": "none",
+            "lifecycle_mutation": "isolated_staging_only",
+            "production_runtime_imported": False,
+            "metadata": {
+                "scope": scope,
+                "shadow_update_version": SHADOW_UPDATE_VERSION,
+                **({"materialized_at": evidence["created_at"]}
+                   if evidence.get("created_at") is not None else {}),
+                **({"anti_forgetting_witness_digest": anti_forgetting.receipt_digest}
+                   if anti_forgetting is not None else {}),
+                **({"p12_shadow_trigger_digest": p12_trigger.receipt_digest}
+                   if p12_trigger is not None else {}),
+                **({"training_evidence_campaigns": dict(sorted(
+                    training_campaigns.items()))} if training_campaigns else {}),
+                **({"capability_gap_source_receipt": {**gap_source.to_dict(),
+                    "receipt_id": gap_source.receipt_id, "receipt_digest": gap_source.receipt_digest}}
+                   if gap_source is not None else {}),
+            },
+        }
+        receipt = AppliedShadowUpdateReceipt(
+            **payload, replay_digest=_digest(payload))
+    finally:
+        staging.close()
+    return receipt
+
+
+__all__ = [
+    "SHADOW_UPDATE_VERSION", "ShadowUpdateError",
+    "AppliedShadowUpdateReceipt", "apply_localized_update_shadow",
+]

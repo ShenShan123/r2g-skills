@@ -12,7 +12,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import diagnose_signoff_fix as d
+
+pytestmark = pytest.mark.usefixtures("empty_user_knowledge")
 
 MOD = Path(__file__).resolve().parents[1] / "scripts" / "reports" / "diagnose_signoff_fix.py"
 

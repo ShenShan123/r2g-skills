@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tehm://schemas/typed_utility_contract_v1",
+  "title": "TEHM Typed Utility Contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "contract_id",
+    "action_signature",
+    "primary_objective",
+    "hard_constraints",
+    "resource_budgets",
+    "runtime_policy",
+    "authority"
+  ],
+  "properties": {
+    "version": {"const": "typed-utility-contract-v1"},
+    "contract_id": {"type": "string", "minLength": 1},
+    "status": {"type": "string", "enum": ["PRE_REGISTERED_FOR_PROSPECTIVE_COHORT", "FROZEN"]},
+    "action_signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain", "transformation_family", "config_edits", "operation_point"],
+      "properties": {
+        "domain": {"const": "flow.CONFIG_DELTA"},
+        "transformation_family": {"type": "string", "minLength": 1},
+        "config_edits": {"type": "object", "minProperties": 1},
+        "operation_point": {"type": "string", "minLength": 1}
+      }
+    },
+    "primary_objective": {"type": "object"},
+    "hard_constraints": {"type": "object"},
+    "resource_budgets": {"type": "object"},
+    "runtime_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interval_must_fit_contract", "ood_action", "missing_evidence_action"],
+      "properties": {
+        "interval_must_fit_contract": {"const": true},
+        "ood_action": {"const": "ABSTAIN"},
+        "missing_evidence_action": {"const": "ABSTAIN"}
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_pareto_gate_unchanged", "canonical_memory_mutation", "promotion_eligible"],
+      "properties": {
+        "raw_pareto_gate_unchanged": {"const": true},
+        "canonical_memory_mutation": {"const": "none"},
+        "promotion_eligible": {"const": false}
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tehm://schemas/procedural_ablation_task_manifest_v1",
+  "title": "TEHM Procedural Ablation Task Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "status", "source_snapshot", "firewall", "tasks", "acceptance", "task_sources"],
+  "properties": {
+    "version": {"const": "procedural-ablation-task-manifest-v1"},
+    "status": {"enum": ["PLANNED", "FROZEN", "EXECUTED"]},
+    "source_snapshot": {"type": "object", "required": ["canonical_bundle", "bundle_digest"]},
+    "firewall": {"type": "object", "required": ["training_lineages", "heldout_lineages"]},
+    "tasks": {"type": "array", "minItems": 4, "items": {"type": "object"}},
+    "acceptance": {"type": "object"},
+    "task_sources": {"type": "object"}
+  }
+}

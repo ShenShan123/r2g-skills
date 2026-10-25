@@ -1,0 +1,529 @@
+"""Rule building pipeline (design doc 20.5, 26 Phase 5).
+
+``crystallize_all``: group captured transitions by primary effect key (preflight),
+role-normalize each non-singleton group, joint-anti-unify the rewrites, synthesize
+candidate rules, and persist them into ``tehm_rules`` + ``tehm_rule_sources``.
+
+Phase 6 (Rule Validity) audits these candidates next; nothing here claims
+validity — rules are stored as ``CANDIDATE`` (V2 pending).
+"""
+from __future__ import annotations
+
+import sqlite3
+from functools import wraps
+
+from tehm import db as tehm_db
+from tehm.crystallization.anti_unify import AntiUnifyConfig, anti_unify_rewrites
+from tehm.crystallization.preflight import run_preflight
+from tehm.crystallization.risk import stratify_rule_risk
+from tehm.crystallization.role_normalize import RoleNormalizedRewrite, normalize_rewrite
+from tehm.crystallization.synthesize_skill import rule_sources, synthesize_skill
+from tehm.crystallization.validity import ValidityConfig, audit_rule
+from tehm.verified_execution import require_verified_transition
+
+
+def _atomic_crystallization(fn):
+    """Make rule definitions and their witness rows one derived transaction.
+
+    A full rebuild can emit several rules and may retire stale lifecycle rows.
+    The savepoint prevents a later anti-unification/persistence/retirement
+    failure from exposing only a prefix, while preserving a caller-owned outer
+    transaction.  ``commit=False`` remains available to enclosing lanes.
+    """
+    @wraps(fn)
+    def wrapped(conn: sqlite3.Connection, *args, **kwargs):
+        requested_commit = kwargs.get("commit", True)
+        had_outer_transaction = conn.in_transaction
+        savepoint = "tehm_crystallize_v1"
+        conn.execute(f"SAVEPOINT {savepoint}")
+        savepoint_active = True
+        try:
+            result = fn(conn, *args, **kwargs)
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            savepoint_active = False
+            if requested_commit and not had_outer_transaction:
+                conn.commit()
+            return result
+        except Exception:
+            if savepoint_active:
+                conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            raise
+
+    return wrapped
+
+
+@_atomic_crystallization
+def crystallize_all(conn: sqlite3.Connection, *, min_group_size: int = 2,
+                    validity_config: ValidityConfig | None = None,
+                    dry_run: bool = False, campaign_id: str = "live",
+                    effect_keys: frozenset[str] | set[str] | None = None,
+                    retire_stale: bool = True,
+                    created_at: str | None = None,
+                    commit: bool = True,
+                    group_keys: (frozenset[tuple[str, str | None]] |
+                                 set[tuple[str, str | None]] | None) = None
+                    ) -> list[dict]:
+    """Run the Phase 5-6 pipeline; returns audited candidate rules.
+
+    Each crystallized rule is put through the ordered validity audit
+    (V2 -> V1 -> V3 -> V4, design doc 7) and risk stratification (design doc 8)
+    before being persisted with its final ``validity_status``.
+    ``commit=False`` is reserved for callers that wrap a derived update in
+    their own transaction/savepoint.  Stale-rule retirement uses the same
+    commit boundary, so it remains safe when ``commit=False`` is requested.
+    """
+    if not campaign_id:
+        raise ValueError("campaign_id is required for crystallization")
+    validity_config = validity_config or ValidityConfig(min_group_size=min_group_size)
+    transitions, lineage_of, episode_of, invalid_transition_ids = _load_transitions(
+        conn, campaign_id=campaign_id)
+    by_id = {t["transition_id"]: t for t in transitions}
+    report = run_preflight(conn, min_group_size=min_group_size,
+                            campaign_id=campaign_id)
+
+    rules: list[dict] = []
+    for key, group in report.groups.items():
+        if effect_keys is not None and key not in effect_keys:
+            continue
+        # ``run_preflight`` intentionally reports the raw learner membership
+        # corpus, including legacy/incomplete rows retained for audit.  The
+        # crystallizer must use only the verified subset and must not index a
+        # filtered-out transition while walking those advisory groups.
+        group_transition_ids = [
+            tid for tid in group["transition_ids"] if tid in by_id]
+        if len(group_transition_ids) < min_group_size:
+            continue  # singletons never crystallize (design doc 7.2/6.3)
+        # A primary effect can contain structurally different executors.  Do
+        # not anti-unify those into a wildcard profile: split first on the
+        # explicit compatibility contract carried by each RTL action.
+        # Flow/signoff rewrites also split on the edited KNOB SET (B2): a rule must
+        # carry a concrete knob list to be executable, so episodes editing
+        # different knobs never anti-unify into a wildcard knob.
+        compatibility_groups: dict[tuple, list[str]] = {}
+        for tid in group_transition_ids:
+            action = by_id[tid].get("action") or {}
+            payload = action.get("payload") or {}
+            profile = payload.get("compatibility_profile")
+            knob_edits = payload.get("knob_edits")
+            knob_set = (",".join(sorted(knob_edits))
+                        if isinstance(knob_edits, dict) and knob_edits else None)
+            compatibility_groups.setdefault((profile, knob_set), []).append(tid)
+        for (compatibility_profile, knob_set), transition_ids in sorted(
+                compatibility_groups.items(), key=lambda item: str(item[0])):
+            if (group_keys is not None and
+                    (key, compatibility_profile) not in group_keys):
+                continue
+            if len(transition_ids) < min_group_size:
+                continue
+            members = [by_id[tid] for tid in transition_ids]
+            internal_key = (key if compatibility_profile is None else
+                            f"{key}|compatibility:{compatibility_profile}")
+            if knob_set is not None:
+                internal_key = f"{internal_key}|knobs:{knob_set}"
+            rules.append(_crystallize_group(
+                conn, members, internal_key=internal_key,
+                compatibility_profile=compatibility_profile, episode_of=episode_of,
+                lineage_of=lineage_of, min_group_size=min_group_size,
+                validity_config=validity_config, created_at=created_at,
+                dry_run=True))
+    # P1c (real-corpus X1): two effect groups can crystallize the SAME content-addressed rule with different
+    # validity. Persisting each in turn made the stored row (validity AND sources) the last write, while
+    # enrolment read the first -- order-dependent, and a crash when the last was below the lifecycle minimum.
+    # One rule per id, chosen deterministically: the most conservative validity, then the smallest merge trace.
+    rules = _one_rule_per_id(rules)
+    if not dry_run:
+        for rule in rules:
+            _persist_rule(conn, rule, commit=False)
+    # Phase D amendment D-A2: rules over the knob SUBSET that differently-shaped
+    # verified flow/signoff fixes share (a full rebuild only; never targeted).
+    if effect_keys is None and group_keys is None:
+        seen = {r["rule_id"] for r in rules}
+        for projected, internal_key in _knob_subset_groups(
+                transitions, lineage_of, min_group_size=min_group_size):
+            rule = _crystallize_group(
+                conn, projected, internal_key=internal_key, compatibility_profile=None,
+                episode_of=episode_of, lineage_of=lineage_of,
+                min_group_size=min_group_size, validity_config=validity_config,
+                created_at=created_at, dry_run=True,
+                knob_projection=internal_key.rsplit("|subset:", 1)[1])
+            if rule["rule_id"] in seen:
+                continue
+            seen.add(rule["rule_id"])
+            if not dry_run:
+                _persist_rule(conn, rule, commit=False)
+            rules.append(rule)
+    # Do not let an incomplete/corrupt learner row make a formerly valid rule
+    # look stale and silently retire it.  The invalid row remains visible to
+    # raw/preflight audit; a clean verified rebuild can decide retirement later.
+    if (not dry_run and retire_stale and effect_keys is None and
+            not invalid_transition_ids):
+        _retire_stale_rules(conn, {r["rule_id"] for r in rules}, campaign_id,
+                            commit=False)
+    return rules
+
+
+def _crystallize_group(conn, members: list[dict], *, internal_key: str,
+                       compatibility_profile, episode_of: dict, lineage_of: dict,
+                       min_group_size: int, validity_config: ValidityConfig,
+                       created_at: str | None, dry_run: bool,
+                       knob_projection: str | None = None) -> dict:
+    """One group -> one audited rule: role-normalize, anti-unify, synthesize,
+    validity audit (V2->V1->V3->V4), risk; persisted unless ``dry_run``."""
+    for t in members:
+        t["lineage_id"] = lineage_of.get(t["source_state_id"])
+    rewrites: list[RoleNormalizedRewrite] = [
+        normalize_rewrite(
+            t, effect_key=internal_key,
+            episode_id=episode_of.get(t["transition_id"]),
+            lineage_id=lineage_of.get(t["source_state_id"]))
+        for t in members
+    ]
+    result = anti_unify_rewrites(
+        rewrites, AntiUnifyConfig(min_group_size=min_group_size))
+    obligations = tuple(sorted({o for r in rewrites for o in r.obligations}))
+    source_episodes = sorted({r.episode_id for r in rewrites})
+    source_episode_transitions = {
+        episode_id: sorted({r.transition_id for r in rewrites
+                            if r.episode_id == episode_id})
+        for episode_id in source_episodes}
+    source_episode_lineages = {
+        episode_id: next((r.lineage_id for r in rewrites
+                          if r.episode_id == episode_id and r.lineage_id), None)
+        for episode_id in source_episodes}
+    rule = synthesize_skill(
+        result, domain=rewrites[0].domain,
+        transformation_family=rewrites[0].transformation_family,
+        action_domain=rewrites[0].action_domain,
+        obligations=obligations, source_episodes=source_episodes,
+        compatibility_profile=compatibility_profile,
+        created_at=(created_at if created_at is not None
+                    else tehm_db.now_local()),
+        source_episode_transitions=source_episode_transitions,
+        source_episode_lineages=source_episode_lineages)
+    if knob_projection:
+        # Extrapolated: the sources also edited knobs outside this subset.
+        rule["context_predicates"]["knob_projection"] = knob_projection
+    # Phase 6: ordered validity audit + risk stratification.
+    audit = audit_rule(rule, source_transitions=members, config=validity_config)
+    rule["validity_status"] = audit.status
+    rule["validity_profile"] = audit.to_dict()
+    rule["risk_profile"] = stratify_rule_risk(rule, members)
+    if not dry_run:
+        # The enclosing savepoint owns the commit boundary.  Keeping this
+        # write uncommitted is required for all-rules atomicity.
+        _persist_rule(conn, rule, commit=False)
+    return rule
+
+
+# most conservative first: a rule any producing group judges unfaithful or degenerate is never enrolled
+_CONSERVATIVE_ORDER = ("REJECT_UNFAITHFUL", "REJECT_DEGENERATE", "INSTANCE_MEMORY", "CANDIDATE",
+                       "UNSTABLE_CANDIDATE", "PROVISIONAL_VALID", "VALIDATED")
+
+
+def _one_rule_per_id(rules: list[dict]) -> list[dict]:
+    """Collapse candidates sharing a rule id to one, independent of group order; first-seen order is kept."""
+    rank = {v: i for i, v in enumerate(_CONSERVATIVE_ORDER)}
+    best: dict[str, dict] = {}
+    order: list[str] = []
+    for r in rules:
+        rid = r["rule_id"]
+        if rid not in best:
+            best[rid] = r
+            order.append(rid)
+            continue
+        key = lambda x: (rank.get(x.get("validity_status"), -1), str(x.get("merge_trace_digest")))
+        if key(r) < key(best[rid]):
+            best[rid] = r
+    return [best[rid] for rid in order]
+
+
+_STAGE_ORDER = ("synth", "floorplan", "place", "cts", "route", "finish")
+
+
+def _knob_subset_groups(transitions: list[dict], lineage_of: dict, *,
+                        min_group_size: int):
+    """Yield (projected members, internal key) for each knob SUBSET shared by
+    verified PASS flow/signoff fixes of one (check, class, platform) bucket that
+    edited different knob sets (Phase D amendment D-A2).
+
+    A projection onto K is an EXTRAPOLATION (the sources also changed knobs
+    outside K): it needs >= min_group_size members from >= 2 designs and at
+    least one member whose own knob set is larger than K (else it is an
+    ordinary knob-set group, already crystallised). Members are re-stamped with
+    family KNOB_SUBSET_<K> and the EARLIEST re-run stage among them.
+    """
+    buckets: dict[tuple, list[dict]] = {}
+    for t in transitions:
+        payload = (t.get("action") or {}).get("payload") or {}
+        knobs = payload.get("knob_edits")
+        sit = payload.get("situation")
+        if ((t.get("verifier") or {}).get("verdict") != "PASS" or
+                not isinstance(knobs, dict) or not knobs or not isinstance(sit, dict)):
+            continue
+        key = (sit.get("check"), sit.get("violation_class"), sit.get("platform"))
+        buckets.setdefault(key, []).append(t)
+    for key, members in sorted(buckets.items(), key=lambda kv: str(kv[0])):
+        sets = [frozenset(m["action"]["payload"]["knob_edits"]) for m in members]
+        subsets = {a & b for i, a in enumerate(sets) for b in sets[i + 1:] if a & b}
+        for subset in sorted(subsets, key=lambda k: (-len(k), sorted(k))):
+            group = [(m, s) for m, s in zip(members, sets) if subset <= s]
+            designs = {lineage_of.get(m["source_state_id"]) for m, _ in group}
+            if (len(group) < min_group_size or len(designs) < 2
+                    or all(s == subset for _, s in group)):
+                continue
+            stages = [((m["action"].get("payload") or {}).get("rerun_from")) for m, _ in group]
+            rerun = min((x for x in stages if x in _STAGE_ORDER),
+                        key=_STAGE_ORDER.index, default=None)
+            name = ",".join(sorted(subset))
+            family = "KNOB_SUBSET_" + "_".join(sorted(subset))
+            yield ([_project(m, subset, family, rerun) for m, _ in group],
+                   f"subset:{key}|subset:{name}")
+
+
+def _project(t: dict, subset: frozenset, family: str, rerun) -> dict:
+    """A copy of transition ``t`` whose action edits only ``subset``."""
+    action = dict(t.get("action") or {})
+    payload = dict(action.get("payload") or {})
+    payload["knob_edits"] = {k: v for k, v in payload["knob_edits"].items() if k in subset}
+    payload["config_edits"] = {k: v for k, v in (payload.get("config_edits") or {}).items()
+                               if k in subset}
+    payload["strategy"] = family.lower()
+    payload["rerun_from"] = rerun
+    action.update(payload=payload, transformation_family=family)
+    return {**t, "action": action}
+
+
+def _load_transitions(conn: sqlite3.Connection, *, campaign_id: str = "live"):
+    rows = conn.execute(
+        "SELECT transition_id, source_state_id, target_state_id, action_json, "
+        "observation_delta_json, verifier_json, provenance_json, outcome "
+        "FROM tehm_transitions t "
+        "WHERE EXISTS (SELECT 1 FROM tehm_dataset_membership dm "
+        "WHERE dm.transition_id=t.transition_id AND dm.campaign_id=? "
+        "AND dm.split='training' AND dm.learner_eligible=1) "
+        # P1c (X1): a defined order -- anti-unification names holes in member order, so insertion order
+        # gave the SAME rule different content addresses in batched and one-shot builds
+        "ORDER BY t.transition_id", (campaign_id,)).fetchall()
+    transitions = [
+        {
+            "transition_id": r["transition_id"],
+            "source_state_id": r["source_state_id"],
+            "target_state_id": r["target_state_id"],
+            "action": tehm_db.read_json(r["action_json"]),
+            "observation_delta": tehm_db.read_json(r["observation_delta_json"]),
+            "verifier": tehm_db.read_json(r["verifier_json"]),
+            "provenance": tehm_db.read_json(r["provenance_json"]),
+            "outcome": r["outcome"],
+        }
+        for r in rows
+    ]
+    # Membership identifies the learner partition; it does not prove that a
+    # transition was executed under an executable oracle.  Exclude incomplete
+    # rows before grouping so they can never become candidate-rule support,
+    # while preserving legacy diagnostic rows for preflight/audit reporting.
+    verified = []
+    invalid_transition_ids: list[str] = []
+    for transition in transitions:
+        try:
+            require_verified_transition(conn, transition["transition_id"])
+        except ValueError as exc:
+            # Only a CORRUPT row (unloadable witness, failed scoped replay) may block
+            # stale-rule retirement. A merely UNMEASURED row (stop / apply-failed /
+            # rerun-failed: no definitive verdict, incomplete oracle) never feeds a rule
+            # either, but treating it as corrupt disabled retirement in every R2G store,
+            # so rules outlived their evidence (R2G memory Phase F finding 1).
+            if not _only_unmeasured(str(exc)):
+                invalid_transition_ids.append(transition["transition_id"])
+            continue
+        verified.append(transition)
+    transitions = verified
+    lineage_of: dict[str, str] = {}
+    for r in conn.execute("SELECT state_id, lineage_id FROM tehm_states"):
+        lineage_of[r["state_id"]] = r["lineage_id"] or "?"
+    # P1c (X1): a transition appears in every prefix episode of its session; map it to the LONGEST episode
+    # containing it (the session's complete chain; ties by episode id) -- the last row of a table scan
+    # depended on capture order.
+    episode_of: dict[str, str] = {}
+    for r in conn.execute(
+            """SELECT s.transition_id AS transition_id, s.episode_id AS episode_id
+                 FROM tehm_episode_steps s
+                 JOIN (SELECT episode_id, count(*) AS n FROM tehm_episode_steps GROUP BY episode_id) e
+                   ON e.episode_id = s.episode_id
+                ORDER BY s.transition_id, e.n DESC, s.episode_id"""):
+        episode_of.setdefault(r["transition_id"], r["episode_id"])
+    return transitions, lineage_of, episode_of, tuple(invalid_transition_ids)
+
+
+_UNMEASURED_REASONS = frozenset({"verifier_verdict_not_definitive", "oracle_incomplete",
+                                 "oracle_type_not_executable"})
+
+
+def _only_unmeasured(message: str) -> bool:
+    """True when require_verified_execution's reasons are ALL 'not measured' ones."""
+    marker = "requires complete verified execution: "
+    if marker not in message:
+        return False
+    reasons = {r.strip() for r in message.split(marker, 1)[1].split(",") if r.strip()}
+    return bool(reasons) and reasons <= _UNMEASURED_REASONS
+
+
+def _persist_rule(conn: sqlite3.Connection, rule: dict, *, commit: bool = True) -> None:
+    from tehm.ids import stable_dumps
+
+    # A normal crystallization pass is a derived candidate projection.  It is
+    # not an authority-bearing revision operation.  Once a rule is promoted,
+    # changing any definition/validity/provenance witness behind the same
+    # content id would silently change what production retrieval executes (or
+    # what the authority receipt describes).  Replays of the exact same
+    # projection are harmless; any drift must go through an explicit shadow
+    # revision and its independent authority path.
+    existing = conn.execute(
+        "SELECT * FROM tehm_rules WHERE rule_id=?", (rule["rule_id"],)
+    ).fetchone()
+    promoted = conn.execute(
+        "SELECT 1 FROM tehm_rule_status "
+        "WHERE rule_id=? AND status='promoted' LIMIT 1",
+        (rule["rule_id"],),
+    ).fetchone()
+    if existing is not None and promoted is not None:
+        expected_fields = {
+            "domain": rule["domain"],
+            "before_pattern_json": stable_dumps(rule["before_pattern"]),
+            "after_pattern_json": stable_dumps(rule["after_pattern"]),
+            "hard_preconditions_json": stable_dumps(rule["hard_preconditions"]),
+            "context_profile_json": stable_dumps(rule["context_predicates"]),
+            "obligations_json": stable_dumps(rule["obligations"]),
+            "validity_status": rule["validity_status"],
+            "validity_profile_json": stable_dumps(rule["validity_profile"]),
+            "risk_profile_json": stable_dumps(rule["risk_profile"]),
+            "predicate_schema_version": rule["predicate_schema_version"],
+            "role_schema_version": rule["role_schema_version"],
+            "crystallizer_version": rule["crystallizer_version"],
+            "merge_trace_digest": rule["merge_trace_digest"],
+        }
+        mismatches = [
+            field for field, value in expected_fields.items()
+            if existing[field] != value
+        ]
+        expected_sources = sorted(
+            (source["episode_id"], source["source_substitution_json"],
+             source["evidence_profile_json"], source["lineage_id"])
+            for source in rule_sources(rule))
+        persisted_sources = sorted(
+            (row["episode_id"], row["source_substitution_json"],
+             row["evidence_profile_json"], row["lineage_id"])
+            for row in conn.execute(
+                "SELECT episode_id, source_substitution_json, "
+                "evidence_profile_json, lineage_id FROM tehm_rule_sources "
+                "WHERE rule_id=?", (rule["rule_id"],)))
+        if persisted_sources != expected_sources:
+            mismatches.append("rule_sources")
+        if mismatches:
+            raise ValueError(
+                "promoted rule is immutable; explicit revision authority "
+                "required: " + ",".join(mismatches))
+        # Preserve utility, confidence, timestamps, and row identity on an
+        # exact replay.  There is no reason to issue an UPDATE that could
+        # perturb a promoted row while returning the same rule ID.
+        return
+
+    conn.execute(
+        """INSERT INTO tehm_rules (
+               rule_id, domain, before_pattern_json, after_pattern_json,
+               hard_preconditions_json, context_profile_json, obligations_json,
+               validity_status, validity_profile_json, confidence_json,
+               utility_json, risk_profile_json, predicate_schema_version,
+               role_schema_version, crystallizer_version, merge_trace_digest,
+               created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(rule_id) DO UPDATE SET
+             domain=excluded.domain,
+             before_pattern_json=excluded.before_pattern_json,
+             after_pattern_json=excluded.after_pattern_json,
+             hard_preconditions_json=excluded.hard_preconditions_json,
+             context_profile_json=excluded.context_profile_json,
+             obligations_json=excluded.obligations_json,
+             validity_status=excluded.validity_status,
+             validity_profile_json=excluded.validity_profile_json,
+             risk_profile_json=excluded.risk_profile_json,
+             predicate_schema_version=excluded.predicate_schema_version,
+             role_schema_version=excluded.role_schema_version,
+             crystallizer_version=excluded.crystallizer_version,
+             merge_trace_digest=excluded.merge_trace_digest,
+             updated_at=excluded.updated_at""",
+        (
+            rule["rule_id"],
+            rule["domain"],
+            stable_dumps(rule["before_pattern"]),
+            stable_dumps(rule["after_pattern"]),
+            stable_dumps(rule["hard_preconditions"]),
+            stable_dumps(rule["context_predicates"]),
+            stable_dumps(rule["obligations"]),
+            rule["validity_status"],
+            stable_dumps(rule["validity_profile"]),
+            stable_dumps(rule["confidence"]),
+            stable_dumps(rule["utility"]),
+            stable_dumps(rule["risk_profile"]),
+            rule["predicate_schema_version"],
+            rule["role_schema_version"],
+            rule["crystallizer_version"],
+            rule["merge_trace_digest"],
+            rule["created_at"],
+            rule["updated_at"],
+        ))
+    # Source rows are a materialized view of this crystallization witness set.
+    # Utility and lifecycle authority are intentionally preserved above.
+    conn.execute("DELETE FROM tehm_rule_sources WHERE rule_id=?",
+                 (rule["rule_id"],))
+    for source in rule_sources(rule):
+        conn.execute(
+            """INSERT OR REPLACE INTO tehm_rule_sources (
+                   rule_id, episode_id, source_substitution_json,
+                   evidence_profile_json, lineage_id)
+               VALUES (?, ?, ?, ?, ?)""",
+            (source["rule_id"], source["episode_id"],
+             source["source_substitution_json"],
+             source["evidence_profile_json"], source["lineage_id"]))
+    if commit:
+        conn.commit()
+
+
+def _retire_stale_rules(conn: sqlite3.Connection, active_rule_ids: set[str],
+                        campaign_id: str, *, commit: bool = True) -> None:
+    """Retire lifecycle rows no longer produced by a full rebuild.
+
+    Definitions and source evidence remain available for audit; ``retired``
+    only removes stale runtime authority.
+    """
+    from tehm.evolution.anti_forgetting import (
+        raw_evidence_digest, verify_raw_evidence_unchanged,
+    )
+    from tehm.lifecycle.rule_status import set_status
+
+    evidence_before = raw_evidence_digest(conn)
+    rows = conn.execute(
+        """SELECT rs.rule_id, rs.target_scope, rs.status,
+                         r.validity_status
+             FROM tehm_rule_status rs
+             LEFT JOIN tehm_rules r ON r.rule_id=rs.rule_id
+            WHERE rs.status IN ('shadow', 'candidate', 'promoted')"""
+    ).fetchall()
+    for row in rows:
+        if (row["rule_id"] in active_rule_ids and
+                row["validity_status"] in {"PROVISIONAL_VALID", "VALIDATED"}):
+            continue
+        invalid = row["rule_id"] in active_rule_ids
+        set_status(
+            conn, rule_id=row["rule_id"], target_scope=row["target_scope"],
+            status="quarantined" if invalid else "retired",
+            provenance={"authority": "crystallize_all",
+                        "reason": "revalidated_below_lifecycle_threshold"
+                        if invalid else "not_rebuilt_in_campaign",
+                        "campaign_id": campaign_id}, commit=commit)
+    evidence_receipt = verify_raw_evidence_unchanged(conn, evidence_before)
+    if not evidence_receipt.preserved:
+        raise RuntimeError(
+            "full rebuild retirement changed canonical evidence: "
+            f"{evidence_receipt.before_digest} -> "
+            f"{evidence_receipt.after_digest}")

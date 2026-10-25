@@ -1,0 +1,7 @@
+# TEHM runtime artifacts — never track DBs, artifact blobs, or caches.
+tehm.sqlite
+tehm.sqlite-*
+artifacts/
+__pycache__/
+.pytest_cache/
+*.pyc

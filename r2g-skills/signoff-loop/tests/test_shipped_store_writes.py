@@ -19,6 +19,20 @@ import knowledge_db
 import learn_heuristics
 
 
+@pytest.fixture(autouse=True)
+def synthetic_shipped_store(tmp_path, monkeypatch):
+    """Exercise optional shipped-store protection with synthetic data only."""
+    db = tmp_path / "synthetic-shipped.sqlite"
+    heuristics = tmp_path / "synthetic-shipped.json"
+    conn = knowledge_db.connect(db)
+    knowledge_db.ensure_schema(conn)
+    conn.close()
+    heuristics.write_text("{}\n")
+    monkeypatch.setattr(knowledge_db, "DEFAULT_DB_PATH", db)
+    monkeypatch.setattr(knowledge_db, "DEFAULT_HEURISTICS_PATH", heuristics)
+    monkeypatch.setattr(knowledge_db, "SHIPPED_STORE_FILES", (db, heuristics))
+
+
 def _digest(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 

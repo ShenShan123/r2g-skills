@@ -1,0 +1,798 @@
+"""Canonical evidence capture adapter (design doc 21.2).
+
+``capture(conn, store, record)`` turns one ``ExecutionRecord`` (a real executed
+repair step: before/after states + action + observation delta + verification)
+into the canonical store: content-addressed states, one transition, episode
+membership, experience-graph edges, and the five-view materialization.
+
+Everything is deterministic and idempotent: re-capturing identical evidence
+yields identical IDs (dedup) and no duplicate rows.
+
+First sources (Phase 2): R2G flow/signoff repair trajectories, whose actions
+are already structured (config delta / sdc edit / stage rerun / repair action)
+and whose oracles are executable.
+"""
+from __future__ import annotations
+
+import json
+import sqlite3
+from dataclasses import dataclass, field
+from functools import wraps
+
+import tehm.db as tehm_db
+from tehm.canonical.episode import CanonicalEpisode, trajectory_summary
+from tehm.canonical.state import CanonicalState, source_digest
+from tehm.canonical.transition import (
+    Action,
+    CanonicalTransition,
+    ObservationDelta,
+    classify_outcome,
+    primary_effect_key,
+)
+from tehm.canonical.verifier import VerifierSnapshot, toolchain_snapshot
+from tehm.graph.local_design_graph import (
+    build_run_context_graph,
+    load_graph_from_artifact,
+)
+from tehm.graph.roles import RoleProjector
+from tehm.graph.predicates import extract_predicates
+from tehm.dataset import SPLITS, require_learner_bool
+from tehm.views import materialize as views_materialize
+from tehm.views.diagnostic import extract_diagnostic_signature
+from tehm.ids import stable_dumps
+
+_REQUIRED_RECORD_KEYS = ("domain", "before", "action", "after",
+                         "observation_delta", "verification")
+
+
+class ExecutionRecordError(ValueError):
+    pass
+
+
+@dataclass
+class ExecutionRecord:
+    """The input contract for one captured repair step.
+
+    ``before`` / ``after``: ``{repository_ref?, config, reports, failure_signature?,
+    artifacts?}`` — the state content. ``action``: ``{domain,
+    transformation_family, payload}``. ``observation_delta`` / ``verification``:
+    mirror the canonical Transition shapes. ``episode`` (optional):
+    ``{episode_id?, mechanism_family, lineage_id, step_index, terminal_status?}``.
+    """
+
+    record_id: str
+    domain: str
+    before: dict
+    action: dict
+    after: dict
+    observation_delta: dict
+    verification: dict
+    project_id: str | None = None
+    design_id: str | None = None
+    lineage_id: str | None = None
+    repository_ref: str | None = None
+    episode: dict | None = None
+    # P1c: identity scope / content digest / raw record, stored on the transition's provenance (never part of
+    # the transition's content address). Adapter-specific; capture copies it verbatim.
+    provenance: dict | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ExecutionRecord":
+        if type(data) is not dict:
+            raise ExecutionRecordError("ExecutionRecord must be a mapping")
+        missing = [k for k in _REQUIRED_RECORD_KEYS if not data.get(k)]
+        if missing:
+            raise ExecutionRecordError(
+                f"ExecutionRecord missing required keys: {missing}")
+        if type(data["domain"]) is not str or not data["domain"].strip():
+            raise ExecutionRecordError("ExecutionRecord.domain must be a non-empty string")
+        if "record_id" in data and data["record_id"] is not None \
+                and type(data["record_id"]) is not str:
+            raise ExecutionRecordError("ExecutionRecord.record_id must be a string or None")
+        for key in ("before", "action", "after", "observation_delta",
+                    "verification"):
+            if type(data[key]) is not dict:
+                raise ExecutionRecordError(
+                    f"ExecutionRecord.{key} must be a mapping")
+        if "episode" in data and data["episode"] is not None \
+                and type(data["episode"]) is not dict:
+            raise ExecutionRecordError("ExecutionRecord.episode must be a mapping or None")
+        if data.get("provenance") is not None and type(data["provenance"]) is not dict:
+            raise ExecutionRecordError("ExecutionRecord.provenance must be a mapping or None")
+        record = cls(
+            record_id=data.get("record_id") or "",
+            domain=data["domain"],
+            before=data["before"],
+            action=data["action"],
+            after=data["after"],
+            observation_delta=data["observation_delta"],
+            verification=data["verification"],
+            project_id=data.get("project_id"),
+            design_id=data.get("design_id"),
+            lineage_id=data.get("lineage_id"),
+            repository_ref=data.get("repository_ref"),
+            episode=data["episode"] if data.get("episode") else None,
+            provenance=data.get("provenance") or None,
+        )
+        record.validate()
+        return record
+
+    def validate(self) -> None:
+        if type(self.domain) is not str or not self.domain.strip():
+            raise ExecutionRecordError("ExecutionRecord.domain must be a non-empty string")
+        if type(self.record_id) is not str:
+            raise ExecutionRecordError("ExecutionRecord.record_id must be a string")
+        for side, content in (("before", self.before), ("after", self.after)):
+            if type(content) is not dict:
+                raise ExecutionRecordError(f"{side} must be a mapping")
+            if "reports" not in content:
+                raise ExecutionRecordError(f"{side}.reports is required")
+        for name, content in (("action", self.action),
+                              ("observation_delta", self.observation_delta),
+                              ("verification", self.verification)):
+            if type(content) is not dict:
+                raise ExecutionRecordError(f"{name} must be a mapping")
+        if "config" not in self.before and "config" not in self.after:
+            raise ExecutionRecordError("at least one state must carry config")
+        # Fail fast at parse time on malformed action / delta / verification.
+        Action.from_dict(self.action)
+        ObservationDelta.from_dict(self.observation_delta)
+        VerifierSnapshot.from_dict(self.verification)
+
+
+@dataclass
+class CaptureReceipt:
+    record_id: str
+    state_ids: dict = field(default_factory=dict)   # {"before": id, "after": id}
+    transition_id: str = ""
+    episode_id: str | None = None
+    outcome: str = ""
+    primary_effect_key: str = ""
+    views_materialized: int = 0
+    artifacts_written: int = 0
+    edge_kinds: list = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "record_id": self.record_id,
+            "state_ids": self.state_ids,
+            "transition_id": self.transition_id,
+            "episode_id": self.episode_id,
+            "outcome": self.outcome,
+            "primary_effect_key": self.primary_effect_key,
+            "views_materialized": self.views_materialized,
+            "artifacts_written": self.artifacts_written,
+            "edge_kinds": self.edge_kinds,
+        }
+
+
+def _atomic_capture(fn):
+    """Wrap canonical rows and derived views in one caller-safe savepoint.
+
+    Capture may be called inside a larger transaction (for example a batch
+    import).  In that case release only the local savepoint; otherwise commit
+    the completed capture.  A view materializer failure therefore cannot leave
+    canonical rows without their corresponding typed views, nor can it roll
+    back an unrelated outer transaction.
+    """
+    @wraps(fn)
+    def wrapped(conn: sqlite3.Connection, *args, **kwargs):
+        had_outer_transaction = conn.in_transaction
+        savepoint = "tehm_canonical_capture_v1"
+        conn.execute(f"SAVEPOINT {savepoint}")
+        savepoint_active = True
+        try:
+            result = fn(conn, *args, **kwargs)
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            savepoint_active = False
+            if not had_outer_transaction:
+                conn.commit()
+            return result
+        except Exception:
+            if savepoint_active:
+                conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            raise
+
+    return wrapped
+
+
+def _assert_existing_row_equivalent(
+        conn: sqlite3.Connection, *, table: str, where_sql: str,
+        where_params: tuple, expected: dict, label: str,
+        ignore_keys: frozenset[str] = frozenset()) -> None:
+    """Fail closed when a deterministic canonical row is replayed differently."""
+    existing = conn.execute(
+        f"SELECT * FROM {table} WHERE {where_sql} LIMIT 1",
+        where_params).fetchone()
+    if existing is None:
+        return
+    mismatches = [
+        key for key, value in expected.items()
+        if key not in ignore_keys and existing[key] != value
+    ]
+    if mismatches:
+        raise ExecutionRecordError(
+            f"{label} evidence is immutable and conflicts: "
+            f"{', '.join(mismatches)}")
+
+
+@_atomic_capture
+def capture(conn: sqlite3.Connection, store, record: ExecutionRecord,
+            *, materialized_at: str | None = None,
+            dataset_campaign_id: str = "live",
+            dataset_split: str = "training",
+            dataset_learner_eligible: bool = True,
+            frozen_snapshot_digest: str | None = None) -> CaptureReceipt:
+    """Capture one execution record into the canonical store + views."""
+    from tehm.db import now_local
+
+    if not isinstance(record, ExecutionRecord):
+        raise ExecutionRecordError("capture requires an ExecutionRecord")
+    # Validate before writing graph artifacts or canonical rows.  This keeps
+    # malformed typed evidence out of both the immutable store and its shadow
+    # projections, including records constructed directly by adapters.
+    record.validate()
+    if not dataset_campaign_id:
+        raise ValueError("dataset_campaign_id is required")
+    if type(dataset_split) is not str or dataset_split not in SPLITS:
+        raise ValueError(f"unknown dataset_split: {dataset_split!r}")
+    require_learner_bool(dataset_learner_eligible,
+                         field="dataset_learner_eligible")
+    if dataset_split != "training" and dataset_learner_eligible:
+        raise ValueError(
+            "only training evidence may be marked learner_eligible")
+    materialized_at = materialized_at or now_local()
+
+    # --- 1. build before/after canonical states -----------------------------
+    before_content = _state_content(record.before, record.repository_ref)
+    after_content = _state_content(record.after, record.repository_ref)
+
+    cfg = dict(record.before.get("config") or {}) or dict(record.after.get("config") or {})
+    platform = cfg.get("PLATFORM") or cfg.get("platform")
+    run_tag = _find_run_tag(record.before) or _find_run_tag(record.after)
+
+    # Prefer an adapter-supplied structural graph (for example RTL
+    # MODULE/FSM semantics), with the report-only flow graph as fallback.
+    before_graph = _state_graph(
+        before_content, record.design_id, platform=platform, run_tag=run_tag)
+    after_graph = _state_graph(
+        after_content, record.design_id, platform=platform, run_tag=run_tag)
+
+    before_manifest = {
+        "before_graph": store.put_json("graph", before_graph.to_dict(),
+                                       producer="tehm-capture"),
+        **record.before.get("artifacts", {}),
+    }
+    after_manifest = {
+        "after_graph": store.put_json("graph", after_graph.to_dict(),
+                                      producer="tehm-capture"),
+        **record.after.get("artifacts", {}),
+    }
+
+    before_state = CanonicalState(
+        domain=record.domain,
+        project_id=record.project_id,
+        design_id=record.design_id,
+        lineage_id=record.lineage_id,
+        repository_ref=record.repository_ref,
+        source_digest=source_digest(before_content),
+        context_graph_digest=before_graph.digest(),
+        verifier_snapshot=toolchain_snapshot(
+            tool_versions=_tool_versions(record),
+            oracle_available=_oracle_available(before_content)),
+        artifact_manifest=before_manifest,
+        created_at=materialized_at,
+    )
+    after_state = CanonicalState(
+        domain=record.domain,
+        project_id=record.project_id,
+        design_id=record.design_id,
+        lineage_id=record.lineage_id,
+        repository_ref=record.repository_ref,
+        source_digest=source_digest(after_content),
+        context_graph_digest=after_graph.digest(),
+        verifier_snapshot=toolchain_snapshot(
+            tool_versions=_tool_versions(record),
+            oracle_available=_oracle_available(after_content)),
+        artifact_manifest=after_manifest,
+        created_at=materialized_at,
+    )
+
+    # --- 2. action + delta + verification -----------------------------------
+    action = Action.from_dict(record.action)
+    delta = ObservationDelta.from_dict(record.observation_delta)
+    verifier = VerifierSnapshot.from_dict(record.verification)
+    outcome = classify_outcome(delta, verifier)
+    effect_key = primary_effect_key(action, delta, verifier)
+
+    # Preserve an execution/run witness on the immutable transition.  ORFS
+    # causal replication gates require distinct run identities; keeping this
+    # field in transition provenance makes that requirement auditable without
+    # changing the content-addressed transition identity.
+    run_id = _find_run_tag(record.before) or _find_run_tag(record.after)
+    transition_provenance = {
+        "record_id": record.record_id,
+        "episode_id": (record.episode or {}).get("episode_id"),
+        "source": "canonical-capture-v1",
+    }
+    if run_id:
+        transition_provenance["run_id"] = str(run_id)
+    for key, value in (record.provenance or {}).items():
+        transition_provenance.setdefault(key, value)
+    transition = CanonicalTransition(
+        source_state_id=before_state.state_id,
+        target_state_id=after_state.state_id,
+        action=action,
+        observation_delta=delta,
+        verifier=verifier,
+        outcome=outcome,
+        primary_effect_key=effect_key,
+        created_regressions=list(delta.created_regressions),
+        newly_observed=list(delta.newly_observed_failures),
+        provenance=transition_provenance,
+    )
+    transition.validate()
+
+    # --- 3. episode (session-accumulated repair episode graph) ---------------
+    ep = record.episode or {}
+    session_id = ep.get("episode_id")
+    head = _session_head(conn, session_id) if session_id else None
+    if head is not None:
+        head_steps, head_outcomes = _session_transitions(conn, head["episode_id"])
+        if transition.transition_id in head_steps:
+            # Idempotent re-capture of a step already in this session.
+            # Reuse the head episode's identity-bearing mechanism family.  A
+            # replay of an earlier step can carry that step's local family,
+            # but the accumulated episode ID is defined by the existing
+            # ordered chain; deriving it from the replay payload would create
+            # a second episode and make procedural view provenance drift.
+            episode = CanonicalEpisode(
+                domain=record.domain,
+                initial_state_id=head["initial_state_id"],
+                mechanism_family=head["mechanism_family"],
+                lineage_id=ep.get("lineage_id") or record.lineage_id,
+                terminal_state_id=head["terminal_state_id"],
+                terminal_status=head["terminal_status"],
+                trajectory_summary_json=tehm_db.read_json(head["trajectory_summary_json"]),
+                provenance={"record_id": record.record_id, "session_id": session_id},
+                session_key=session_id,
+                ordered_transition_ids=head_steps,
+            )
+        else:
+            # P1c (X1 on SOURCE-v1): the chain is ordered by the record's position in its session, not by
+            # arrival, so an episode is the same whatever order (or batch) its steps are captured in. The
+            # initial state follows the lowest position, the terminal state/status the highest.
+            indexed = _session_steps_indexed(conn, head["episode_id"])
+            new_index = int(ep.get("step_index", 0))
+            if new_index in {i for i, _, _ in indexed}:
+                new_index = max((i for i, _, _ in indexed), default=-1) + 1   # collision: append (as before)
+            merged = sorted(indexed + [(new_index, transition.transition_id, outcome)])
+            ordered = [tid for _, tid, _ in merged]
+            outcomes = [o for _, _, o in merged]
+            is_first = merged[0][1] == transition.transition_id and merged[0][0] == new_index
+            is_last = merged[-1][1] == transition.transition_id and merged[-1][0] == new_index
+            episode = CanonicalEpisode(
+                domain=record.domain,
+                initial_state_id=before_state.state_id if is_first else head["initial_state_id"],
+                # the family of the highest-position step (as a capture in session order would leave it)
+                mechanism_family=((ep.get("mechanism_family") or head["mechanism_family"]) if is_last
+                                  else head["mechanism_family"]),
+                lineage_id=ep.get("lineage_id") or record.lineage_id,
+                terminal_state_id=after_state.state_id if is_last else head["terminal_state_id"],
+                terminal_status=(ep.get("terminal_status", "OPEN") if is_last else head["terminal_status"]),
+                trajectory_summary_json=trajectory_summary(outcomes),
+                provenance={"record_id": record.record_id, "session_id": session_id},
+                session_key=session_id,
+                ordered_transition_ids=ordered,
+            )
+            _carry_forward_steps(conn, head["episode_id"], episode.episode_id)
+    else:
+        episode = CanonicalEpisode(
+            domain=record.domain,
+            initial_state_id=before_state.state_id,
+            mechanism_family=ep.get("mechanism_family"),
+            lineage_id=ep.get("lineage_id") or record.lineage_id,
+            terminal_state_id=after_state.state_id,
+            terminal_status=ep.get("terminal_status", "OPEN"),
+            trajectory_summary_json=trajectory_summary([outcome]),
+            provenance={"record_id": record.record_id, "session_id": session_id},
+            session_key=session_id,
+            ordered_transition_ids=[transition.transition_id],
+        )
+
+    # --- 4. persist (idempotent) --------------------------------------------
+    for st in (before_state, after_state):
+        state_row = st.to_row()
+        _assert_existing_row_equivalent(
+            conn, table="tehm_states", where_sql="state_id=?",
+            where_params=(state_row["state_id"],), expected=state_row,
+            label="state", ignore_keys=frozenset({
+                # These columns describe the witness that first introduced
+                # a content-addressed state, but are deliberately excluded
+                # from state_id and may differ across deduplicated lineages.
+                "project_id", "design_id", "lineage_id", "repository_ref",
+                "created_at",
+            }))
+        conn.execute(
+            """INSERT OR IGNORE INTO tehm_states (
+                   state_id, domain, project_id, design_id, lineage_id,
+                   repository_ref, source_digest, context_graph_digest,
+                   verifier_snapshot_json, artifact_manifest_json,
+                   created_at, schema_version)
+               VALUES (:state_id, :domain, :project_id, :design_id, :lineage_id,
+                   :repository_ref, :source_digest, :context_graph_digest,
+                   :verifier_snapshot_json, :artifact_manifest_json,
+                   :created_at, :schema_version)""",
+            state_row)
+
+    transition_row = transition.to_row()
+    _assert_existing_row_equivalent(
+        conn, table="tehm_transitions", where_sql="transition_id=?",
+        where_params=(transition_row["transition_id"],),
+        expected=transition_row, label="transition",
+        # Provenance is a capture witness, not transition identity: the same
+        # verified action may be re-ingested under another campaign/session.
+        # INSERT OR IGNORE preserves the first witness without overwriting it.
+        ignore_keys=frozenset({"provenance_json"}))
+    conn.execute(
+        """INSERT OR IGNORE INTO tehm_transitions (
+               transition_id, source_state_id, target_state_id, action_domain,
+               action_json, observation_delta_json, verifier_json,
+               primary_effect_key, outcome, created_regressions_json,
+               newly_observed_json, provenance_json, schema_version)
+           VALUES (:transition_id, :source_state_id, :target_state_id, :action_domain,
+               :action_json, :observation_delta_json, :verifier_json,
+               :primary_effect_key, :outcome, :created_regressions_json,
+               :newly_observed_json, :provenance_json, :schema_version)""",
+        transition_row)
+    # P1c: every physical attempt is kept, even when its transition content already exists
+    tehm_db.ensure_attempts_table(conn)
+    conn.execute(
+        "INSERT OR IGNORE INTO tehm_attempts (record_id, transition_id, record_digest, provenance_json, "
+        "materialized_at) VALUES (?, ?, ?, ?, ?)",
+        (record.record_id, transition_row["transition_id"], (record.provenance or {}).get("record_digest"),
+         json.dumps(transition_provenance, sort_keys=True), materialized_at))
+
+    episode_row = episode.to_row()
+    _assert_existing_row_equivalent(
+        conn, table="tehm_episodes", where_sql="episode_id=?",
+        where_params=(episode_row["episode_id"],), expected=episode_row,
+        label="episode",
+        # Episode identity is the ordered transition chain.  A replay or a
+        # second ingest may carry a different capture witness; keep the first
+        # provenance row while refusing changes to the episode facts below.
+        ignore_keys=frozenset({"provenance_json"}))
+    conn.execute(
+        """INSERT OR IGNORE INTO tehm_episodes (
+               episode_id, domain, initial_state_id, terminal_state_id,
+               terminal_status, mechanism_family, lineage_id,
+               trajectory_summary_json, provenance_json, schema_version)
+           VALUES (:episode_id, :domain, :initial_state_id, :terminal_state_id,
+               :terminal_status, :mechanism_family, :lineage_id,
+               :trajectory_summary_json, :provenance_json, :schema_version)""",
+        episode_row)
+
+    requested_step_index = int((record.episode or {}).get("step_index", 0))
+    step_index = requested_step_index
+    if head is not None:
+        existing_step = conn.execute(
+            "SELECT step_index FROM tehm_episode_steps "
+            "WHERE episode_id=? AND transition_id=? LIMIT 1",
+            (episode.episode_id, transition.transition_id)).fetchone()
+        if existing_step is not None:
+            # Replays retain the original position even if the caller's
+            # source omitted or changed its volatile step metadata.
+            step_index = int(existing_step["step_index"])
+        else:
+            occupied = {
+                int(row["step_index"])
+                for row in conn.execute(
+                    "SELECT step_index FROM tehm_episode_steps "
+                    "WHERE episode_id=?", (head["episode_id"],)).fetchall()
+            }
+            if step_index in occupied:
+                # A session adapter may emit a default zero for each isolated
+                # record.  Preserve the accumulated chain by appending this
+                # new transition instead of replacing an earlier step.
+                step_index = max(occupied, default=-1) + 1
+    step_row = {
+        "episode_id": episode.episode_id,
+        "step_index": step_index,
+        "transition_id": transition.transition_id,
+        "branch_id": "main",
+    }
+    _assert_existing_row_equivalent(
+        conn, table="tehm_episode_steps",
+        where_sql="episode_id=? AND step_index=?",
+        where_params=(step_row["episode_id"], step_row["step_index"]),
+        expected=step_row, label="episode step")
+    conn.execute(
+        """INSERT OR IGNORE INTO tehm_episode_steps
+               (episode_id, step_index, transition_id, branch_id)
+           VALUES (?, ?, ?, 'main')""",
+        (episode.episode_id, step_index, transition.transition_id))
+
+    # Dataset role is explicit at the capture boundary.  Evaluation/A-B
+    # callers pass a non-training campaign and ``dataset_learner_eligible``
+    # false; this prevents a later learner query from seeing the row through
+    # an implicit ``live`` membership.
+    membership_row = {
+        "transition_id": transition.transition_id,
+        "campaign_id": dataset_campaign_id,
+        "split": dataset_split,
+        "learner_eligible": int(dataset_learner_eligible),
+        "frozen_snapshot_digest": frozen_snapshot_digest,
+        "assigned_at": materialized_at,
+    }
+    _assert_existing_row_equivalent(
+        conn, table="tehm_dataset_membership",
+        where_sql="transition_id=? AND campaign_id=?",
+        where_params=(membership_row["transition_id"],
+                      membership_row["campaign_id"]),
+        expected=membership_row, label="dataset membership",
+        ignore_keys=frozenset({"assigned_at"}))
+    conn.execute(
+        """INSERT OR IGNORE INTO tehm_dataset_membership
+               (transition_id, campaign_id, split, learner_eligible,
+                frozen_snapshot_digest, assigned_at)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (membership_row["transition_id"], membership_row["campaign_id"],
+         membership_row["split"], membership_row["learner_eligible"],
+         membership_row["frozen_snapshot_digest"], membership_row["assigned_at"]))
+
+    # --- 5. experience-graph edges ------------------------------------------
+    edge_kinds: list[str] = []
+    for rel, src, dst in (
+        ("EXECUTED_FROM", transition.transition_id, before_state.state_id),
+        ("PRODUCED_STATE", transition.transition_id, after_state.state_id),
+        ("PART_OF_EPISODE", transition.transition_id, episode.episode_id),
+    ):
+        edge_row = {
+            "source_id": src,
+            "relation_type": rel,
+            "target_id": dst,
+            "metadata_json": stable_dumps({"capture": record.record_id}),
+        }
+        _assert_existing_row_equivalent(
+            conn, table="tehm_edges",
+            where_sql="source_id=? AND relation_type=? AND target_id=?",
+            where_params=(src, rel, dst), expected=edge_row, label="edge",
+            # Edge identity is the relation triple; capture metadata may
+            # legitimately name a second ingest of the same transition.
+            ignore_keys=frozenset({"metadata_json"}))
+        conn.execute(
+            """INSERT OR IGNORE INTO tehm_edges
+                   (source_id, relation_type, target_id, metadata_json)
+               VALUES (?, ?, ?, ?)""",
+            (edge_row["source_id"], edge_row["relation_type"],
+             edge_row["target_id"], edge_row["metadata_json"]))
+        edge_kinds.append(rel)
+    # --- 6. materialize the five views (parametric stays NOT_IMPLEMENTED) ----
+    role_map = RoleProjector().project_all(before_graph)
+    views = views_materialize.materialize_all(
+        conn,
+        state_before=before_state,
+        state_after=after_state,
+        transition=transition,
+        episode=episode,
+        before_graph=before_graph,
+        after_graph=after_graph,
+        before_signature=extract_diagnostic_signature(before_content),
+        transition_delta_signature=views_materialize.transition_delta_signature(transition),
+        role_map=role_map,
+        episode_transitions=_load_episode_transitions(
+            conn, episode.ordered_transition_ids),
+        materialized_at=materialized_at,
+        commit=False,
+    )
+
+    # Sanity: predicates (H3) materialized alongside — they ride the semantic
+    # view as an evidence snapshot; run the extractor for a determinism check.
+    extract_predicates(before_graph)
+
+    return CaptureReceipt(
+        record_id=record.record_id,
+        state_ids={"before": before_state.state_id, "after": after_state.state_id},
+        transition_id=transition.transition_id,
+        episode_id=episode.episode_id,
+        outcome=outcome,
+        primary_effect_key=effect_key,
+        views_materialized=len(views),
+        artifacts_written=4,
+        edge_kinds=edge_kinds,
+    )
+
+
+# -- episode-graph helpers ---------------------------------------------------
+
+def _session_head(conn: sqlite3.Connection, session_id: str) -> dict | None:
+    """The current head episode of a repair session (most steps so far)."""
+    if not session_id:
+        return None
+    rows = conn.execute(
+        "SELECT episode_id, initial_state_id, terminal_state_id, "
+        "terminal_status, mechanism_family, trajectory_summary_json, "
+        "provenance_json FROM tehm_episodes").fetchall()
+    head: dict | None = None
+    for r in rows:
+        prov = tehm_db.read_json(r["provenance_json"])
+        if prov.get("session_id") != session_id:
+            continue
+        n = conn.execute(
+            "SELECT COUNT(*) AS n FROM tehm_episode_steps WHERE episode_id=?",
+            (r["episode_id"],)).fetchone()["n"]
+        if head is None or n > head["steps"]:
+            head = {
+                "episode_id": r["episode_id"],
+                "initial_state_id": r["initial_state_id"],
+                "terminal_state_id": r["terminal_state_id"],
+                "terminal_status": r["terminal_status"],
+                "mechanism_family": r["mechanism_family"],
+                "trajectory_summary_json": r["trajectory_summary_json"],
+                "steps": n,
+            }
+    return head
+
+
+def _session_transitions(conn: sqlite3.Connection, episode_id: str) -> tuple[list, list]:
+    """Ordered (transition_ids, outcomes) of one episode's main branch."""
+    rows = conn.execute(
+        """SELECT t.transition_id AS tid, t.outcome AS outcome
+           FROM tehm_episode_steps s
+           JOIN tehm_transitions t ON t.transition_id = s.transition_id
+           WHERE s.episode_id = ? AND s.branch_id = 'main'
+           ORDER BY s.step_index""", (episode_id,)).fetchall()
+    return [r["tid"] for r in rows], [r["outcome"] for r in rows]
+
+
+def _session_steps_indexed(conn: sqlite3.Connection, episode_id: str) -> list:
+    """[(step_index, transition_id, outcome)] of one episode's main branch, by step index."""
+    return [(int(r["step_index"]), r["tid"], r["outcome"]) for r in conn.execute(
+        """SELECT s.step_index AS step_index, t.transition_id AS tid, t.outcome AS outcome
+           FROM tehm_episode_steps s
+           JOIN tehm_transitions t ON t.transition_id = s.transition_id
+           WHERE s.episode_id = ? AND s.branch_id = 'main'
+           ORDER BY s.step_index""", (episode_id,)).fetchall()]
+
+
+def _carry_forward_steps(conn: sqlite3.Connection, from_episode: str, to_episode: str) -> None:
+    """Copy the old episode's steps onto the new accumulated episode id."""
+    for r in conn.execute(
+            "SELECT step_index, transition_id, branch_id FROM tehm_episode_steps "
+            "WHERE episode_id = ?", (from_episode,)).fetchall():
+        step_row = {
+            "episode_id": to_episode,
+            "step_index": r["step_index"],
+            "transition_id": r["transition_id"],
+            "branch_id": r["branch_id"],
+        }
+        _assert_existing_row_equivalent(
+            conn, table="tehm_episode_steps",
+            where_sql="episode_id=? AND step_index=?",
+            where_params=(to_episode, r["step_index"]),
+            expected=step_row, label="episode step")
+        conn.execute(
+            """INSERT OR IGNORE INTO tehm_episode_steps
+                   (episode_id, step_index, transition_id, branch_id)
+               VALUES (?, ?, ?, ?)""",
+            (step_row["episode_id"], step_row["step_index"],
+             step_row["transition_id"], step_row["branch_id"]))
+
+
+def _load_episode_transitions(conn: sqlite3.Connection,
+                              transition_ids: list[str]) -> list[CanonicalTransition]:
+    """Rehydrate an episode's ordered canonical transitions for its view.
+
+    The episodic view is keyed by the accumulated episode ID and therefore
+    must contain the complete ordered chain.  Reconstructing from persisted
+    rows keeps replay independent of the one input record currently being
+    ingested (which may be an earlier step in that chain).
+    """
+    if not transition_ids:
+        return []
+    placeholders = ", ".join("?" for _ in transition_ids)
+    rows = conn.execute(
+        "SELECT * FROM tehm_transitions WHERE transition_id IN (" +
+        placeholders + ")", tuple(transition_ids)).fetchall()
+    by_id = {row["transition_id"]: row for row in rows}
+    missing = [tid for tid in transition_ids if tid not in by_id]
+    if missing:
+        raise ExecutionRecordError(
+            "episode view cannot load missing transitions: " + ", ".join(missing))
+    transitions: list[CanonicalTransition] = []
+    for tid in transition_ids:
+        row = by_id[tid]
+        transitions.append(CanonicalTransition(
+            source_state_id=row["source_state_id"],
+            target_state_id=row["target_state_id"],
+            action=Action.from_dict(tehm_db.read_json(row["action_json"])),
+            observation_delta=ObservationDelta.from_dict(
+                tehm_db.read_json(row["observation_delta_json"])),
+            verifier=VerifierSnapshot.from_dict(
+                tehm_db.read_json(row["verifier_json"])),
+            outcome=row["outcome"],
+            primary_effect_key=row["primary_effect_key"],
+            created_regressions=tehm_db.read_json(
+                row["created_regressions_json"]),
+            newly_observed=tehm_db.read_json(row["newly_observed_json"]),
+            provenance=tehm_db.read_json(row["provenance_json"]),
+            schema_version=row["schema_version"],
+        ))
+    return transitions
+
+
+# -- helpers -----------------------------------------------------------------
+
+def _state_content(state: dict, repository_ref: str | None) -> dict:
+    content = {
+        "repository_ref": repository_ref or state.get("repository_ref"),
+        "config": dict(state.get("config") or {}),
+        "reports": dict(state.get("reports") or {}),
+        "artifacts": dict(state.get("artifacts") or {}),
+        "failure_signature": dict(state.get("failure_signature") or {}),
+    }
+    if state.get("structural_graph") is not None:
+        content["structural_graph"] = dict(state["structural_graph"])
+    return content
+
+
+def _state_graph(content: dict, design_id: str | None, *,
+                 platform: str | None, run_tag: str | None):
+    """Build the semantic graph owned by one canonical state.
+
+    A supplied ``{nodes, edges}`` artifact is authoritative.  Malformed graph
+    data fails closed instead of silently downgrading to a report-only graph;
+    adapters that do not provide structural semantics use the flow fallback.
+    """
+    structural = content.get("structural_graph")
+    if structural is not None:
+        if (not isinstance(structural, dict)
+                or not isinstance(structural.get("nodes"), list)
+                or not isinstance(structural.get("edges"), list)):
+            raise ExecutionRecordError(
+                "structural_graph must contain nodes and edges lists")
+        return load_graph_from_artifact(structural)
+    return build_run_context_graph(
+        content.get("reports", {}), content.get("config", {}),
+        design_id=design_id, platform=platform, run_tag=run_tag)
+
+
+def _find_run_tag(state: dict) -> str | None:
+    # Failed production runs often have no report provenance (the flow stops
+    # before route/signoff reports are emitted), while the adapter still
+    # records the authoritative run tag in its content-addressed artifact
+    # manifest.  Prefer report provenance, then fall back to that manifest so
+    # a matched control/treatment pair shares the same source graph context.
+    for report in (state.get("reports") or {}).values():
+        provenance = report.get("provenance") or {}
+        if provenance.get("run_tag"):
+            return str(provenance["run_tag"])
+    def nested(value):
+        if isinstance(value, dict):
+            if value.get("run_tag"):
+                return str(value["run_tag"])
+            for child in value.values():
+                found = nested(child)
+                if found:
+                    return found
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                found = nested(child)
+                if found:
+                    return found
+        return None
+    return nested(state.get("artifacts") or {})
+
+
+def _tool_versions(record: ExecutionRecord) -> dict:
+    verification = record.verification or {}
+    tool_versions = verification.get("tool_versions") or {}
+    if isinstance(tool_versions, dict):
+        return tool_versions
+    return {}
+
+
+def _oracle_available(state_content: dict) -> dict:
+    reports = state_content.get("reports", {})
+    return {key: bool(report) for key, report in reports.items()}

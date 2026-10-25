@@ -1,0 +1,32 @@
+# Obligation registry v1 (design doc 25).
+# Result per obligation: BOUND | SYNTHESIZABLE | UNAVAILABLE | PASS | FAIL
+# OC = sum(w_q * 1[checked(q)]) / sum(w_q); unavailable obligations must lower
+# activation confidence (never silently pass).
+schema_version: obligation-v1
+
+flow_signoff_obligations:
+  - TARGET_FAILURE_REMOVED
+  - PRESERVE_LVS
+  - PRESERVE_ROUTE_COMPLETION
+  - PRESERVE_TIMING_TIER
+  - NO_WNS_REGRESSION
+  - PRESERVE_RCX
+  - NO_RULE_DECK_RELAXATION
+  - NO_CREATED_DRC_REGRESSION
+  - REQUIRED_STAGE_COMPLETED
+
+rtl_obligations:
+  - RTL_TARGET_TEST_PASS
+  - RTL_FROZEN_REGRESSION_PASS
+  - RTL_COMPILE_PASS
+  - RTL_EQUIVALENCE_PASS
+  - RESET_SEMANTICS_PRESERVED
+  - HANDSHAKE_PROPERTY_PRESERVED
+  - NO_NEW_ASSERTION_FAILURE
+
+result_states:
+  - BOUND
+  - SYNTHESIZABLE
+  - UNAVAILABLE
+  - PASS
+  - FAIL

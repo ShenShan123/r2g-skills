@@ -10,7 +10,7 @@
 _r2g_workspace_lockfile() {  # platform design variant -> echoes the lockfile path
   # Keyed on the SHARED ORFS workspace identity ($FLOW_DIR/.../<platform>/<design>/<variant>).
   local key h
-  key="$1/$2/$3"
+  key="${FLOW_DIR:-}/$1/$2/$3"
   h="$(printf '%s' "$key" | md5sum 2>/dev/null | awk '{print $1}')"
   [[ -z "$h" ]] && h="$(printf '%s' "$key" | tr -c 'A-Za-z0-9' '_')"
   printf '%s/r2g_ws_%s.lock' "${R2G_LOCK_DIR:-/tmp}" "$h"

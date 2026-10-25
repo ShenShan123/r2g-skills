@@ -320,6 +320,10 @@ def recommend(project: Path, use_learned: bool = True,
     design_type = detect_design_type(project, config)
     cell_count = synth_stats.get('cell_count', 0)
     platform = config.get('PLATFORM', 'nangate45')
+    memory_backend = os.environ.get("R2G_MEMORY_BACKEND", "legacy").strip().lower()
+    if memory_backend not in {"none", "legacy", "tehm"}:
+        raise ValueError(
+            f"invalid R2G_MEMORY_BACKEND={memory_backend!r}; refusing silent fallback")
 
     recommendations = {}
     explanations = []
@@ -354,7 +358,7 @@ def recommend(project: Path, use_learned: bool = True,
     # intentional: safety rails beat empirical medians.
     learned_source = None
     try:
-        if not use_learned:
+        if not use_learned or memory_backend != "legacy":
             # Naive arm: skip the learned override entirely. learned_source
             # stays None and only params_by_size + clamps + floor apply.
             raise _SkipLearned
@@ -415,6 +419,26 @@ def recommend(project: Path, use_learned: bool = True,
         learned_source = None
     # ----------------------------------------------------------------------
 
+    memory_proposal = None
+    if use_learned and memory_backend == "tehm":
+        try:
+            memory_root = Path(__file__).resolve().parents[3] / "memory"
+            if str(memory_root) not in sys.path:
+                sys.path.insert(0, str(memory_root))
+            from runtime_router import config_recommendation
+            memory_proposal = config_recommendation(
+                project_dir=project, design_id=config.get("DESIGN_NAME"),
+                platform=platform, cfg=config)
+            if memory_proposal:
+                recommendations.update(memory_proposal["config_edits"])
+                learned_source = f"tehm_rule:{memory_proposal['rule_id']}"
+                explanations.append(
+                    f"TEHM typed config rule {memory_proposal['rule_id']} proposed "
+                    f"{memory_proposal['config_edits']}")
+        except Exception as exc:  # fail closed to the shared static policy (H12)
+            explanations.append(
+                f"TEHM memory unavailable; using cold-start policy ({type(exc).__name__})")
+
     # Design-type adjustments
     if design_type == 'bus_heavy':
         recommendations['CORE_UTILIZATION'] = min(recommendations['CORE_UTILIZATION'], 15)
@@ -469,7 +493,7 @@ def recommend(project: Path, use_learned: bool = True,
         if 'PLACE_DENSITY' not in config:
             explanations.append('sky130 platform: consider higher PLACE_DENSITY (0.50+) vs nangate45 default (0.30).')
 
-    return {
+    result = {
         'design_name': config.get('DESIGN_NAME', 'unknown'),
         'platform': platform,
         'cell_count': cell_count,
@@ -480,6 +504,12 @@ def recommend(project: Path, use_learned: bool = True,
         'explanations': explanations,
         'learned_source': learned_source,
     }
+    # Preserve the legacy JSON contract byte-for-byte: backend metadata is an
+    # experimental-arm field, never injected into the frozen baseline output.
+    if memory_backend != "legacy":
+        result['memory_backend'] = memory_backend
+        result['memory_proposal'] = memory_proposal
+    return result
 
 
 def main():

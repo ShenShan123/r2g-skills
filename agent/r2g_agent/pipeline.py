@@ -165,6 +165,7 @@ class Pipeline:
         self._procs: dict[tuple, subprocess.Popen] = {}
         # the user's own knowledge store (seeded from the shipped one, which the
         # skills refuse to write); every stage reads and writes this copy
+        self.memory_env = knowledge.env()
         self.knowledge = knowledge.ensure() if ingest else {"action": "disabled"}
         self._cancel: set[str] = set()
         self._lock = threading.Lock()
@@ -333,8 +334,7 @@ class Pipeline:
         e = dict(os.environ)
         e.update({"NUM_CORES": str(self.cores), "OMP_NUM_THREADS": str(self.cores),
                   "ORFS_TIMEOUT": str(self.stage_timeout)})
-        if self.ingest:
-            e.update(knowledge.env())
+        e.update(self.memory_env)
         e.update(env or {})
         with open(logdir / ("%s.log" % stage), "ab") as log:
             log.write(("\n$ %s\n" % " ".join(cmd)).encode())
@@ -609,8 +609,10 @@ class Pipeline:
             return
         ing = skills_dir() / "signoff-loop" / "knowledge" / "ingest_run.py"
         try:
-            rc = self._sh(jid, name, "ingest", ["python3", str(ing), str(pdir), "--db",
-                                                knowledge.env()["R2G_KNOWLEDGE_DB"]], pdir, timeout=600)
+            cmd = ["python3", str(ing), str(pdir)]
+            if self.memory_env["R2G_MEMORY_BACKEND"] == "legacy":
+                cmd += ["--db", self.memory_env["R2G_KNOWLEDGE_DB"]]
+            rc = self._sh(jid, name, "ingest", cmd, pdir, timeout=600)
         except Cancelled:
             raise
         except Exception as e:                                    # noqa: BLE001

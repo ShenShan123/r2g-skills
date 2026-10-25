@@ -116,3 +116,15 @@ def production_toolchain_env():
 def production_toolchain():
     with production_toolchain_env():
         yield
+
+
+@pytest.fixture
+def empty_user_knowledge(tmp_path, monkeypatch):
+    """A fresh initialized user store; CLI tests must not need bundled history."""
+    import knowledge_db
+    path = tmp_path / 'empty-user-knowledge.sqlite'
+    conn = knowledge_db.connect(path)
+    knowledge_db.ensure_schema(conn)
+    conn.close()
+    monkeypatch.setenv('R2G_KNOWLEDGE_DB', str(path))
+    return path

@@ -21,6 +21,7 @@ Exit codes:
   2 — usage error or missing data
 """
 import json
+import hashlib
 import math
 import re
 import sys
@@ -33,6 +34,22 @@ TIER_ORDER = {'clean': 0, 'minor': 1, 'moderate': 2, 'severe': 3, 'unconstrained
 def worse_tier(a: str, b: str) -> str:
     """Return the more severe of two tiers."""
     return a if TIER_ORDER.get(a, 0) >= TIER_ORDER.get(b, 0) else b
+
+
+def drv_summary(timing: dict) -> dict:
+    """Post-route design-rule limits from ppa.json (OpenROAD finish-stage
+    report_check_types): max-slew and max-capacitance violator counts. Reported beside,
+    never folded into, the setup tier; status 'fail' means a Liberty limit is exceeded
+    (acceptance check A8), 'unknown' means the counts are missing."""
+    def _n(key):
+        v = timing.get(key)
+        return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+    slew, cap = _n('max_slew_violations'), _n('max_cap_violations')
+    if slew is None or cap is None:
+        return {'max_slew_violations': slew, 'max_cap_violations': cap, 'total': None,
+                'status': 'unknown'}
+    return {'max_slew_violations': slew, 'max_cap_violations': cap, 'total': slew + cap,
+            'status': 'clean' if slew + cap == 0 else 'fail'}
 
 
 def classify_wns(wns: float, moderate_thr: float, severe_thr: float) -> str:
@@ -67,6 +84,24 @@ def read_clock_period(project: Path) -> float | None:
     sdc_text = sdc_file.read_text(encoding='utf-8', errors='ignore')
     m = re.search(r'set\s+clk_period\s+([\d.]+)', sdc_text)
     return float(m.group(1)) if m else None
+
+
+def ppa_binding(project: Path, ppa: dict, raw: bytes) -> dict:
+    """Name the input actually read, never the signoff pointer or newest run.
+
+    Missing/contradictory identity stays unknown. This is input attribution,
+    not a claim that a newer flow or a complete acceptance succeeded.
+    """
+    rd = Path(ppa['run_dir']) if ppa.get('run_dir') else None
+    tag = None
+    if rd and rd.is_dir() and rd.resolve().parent == (project / 'backend').resolve():
+        candidates = {v for v in (rd.name, ppa.get('run_tag'),
+                                  (ppa.get('provenance') or {}).get('run_tag')) if v}
+        if len(candidates) == 1:
+            tag = rd.name
+    return {'run_tag': tag, 'provenance': {'run_tag': tag, 'run_dir': str(rd) if tag else None,
+            'source': 'ppa_run_dir' if tag else 'unknown',
+            'ppa_sha256': hashlib.sha256(raw).hexdigest()}}
 
 
 def read_core_utilization(project: Path) -> float | None:
@@ -314,7 +349,8 @@ def main():
         sys.exit(2)
 
     try:
-        ppa = json.loads(ppa_file.read_text(encoding='utf-8', errors='ignore'))
+        ppa_raw = ppa_file.read_bytes()
+        ppa = json.loads(ppa_raw)
     except json.JSONDecodeError as e:
         print(f'ERROR: failed to parse {ppa_file}: {e}', file=sys.stderr)
         sys.exit(2)
@@ -325,11 +361,15 @@ def main():
     violation_count = timing.get('setup_violation_count', 'N/A')
     hold_wns = timing.get('hold_wns')
     hold_tns = timing.get('hold_tns')
+    drv = drv_summary(timing)
+    binding = ppa_binding(project, ppa, ppa_raw)
 
     # Handle missing WNS
     if wns is None or not isinstance(wns, (int, float)):
         result = {
+            **binding,
             'tier': 'unknown', 'wns': None, 'tns': None,
+            'drv': drv,
             'wns_tier': 'unknown', 'tns_tier': 'unknown',
             'message': 'No setup_wns found in ppa.json. Timing data may be missing.',
             'options': [
@@ -366,6 +406,7 @@ def main():
     tns_display = f'{tns:.4f}' if isinstance(tns_raw, (int, float)) else 'N/A'
 
     result = {
+        **binding,
         'wns': wns,
         'tns': tns_raw,
         # diagnose_signoff_fix._timing_plan keys on `wns_ns`/`clock_period_ns`
@@ -382,6 +423,7 @@ def main():
         'utilization': utilization,
         'hold_wns': hold_wns,
         'hold_tns': hold_tns,
+        'drv': drv,
         'thresholds': {
             'wns_moderate': wns_moderate,
             'wns_severe': wns_severe,
@@ -510,6 +552,9 @@ def main():
         hold_tns_val = f', hold_tns={hold_tns:.4f}ns' if isinstance(hold_tns, (int, float)) else ''
         print(f'  Note: Hold violations present (hold_wns={hold_wns:.4f}ns{hold_tns_val}) — '
               f'not blocking, but worth reviewing.')
+    if drv['status'] == 'fail':
+        print(f"  Note: design-rule limits exceeded (max_slew={drv['max_slew_violations']}, "
+              f"max_cap={drv['max_cap_violations']}) — timing repair (drv) required for acceptance.")
     sys.exit(0)
 
 

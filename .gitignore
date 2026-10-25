@@ -325,3 +325,14 @@ webui/node_modules/
 webui/tsconfig.tsbuildinfo
 # the built UI ships inside the Python package so users never need Node
 !agent/r2g_agent/web/dist/
+
+# Local TEHM design sources are excluded by the published memory branch.
+/memory/docs/
+# Runtime data and future experiments stay outside the clean source tree.
+/experiments/
+/evidence/
+/memory/evaluation/
+/memory/scripts/
+r2g-skills/signoff-loop/knowledge/knowledge.sqlite*
+r2g-skills/signoff-loop/knowledge/heuristics.json
+r2g-skills/signoff-loop/knowledge/eval/

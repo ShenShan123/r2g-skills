@@ -26,7 +26,7 @@ def test_checker_refuses_a_workspace_another_run_holds(tmp_path: Path) -> None:
     lockdir = tmp_path / "locks"
     lockdir.mkdir()
     variant = proj.name                     # the $3-omitted default
-    key = f"{PLATFORM}/{DESIGN}/{variant}".encode()
+    key = f"{orfs / 'flow'}/{PLATFORM}/{DESIGN}/{variant}".encode()
     lockfile = lockdir / f"r2g_ws_{hashlib.md5(key).hexdigest()}.lock"
 
     with open(lockfile, "w") as held:       # e.g. the fix/<task> run grading now

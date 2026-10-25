@@ -1,0 +1,59 @@
+# Role schema v1 (design doc 6.4).
+# Mirror of tehm.graph.roles.ROLE_SCHEMA.
+# Roles come from the unified LocalDesignGraph; uncertain entities -> UNKNOWN.
+schema_version: role-v0.1
+
+roles:
+  STATE_REG:            # RTL state registers
+    node_kinds: [STATE_REG, SIGNAL]
+    name_patterns: ["(?i)state(_reg|reg|_cur|_q)?$", "(?i)^(cur|curr)_state"]
+  NEXT_STATE:
+    node_kinds: [SIGNAL, EXPRESSION]
+    name_patterns: ["(?i)next_state", "(?i)^nxt", "(?i)_ns$"]
+  TRANSITION_GUARD:
+    node_kinds: [EXPRESSION, TRANSITION_GUARD]
+    name_patterns: ["(?i)guard", "(?i)cond", "(?i)en$"]
+  REQUEST:
+    node_kinds: [SIGNAL]
+    name_patterns: ["(?i)(^|_)req(uest)?$"]
+  ACK:
+    node_kinds: [SIGNAL]
+    name_patterns: ["(?i)(^|_)ack$", "(?i)done$", "(?i)valid_in$"]
+  VALID:
+    node_kinds: [SIGNAL]
+    name_patterns: ["(?i)(^|_)valid$"]
+  READY:
+    node_kinds: [SIGNAL]
+    name_patterns: ["(?i)(^|_)ready$"]
+  RESET:
+    node_kinds: [SIGNAL, RESET]
+    name_patterns: ["(?i)reset", "(?i)^rst"]
+  COUNTER:
+    node_kinds: [SIGNAL, COUNTER]
+    name_patterns: ["(?i)count(_val)?$", "(?i)^cnt"]
+  COUNTER_BOUND:
+    node_kinds: [SIGNAL, COUNTER_BOUND]
+    name_patterns: ["(?i)(max|bound|limit|threshold)"]
+  DATA_PATH:
+    node_kinds: [SIGNAL, DATA_PATH]
+    name_patterns: ["(?i)(data|din|dout|payload)"]
+  CONTROL_PATH:
+    node_kinds: [SIGNAL, CONTROL_PATH]
+    name_patterns: ["(?i)(ctrl|control|fsm|state)"]
+  # flow/signoff v1 roles (kind-driven)
+  TARGET_CHECK:
+    node_kinds: [CHECK]
+  PRESERVE_CHECK:
+    node_kinds: [CHECK]
+  RERUN_STAGE:
+    node_kinds: [STAGE]
+  CONFIG_KNOB:
+    node_kinds: [CONFIG_KNOB]
+  ORACLE:
+    node_kinds: [ORACLE, TOOL]
+  RESOURCE:
+    node_kinds: []
+  FAILURE_SIGNATURE:
+    node_kinds: [VIOLATION_CLASS]
+
+unknown: UNKNOWN

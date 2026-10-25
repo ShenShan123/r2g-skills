@@ -14,8 +14,10 @@ the input to `suggest_config.py` and `failure-patterns.md` review.
 | `failure_candidates.json` | `knowledge/mine_rules.py` | human reviewer → `references/failure-patterns.md` |
 | `fix_events_archive.sqlite` | `fix_log_manager.py` (cold archive of raw `fix_events`) | retained-only (learning never reads it; Tier-2 survives archival) |
 
-The store (`knowledge.sqlite` + `heuristics.json`, plus `fix_events_archive.sqlite` once created)
-is **tracked in git**, so the skill ships pre-trained with its accumulated experience.
+Generated stores are user data, not source files. This clean checkout contains no
+`knowledge.sqlite`, `heuristics.json` or historical evaluation set. The agent creates
+an empty legacy store under `$R2G_HOME/knowledge` when explicitly selected. TEHM is
+the agent default; see `memory/README.md` for its independent store and policy layer.
 
 ### Module map (2026-07-18 consolidation)
 
@@ -90,6 +92,7 @@ failure_candidates.json ─┘
 | `observe.py` | reads `knowledge.sqlite` (+ journal, read-only) | agent (`health` degradation alerts; `trace` provenance) |
 | `search_failures.py` | indexes `failure-patterns.md` + `failure_candidates.json`; `lessons_for_symptom()` parses `r2g-lesson` front-matter | `analyze_execution.py`; **`diagnose_signoff_fix.py` decision path** (surfaces the matching active prose lesson at fix time) |
 | `symptom.py` | pure `{check,class,predicates}` → `symptom_id` | `ingest_run.py`, `learn_heuristics.py`, `diagnose_signoff_fix.py` (the universal repair-experience index; family-name is never a key) |
+| `situation.py` | pre-fix failure context (sit-v2: check, class, abort error code, timeout, platform, die mode, util/count band, PPL-0024 perimeter band) → `situation_id` | `fix_signoff.sh` (pre-fix `snapshot` → fix_log `situation`), `engineer_loop` backend recoveries, `ingest_run.py` (derives it when a row has none). Stored ALONGSIDE `symptom_id`, never replacing it (R2G memory redesign A2, 2026-10-01) |
 | `sync_lessons.py` | one-way prose → `lessons` table (front-matter + evidence backfill) | `fix_log_manager.manage()` post-ingest; dashboard/agent |
 | `analyze_execution.py` | reads project artifacts + search results | agent (fix proposal review queue) |
 | `build_lineage_view.py` | read-only (`mode=ro`) projection over `knowledge.sqlite` + `config_lineage` + `heuristics.json` | dashboard "Knowledge health" + "Tuning provenance" panels |
@@ -113,7 +116,8 @@ reports/fix_log.jsonl ─ ingest_run.py ─► fix_events (Tier-1, append-only r
 
 | Table | Tier | Grain | Notes |
 |---|---|---|---|
-| `fix_events` | 1 | one row per fix iteration | append-only system of record; keyed `(fix_session_id, iter, strategy)`; carries before/after counts + category vectors, verdict, config delta + cumulative snapshot, env/tool versions, `provenance` (`live`/`backfill:<source>`) |
+| `fix_events` | 1 | one row per fix iteration | append-only system of record; keyed `(fix_session_id, iter, strategy)`; carries before/after counts + category vectors, verdict, config delta + cumulative snapshot, env/tool versions, `provenance` (`live`/`backfill:<source>`), and the additive `situation_id`/`situation_json`/`situation_source` (`snapshot` = captured pre-fix by the writer and never overwritten on re-ingest; `ingest` = derived from the project's config at ingest, possibly post-fix — a weaker key) |
+| `situations` | — | one row per distinct `situation_id` | the situation catalog (sit-v1 and sit-v2 ids) (`situation_json`, `version`, `first_seen`); exported by `knowledge_sync` like `symptoms` |
 | `fix_trajectories` | 2 | one row per (session, check, **symptom**) episode | `outcome` ∈ `resolved`/`improved`/`abandoned`/`not_attempted` (`improved` = a partial `win`, no full clear — winner preserved, kept strictly below `resolved`), `winning_strategy`, `failed_strategies_json`, ordered `path_json`. PK `(fix_session_id, check_type, symptom_id)` so a symptom-shifting session splits per symptom (failure-patterns #44). **Materialized** (idempotent rebuild; a legacy-PK copy is dropped for recreation) — **never archived**, so learning survives raw archival |
 | `run_violations` | — | one row per run (incl. clean) | the full violation landscape: drc/lvs status + category/mismatch vectors, timing tier, WNS |
 | `fix_events_archive` | 1 (cold) | same columns as `fix_events` | raw rows evicted past a size threshold by `fix_log_manager.archive_old_raw`/`manage`; written to the sidecar `fix_events_archive.sqlite` |

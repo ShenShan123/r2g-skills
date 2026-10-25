@@ -1,23 +1,9 @@
-"""The user's own knowledge store, seeded from the shipped one.
+"""Per-user memory for the r2g agent.
 
-signoff-loop ships knowledge.sqlite + heuristics.json as git-tracked evidence and
-refuses to write them (knowledge_db.SHIPPED_WRITE_OPT_IN). Before this module the
-agent pointed every ingest at that shipped file, the refusal was swallowed, and
-no agent run was ever recorded: the learning loop was open for every user.
-
-Now each user has a copy under R2G_HOME/knowledge/:
-
-  knowledge.sqlite   seeded from the shipped store on first start; every run of
-                     every job is ingested here
-  heuristics.json    re-learned from it after each ingest; what repair reads
-  journal.sqlite     the action journal (machine-local by design)
-  shipped.sha256     digest of the shipped store last merged in
-
-When the shipped store changes (a `git pull` brought new experience), it is
-merged in with knowledge_sync's additive, honesty-gated merge: new rows are
-added, the user's own rows are never overwritten, and a merge that would fail an
-honesty gate is rolled back and reported. Nothing is ever sent anywhere; a user
-who wants to contribute exports a bundle (`knowledge_sync.py export`) by hand.
+The agent defaults to TEHM at R2G_HOME/memory; legacy and none remain explicit
+alternatives. Legacy stores are seeded additively from the shipped baseline.
+TEHM captures and rebuilds only its own execution evidence. No legacy rows are
+imported as TEHM authority. Every skill subprocess receives the same selection.
 """
 from __future__ import annotations
 
@@ -26,12 +12,34 @@ import os
 import shutil
 import sqlite3
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
-from .paths import r2g_home, skills_dir
+from .paths import r2g_home, skills_dir, repo_root
 
-_LOCK = threading.Lock()
+_LOCK = threading.RLock()
+_BACKEND_NAME: str | None = None
+
+
+def backend_name() -> str:
+    """The agent uses TEHM by default; one authority is locked for its process."""
+    global _BACKEND_NAME
+    name = os.environ.get("R2G_MEMORY_BACKEND", "tehm").strip().lower()
+    if name not in {"none", "legacy", "tehm"}:
+        raise ValueError(f"invalid R2G_MEMORY_BACKEND={name!r}; refusing silent fallback")
+    with _LOCK:
+        if _BACKEND_NAME is not None and name != _BACKEND_NAME:
+            raise RuntimeError(f"memory backend already opened as {_BACKEND_NAME!r}; refusing {name!r}")
+        _BACKEND_NAME = name
+    return name
+
+
+def tehm_paths() -> dict:
+    root = r2g_home() / "memory"
+    return {"db": Path(os.environ.get("TEHM_DB", root / "tehm.sqlite")).expanduser().resolve(),
+            "artifacts": Path(os.environ.get("TEHM_ARTIFACTS_ROOT", root / "artifacts")).expanduser().resolve()}
+
 
 
 def shipped_dir() -> Path:
@@ -56,9 +64,17 @@ def paths() -> dict:
 
 
 def env() -> dict:
-    """What every skill script needs to read and write the user's copy."""
+    """Pass the selected backend and user-local stores to every skill process."""
+    name = backend_name()
+    if name == "none":
+        return {"R2G_MEMORY_BACKEND": name}
+    if name == "tehm":
+        p = tehm_paths()
+        return {"R2G_MEMORY_BACKEND": name, "TEHM_DB": str(p["db"]),
+                "TEHM_ARTIFACTS_ROOT": str(p["artifacts"])}
     p = paths()
-    return {"R2G_KNOWLEDGE_DB": str(p["db"]), "R2G_HEURISTICS_PATH": str(p["heuristics"]),
+    return {"R2G_MEMORY_BACKEND": name,
+            "R2G_KNOWLEDGE_DB": str(p["db"]), "R2G_HEURISTICS_PATH": str(p["heuristics"]),
             "R2G_JOURNAL_DB": str(p["journal"])}
 
 
@@ -79,6 +95,10 @@ def _run(script: str, *args: str) -> subprocess.CompletedProcess:
 
 def learn() -> tuple[bool, str]:
     """Rebuild the user's heuristics.json from the user's store."""
+    name = backend_name()
+    if name != "legacy":
+        # runtime_router.ingest_project already rebuilds TEHM from its own evidence.
+        return True, "disabled" if name == "none" else "TEHM rebuilt during ingest"
     p = paths()
     with _LOCK:
         r = _run("learn_heuristics.py", "--db", str(p["db"]), "--out", str(p["heuristics"]))
@@ -88,10 +108,40 @@ def learn() -> tuple[bool, str]:
 
 def ensure() -> dict:
     """Seed or update the user's store. Returns what happened, for the UI/log."""
+    name = backend_name()
+    if name == "none":
+        return {"action": "disabled", "backend": name}
+    if name == "tehm":
+        p = tehm_paths()
+        e = {**os.environ, **env()}
+        e["PYTHONPATH"] = str(repo_root() / "memory") + os.pathsep + e.get("PYTHONPATH", "")
+        read_only = os.environ.get("R2G_MEMORY_READ_ONLY_EVAL", "0") == "1"
+        command = [sys.executable, "-m", "tehm.cli", "init-db"]
+        if read_only:
+            command = [sys.executable, "-c",
+                       "from pathlib import Path; import sys; from tehm import db; "
+                       "c=db.connect_read_only(Path(sys.argv[1])); c.close()", str(p["db"])]
+        with _LOCK:
+            r = subprocess.run(command, cwd=repo_root(), env=e,
+                               capture_output=True, text=True, timeout=120)
+        if r.returncode:
+            raise RuntimeError("TEHM initialization failed: " + (r.stdout + r.stderr)[-800:])
+        return {"action": "ready", "backend": name, "db": str(p["db"]), "read_only": read_only}
     p = paths()
     shipped, shipped_heur = shipped_store()
     if not shipped.is_file():
-        return {"action": "no_shipped_store", "db": str(p["db"])}
+        with _LOCK:
+            if p["db"].is_file():
+                return {"action": "up_to_date", "backend": "legacy", "db": str(p["db"])}
+            command = [sys.executable, "-c",
+                       "import sys, knowledge_db; "
+                       "c=knowledge_db.connect(sys.argv[1]); knowledge_db.ensure_schema(c); c.close()",
+                       str(p["db"])]
+            r = subprocess.run(command, cwd=shipped_dir(), env={**os.environ, **env()},
+                               capture_output=True, text=True, timeout=120)
+        if r.returncode:
+            raise RuntimeError("Legacy initialization failed: " + (r.stdout + r.stderr)[-800:])
+        return {"action": "initialized", "backend": "legacy", "db": str(p["db"])}
     digest = _sha(shipped)
     with _LOCK:
         if not p["db"].is_file():
@@ -120,6 +170,13 @@ def ensure() -> dict:
 
 
 def summary() -> dict:
+    name = backend_name()
+    if name == "none":
+        return {"backend": name, "enabled": False, "db": None, "runs": 0, "heuristics": False}
+    if name == "tehm":
+        p = tehm_paths()
+        return {"backend": name, "db": str(p["db"]), "initialized": p["db"].is_file(),
+                "runs": None, "heuristics": False}
     p = paths()
     try:
         c = sqlite3.connect("file:%s?mode=ro" % p["db"], uri=True)
@@ -127,4 +184,4 @@ def summary() -> dict:
         c.close()
     except sqlite3.Error:
         n = None
-    return {"db": str(p["db"]), "runs": n, "heuristics": p["heuristics"].is_file()}
+    return {"backend": name, "db": str(p["db"]), "runs": n, "heuristics": p["heuristics"].is_file()}

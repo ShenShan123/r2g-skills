@@ -74,6 +74,7 @@ except ImportError:                       # knowledge/ not yet on the path
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "knowledge"))
     import symptom
 
+from knob_policy import UNSET              # noqa: E402  the edit REMOVES the knob (D-A1)
 BLOCK_START = "# >>> r2g signoff-fix (auto) >>>"
 BLOCK_END = "# <<< r2g signoff-fix (auto) <<<"
 KLAYOUT_CPP_CRASH = re.compile(r"sort_circuit|gen_log_entry|segmentation|sigsegv", re.I)
@@ -167,7 +168,8 @@ def _all_antenna(categories: dict) -> bool:
 def _applied(cfg: dict, edits: dict) -> bool:
     if not edits:
         return False
-    return all(str(cfg.get(k)) == str(v) for k, v in edits.items())
+    return all((k not in cfg) if str(v) == UNSET else (str(cfg.get(k)) == str(v))
+               for k, v in edits.items())
 
 
 
@@ -475,13 +477,74 @@ def _routing_drc_strategies(cfg: dict, exclude: set) -> list:
     return [strat]
 
 
+# Local-interconnect spacing DRC (sky130 li.*, licon.*, mcon.*; 2026-10-05, failure-patterns
+# "Local-interconnect spacing DRC (li.3)"): violations inside and between abutting cells,
+# i.e. a PLACEMENT effect. density_relief lowers utilisation, which on an already sparse
+# sky130hs die (8-19 %) goes the wrong way and soon hits its floor. The generic ORFS lever
+# for placement-induced spacing is cell padding: ladder 2 -> 4 sites, global and detail.
+_LOCAL_DRC_PREFIXES = ("li.", "licon.", "mcon.")
+_CELL_PAD_STEPS = (2, 4)
+
+
+def _is_local_drc(category: str) -> bool:
+    return category.lower().startswith(_LOCAL_DRC_PREFIXES)
+
+
+CELL_PAD_STRATEGIES = tuple(f"cell_pad_relief_{p}" for p in _CELL_PAD_STEPS)
+
+
+def _cell_pad_strategies(cfg: dict, exclude=frozenset()) -> list:
+    """The next untried rung above the padding already in the config. One id per rung: a
+    rejected rung is rolled back (config unchanged) but stays excluded, so the ladder
+    advances instead of retrying it (Phase R S2 finding, amendment R-A1)."""
+    try:
+        cur = int(float(cfg.get("CELL_PAD_IN_SITES_DETAIL_PLACEMENT", "0")))
+    except (TypeError, ValueError):
+        cur = 0
+    nxt = next((p for p in _CELL_PAD_STEPS if p > cur and f"cell_pad_relief_{p}" not in exclude), None)
+    if nxt is None:
+        return []
+    edits = {"CELL_PAD_IN_SITES_GLOBAL_PLACEMENT": str(nxt),
+             "CELL_PAD_IN_SITES_DETAIL_PLACEMENT": str(nxt)}
+    if _applied(cfg, edits):
+        return []
+    return [{"id": f"cell_pad_relief_{nxt}",
+             "rationale": (f"Local-interconnect spacing violations are a placement effect: pad "
+                           f"every cell by {nxt} sites (global and detail placement) so abutting "
+                           "cells keep li/licon/mcon spacing. Real layout change; the deck is "
+                           "never relaxed."),
+             "config_edits": edits, "rerun_from": "floorplan", "recheck": "drc",
+             "auto_apply": True}]
+
+
 # Detailed-route congestion / DRT-residual / wall-clock-timeout relief (validated
 # 2026-06-17; see references/failure-patterns.md "Routing Congestion" and the
 # route-relief note). SAME CORE_UTILIZATION lever as density_relief, but keyed to a
 # ROUTE-STAGE abort (orfs-fail-route, symptom check=orfs_stage/class=route) which
 # never reaches signoff DRC — so the A/B loop was structurally blind to it until
 # this strategy + fix_signoff.sh --check route wired backend aborts into the loop.
-def _route_strategies(cfg: dict, exclude: set, *, to_floor: bool = False) -> list:
+_ROUTE_ABORT_FACTOR = 0.8   # a global-route congestion abort steps CORE_UTILIZATION x0.8
+_SPARSE_UTIL = 20           # at or below this utilisation a congested die is not short of area
+_ROUTE_LAYER_ADJ = "0.10"   # ORFS: low ROUTING_LAYER_ADJUSTMENT "reduces global routing failure"
+
+
+def _route_layer_strategies(cfg: dict, exclude: set) -> list:
+    """GRT congestion that utilisation cannot relieve (sparse die, or the ladder at its floor):
+    lower ROUTING_LAYER_ADJUSTMENT (default 0.5) to 0.10, the lever run_orfs.sh's own GRT-0116
+    hint names. One try. The detailed router and the signoff deck are unchanged; DRC still judges
+    the result (failure-patterns "global-route congestion ... ladder", amendment R-A1)."""
+    edits = {"ROUTING_LAYER_ADJUSTMENT": _ROUTE_LAYER_ADJ}
+    if "route_layer_relief" in exclude or _applied(cfg, edits):
+        return []
+    return [{"id": "route_layer_relief",
+             "rationale": ("Global routing stays congested where more area cannot help: lower the "
+                           "routing-layer capacity adjustment to 0.10 so global routing can use more "
+                           "of each layer; detailed routing and DRC still decide."),
+             "config_edits": edits, "rerun_from": "route", "recheck": "route", "auto_apply": True}]
+
+
+def _route_strategies(cfg: dict, exclude: set, *, to_floor: bool = False,
+                      aborted: bool = False) -> list:
     """Route-stage abort relief: lower CORE_UTILIZATION so detailed routing has
     room to converge — congested / timeout routes (substitution-permutation crypto,
     dense interconnect) leave DRT grinding stubborn tiles until the wall-clock kills
@@ -504,7 +567,17 @@ def _route_strategies(cfg: dict, exclude: set, *, to_floor: bool = False) -> lis
         cur_util = int(float(cfg.get("CORE_UTILIZATION", "")))
     except (TypeError, ValueError):
         return []
-    new_util = _UTIL_FLOOR if to_floor else max(_UTIL_FLOOR, cur_util - _UTIL_STEP)
+    # Ladder (2026-10-05, failure-patterns "Routing Congestion" -> route_relief ladder):
+    # a global-route congestion ABORT (no detailed-route result) steps x0.8 -- one -8
+    # step from a 74-89 % die stays congested -- while a route that completed WITH
+    # violations keeps the gentle -8. Both repeat: fix_signoff continues past a rerun
+    # that is still congested, bounded by the floor, MAX_ITERS and its non-improvement stop.
+    if to_floor:
+        new_util = _UTIL_FLOOR
+    elif aborted:
+        new_util = max(_UTIL_FLOOR, min(cur_util - _UTIL_STEP, int(cur_util * _ROUTE_ABORT_FACTOR)))
+    else:
+        new_util = max(_UTIL_FLOOR, cur_util - _UTIL_STEP)
     if new_util >= cur_util:
         return []
     strat = {
@@ -515,9 +588,14 @@ def _route_strategies(cfg: dict, exclude: set, *, to_floor: bool = False) -> lis
                       "router/signoff deck is never relaxed."),
         "config_edits": {"CORE_UTILIZATION": str(new_util)},
         "rerun_from": "floorplan", "recheck": "route", "auto_apply": True}
-    if strat["id"] in exclude or _applied(cfg, strat["config_edits"]):
-        return []
-    return [strat]
+    if not aborted:     # timeout jump / completed-route step: one try, excluded after (rollback-safe)
+        if strat["id"] in exclude or _applied(cfg, strat["config_edits"]):
+            return []
+        return [strat]
+    # Abort ladder: fix_signoff keeps the config of a still-congested rerun (no rollback),
+    # so each repeat is a new, lower utilisation.
+    strat["repeatable"] = True
+    return [] if _applied(cfg, strat["config_edits"]) else [strat]
 
 
 def _route_plan(route: dict, cfg: dict, exclude: set) -> dict:
@@ -537,7 +615,16 @@ def _route_plan(route: dict, cfg: dict, exclude: set) -> dict:
         # A pure timeout (route never completed) -> jump CORE_UTILIZATION to the
         # floor in one reflow; a route that completed WITH violations keeps the
         # gentle one-step relief. See _route_strategies (2026-06-18).
-        strategies = _route_strategies(cfg, exclude, to_floor=(status == "timeout"))
+        aborted = route.get("total_violations") is None
+        strategies = _route_strategies(cfg, exclude, to_floor=(status == "timeout"), aborted=aborted)
+        if aborted and status != "timeout":
+            layer = _route_layer_strategies(cfg, exclude)
+            try:
+                sparse = int(float(cfg.get("CORE_UTILIZATION", ""))) <= _SPARSE_UTIL
+            except (TypeError, ValueError):
+                sparse = False
+            # sparse die: area is not the problem -> layer relief first; dense: after the util ladder
+            strategies = (layer + strategies) if sparse else (strategies + layer)
         plan["strategies"] = strategies
         if not strategies:
             plan["status"] = "residual"
@@ -611,6 +698,10 @@ def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
         else:
             non_antenna = sorted(k for k in cats if not k.upper().endswith("_ANTENNA"))
             strategies = _routing_drc_strategies(cfg, exclude)
+            if any(_is_local_drc(k) for k in non_antenna):
+                pad = _cell_pad_strategies(cfg, exclude)
+                # local class dominant -> pad first; otherwise after the routing relief
+                strategies = (pad + strategies) if dominant and _is_local_drc(dominant) else (strategies + pad)
             plan["strategies"] = strategies
             if not strategies:
                 plan["status"] = "residual"
@@ -801,7 +892,16 @@ def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
     wns = tcheck.get("wns_ns")
     plan = {"check": "timing", "status": tier, "violation_count": None,
             "dominant_category": tier, "strategies": [], "residual_reason": None}
+    drv = tcheck.get("drv") or {}
+    drv_strategy = _drv_route_margin_strategy(drv, cfg, routing_clean, exclude)
     if tier in ("clean", "unknown", None):
+        if tier == "clean" and drv.get("status") == "fail":
+            plan.update(status="drv", dominant_category="drv",
+                        violation_count=drv.get("total"))
+            if drv_strategy:
+                plan["strategies"] = [drv_strategy]
+            else:
+                plan["residual_reason"] = "drv_route_margin_exhausted"
         return plan
     try:
         cur_util = int(float(cfg.get("CORE_UTILIZATION", "")))
@@ -956,9 +1056,55 @@ def _timing_plan(tcheck: dict, cfg: dict, exclude: set,
              "config_edits": {"ABC_AREA": "0", "SYNTH_HIERARCHICAL": "0"},
              "sdc_edits": {}, "rerun_from": "synth", "recheck": "timing",
              "auto_apply": True, "requires_ab_promotion": True})
+    if drv_strategy:
+        strategies.append(drv_strategy)
     plan["strategies"] = [s for s in strategies
                           if s["id"] not in exclude or s.get("repeatable")]
     return plan
+
+
+# Max-slew / max-capacitance violations left at finish (acceptance check A8) are
+# typically one or two driver pins a few percent over the Liberty limit. A margin on
+# EVERY repair_design pass (SLEW_MARGIN/CAP_MARGIN in config.mk) upsized ~900 cells of
+# a 74-89%-utilization sky130hd design and congested global routing; applied only to
+# the global-route-stage pass -- routing parasitics, nets already near their limit --
+# it is targeted (see failure-patterns "finish-stage max-slew/max-cap"). run_orfs.sh
+# exports R2G_ROUTE_{SLEW,CAP}_MARGIN as SLEW_/CAP_MARGIN for the route stage only.
+# Ascending: the smallest over-fix that clears costs the least setup slack (pilot:
+# riscv_core cleared at 10 % with setup met, but missed setup by 4.7 ps at 20 %;
+# chacha_core needed 20 %). fix_signoff rejects a step that trades DRV for setup
+# (timing badness = negative-WNS ps + DRV violators).
+_DRV_ROUTE_MARGINS = (10, 20, 40)
+
+
+DRV_ROUTE_MARGIN_STRATEGIES = tuple(f"drv_route_margin_{m}" for m in _DRV_ROUTE_MARGINS)
+
+
+def _drv_route_margin_strategy(drv: dict, cfg: dict, routing_clean: bool,
+                               exclude=frozenset()) -> dict | None:
+    """The next untried ladder step above the margin already in the config. One id per
+    step: a rejected step is rolled back (config margin unchanged) but stays excluded,
+    so the ladder still advances instead of retrying it."""
+    if drv.get("status") != "fail" or not routing_clean:
+        return None
+    try:
+        cur = float(cfg.get("R2G_ROUTE_SLEW_MARGIN", "0"))
+    except (TypeError, ValueError):
+        cur = 0.0
+    nxt = next((m for m in _DRV_ROUTE_MARGINS
+                if m > cur and f"drv_route_margin_{m}" not in exclude), None)
+    if nxt is None:
+        return None
+    return {"id": f"drv_route_margin_{nxt}",
+            "rationale": (
+                f"{drv.get('max_slew_violations')} max-slew / {drv.get('max_cap_violations')} "
+                f"max-cap violators after routing: over-fix the global-route-stage "
+                f"repair_design by {nxt}% so nets near their Liberty limit are buffered or "
+                "resized before detailed routing. Placement-stage repair is untouched."),
+            "config_edits": {"R2G_ROUTE_SLEW_MARGIN": str(nxt),
+                             "R2G_ROUTE_CAP_MARGIN": str(nxt)},
+            "sdc_edits": {}, "rerun_from": "route", "recheck": "timing",
+            "auto_apply": True}
 
 
 def _fmax_winner(proj) -> float | None:
@@ -1007,7 +1153,54 @@ def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
         plan = _route_plan(route or {}, cfg, excl)
     else:
         plan = _lvs_plan(lvs or {}, cfg, excl)
-    return _rank_plan_strategies(plan, recipes)
+    return _rank_plan_strategies(_quarantine_invalid(plan, "catalogue"), recipes)
+
+
+def _quarantine_invalid(plan: dict, source: str) -> dict:
+    """Move auto-applicable strategies that violate the executor contract out of the plan
+    and into plan['technical_failures'] (an invalid candidate is never ranked, selected or
+    executed, and never read as an ordinary "no strategy" stop). Idempotent."""
+    from candidate_contract import contract_errors
+    kept, invalid = [], []
+    for s in plan.get("strategies") or []:
+        errors = contract_errors(s) if (not isinstance(s, dict) or s.get("auto_apply")) else []
+        if errors:
+            invalid.append({"id": s.get("id") if isinstance(s, dict) else None, "errors": errors})
+        else:
+            kept.append(s)
+    if invalid:
+        print(f"{source} candidate(s) INVALID: {invalid}", file=sys.stderr)
+        plan["strategies"] = kept
+        plan.setdefault("technical_failures", []).append(
+            {"kind": "invalid_candidate", "source": source, "candidates": invalid})
+    return plan
+
+
+def _next_decision(plan: dict, rank_first: str | None = None) -> tuple:
+    """The --next protocol line: (id, rerun_from, recheck), ("STOP", status, reason), or
+    ("TECHNICAL", kind, detail). A recorded technical failure or a chosen strategy that
+    violates the executor contract is reported, never executed (2026-10-17)."""
+    from candidate_contract import contract_errors, describe
+    failures = plan.get("technical_failures") or []
+    if failures:
+        first = failures[0]
+        detail = describe(first["candidates"]) if first.get("candidates") else str(first.get("detail", ""))
+        return ("TECHNICAL", first["kind"], (first.get("source", "?") + ": " + detail).replace("\t", " ")[:900])
+    # Every auto-applicable candidate in the plan (catalogue included; memory candidates were
+    # already gated) is checked BEFORE selection, so a malformed one surfaces instead of being
+    # skipped or crashing the selector.
+    invalid = [{"id": s.get("id") if isinstance(s, dict) else None, "errors": contract_errors(s)}
+               for s in plan.get("strategies") or []
+               if not isinstance(s, dict) or (s.get("auto_apply") and contract_errors(s))]
+    if invalid:
+        return ("TECHNICAL", "invalid_candidate", "plan: " + describe(invalid))
+    auto = _live_auto_strategy(plan, rank_first=rank_first)
+    if auto is None:
+        return ("STOP", str(plan.get("status")), plan.get("residual_reason") or "no_auto_strategy")
+    errors = contract_errors(auto)
+    if errors:
+        return ("TECHNICAL", "invalid_candidate", describe([{"id": auto.get("id"), "errors": errors}]))
+    return (auto["id"], auto.get("rerun_from") or "", auto["recheck"])
 
 
 def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | None:
@@ -1202,6 +1395,7 @@ def apply_edits(config_text: str, edits: dict, override_keys=()) -> str:
     also assigns is silently discarded. The list is TARGETED, never blanket:
     `override` also defeats make's COMMAND-LINE variables, and run_orfs.sh passes
     DESIGN_CONFIG and FLOW_VARIANT that way."""
+    removed = {k for k, v in edits.items() if str(v) == UNSET}
     out, skip, kept = [], False, {}
     for ln in config_text.splitlines():
         s = ln.strip()
@@ -1218,8 +1412,11 @@ def apply_edits(config_text: str, edits: dict, override_keys=()) -> str:
             if m:
                 kept[m.group(1)] = m.group(2).strip()
             continue
-        out.append(ln)
+        m = re.match(r"\s*(?:override\s+)?(?:export\s+)?([A-Z0-9_]+)\s*[:?+]?=", ln)
+        if not (m and m.group(1) in removed):
+            out.append(ln)
     kept.update({k: v for k, v in edits.items()})
+    kept = {k: v for k, v in kept.items() if k not in removed}
     over = set(override_keys)
     body = "\n".join(out).rstrip("\n")
     block = ([BLOCK_START]
@@ -1330,6 +1527,57 @@ def _apply_repair_action_policy(plan: dict) -> dict:
             "repair action policy blocked every applicable strategy"
             + (f": {error}" if error else "")
         )
+    return plan
+
+
+def _task_action_failure(strategy: dict, project: Path, cfg_text: str) -> str | None:
+    """Check evaluator-owned task bounds before ANY deterministic/memory edit.
+
+    This is independent of the general hard-knob policy and lifecycle gates.
+    A registered task owns its immutable SDC even if the catalogue or an A/B
+    override would otherwise allow clock relaxation. Ungoverned Fmax is unchanged.
+    """
+    raw=os.environ.get('R2G_TASK_MANIFEST')
+    if not raw:
+        return None
+    try:
+        scripts=Path(__file__).resolve().parents[4]/'memory'
+        if str(scripts) not in sys.path:
+            sys.path.insert(0,str(scripts))
+        from tehm.policy import envelope
+        manifest=json.loads(Path(raw).read_text())
+        if not isinstance(manifest,dict) or not isinstance(manifest.get('initial_config'),dict):
+            raise ValueError('task manifest has no initial_config object')
+        if ((strategy.get('sdc_edits') or strategy.get('sdc'))
+                and 'constraints/constraint.sdc' in (manifest.get('immutable') or {}).get('files',{})):
+            return 'task freezes constraints/constraint.sdc; SDC edits are forbidden'
+        if strategy.get('env') or strategy.get('env_flags'):
+            return 'task-bound strategies cannot edit the execution environment'
+        proposed=envelope.effective_config(apply_edits(cfg_text,strategy.get('config_edits') or {}))
+        checked=envelope.check_config(manifest,proposed,project=project,env=os.environ)
+        if not checked['ok']:
+            return 'task constraint violation: '+json.dumps(checked['violations'],sort_keys=True)
+    except (OSError,ValueError,TypeError,AttributeError,ImportError) as exc:
+        return 'task policy unavailable: '+str(exc)
+    return None
+
+
+def _apply_task_action_policy(plan: dict, project: Path, cfg_text: str) -> dict:
+    if not os.environ.get('R2G_TASK_MANIFEST'):
+        return plan
+    kept=[];rejected=[]
+    for strategy in plan.get('strategies') or []:
+        reason=_task_action_failure(strategy,project,cfg_text)
+        if reason:
+            rejected.append({'strategy':strategy.get('id'),'reason':reason})
+        else:
+            kept.append(strategy)
+    plan['strategies']=kept
+    plan['task_policy_rejections']=rejected
+    plan['task_policy_gate_ok']=not any(r['reason'].startswith('task policy unavailable:') for r in rejected)
+    if rejected and not kept:
+        plan['status']='residual'
+        plan['residual_reason']='task policy blocked every applicable strategy'
     return plan
 
 
@@ -1804,6 +2052,122 @@ def _current_vclass(check: str, drc: dict, lvs: dict,
     return None
 
 
+def _current_situation(proj: Path, check: str, drc: dict, lvs: dict) -> dict | None:
+    """The pre-fix situation (knowledge/situation.py sit-v1). fix_signoff.sh exports
+    the snapshot it logs (R2G_LOG_SITUATION), so the decision and its fix_log row see
+    the SAME situation; computed here only when called outside a fix iteration."""
+    raw = os.environ.get("R2G_LOG_SITUATION")
+    if raw:
+        try:
+            return json.loads(raw)
+        except ValueError:
+            pass
+    try:
+        import situation
+        count = (drc.get("total_violations") if check == "drc" else
+                 lvs.get("mismatch_count") if check == "lvs" else None)
+        return situation.from_project(proj, check, _current_vclass(check, drc, lvs), count)
+    except Exception:
+        return None
+
+
+def _family(strategy_id: str | None) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "_", str(strategy_id or "")).strip("_").upper()
+
+
+def _apply_tehm_policy(plan: dict, proj: Path, check: str, cfg: dict, drc, route, tcheck, situation) -> dict:
+    """Apply the configured TEHM policy (R2G_TEHM_POLICY) to plan['strategies'].
+
+    Policy file: {"schema": "tehm-v2-policy-v1", "mechanisms": {name: bool}, "index": path,
+    "index_sha256": hex, "task_ip_family": str|null}. The index hash must match (fail closed).
+    The episode's executed actions come from this project's fix_log.jsonl."""
+    import hashlib
+    _mem = Path(__file__).resolve().parents[4] / "memory"
+    if str(_mem) not in sys.path:
+        sys.path.insert(0, str(_mem))
+    from tehm.policy import policy as _P, state as _S
+    policy_path = os.environ.get("R2G_TEHM_POLICY") or os.environ.get("R2G_TEHM_V2_POLICY")
+    pol = json.loads(Path(policy_path).read_text())
+    if pol.get("schema") not in {"tehm-policy-v1", "tehm-v2-policy-v1"} or set(pol.get("mechanisms") or {}) != set(_P.MECHANISMS):
+        raise ValueError("invalid TEHM policy file")
+    raw = Path(pol["index"]).read_bytes()
+    if hashlib.sha256(raw).hexdigest() != pol.get("index_sha256"):
+        raise ValueError("TEHM policy evidence index hash mismatch")
+    index = json.loads(raw)
+    rows = []
+    log = proj / "reports" / "fix_log.jsonl"
+    if log.exists():
+        for line in log.read_text().splitlines():
+            try:
+                rows.append(json.loads(line))
+            except ValueError:
+                continue
+    st = _S.from_reports(check, situation, drc, route, tcheck, cfg)
+    ordered, decisions = _P.decide(plan.get("strategies") or [], st, index, _P.episode_rows(rows),
+                                   pol["mechanisms"], {pol["task_ip_family"]} if pol.get("task_ip_family") else set())
+    plan["strategies"] = ordered
+    plan["tehm_policy"] = {"state": {k: st[k] for k in ("failures", "signature", "timing_unconstrained")},
+                       "mechanisms": pol["mechanisms"], "decisions": decisions}
+    for d in decisions:
+        if d["decision"] == "rejected":
+            print(f"TEHM policy rejected {d['id']} [{d['mechanism']}]: {d['reason']}", file=sys.stderr)
+    return plan
+
+
+def _gate_memory_strategies(strategies: list, cfg: dict, exclude: set,
+                            invalid: list | None = None) -> list:
+    """B4 (R2G memory redesign 2026-10-01): a memory (TEHM) strategy passes the same
+    exclusion as the catalogue (already tried this session), is dropped when its edits
+    are already in effect, and every edit must pass the hard knob policy
+    (knowledge/knob_policy.py). Each drop is logged with its reason.
+
+    A candidate that violates the executor contract (knowledge/candidate_contract.py) is
+    NOT an ordinary drop: it goes to ``invalid`` and the caller reports a technical failure
+    (failure-patterns "Memory candidate broke the executor contract", 2026-10-17)."""
+    import knob_policy
+    from candidate_contract import contract_errors
+    kept = []
+    for st in strategies or []:
+        sid = st.get("id")
+        why = None
+        errors = contract_errors(st) + ([st["contract_error"]] if st.get("contract_error") else [])
+        if errors:
+            print(f"memory candidate {sid} INVALID: {'; '.join(errors)}", file=sys.stderr)
+            if invalid is not None:
+                invalid.append({"id": sid, "errors": errors})
+            continue
+        if sid in exclude:
+            why = "already tried (exclude)"
+        elif _applied(cfg, st.get("config_edits") or {}):
+            why = "edits already in effect"
+        else:
+            bad = knob_policy.edits_violations(st.get("config_edits") or {})
+            if bad:
+                why = "knob policy: " + "; ".join(bad)
+        if why:
+            print(f"TEHM strategy {sid} dropped: {why}", file=sys.stderr)
+            continue
+        kept.append(st)
+    return kept
+
+
+def _apply_vetoes(strategies: list, vetoes: dict) -> list:
+    """B5: drop every strategy — catalogue or memory — that the verified evidence
+    vetoes in THIS situation (situation-scoped, never per project or design class)."""
+    vetoed = {_family(k): k for k in vetoes}
+    kept = []
+    for st in strategies:
+        fam = _family(st.get("transformation_family") or st.get("id"))
+        if fam in vetoed:
+            ev = vetoes[vetoed[fam]]
+            print(f"strategy {st.get('id')} vetoed in this situation: {ev['failures']} "
+                  f"verified failure(s) on {len(ev['designs'])} design(s), "
+                  f"{ev['passes']} pass(es)", file=sys.stderr)
+            continue
+        kept.append(st)
+    return kept
+
+
 def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
                          sid: str | None = None, design_class: str = "",
                          platform: str = "", db_path=None) -> dict:
@@ -1845,14 +2209,25 @@ def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
         # P1-12 (2026-07-15): key dead-evidence by SYMPTOM when known — a strategy that
         # failed on DRC symptom A must NOT be blacklisted for a DIFFERENT DRC symptom B
         # on the same project (the old (project, check, strategy) key over-generalized).
-        sym_sql = " AND symptom_id=?" if sid else ""
-        sym_params = (sid,) if sid else ()
+        # Route fix iterations are STORED as check_type='orfs_stage', class 'route'
+        # (fix_signoff.sh _log_iter remaps them): querying check_type='route' matched
+        # zero rows, so the dead gate could never fire for route (failure-patterns.md
+        # "Route dead-fix gate never fired"). Key it to the stored route symptom.
+        # Scoped to the dead gate ONLY: the lifecycle annotation below keeps using `sid`
+        # (route still does not consult recipe_status -- that is a separate decision).
+        db_check, dead_sid = check, sid
+        if check == "route":
+            db_check = "orfs_stage"
+            if not dead_sid:
+                dead_sid = symptom.symptom_id(symptom.canonical_signature("orfs_stage", "route", {}))
+        sym_sql = " AND symptom_id=?" if dead_sid else ""
+        sym_params = (dead_sid,) if dead_sid else ()
         rows = conn.execute(
             f"SELECT strategy, "
             f"SUM(CASE WHEN verdict IN ('no_change','regression') THEN 1 ELSE 0 END), "
             f"SUM(CASE WHEN verdict IN ('cleared','win') THEN 1 ELSE 0 END) "
             f"FROM fix_events WHERE project_path IN ({ph}) AND check_type=?{sym_sql} "
-            f"GROUP BY strategy", (*paths, check, *sym_params)).fetchall()
+            f"GROUP BY strategy", (*paths, db_check, *sym_params)).fetchall()
         dead = {s: int(nf or 0) for s, nf, ns in rows
                 if s and s != "none" and int(ns or 0) == 0
                 and int(nf or 0) >= dead_after}
@@ -2054,6 +2429,12 @@ def main(argv=None) -> int:
         or (Path(__file__).resolve().parents[2] / "knowledge" / "heuristics.json")
     )
 
+    memory_backend = os.environ.get("R2G_MEMORY_BACKEND", "legacy").strip().lower()
+    if memory_backend not in {"none", "legacy", "tehm"}:
+        print(f"ERROR: invalid R2G_MEMORY_BACKEND={memory_backend!r}; refusing silent fallback",
+              file=sys.stderr)
+        return 2
+
     proj = Path(args.project_dir)
     drc = _load(proj / "reports" / "drc.json")
     lvs = _load(proj / "reports" / "lvs.json")
@@ -2069,9 +2450,22 @@ def main(argv=None) -> int:
     # Decision-8 indexed lookup first (engineer-loop §5.7): exact (symptom,
     # design_class, platform) -> pooled class -> pooled platform; only PROMOTED
     # recipes rank live. Falls back to the symptom/family path when absent.
+    # design_class through the ONE derivation ingest stores (ppa.json cell count,
+    # else this project's prior ingested count; redesign A3). A read-only connection:
+    # a diagnosis never migrates or writes the store.
     try:
-        import suggest_config as _sc
-        design_class = _sc.detect_design_class(proj, cfg)
+        import sqlite3
+        import ingest_run as _ir
+        import knowledge_db
+        _ro = None
+        _dbp = Path(os.environ.get("R2G_KNOWLEDGE_DB") or knowledge_db.DEFAULT_DB_PATH)
+        if _dbp.exists():
+            _ro = sqlite3.connect(f"file:{_dbp}?mode=ro", uri=True)
+        try:
+            design_class = _ir.project_design_class(proj, cfg, conn=_ro)
+        finally:
+            if _ro is not None:
+                _ro.close()
     except Exception:
         design_class = "unknown/unknown"
     # Route (backend-abort) symptoms index under check=orfs_stage/class=route, not
@@ -2087,7 +2481,12 @@ def main(argv=None) -> int:
     # order to reorder, so learned RANKING is a no-op for route today. The guard just
     # below fails LOUDLY the moment the route catalog grows past one strategy — at which
     # point indexed ranking + lifecycle filtering MUST be wired here like drc/lvs.
-    if args.check == "route":
+    if memory_backend != "legacy":
+        # Shared cold-start policy only.  In TEHM/none modes no legacy recipe,
+        # lifecycle, heuristic, or prose-lesson authority may be consulted.
+        recipes, pooled = None, {}
+        idx_recipe = None
+    elif args.check == "route":
         recipes, pooled = None, {}
         idx_recipe = None
     else:
@@ -2103,7 +2502,7 @@ def main(argv=None) -> int:
         _report = {"drc": drc, "lvs": lvs, "timing": tcheck}.get(args.check) or {}
         _sid = symptom.symptom_id(symptom.canonical_signature(
             args.check, _vc, symptom.predicates_for(args.check, _report)))
-    if args.check != "route" and idx_recipe is not None:
+    if memory_backend == "legacy" and args.check != "route" and idx_recipe is not None:
         recipes, pooled = idx_recipe, idx_pooled
         try:
             import knowledge_db
@@ -2123,7 +2522,7 @@ def main(argv=None) -> int:
                   f"({type(exc).__name__}: {exc}); using cold-start ranking",
                   file=sys.stderr)
             recipes, pooled = None, {}
-    elif args.check != "route":
+    elif memory_backend == "legacy" and args.check != "route":
         sym_recipe, pooled = load_symptom_recipe(
             check=args.check, platform=plat, drc=drc, lvs=lvs, tcheck=tcheck,
             heuristics=heuristics_path)
@@ -2133,7 +2532,12 @@ def main(argv=None) -> int:
     plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes,
                       tcheck=tcheck, route=route, fmax_mode=_is_fmax_mode(proj),
                       fmax_winner=_fmax_winner(proj))
-    if args.check == "drc" and "pin_side_rebalance" not in exclude:
+    plan = _quarantine_invalid(plan, "catalogue")
+    # A memory candidate cannot reopen a check that the shared planner already
+    # considers complete. In particular, DRC 0 -> 0 is not a repair opportunity.
+    # UNKNOWN/residual states are deliberately NOT treated as completed.
+    completed_check = plan.get("status") in ("clean", "clean_beol", "skipped")
+    if not completed_check and args.check == "drc" and "pin_side_rebalance" not in exclude:
         pin_strategy = _edge_localized_pin_strategy(proj, drc, cfg)
         if pin_strategy is not None:
             plan.setdefault("strategies", []).append(pin_strategy)
@@ -2155,7 +2559,84 @@ def main(argv=None) -> int:
                 plan["residual_reason"] = None
     _apply_repair_action_policy(plan)
     _rank_plan_strategies(plan, recipes, pooled=pooled)
-    if args.check == "route" and len(plan.get("strategies", [])) > 1:
+    # Backend-routed TEHM authority, ahead of the shared cold-start catalog.
+    if memory_backend == "tehm" and not completed_check:
+        try:
+            # <repo>/r2g-skills/signoff-loop/scripts/reports/ -> parents[4] = <repo>.
+            # parents[3] (r2g-skills/) silently disabled TEHM consultation since the
+            # import (fail-closed ImportError; found by the Phase D2 smoke run).
+            _MEM = Path(__file__).resolve().parents[4] / "memory"
+            if str(_MEM) not in sys.path:
+                sys.path.insert(0, str(_MEM))
+            from runtime_router import signoff_strategies, signoff_vetoes
+            _sit = _current_situation(proj, args.check, drc, lvs)
+            try:                             # graded severity for composition (Phase G2)
+                import severity as _sev
+                _cur_sev = _sev.from_project(
+                    proj, args.check, _current_vclass(args.check, drc, lvs)
+                    or ("route" if args.check == "route" else None))
+            except Exception:
+                _cur_sev = None
+            _tehm_st = signoff_strategies(
+                project_dir=proj, check=args.check,
+                design_id=cfg.get("DESIGN_NAME"), platform=plat, cfg=cfg,
+                reports={"drc": drc, "lvs": lvs, "timing": tcheck,
+                         "route": route}, situation=_sit, severity=_cur_sev)
+            _invalid = []
+            _tehm_st = _gate_memory_strategies(_tehm_st, cfg, exclude, _invalid)
+            if _invalid:
+                plan.setdefault("technical_failures", []).append(
+                    {"kind": "invalid_candidate", "source": "tehm", "candidates": _invalid})
+            _vetoes = signoff_vetoes(situation=_sit)
+            priority_file = os.environ.get('R2G_TEHM_PRIORITY_FILE')
+            if priority_file:
+                from tehm.policy.priority import load_policy,prioritize,quality_context
+                priority=load_policy(priority_file)
+                if not priority['cost_priority']:raise ValueError('Priority file is not enabled')
+                task_manifest=json.loads(Path(os.environ['R2G_TASK_MANIFEST']).read_text())
+                first,deferred=prioritize(_tehm_st,_sit,priority['priority_samples'],quality_context(task_manifest))
+                plan['strategies']=first+list(plan.get('strategies') or [])+deferred
+                plan['tehm_task_priority']=[{'id':s['id'],**s['task_priority_evidence']} for s in first+deferred]
+                print(f'TEHM earned priority: {len(first)} first, {len(deferred)} deferred',file=sys.stderr)
+                _tehm_st=[]  # already inserted at the explicitly earned positions
+            if _tehm_st:
+                plan["strategies"] = list(_tehm_st) + list(plan.get("strategies") or [])
+                print(f"TEHM consultation: {len(_tehm_st)} tehm_rule strategy(ies) "
+                      f"prepended", file=sys.stderr)
+            if _vetoes:
+                plan["strategies"] = _apply_vetoes(plan.get("strategies") or [], _vetoes)
+        except Exception as _exc:
+            # A crashed consultation is a TECHNICAL failure, never a silent fall-back to the
+            # catalogue (that would score a broken memory arm as an ordinary repair attempt).
+            print(f"ERROR: TEHM consultation crashed: {type(_exc).__name__}: {_exc}",
+                  file=sys.stderr)
+            plan.setdefault("technical_failures", []).append(
+                {"kind": "consultation_crash", "source": "tehm",
+                 "detail": f"{type(_exc).__name__}: {_exc}"})
+    # Table 2's simple SOURCE recipe control: deliberately no TEHM induction,
+    # composition or veto knowledge; share the executor, hard-knob gates and rollback.
+    recipe_file = os.environ.get("R2G_RECIPE_FILE")
+    if recipe_file:
+        if memory_backend != "none":
+            raise ValueError("SOURCE recipes must not be combined with another memory backend")
+        if not completed_check and os.environ.get("R2G_RECIPE_SUSPENDED") != "1":
+            _scripts = Path(__file__).resolve().parents[4] / "memory"
+            if str(_scripts) not in sys.path:
+                sys.path.insert(0, str(_scripts))
+            from tehm.policy.recipes import recipe_strategies
+            _sit = _current_situation(proj, args.check, drc, lvs)
+            if _sit is None:
+                raise ValueError("Cannot classify the SOURCE recipe consultation")
+            _invalid = []
+            _recipe_st = _gate_memory_strategies(recipe_strategies(recipe_file, _sit, cfg, exclude), cfg, exclude,
+                                                 _invalid)
+            if _invalid:
+                plan.setdefault("technical_failures", []).append(
+                    {"kind": "invalid_candidate", "source": "recipe", "candidates": _invalid})
+            plan["strategies"] = _recipe_st + list(plan.get("strategies") or [])
+            plan["recipe_consultation"] = [s["id"] for s in _recipe_st]
+    if (memory_backend == "legacy" and args.check == "route" and
+            len(plan.get("strategies", [])) > 1):
         # P1-2 self-announcing guard (recipe-lifecycle audit 2026-07-14): the live route
         # path is single-strategy by design (see the comment above). A route catalog that
         # now emits >1 strategy has outgrown that assumption — learned indexed ranking +
@@ -2167,32 +2648,48 @@ def main(argv=None) -> int:
               "recipe-lifecycle filtering are NOT wired for the live route path (P1-2, "
               "failure-patterns #48); route execution order is static. Wire route indexed "
               "ranking before adding a second route strategy.", file=sys.stderr)
-    attach_lessons(plan, check=args.check,
-                   vclass=_current_vclass(args.check, drc, lvs, tcheck), platform=plat)
-    # Drop a strategy whose inputs this project cannot produce, at SELECTION time.
-    # The apply-time precondition already refuses to write anything, but by then
-    # the driver has spent an iteration on it: measured as iter=2
-    # strategy=deck_driven_antenna_diode verdict=apply_failed, which consumed the
-    # attempt budget and kept the run from ever reaching its residual verdict.
-    # Offering a strategy that provably cannot run is the same waste the
-    # antenna-model precheck exists to prevent, one layer up.
-    _drop_unmaterializable(plan, proj, cfg)
-
-    _annotate_live_gates(plan, proj, check=args.check, sid=_sid,
-                         design_class=design_class, platform=plat)
+    if memory_backend == "legacy":
+        attach_lessons(plan, check=args.check,
+                       vclass=_current_vclass(args.check, drc, lvs, tcheck), platform=plat)
+        _annotate_live_gates(plan, proj, check=args.check, sid=_sid,
+                             design_class=design_class, platform=plat)
+    else:
+        plan["lessons"] = []
+        plan["memory_backend"] = memory_backend
     plan["routing_context"] = {
         "symptom_id": _sid,
         "design_class": design_class,
         "platform": plat,
     }
     _prioritize_geometric_pin_strategy(plan)
+    _drop_unmaterializable(plan, proj, cfg)
+
+    # TEHM policy (memory/tehm/policy): typed matching, applicability, evidence ranking and repeat
+    # control over the TEHM arm's plan only, from a frozen policy + evidence index. NB and
+    # RECIPE never pass here; nothing is executed or learned by this step.
+    if memory_backend == "tehm" and (os.environ.get("R2G_TEHM_POLICY") or os.environ.get("R2G_TEHM_V2_POLICY")) and not completed_check:
+        try:
+            _apply_tehm_policy(plan, proj, args.check, cfg, drc, route, tcheck,
+                           _current_situation(proj, args.check, drc, lvs))
+        except Exception as _exc:
+            print(f"ERROR: TEHM policy failed: {type(_exc).__name__}: {_exc}", file=sys.stderr)
+            plan.setdefault("technical_failures", []).append(
+                {"kind": "consultation_crash", "source": "tehm_policy", "detail": f"{type(_exc).__name__}: {_exc}"})
 
     if args.rank_first:
         head = [s for s in plan["strategies"] if s["id"] == args.rank_first]
         rest = [s for s in plan["strategies"] if s["id"] != args.rank_first]
         plan["strategies"] = head + rest
 
+    # After ALL catalogue/TEHM/recipe insertion and ranking; no arm bypasses the
+    # frozen task, and --rank-first does not confer authority to change it.
+    _apply_task_action_policy(plan,proj,cfg_text)
+
     if args.apply:
+        if completed_check:
+            print(f"ERROR: check '{args.check}' is already {plan['status']}; no repair to apply",
+                  file=sys.stderr)
+            return 2
         strat = next((s for s in plan["strategies"] if s["id"] == args.apply), None)
         if strat is None:
             # Strategy may be filtered out because it was already applied (idempotent
@@ -2209,6 +2706,7 @@ def main(argv=None) -> int:
         policy, policy_error = _load_repair_action_policy()
         policy_failure = policy_error or (
             _strategy_policy_failure(strat, policy) if policy is not None else None)
+        policy_failure = policy_failure or _task_action_failure(strat,proj,cfg_text)
         if policy_failure:
             print(json.dumps({"status": "action_policy_blocked", "applied": None,
                               "strategy": strat["id"], "reason": policy_failure}))
@@ -2362,9 +2860,11 @@ def main(argv=None) -> int:
         if strat["config_edits"]:
             cfg_after = cfg_path.read_text(encoding="utf-8") if cfg_path.exists() else ""
             for k, v in strat["config_edits"].items():
-                if not re.search(rf"(?m)^\s*(?:override\s+)?export\s+"
-                                 rf"{re.escape(str(k))}\s*=\s*"
-                                 rf"{re.escape(str(v))}\s*$", cfg_after):
+                if str(v) == UNSET:
+                    if k in parse_config(cfg_after):
+                        unmet.append(f"config_unset_not_landed:{k}")
+                elif not re.search(rf"(?m)^\s*(?:override\s+)?export\s+{re.escape(str(k))}\s*=\s*"
+                                   rf"{re.escape(str(v))}\s*$", cfg_after):
                     unmet.append(f"config_edit_not_landed:{k}")
         if sdc_new_p is not None:
             sdc_after = sdc_path.read_text(encoding="utf-8") if sdc_path.exists() else ""
@@ -2384,7 +2884,20 @@ def main(argv=None) -> int:
                               "config_edits": {}}))
             return 0
         out = {"status": "applied", "applied": strat["id"],
-               "config_edits": strat["config_edits"]}
+               "config_edits": strat["config_edits"],
+               # Pre-fix values of the edited knobs: the parametric (delta) form of
+               # this fix for memory (R2G memory redesign B2).
+               "config_before": {k: cfg.get(k) for k in strat["config_edits"]}}
+        if strat.get("source") in ("tehm_rule", "tehm_compose", "recipe"):
+            # D-A1 attribution: log the fix under its rule's family, with the rule id
+            # and whether this application is a candidate trial.
+            out.update(memory_rule=strat.get("rule_id"),
+                       strategy_family=strat.get("transformation_family"),
+                       memory_trial=bool(strat.get("memory_trial")),
+                       witness_selected=strat.get("witness_selected") or [],
+                       memory_mechanisms=strat.get("mechanisms") or [])   # Phase H attribution
+            if 'task_priority_evidence' in strat:
+                out['task_priority_evidence']=strat['task_priority_evidence']
         if sdc_edits:
             out["sdc_edits"] = sdc_edits
         print(json.dumps(out))
@@ -2411,12 +2924,7 @@ def main(argv=None) -> int:
         return 0
 
     if args.next:
-        auto = _live_auto_strategy(plan, rank_first=args.rank_first)
-        if auto is None:
-            reason = plan.get("residual_reason") or "no_auto_strategy"
-            print(f"STOP\t{plan['status']}\t{reason}")
-        else:
-            print(f"{auto['id']}\t{auto.get('rerun_from') or ''}\t{auto['recheck']}")
+        print("\t".join(_next_decision(plan, args.rank_first)))
         return 0
 
     print(json.dumps(plan, indent=2))

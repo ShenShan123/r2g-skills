@@ -1,8 +1,8 @@
 """Flow parameters: r2g's measured defaults, or the user's own.
 
 The defaults are the frozen baseline the nangate45 campaign ran 1249 designs
-under (experiments/make_spec_table.py for the die and period,
-experiments/conformance_check.py FROZEN for the SDC), so a design run with them
+under (r2g_agent/project.py for the die and period,
+r2g_agent/project.py FROZEN for the SDC), so a design run with them
 is sized and constrained exactly like the designs the knowledge base learned
 from. A user may override any field; the merged result and the list of changed
 fields are recorded with every design (metadata.json `flow_profile`) and in the
@@ -112,4 +112,4 @@ def describe(platform: str) -> dict:
     return {"platform": platform, "defaults": defaults(platform),
             "fields": {k: {"label": f[0], "unit": f[1], "min": f[2], "max": f[3], "help": f[4]}
                        for k, f in FIELDS.items()},
-            "source": "nangate45 冻结基线（1249 个设计）：experiments/make_spec_table.py + conformance_check.py"}
+            "source": "nangate45 默认参数：r2g_agent/platforms.py 与 project.py"}
