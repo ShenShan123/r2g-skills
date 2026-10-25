@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Send, Paperclip, X, Plus, MessageSquare, Loader2, History } from "lucide-react";
+import { Send, Paperclip, X, Plus, MessageSquare, Loader2, History, ArrowDown } from "lucide-react";
 import { api, chatStream, ChatEvent } from "../lib/api";
 import { Logo } from "../components/ui";
 import { ConversationRun, ConversationPart, ConversationTurnKind, toolJobId } from "../components/ConversationRun";
+import { useChatScroll } from "../hooks/useChatScroll";
 
 type Part = ConversationPart;
 type Msg = {
@@ -93,7 +94,7 @@ export default function Chat() {
   const [attBusy, setAttBusy] = useState(false);
   const [attErr, setAttErr] = useState("");
   const [hist, setHist] = useState(false);
-  const end = useRef<HTMLDivElement>(null);
+  const { scrollRef, contentRef, showScrollButton, scrollToBottom, reset: resetScroll, scrollEvents } = useChatScroll(msgs);
   const dirInput = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const viewEpoch = useRef(0);
@@ -112,7 +113,6 @@ export default function Chat() {
   const loadSessions = () => api.sessions().then(setSessions).catch(() => {});
   useEffect(() => { loadSessions(); }, []);
   useEffect(() => { dirInput.current?.setAttribute("webkitdirectory", ""); }, []);
-  useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
   useEffect(() => () => activeStream.current?.abort(), []);
   useEffect(() => {
     if (!sid) return;
@@ -136,6 +136,7 @@ export default function Chat() {
   }
 
   function leaveView() {
+    resetScroll();
     activeStream.current?.abort(); activeStream.current = null;
     streaming.current = false; setBusy(false);
     return ++viewEpoch.current;
@@ -180,6 +181,7 @@ export default function Chat() {
 
   async function send(typed: string) {
     if ((!typed.trim() && !att) || busy) return;
+    scrollToBottom();
     // the model reads the attachment as a path it can pass to start_job
     const text = att ? `[附件] 已上传 RTL 文件夹 ${att.name}（${att.files} 个文件），路径：${att.path}\n${typed}` : typed;
     const epoch = viewEpoch.current, requestId = crypto.randomUUID();
@@ -229,42 +231,49 @@ export default function Chat() {
           <div className="flex w-72 flex-col bg-panel" onClick={(e) => e.stopPropagation()}>{history}</div>
         </div>)}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-2 border-b border-line px-3 py-2 lg:hidden">
           <button className="btn-ghost px-3 py-1.5" onClick={() => setHist(true)}><History size={15} /> 历史</button>
           <button className="btn-ghost px-3 py-1.5" onClick={newChat}><Plus size={15} /> 新对话</button>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
-            {msgs.length === 0 && (
-              <div className="mt-8 text-center md:mt-14">
-                <div className="flex justify-center"><Logo size={44} /></div>
-                <h1 className="mt-4 text-xl font-bold md:text-2xl">有什么可以帮你？</h1>
-                <p className="mt-2 text-sm text-muted">我可以帮你找设计、提交任务、看进度、解释失败原因。<br className="hidden md:block" />
-                  通过与否由签核工具判定，不是我说了算。</p>
-                <div className="mx-auto mt-6 grid max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
-                  {SUGGEST.map((s) => (
-                    <button key={s} onClick={() => send(s)} className="card px-4 py-3 text-left text-sm hover:border-accent/60">{s}</button>))}
-                </div>
-              </div>)}
-            <div className="space-y-6">
-              {msgs.map((m, i) => m.role === "user" ? (
-                <div key={i} className={m.turnKind && m.turnKind !== "user" ? "text-xs text-muted" : "flex justify-end"}>
-                  {m.turnKind === "repair_review" ? "已授权的修复与验证" : m.turnKind === "job_review"
-                    ? "任务结束后的自动审查" : <UserBubble text={(m.parts[0] as any).text} />}
-                </div>
-              ) : (
-                <div key={i} className="flex gap-3">
-                  <div className="mt-1 hidden shrink-0 sm:block"><Logo size={26} /></div>
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <ConversationRun parts={m.parts} sid={sid} busy={m.turnStatus ? ["queued", "running"].includes(m.turnStatus) : busy && i === msgs.length - 1}
-                      queued={m.turnStatus === "queued"} turnKind={m.turnKind}
-                      error={m.error} jobIds={[...latestJobs].filter(([, owner]) => owner === i).map(([id]) => id)} />
+        <div className="relative min-h-0 flex-1">
+          <div ref={scrollRef} {...scrollEvents} tabIndex={0} role="region" aria-label="对话消息"
+            className="h-full overflow-y-auto overscroll-contain focus-visible:outline-none">
+            <div ref={contentRef} className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
+              {msgs.length === 0 && (
+                <div className="mt-8 text-center md:mt-14">
+                  <div className="flex justify-center"><Logo size={44} /></div>
+                  <h1 className="mt-4 text-xl font-bold md:text-2xl">有什么可以帮你？</h1>
+                  <p className="mt-2 text-sm text-muted">我可以帮你找设计、提交任务、看进度、解释失败原因。<br className="hidden md:block" />
+                    通过与否由签核工具判定，不是我说了算。</p>
+                  <div className="mx-auto mt-6 grid max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
+                    {SUGGEST.map((s) => (
+                      <button key={s} onClick={() => send(s)} className="card px-4 py-3 text-left text-sm hover:border-accent/60">{s}</button>))}
                   </div>
-                </div>))}
+                </div>)}
+              <div className="space-y-6">
+                {msgs.map((m, i) => m.role === "user" ? (
+                  <div key={i} className={m.turnKind && m.turnKind !== "user" ? "text-xs text-muted" : "flex justify-end"}>
+                    {m.turnKind === "repair_review" ? "已授权的修复与验证" : m.turnKind === "job_review"
+                      ? "任务结束后的自动审查" : <UserBubble text={(m.parts[0] as any).text} />}
+                  </div>
+                ) : (
+                  <div key={i} className="flex gap-3">
+                    <div className="mt-1 hidden shrink-0 sm:block"><Logo size={26} /></div>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <ConversationRun parts={m.parts} sid={sid} busy={m.turnStatus ? ["queued", "running"].includes(m.turnStatus) : busy && i === msgs.length - 1}
+                        queued={m.turnStatus === "queued"} turnKind={m.turnKind}
+                        error={m.error} jobIds={[...latestJobs].filter(([, owner]) => owner === i).map(([id]) => id)} />
+                    </div>
+                  </div>))}
+              </div>
             </div>
-            <div ref={end} />
           </div>
+          {showScrollButton && <button type="button" aria-label="回到最新消息" title="回到最新消息"
+            onClick={scrollToBottom}
+            className="absolute bottom-4 left-1/2 z-10 flex h-10 w-10 -translate-x-1/2 items-center justify-center rounded-full border border-line bg-panel/80 text-muted shadow-card backdrop-blur-sm transition-colors hover:bg-panel hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            <ArrowDown size={19} aria-hidden="true" />
+          </button>}
         </div>
         <div className="border-t border-line bg-panel/60 px-3 py-3 md:px-6 md:py-4">
           {(att || attErr || attBusy) && (

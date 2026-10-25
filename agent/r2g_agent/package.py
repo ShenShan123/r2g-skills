@@ -22,7 +22,7 @@ from .paths import r2g_home
 REPORTS = ("drc.json", "lvs.json", "rcx.json", "route.json", "ppa.json",
            "timing_check.json", "signoff_manifest.json", "signoff_gate.json",
            "graph_dataset.json", "image_dataset.json", "verify.json",
-           "fix_log.jsonl", "layout.png")
+           "fix_log.jsonl", "layout.png", "toolchain_capabilities.json", "task_contract.json")
 REPAIR_REPORTS = ("agent_repair.json", "agent_repair.diff", "functional_check.json", "input_bindings.json")
 LOG_STAGES = ("prepare", "synth", "size", "flow", "signoff", "repair", "graph", "verify", "preview")
 # Limits apply to uncompressed bytes, including generated manifests. They bound

@@ -26,7 +26,7 @@ r2g = "r2g_agent.cli:main"
 include = ["r2g_agent*"]
 
 [tool.setuptools.package-data]
-r2g_agent = ["examples/*/*", "web/dist/**/*", "prompts/*.md"]
+r2g_agent = ["examples/*/*", "web/dist/**/*", "prompts/*.md", "task_skills/*.json", "task_skills/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

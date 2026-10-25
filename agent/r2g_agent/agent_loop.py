@@ -21,7 +21,7 @@ from pathlib import Path
 from . import tools
 from .model_context import ContextBudgetError, prepare_context
 from .paths import PKG_DIR, r2g_home
-from .tool_outputs import ToolContext, ToolOutputError, ToolOutputStore
+from .tool_outputs import ToolContext, ToolOutputStore
 from .turns import TurnStore, TurnConflict, TERMINAL
 
 MAX_STEPS = 12
@@ -164,6 +164,8 @@ def run_turn(adapter, sessions: SessionStore, sid: str, user_text: str, *, turn_
 
 
 def _run_turn(adapter, sessions: SessionStore, sid: str, turn: dict):
+    from .execution import HostExecutor
+    executor = HostExecutor(sessions, tools.RT.store)
     user_text = turn["payload"]["message"]
     tid = turn["id"]
     messages = sessions.load(sid)
@@ -244,34 +246,25 @@ def _run_turn(adapter, sessions: SessionStore, sid: str, turn: dict):
             context = replace(context, action_id=action["id"], job_id=sessions.turns.get(tid)["job_id"])
             yield {"type": "tool_call", "id": c["id"], "action_id": action["id"],
                    "name": c["name"], "arguments": c["arguments"]}
-            result = tools.call(c["name"], c["arguments"], context=context)
-            try:
-                view, ref = sessions.outputs.record(sid, c["id"], c["name"], result)
-            except ToolOutputError as e:
-                # The tool may already have had side effects. Do not call it again.
-                failure = {"error": str(e), "error_code": "tool_output_not_recorded",
-                           "execution_may_have_completed": True}
-                messages.append({"role": "tool", "tool_call_id": c["id"], "name": c["name"],
-                                 "content": json.dumps(failure), "turn_id": tid, "action_id": action["id"]})
+            host_context = executor.host_context("chat", session_id=sid, turn_id=tid,
+                                                 action_id=action["id"], allow_session_tools=True)
+            receipt = executor.execute_prepared(c["name"], c["arguments"], host_context,
+                                                 messages=messages, title=title)
+            view, ref = receipt["result"], receipt["output_ref"]
+            yield {"type": "tool_result", "id": c["id"], "action_id": action["id"], "name": c["name"],
+                   "result": view, "output_ref": ref}
+            if receipt["status"] == "recovery_required":
+                # An uncertain side effect is never replayed or followed by
+                # later proposed calls. Keep every proposal/result pair intact.
                 for pending in calls[index + 1:]:
                     messages.append({"role": "tool", "tool_call_id": pending["id"],
                                      "name": pending["name"], "turn_id": tid, "content": json.dumps({
                                          "error": "not executed: tool observation storage failed",
                                          "error_code": "not_executed"})})
                 sessions.save(sid, messages, title)
-                yield {"type": "tool_result", "id": c["id"], "name": c["name"], "result": failure}
                 yield {"type": "error", "message": "工具结果未能保存，本轮已停止；请核对任务状态后再决定下一步。",
                        "recovery_required": True}
                 return
-            messages.append({"role": "tool", "tool_call_id": c["id"], "name": c["name"],
-                             "content": json.dumps(view, ensure_ascii=False, default=str), "output_ref": ref,
-                             "turn_id": tid, "action_id": action["id"]})
-            job_id = None
-            if c["name"] in ("start_job", "start_batch", "execute_rtl_repair") and isinstance(result, dict) and result.get("job_id") and not result.get("error"):
-                job_id = result["job_id"]
-            sessions.turns.complete_action(action["id"], view, ref, messages, title, job_id=job_id)
-            yield {"type": "tool_result", "id": c["id"], "action_id": action["id"], "name": c["name"], "result": view,
-                   "output_ref": ref}
         sessions.save(sid, messages, title)
     else:
         yield {"type": "text", "delta": "\n\n（已达到单轮工具调用上限，先停在这里。）"}

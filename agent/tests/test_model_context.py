@@ -132,7 +132,8 @@ def test_new_job_is_refreshed_between_tool_steps(monkeypatch, fake_adapter):
     jid = st.create_job("submitted", {}, [{"name": "top"}])
     monkeypatch.setattr(tools, "call", lambda *a, **kw: {"job_id": jid, "note": "running in background",
                                                        "designs": ["long-name" * 10] * 1000})
-    ad = fake_adapter([[{"type": "tool_call", "id": "submit", "name": "start_job", "arguments": {}}], []])
+    ad = fake_adapter([[{"type": "tool_call", "id": "submit", "name": "start_job",
+                        "arguments": {"designs": [{"example": "counter8"}]}}], []])
     ss = agent_loop.SessionStore()
     sid = ss.create()
     list(agent_loop.run_turn(ad, ss, sid, "run"))

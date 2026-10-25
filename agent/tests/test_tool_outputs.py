@@ -18,7 +18,7 @@ def test_long_result_is_readable_after_reopen_and_in_model_context(fake_adapter,
     sid = ss.create()
     original = long_observation()
     monkeypatch.setattr(tools, "call", lambda *a, **kw: original)
-    adapter = fake_adapter([[{"type": "tool_call", "id": "c1", "name": "read_log", "arguments": {}}], []])
+    adapter = fake_adapter([[{"type": "tool_call", "id": "c1", "name": "read_log", "arguments": {"job_id": "synthetic", "design": "top", "stage": "synth"}}], []])
     events = list(agent_loop.run_turn(adapter, ss, sid, "locate the error"))
     result_event = next(e for e in events if e["type"] == "tool_result")
     view = result_event["result"]
@@ -116,7 +116,7 @@ def test_credentials_redacted_before_model_ui_or_disk(fake_adapter, monkeypatch)
     result = {"api_key": "secret-a", "nested": [{"password": "secret-b"}],
               "log": "Authorization: Bearer secret-c\napi_key=secret-d\nhello"}
     monkeypatch.setattr(tools, "call", lambda *a, **kw: result)
-    adapter = fake_adapter([[{"type": "tool_call", "id": "c1", "name": "read_log", "arguments": {}}], []])
+    adapter = fake_adapter([[{"type": "tool_call", "id": "c1", "name": "read_log", "arguments": {"job_id": "synthetic", "design": "top", "stage": "synth"}}], []])
     events = list(agent_loop.run_turn(adapter, ss, sid, "read"))
     result_event = next(e for e in events if e["type"] == "tool_result")
     ref = result_event["output_ref"]
@@ -138,8 +138,8 @@ def test_disk_full_stops_without_repeating_action(fake_adapter, monkeypatch):
     def full(*a, **kw):
         raise OSError(errno.ENOSPC, "disk full")
     monkeypatch.setattr(output_module.os, "replace", full)
-    adapter = fake_adapter([[{"type": "tool_call", "id": "c1", "name": "start_job", "arguments": {}},
-                             {"type": "tool_call", "id": "c2", "name": "start_job", "arguments": {}}], []])
+    adapter = fake_adapter([[{"type": "tool_call", "id": "c1", "name": "start_job", "arguments": {"designs": [{"example": "counter8"}]}},
+                             {"type": "tool_call", "id": "c2", "name": "start_job", "arguments": {"designs": [{"example": "counter8"}]}}], []])
     events = list(agent_loop.run_turn(adapter, ss, sid, "run"))
     assert len(executed) == len(adapter.seen) == 1
     assert events[-1]["type"] == "error"

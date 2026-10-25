@@ -49,7 +49,7 @@ app = FastAPI(title="r2g agent", version=__version__, lifespan=_lifespan)
 app.include_router(repair_router)
 
 
-def init_runtime(cfg: config.Config | None = None, resume: bool = False) -> None:
+def init_runtime(cfg: config.Config | None = None, resume: bool = False, *, model_reviews: bool = True) -> None:
     global _bridge
     if _bridge:
         _bridge.stop()
@@ -62,8 +62,9 @@ def init_runtime(cfg: config.Config | None = None, resume: bool = False) -> None
     tools.RT.pipeline.recover(resume=resume)
     tools.RT.platform = cfg.platform
     sessions = agent_loop.SessionStore()
-    _bridge = BridgeWorker(sessions, store, lambda: make_adapter(cfg.model))
-    STATE.update(cfg=cfg, sessions=sessions, bridge=_bridge)
+    from .execution import HostExecutor
+    _bridge = BridgeWorker(sessions, store, lambda: make_adapter(cfg.model), model_reviews=model_reviews)
+    STATE.update(cfg=cfg, sessions=sessions, bridge=_bridge, executor=HostExecutor(sessions, store))
     install_repairs(STATE)
     _bridge.start()
 
@@ -255,12 +256,37 @@ def jobs():
 @app.post("/api/jobs")
 async def create_job(req: Request):
     body = await req.json()
-    r = tools.start_job(body.get("designs") or [], platform=body.get("platform", "nangate45"),
-                        output=body.get("output", "graph"), title=body.get("title", ""),
-                        params=body.get("params") or None, _submission_key=body.get("request_id"))
-    if "error" in r:
-        raise HTTPException(409 if r.get("error_code") == "submission_conflict" else 400, r["error"])
-    return r
+    return await asyncio.to_thread(_execute_direct, "start_job", body)
+
+
+@app.post("/api/jobs/batch")
+async def create_batch(req: Request):
+    return await asyncio.to_thread(_execute_direct, "start_batch", await req.json())
+
+
+def _execute_direct(name: str, body: dict, *, job_id: str | None = None):
+    from .execution import response
+    if not isinstance(body, dict):
+        raise HTTPException(400, "request must be an object")
+    try:
+        executor = STATE["executor"]
+        context = executor.host_context("web", request_id=body.get("request_id"),
+                                        session_id=body.get("session_id"), job_id=job_id)
+        arguments = {k: v for k, v in body.items() if k not in {"request_id", "session_id"}}
+        if job_id:
+            if "job_id" in arguments and arguments["job_id"] != job_id:
+                raise ValueError("job_id does not match the route")
+            arguments["job_id"] = job_id
+        receipt = executor.execute(name, arguments, context)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    result = response(receipt)
+    if receipt["status"] in {"queued", "running"}:
+        return JSONResponse(result, status_code=202)
+    if "error" in result:
+        code = 409 if receipt["status"] in {"conflict", "recovery_required"} else 400
+        return JSONResponse(result, status_code=code)
+    return result
 
 
 @app.get("/api/jobs/{jid}")
@@ -292,11 +318,11 @@ async def batch_scan(req: Request):
 
 
 @app.post("/api/jobs/{jid}/cancel")
-def cancel(jid: str):
-    result = tools.cancel_job(jid)
-    if "error" in result:
-        raise HTTPException(404, result["error"])
-    return result
+async def cancel(jid: str, req: Request):
+    if tools.RT.store.job(jid) is None:
+        raise HTTPException(404, "no such job")
+    body = await req.json() if await req.body() else {}
+    return await asyncio.to_thread(_execute_direct, "cancel_job", body, job_id=jid)
 
 
 @app.get("/api/jobs/{jid}/designs/{name}/download")

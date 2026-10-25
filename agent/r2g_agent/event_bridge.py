@@ -17,8 +17,9 @@ LOG = logging.getLogger(__name__)
 
 
 class BridgeWorker:
-    def __init__(self, sessions, jobs, adapter_factory):
+    def __init__(self, sessions, jobs, adapter_factory, *, model_reviews: bool = True):
         self.sessions, self.jobs, self.adapter_factory = sessions, jobs, adapter_factory
+        self.model_reviews = model_reviews
         self._stop = threading.Event()
         self._wake = threading.Event()
         self._lock = threading.Lock()
@@ -45,7 +46,7 @@ class BridgeWorker:
         return self.sessions.turns.get(turn["id"])
 
     def launch(self, turn: dict) -> None:
-        if turn["status"] != "queued" or self._stop.is_set():
+        if not self.model_reviews or turn["kind"] == "execution" or turn["status"] != "queued" or self._stop.is_set():
             return
         with self._lock:
             if turn["id"] in self._threads:
@@ -75,6 +76,12 @@ class BridgeWorker:
     def tick(self) -> None:
         self.sessions.turns.recover()
         for event in self.jobs.review_outbox():
+            origin = self.sessions.turns.get(event["turn_id"])
+            if origin and origin["kind"] == "execution" and not origin["payload"].get("review_enabled", False):
+                self.jobs.skip_review(event["id"], "direct execution did not authorize a model review")
+                continue
+            if not self.model_reviews:
+                continue  # Leave chat reviews pending for an authorized model worker.
             # The unique request key closes the cross-database crash window:
             # if enqueue committed but reviewed() did not, the same turn is reused.
             self.enqueue(

@@ -77,7 +77,7 @@ def test_failed_observation_is_uncertain_and_does_not_execute_again(monkeypatch,
     calls = []
     monkeypatch.setattr(tools, "call", lambda *a, **k: calls.append(1) or {"side_effect": "happened"})
     monkeypatch.setattr(store.outputs, "record", lambda *a: (_ for _ in ()).throw(ToolOutputError("disk failed")))
-    adapter = fake_adapter([[{"type": "tool_call", "id": "c1", "name": "start_job", "arguments": {}}]])
+    adapter = fake_adapter([[{"type": "tool_call", "id": "c1", "name": "start_job", "arguments": {"designs": [{"example": "counter8"}]}}]])
     events = list(agent_loop.run_turn(adapter, store, sid, "run"))
     tid = events[0]["turn_id"]
     assert store.turns.get(tid)["status"] == "recovery_required"
@@ -254,7 +254,7 @@ def test_checked_repair_child_becomes_explicit_turn_focus(monkeypatch, fake_adap
     child = jobs.create_job("checked repair child", {}, [{"name": "top"}])
     monkeypatch.setattr(tools.RT, "store", jobs)
     monkeypatch.setattr(tools, "call", lambda *a, **k: {"job_id": child})
-    adapter = fake_adapter([[{"type": "tool_call", "id": "repair", "name": "execute_rtl_repair", "arguments": {}}], []])
+    adapter = fake_adapter([[{"type": "tool_call", "id": "repair", "name": "execute_rtl_repair", "arguments": {"proposal_id": "synthetic"}}], []])
     events = list(agent_loop.run_turn(adapter, sessions, sid, "execute approved repair"))
     tid = events[0]["turn_id"]
     assert sessions.turns.get(tid)["job_id"] == child

@@ -8,6 +8,7 @@
           [--period NS --util U --die UM --params FILE]   override r2g's measured defaults
   r2g params                 the default flow parameters and their ranges
   r2g status [JOB]
+  r2g cancel JOB [--request-id KEY] [--session-id SESSION]
   r2g ui [--port N] [--host H]
   r2g chat                  terminal chat with the agent
   r2g mcp                   MCP server on stdio
@@ -24,9 +25,9 @@ import time
 from . import __version__, config
 
 
-def _runtime():
+def _runtime(*, model_reviews: bool = False):
     from .server import STATE, init_runtime
-    init_runtime()
+    init_runtime(model_reviews=model_reviews)
     return STATE
 
 
@@ -51,7 +52,7 @@ def _follow(store, jid: str, quiet: bool = False) -> dict:
                 time.strftime("%H:%M:%S"), c.get("passed", 0), c.get("failed", 0), c.get("running", 0),
                 c.get("pending", 0), len(j["designs"])), flush=True)
             last = time.time()
-        if j["status"] not in ("running", "pending", "finalizing"):
+        if j["status"] not in ("running", "pending", "finalizing", "cancelling"):
             return j
         time.sleep(2)
 
@@ -89,15 +90,21 @@ def cmd_check_model(a) -> int:
 def cmd_run(a) -> int:
     st = _runtime()
     from . import tools
+    from .execution import response
+    executor = st["executor"]
+    context = executor.host_context("cli", getattr(a, "request_id", None), getattr(a, "session_id", None))
+    print("执行请求 %s（重试可用 --request-id）" % context.request_id, flush=True)
     params = {}
-    if a.params:
-        params.update(json.loads(open(a.params).read()))
+    if getattr(a, "params", None):
+        with open(a.params) as stream:
+            params.update(json.load(stream))
     for k in ("period", "util", "die"):
-        v = getattr(a, k)
+        v = getattr(a, k, None)
         if v is not None:
             params[{"period": "period_ns", "util": "utilization", "die": "die_side_um"}[k]] = v
-    if a.batch:
-        r = tools.start_batch(a.batch, output=a.output, platform=a.platform, params=params or None)
+    if getattr(a, "batch", None):
+        r = response(executor.execute("start_batch", {"path": a.batch, "output": a.output,
+                                                      "platform": a.platform, "params": params or None}, context))
         if "error" in r:
             print("错误：", r["error"])
             return 2
@@ -108,7 +115,8 @@ def cmd_run(a) -> int:
         print(json.dumps(j.get("result"), ensure_ascii=False))
         return 0 if (j.get("result") or {}).get("passed") else 1
     designs = [{"example": e} for e in (a.example or [])] + [{"path": p} for p in (a.paths or [])]
-    r = tools.start_job(designs, platform=a.platform, output=a.output, params=params or None)
+    r = response(executor.execute("start_job", {"designs": designs, "platform": a.platform,
+                                                "output": getattr(a, "output", "graph"), "params": params or None}, context))
     if "error" in r:
         print("错误：", r["error"])
         return 2
@@ -116,6 +124,30 @@ def cmd_run(a) -> int:
     j = _follow(tools.RT.store, r["job_id"])
     print(json.dumps(j.get("result"), ensure_ascii=False))
     return 0 if (j.get("result") or {}).get("passed") else 1
+
+
+def cmd_cancel(a) -> int:
+    from .execution import response
+    executor = _runtime()["executor"]
+    context = executor.host_context("cli", a.request_id, a.session_id, job_id=a.job)
+    result = response(executor.execute("cancel_job", {"job_id": a.job}, context))
+    print(json.dumps(result, ensure_ascii=False))
+    return 2 if "error" in result else 0
+
+
+def cmd_tool(a) -> int:
+    """Invoke a registered EDA tool; this command accepts no shell fragment."""
+    from .execution import response
+    executor = _runtime()["executor"]
+    try:
+        arguments = json.loads(a.arguments)
+        context = executor.host_context("cli", a.request_id, a.session_id,
+                                        allow_session_tools=a.allow_session_tools, read_only=a.read_only)
+        result = response(executor.execute(a.name, arguments, context))
+    except ValueError as exc:
+        result = {"error": str(exc), "error_code": "invalid_execution"}
+    print(json.dumps(result, ensure_ascii=False))
+    return 2 if "error" in result else 0
 
 
 def cmd_params(a) -> int:
@@ -181,7 +213,7 @@ def cmd_ui(a) -> int:
 
 
 def cmd_chat(a) -> int:
-    st = _runtime()
+    st = _runtime(model_reviews=True)
     from .agent_loop import run_turn
     from .llm import make_adapter
     adapter = make_adapter(st["cfg"].model)
@@ -209,7 +241,9 @@ def cmd_mcp(a) -> int:
     import anyio
     _runtime()
     from .mcp_server import serve
-    anyio.run(serve)
+    async def run():
+        await serve(session_id=a.session_id, allow_session_tools=a.allow_session_tools, read_only=a.read_only)
+    anyio.run(run)
     return 0
 
 
@@ -234,13 +268,28 @@ def main(argv=None) -> int:
     r.add_argument("--util", type=float, help="利用率，默认 0.50")
     r.add_argument("--die", type=float, help="固定 die 边长 µm（默认自动）")
     r.add_argument("--params", help="参数 JSON 文件（键见 r2g params）"); r.set_defaults(fn=cmd_run)
+    r.add_argument("--request-id", help="重试沿用同一请求键；源码或参数变化将冲突")
+    r.add_argument("--session-id", help="将操作关联到现有会话")
     pp = sub.add_parser("params", help="显示默认流程参数（经验值）及可改范围")
     pp.add_argument("--platform", default="nangate45"); pp.set_defaults(fn=cmd_params)
     t = sub.add_parser("status"); t.add_argument("job", nargs="?"); t.set_defaults(fn=cmd_status)
+    cancel = sub.add_parser("cancel", help="请求取消任务；终态由执行器确认")
+    cancel.add_argument("job"); cancel.add_argument("--request-id"); cancel.add_argument("--session-id")
+    cancel.set_defaults(fn=cmd_cancel)
+    tool = sub.add_parser("tool", help="执行一个注册的 EDA 工具，不接受 shell 命令")
+    tool.add_argument("name"); tool.add_argument("--arguments", default="{}", help="工具参数 JSON 对象")
+    tool.add_argument("--request-id"); tool.add_argument("--session-id")
+    tool.add_argument("--allow-session-tools", action="store_true", help="明确允许读取指定会话")
+    tool.add_argument("--read-only", action="store_true")
+    tool.set_defaults(fn=cmd_tool)
     u = sub.add_parser("ui", help="启动本地网页界面")
     u.add_argument("--port", type=int); u.add_argument("--host"); u.set_defaults(fn=cmd_ui)
     sub.add_parser("chat", help="终端对话").set_defaults(fn=cmd_chat)
-    sub.add_parser("mcp", help="以 MCP 服务器方式运行（stdio）").set_defaults(fn=cmd_mcp)
+    mcp = sub.add_parser("mcp", help="以 MCP 服务器方式运行（stdio）")
+    mcp.add_argument("--session-id", help="明确绑定的现有会话")
+    mcp.add_argument("--allow-session-tools", action="store_true", help="允许读取所绑定会话的历史和工具观察")
+    mcp.add_argument("--read-only", action="store_true", help="只开放只读审查工具")
+    mcp.set_defaults(fn=cmd_mcp)
     k = sub.add_parser("clean", help="清理已结束任务的工作目录（默认只列出）")
     k.add_argument("--older-than", type=float, default=7.0, help="天数，默认 7")
     k.add_argument("--yes", action="store_true", help="确认删除")

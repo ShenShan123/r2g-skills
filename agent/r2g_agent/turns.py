@@ -129,18 +129,25 @@ class TurnStore:
         with self.connection() as c:
             return [_row(r) for r in c.execute("SELECT * FROM turns WHERE session_id=? ORDER BY created,id", (sid,))]
 
-    def create(self, sid: str, key: str, payload: dict, *, kind="user", job_id=None,
-               max_model_calls=12, max_actions=24, allow_queue=False) -> tuple[dict, bool]:
+    def create(self, sid: str | None, key: str, payload: dict, *, kind="user", job_id=None,
+               max_model_calls=12, max_actions=24, allow_queue=False, claim_immediately=False) -> tuple[dict, bool]:
         if not isinstance(key, str) or not 1 <= len(key) <= 200:
             raise ValueError("request_id must contain 1–200 characters")
-        identity = digest({"session_id": sid, "kind": kind, "payload": payload, "job_id": job_id})
+        if claim_immediately and allow_queue:
+            raise ValueError("an immediate claim cannot be queued")
         with self.connection() as c:
             c.execute("BEGIN IMMEDIATE")
             existing = c.execute("SELECT * FROM turns WHERE request_key=?", (key,)).fetchone()
+            new_session = sid is None and existing is None
+            sid = sid or (existing["session_id"] if existing else uuid.uuid4().hex[:12])
+            identity = digest({"session_id": sid, "kind": kind, "payload": payload, "job_id": job_id})
             if existing:
                 if existing["request_hash"] != identity:
                     raise TurnConflict("request_id was already used for another request")
                 return _row(existing), False
+            if new_session:
+                now = time.time()
+                c.execute("INSERT INTO sessions VALUES (?,?,?,?,?)", (sid, now, now, "", "[]"))
             if not c.execute("SELECT 1 FROM sessions WHERE id=?", (sid,)).fetchone():
                 raise ValueError("unknown session")
             if not allow_queue and c.execute(
@@ -148,9 +155,11 @@ class TurnStore:
             ).fetchone():
                 raise SessionBusy("this session already has an active turn")
             tid = uuid.uuid4().hex
+            now = time.time()
             c.execute("INSERT INTO turns VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                      (tid, sid, key, identity, kind, canonical(payload), job_id, "queued", None,
-                       time.time(), None, None, max_model_calls, max_actions, None))
+                      (tid, sid, key, identity, kind, canonical(payload), job_id,
+                       "running" if claim_immediately else "queued", OWNER if claim_immediately else None,
+                       now, now if claim_immediately else None, None, max_model_calls, max_actions, None))
             if job_id:
                 self._link_job(c, sid, tid, job_id)
             return _row(c.execute("SELECT * FROM turns WHERE id=?", (tid,)).fetchone()), True

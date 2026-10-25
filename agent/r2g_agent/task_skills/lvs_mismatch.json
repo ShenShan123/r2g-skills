@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "id": "lvs_mismatch",
+  "name": "LVS 不一致定位",
+  "version": 1,
+  "execution_mode": "advisory_only",
+  "execution_authorized": false,
+  "supported_stages": [
+    "signoff",
+    "lvs"
+  ],
+  "failure_types": [
+    "lvs_mismatch",
+    "netlist_connectivity_mismatch"
+  ],
+  "required_inputs": [
+    "LVS原始比较报告/错配计数",
+    "版图与网表对应版本",
+    "LVS deck/映射/电源地设置"
+  ],
+  "required_tools": [
+    "klayout"
+  ],
+  "read_tools": [
+    "design_detail",
+    "read_log",
+    "read_rtl",
+    "eda_capabilities",
+    "knowledge_lookup"
+  ],
+  "assets": [
+    "LVS报告与执行日志",
+    "版图与综合/布线网表",
+    "LVS规则与标准单元映射"
+  ],
+  "allowed_modifications": [],
+  "required_evidence": [
+    "同一设计的明确LVS失败或正的mismatch计数。",
+    "DRC clean不代表LVS一致；缺失/未知LVS报告不能视为clean。",
+    "先区分连线/端口差异与规则、blackbox、电源地配置问题。"
+  ],
+  "required_rechecks": [
+    "核对比较的两侧来源、deck与电源映射，再要求独立LVS重跑。",
+    "当前合同不执行网表、版图、规则或RTL修改。"
+  ],
+  "stop_or_escalate": [
+    "禁止屏蔽单元/端口、删除比较项或替换参考网表掩盖错配。",
+    "任一比较输入或规则无来源时升级人工核对。"
+  ],
+  "executable_action": null,
+  "allowed_diagnostics": [],
+  "diagnostic_stages": {},
+  "diagnostic_required_tools": {}
+}

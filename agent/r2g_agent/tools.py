@@ -34,7 +34,8 @@ RT = Runtime()
 REGISTRY: dict[str, dict] = {}
 REVIEW_TOOLS = frozenset({"list_examples", "job_status", "list_jobs", "design_detail", "read_log",
                          "dataset_info", "read_rtl", "read_tool_output", "read_session_history",
-                         "flow_params", "knowledge_lookup", "disk_usage", "propose_rtl_repair"})
+                         "flow_params", "knowledge_lookup", "disk_usage", "propose_rtl_repair",
+                         "eda_capabilities", "task_skill", "plan_next_step"})
 
 
 def tool(description: str, parameters: dict, *, session_scoped: bool = False):
@@ -153,23 +154,8 @@ def list_examples() -> dict:
 def start_job(designs: list, platform: str = "nangate45", output: str = "graph", title: str = "",
               params: dict | None = None, *, _context: ToolContext | None = None,
               _submission_key: str | None = None) -> dict:
-    sources = []
-    for d in designs:
-        if d.get("example"):
-            p = examples_dir() / d["example"]
-            if not p.is_dir():
-                return {"error": "no such example: %s" % d["example"]}
-            sources.append({"name": d.get("name") or d["example"], "path": str(p), "top": d.get("top")})
-        elif d.get("path"):
-            p = Path(d["path"]).expanduser()
-            if not p.exists():
-                return {"error": "path does not exist: %s" % p}
-            sources.append({"name": d.get("name") or p.stem, "path": str(p.resolve()), "top": d.get("top")})
-        else:
-            return {"error": "each design needs 'example' or 'path'"}
-    if not sources:
-        return {"error": "no designs given"}
     try:
+        sources, _ = resolve_submission("start_job", {"designs": designs})
         submission = _submission(_context, _submission_key)
         jid = RT.pipeline.submit(sources, platform=platform, title=title, output=output, params=params,
                                  **({"submission": submission} if submission else {}))
@@ -187,6 +173,40 @@ def _submission(context: ToolContext | None, key: str | None) -> dict | None:
     if key is not None and (not isinstance(key, str) or not 1 <= len(key) <= 200):
         raise ValueError("request_id must contain 1–200 characters")
     return {"request_key": "http:" + key} if key is not None else None
+
+
+def resolve_submission(name: str, arguments: dict) -> tuple[list[dict], dict]:
+    """One source resolver shared by admission fingerprints and actual submission."""
+    if name == "start_batch":
+        from . import batch
+        scan = batch.scan(Path(arguments["path"]))
+        sources = batch.sources(scan)
+        if not sources:
+            raise ValueError("no design with a decidable top module under %s" % arguments["path"])
+        return sources, scan
+    if name != "start_job":
+        raise ValueError("unsupported submission tool")
+    designs = arguments.get("designs")
+    if not isinstance(designs, list) or not designs:
+        raise ValueError("no designs given")
+    sources = []
+    for design in designs:
+        if not isinstance(design, dict):
+            raise ValueError("each design must be an object")
+        if design.get("example"):
+            path = examples_dir() / design["example"]
+            if not path.is_dir():
+                raise ValueError("no such example: %s" % design["example"])
+            name = design.get("name") or design["example"]
+        elif design.get("path"):
+            path = Path(design["path"]).expanduser()
+            if not path.exists():
+                raise ValueError("path does not exist: %s" % path)
+            name = design.get("name") or path.stem
+        else:
+            raise ValueError("each design needs 'example' or 'path'")
+        sources.append({"name": name, "path": str(path.resolve()), "top": design.get("top")})
+    return sources, {}
 
 
 @tool("The flow parameters r2g uses by default (measured on 1249 nangate45 designs: clock period tiers "
@@ -224,15 +244,8 @@ def scan_batch(path: str) -> dict:
 def start_batch(path: str, output: str = "graph", platform: str = "nangate45", title: str = "",
                 params: dict | None = None, *, _context: ToolContext | None = None,
                 _submission_key: str | None = None) -> dict:
-    from . import batch
     try:
-        r = batch.scan(Path(path))
-    except ValueError as e:
-        return {"error": str(e)}
-    src = batch.sources(r)
-    if not src:
-        return {"error": "no design with a decidable top module under %s" % path}
-    try:
+        src, r = resolve_submission("start_batch", {"path": path})
         submission = _submission(_context, _submission_key)
         jid = RT.pipeline.submit(src, platform=platform, output=output, params=params,
                                  title=title or "批量 · %s · %d 个设计" % (Path(r["root"]).name, len(src)),
@@ -485,3 +498,65 @@ def propose_rtl_repair(job_id: str, design: str, file: str, line: int, expected_
 def execute_rtl_repair(proposal_id: str, *, _context: ToolContext) -> dict:
     from .repairs import RepairController
     return RepairController(_context.outputs.database, RT.store, RT.pipeline).execute(_context, proposal_id)
+
+
+@tool("Observe the host's selected open-source tools and platform assets, including versions, "
+      "content hashes, cell libraries/corners, DRC/LVS/RCX prerequisites and refused combinations. "
+      "READY means prerequisites observed, never signoff PASS or manufacturing qualification. "
+      "No tool installation, flow execution or memory mutation occurs.",
+      _obj({"platform": {"type": "string", "enum": ["nangate45", "sky130hd", "sky130hs", "gf180", "asap7"]}}))
+def eda_capabilities(platform: str = "nangate45") -> dict:
+    from . import capabilities
+    observed = capabilities.inventory(platform)
+    return {**observed, "graph_admission": capabilities.check_requirements(observed, output="graph"),
+            "image_admission": capabilities.check_requirements(observed, output="image")}
+
+
+@tool("List small task-oriented EDA skill manifests, or load exactly one executable contract "
+      "on demand. Tasks cover compilation, simulation mismatch, synthesis, timing, LVS and "
+      "dataset delivery. A skill describes prerequisites/evidence/rechecks/stop rules; it is "
+      "not a repair permission and cannot waive host policy.",
+      _obj({"skill_id": {"type": "string", "description": "Omit to list; use an ID returned by the manifest."}}))
+def task_skill(skill_id: str = "") -> dict:
+    from . import task_skills
+    return task_skills.load_skill(skill_id) if skill_id else task_skills.list_skills()
+
+
+@tool("Select task-specific next checks from a linked job's fresh design state and real events. "
+      "Separates infrastructure, missing input/module, syntax, synthesis, timing and LVS evidence. "
+      "Returns candidate task skills with evidence IDs and refusals. Does not execute a repair, "
+      "start a job, or mark anything passed. Load the selected task contract before acting.",
+      _obj({"job_id": {"type": "string"}, "design": {"type": "string"}}, ["job_id"]))
+def plan_next_step(job_id: str, design: str = "") -> dict:
+    from . import capabilities, task_skills
+    current = RT.store.job(job_id)
+    if not current:
+        return {"error": "no such job"}
+    platform = current.get("spec", {}).get("platform", RT.platform)
+    observed = capabilities.inventory(platform)
+    return {**task_skills.select_tasks(current, RT.store.events(job_id, tail=200),
+                                      capabilities=observed, design=design),
+            "capability_admission": capabilities.check_requirements(
+                observed, output=current.get("spec", {}).get("output", "graph"))}
+
+
+@tool("Inspect one local design source directory before choosing or submitting it: bounded "
+      "source snapshot, candidate top/interface, dependencies, size and testbench presence. "
+      "The scan is heuristic, not functional verification or permission to edit. Use a directory "
+      "returned by fetch_rtl/upload; compare candidates using evidence rather than repository stars.",
+      _obj({"path": {"type": "string"}, "top": {"type": "string"}}, ["path"]))
+def inspect_design(path: str, top: str = "") -> dict:
+    from . import design_checks
+    return design_checks.inspect_design(path, top)
+
+
+@tool("Run one fixed cheap diagnostic in a private input copy: compile uses Icarus without "
+      "simulation; synthesis_structure uses Yosys parse/hierarchy/proc/check without mapping "
+      "or backend. The host validates the task contract and tool/source versions. Each compiler "
+      "has a 10-second limit. No commands, flags, arbitrary testbench, RTL editing or verdict "
+      "override is accepted. A passed diagnostic does not establish function or signoff.",
+      _obj({"path": {"type": "string"}, "top": {"type": "string"},
+            "check": {"type": "string", "enum": ["compile", "synthesis_structure"]}}, ["path", "top"]))
+def check_design(path: str, top: str, check: str = "compile") -> dict:
+    from . import design_checks
+    return design_checks.check_design(path, top, check)

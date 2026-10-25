@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "id": "dataset_delivery",
+  "name": "数据集验收与交付核对",
+  "version": 1,
+  "execution_mode": "advisory_only",
+  "execution_authorized": false,
+  "supported_stages": [
+    "graph",
+    "verify",
+    "done"
+  ],
+  "failure_types": [
+    "dataset_check_failure",
+    "missing_artifact",
+    "count_conflict",
+    "delivery_review"
+  ],
+  "required_inputs": [
+    "当前作业/设计状态",
+    "原始verify.json及其结果条目数",
+    "签核报告",
+    "交付manifest和实际归档"
+  ],
+  "required_tools": [],
+  "read_tools": [
+    "job_status",
+    "design_detail",
+    "read_log",
+    "dataset_info"
+  ],
+  "assets": [
+    "graph_dataset.json",
+    "verify.json",
+    "DRC/LVS报告",
+    "delivery_manifest.json",
+    "归档及输入绑定"
+  ],
+  "allowed_modifications": [],
+  "required_evidence": [
+    "按实际结果计算passed/total；严禁交换279与297或套用别的设计计数。",
+    "非空检查集合全部ok与成功verify执行、干净DRC/LVS是不同证据。",
+    "选择器返回verify_delivery只表示应核对交付，不是PASS判定或重新签发通过。",
+    "归档存在/下载成功不能代替内容、输入版本和政策绑定。"
+  ],
+  "required_rechecks": [
+    "对照jobs detail、verify事件、原始verify.json、日志与归档中的报告。",
+    "核对必需产物、哈希、当前源/约束/政策和交付manifest未验证项。"
+  ],
+  "stop_or_escalate": [
+    "任何计数冲突、缺失/失败检查、未知签核、非终态或打包失败都不能交付成功结论。",
+    "不修改标签、报告或检查标准以获得通过；不自动打包/重跑。"
+  ],
+  "executable_action": null,
+  "allowed_diagnostics": [],
+  "diagnostic_stages": {},
+  "diagnostic_required_tools": {}
+}

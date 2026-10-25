@@ -29,6 +29,9 @@ const ACTIONS: Record<string, string> = {
   read_tool_output: "查看已保存的工具结果", read_session_history: "查阅本次对话的历史要求与记录",
   flow_params: "确认流程参数",
   propose_rtl_repair: "提出修复差异，等待审核", execute_rtl_repair: "执行已授权的有限修复",
+  eda_capabilities: "核对工具与工艺资产", task_skill: "读取任务检查规则",
+  plan_next_step: "依据当前证据选择下一项检查", inspect_design: "核对候选设计的接口与依赖",
+  check_design: "执行编译或结构检查",
   search_rtl: "搜索 RTL 设计", fetch_rtl: "读取仓库中的设计", disk_usage: "检查可用磁盘空间",
 };
 const PUBLIC_EVENTS = new Set(["created", "start", "ok", "warn", "fail", "done", "cancelled", "recovery_required"]);

@@ -78,6 +78,13 @@ class JobStore:
                     c.execute("ALTER TABLE jobs ADD COLUMN %s REAL" % name)
             c.execute("INSERT OR REPLACE INTO runtime_schema VALUES ('execution', 1)")
             c.execute("INSERT OR IGNORE INTO runtime_schema VALUES ('submissions_and_reviews', 1)")
+            review_columns = {r[1] for r in c.execute("PRAGMA table_info(job_review_outbox)")}
+            if "review_status" not in review_columns:
+                c.execute("ALTER TABLE job_review_outbox ADD COLUMN review_status TEXT NOT NULL DEFAULT 'pending'")
+                c.execute("UPDATE job_review_outbox SET review_status='created' WHERE review_turn_id IS NOT NULL")
+            if "review_note" not in review_columns:
+                c.execute("ALTER TABLE job_review_outbox ADD COLUMN review_note TEXT")
+            c.execute("UPDATE runtime_schema SET version=2 WHERE component='submissions_and_reviews' AND version<2")
 
     @contextmanager
     def _conn(self):
@@ -123,11 +130,16 @@ class JobStore:
 
     def review_outbox(self) -> list[dict]:
         with self._conn() as c:
-            return [dict(r) for r in c.execute("SELECT * FROM job_review_outbox WHERE review_turn_id IS NULL ORDER BY id")]
+            return [dict(r) for r in c.execute("SELECT * FROM job_review_outbox WHERE review_status='pending' ORDER BY id")]
 
     def reviewed(self, event_id: int, turn_id: str) -> None:
         with self._conn() as c:
-            c.execute("UPDATE job_review_outbox SET review_turn_id=? WHERE id=? AND review_turn_id IS NULL", (turn_id, event_id))
+            c.execute("UPDATE job_review_outbox SET review_turn_id=?,review_status='created' WHERE id=? AND review_status='pending'", (turn_id, event_id))
+
+    def skip_review(self, event_id: int, reason: str) -> None:
+        with self._conn() as c:
+            c.execute("UPDATE job_review_outbox SET review_status='skipped',review_note=? WHERE id=? AND review_status='pending'",
+                      (reason, event_id))
 
     def submission(self, jid: str) -> dict | None:
         with self._conn() as c:

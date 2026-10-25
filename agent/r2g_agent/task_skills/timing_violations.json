@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "id": "timing_violations",
+  "name": "时序违例分析",
+  "version": 1,
+  "execution_mode": "advisory_only",
+  "execution_authorized": false,
+  "supported_stages": [
+    "flow",
+    "signoff",
+    "timing"
+  ],
+  "failure_types": [
+    "setup_violation",
+    "hold_violation",
+    "negative_slack"
+  ],
+  "required_inputs": [
+    "STA报告的路径、corner、setup/hold类型、单位",
+    "对应SDC/时钟和库版本",
+    "同一执行的源与约束绑定"
+  ],
+  "required_tools": [
+    "openroad"
+  ],
+  "read_tools": [
+    "design_detail",
+    "read_log",
+    "flow_params",
+    "eda_capabilities",
+    "knowledge_lookup"
+  ],
+  "assets": [
+    "原始STA/时序报告",
+    "SDC",
+    "Liberty与RCX配置"
+  ],
+  "allowed_modifications": [],
+  "required_evidence": [
+    "负slack或明确的setup/hold失败需来自结构化报告或当前失败事件。",
+    "仅文本提到timing、未测量数值、缺少时钟约束不等于时序通过。",
+    "不能混用不同角、不同SDC或不同源版本的指标。"
+  ],
+  "required_rechecks": [
+    "核对约束完整性与真实关键路径，再要求同一corner/SDC重测。",
+    "时序修复动作尚未注册；任何参数/RTL变更都需要单独策略与授权。"
+  ],
+  "stop_or_escalate": [
+    "禁止放宽时钟、添加false_path或删检查来伪造满足时序。",
+    "无可信路径/单位/corner或报告陈旧时停止下结论。"
+  ],
+  "executable_action": null,
+  "allowed_diagnostics": [],
+  "diagnostic_stages": {},
+  "diagnostic_required_tools": {}
+}

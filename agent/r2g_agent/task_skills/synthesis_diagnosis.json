@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "id": "synthesis_diagnosis",
+  "name": "综合失败诊断",
+  "version": 1,
+  "execution_mode": "advisory_only",
+  "execution_authorized": false,
+  "supported_stages": [
+    "synth"
+  ],
+  "failure_types": [
+    "synthesis_failure",
+    "elaboration_failure",
+    "unsupported_construct",
+    "technology_mapping_failure"
+  ],
+  "required_inputs": [
+    "综合失败事件和日志",
+    "源与依赖清单、top",
+    "综合工具/库/约束版本"
+  ],
+  "required_tools": [
+    "yosys"
+  ],
+  "read_tools": [
+    "design_detail",
+    "read_log",
+    "read_rtl",
+    "inspect_design",
+    "eda_capabilities",
+    "knowledge_lookup",
+    "check_design"
+  ],
+  "assets": [
+    "Yosys日志",
+    "实际Liberty/LEF组合",
+    "综合输入绑定"
+  ],
+  "allowed_modifications": [],
+  "required_evidence": [
+    "失败日志必须来自当前设计、当前综合执行；不同作业的历史失败只作参考。",
+    "区分语法、依赖、elaboration、映射与基础设施错误。",
+    "旧流程内建处理和TEHM文档匹配不证明新增RTL修复可用。"
+  ],
+  "required_rechecks": [
+    "核验top/依赖/库/脚本后提出最小只读下一检查。",
+    "任何变更需独立任务合同与host授权；不从综合成功外推物理签核。"
+  ],
+  "stop_or_escalate": [
+    "状态未知或执行未结束时等待/取证。",
+    "不重写RTL、不改mapping脚本、不自动启动另一EDA任务。"
+  ],
+  "executable_action": null,
+  "allowed_diagnostics": [
+    "synthesis_structure"
+  ],
+  "diagnostic_stages": {
+    "synthesis_structure": [
+      "input",
+      "prepare",
+      "compile",
+      "synth"
+    ]
+  },
+  "diagnostic_required_tools": {
+    "synthesis_structure": [
+      "yosys"
+    ]
+  }
+}

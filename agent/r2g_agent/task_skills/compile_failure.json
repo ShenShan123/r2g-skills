@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "id": "compile_failure",
+  "name": "编译失败定位",
+  "version": 1,
+  "execution_mode": "registered_repair_only",
+  "execution_authorized": false,
+  "supported_stages": [
+    "synth",
+    "compile"
+  ],
+  "failure_types": [
+    "syntax_error",
+    "parse_error",
+    "missing_dependency",
+    "infrastructure_failure"
+  ],
+  "required_inputs": [
+    "job_id/design",
+    "失败阶段和同一设计的事件ID",
+    "失败执行绑定的RTL/约束快照",
+    "精确文件、行号和原始行文本",
+    "当前平台/工具能力"
+  ],
+  "required_tools": [
+    "yosys"
+  ],
+  "read_tools": [
+    "design_detail",
+    "read_log",
+    "read_rtl",
+    "inspect_design",
+    "eda_capabilities",
+    "knowledge_lookup",
+    "check_design"
+  ],
+  "assets": [
+    "失败编译日志",
+    "RTL与include/readmem依赖",
+    "已注册功能oracle"
+  ],
+  "allowed_modifications": [
+    "仅既有rtl_insert_semicolon：counter8单个不超过64KiB的RTL文件副本中插入一个分号；必须单独审核并取得host grant。",
+    "不改原始RTL、约束、接口、testbench、oracle或工具策略。"
+  ],
+  "required_evidence": [
+    "同一job/design的终态synth语法失败事件；排除权限、磁盘、工具缺失等基础设施错误。",
+    "阶段input_bindings必须完整、一致且对应失败执行；提案时再次读取当前源并比较。",
+    "counter8顶层、graph输出；iverilog/vvp实际可用。",
+    "模型文本或missing-semicolon猜测不是修改许可。"
+  ],
+  "required_rechecks": [
+    "host核验精确单行与候选内容；相同候选不重复执行。",
+    "编译和counter8_contract_v1独立2048项功能比较。",
+    "synth/flow/signoff/graph/verify与最终交付输入/政策绑定。"
+  ],
+  "stop_or_escalate": [
+    "无法定位到源文件/行号或证据陈旧时只读补证。",
+    "非counter8、多源、非graph或未注册oracle只给诊断建议。",
+    "无明确host grant、预算用尽、执行状态不确定、政策变化时停止。"
+  ],
+  "executable_action": {
+    "id": "rtl_insert_semicolon",
+    "proposal_tool": "propose_rtl_repair",
+    "execute_tool": "execute_rtl_repair",
+    "host_approval_required": true,
+    "default_budget": {
+      "max_rounds": 2,
+      "max_model_calls": 6,
+      "wall_seconds": 900
+    },
+    "required_tools": [
+      "iverilog",
+      "vvp"
+    ]
+  },
+  "allowed_diagnostics": [
+    "compile"
+  ],
+  "diagnostic_stages": {
+    "compile": [
+      "input",
+      "prepare",
+      "compile",
+      "synth"
+    ]
+  },
+  "diagnostic_required_tools": {
+    "compile": [
+      "iverilog"
+    ]
+  }
+}

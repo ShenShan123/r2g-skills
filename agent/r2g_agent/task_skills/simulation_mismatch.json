@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "id": "simulation_mismatch",
+  "name": "仿真结果不一致诊断",
+  "version": 1,
+  "execution_mode": "advisory_only",
+  "execution_authorized": false,
+  "supported_stages": [
+    "simulate",
+    "simulation",
+    "functional_check"
+  ],
+  "failure_types": [
+    "assertion_failure",
+    "state_mismatch",
+    "output_mismatch"
+  ],
+  "required_inputs": [
+    "失败仿真结果和事件ID",
+    "输入激励/seed/周期",
+    "可信testbench或功能规范",
+    "DUT及oracle源版本"
+  ],
+  "required_tools": [
+    "iverilog",
+    "vvp"
+  ],
+  "read_tools": [
+    "design_detail",
+    "read_log",
+    "read_rtl",
+    "inspect_design",
+    "eda_capabilities"
+  ],
+  "assets": [
+    "已有仿真日志/波形",
+    "可信testbench及依赖",
+    "被测DUT快照"
+  ],
+  "allowed_modifications": [],
+  "required_evidence": [
+    "同一设计的实际仿真或独立功能检查失败，带assertion/期望值/观测值或周期。",
+    "编译成功不等于功能通过；缺少波形/周期应明确未知。",
+    "仅发现名为tb的文件不能证明它已执行或是可信oracle。"
+  ],
+  "required_rechecks": [
+    "先核对激励、复位、时钟和testbench版本，再规划确定性重现。",
+    "任意行为修复都需要另注册独立功能/等价策略与授权；当前合同无执行器。"
+  ],
+  "stop_or_escalate": [
+    "禁止通过修改断言、期望值、测试台或隐藏不匹配来使测试通过。",
+    "无可信oracle、无法重现或超出支持工具范围时升级人工复核。"
+  ],
+  "executable_action": null,
+  "allowed_diagnostics": [],
+  "diagnostic_stages": {},
+  "diagnostic_required_tools": {}
+}

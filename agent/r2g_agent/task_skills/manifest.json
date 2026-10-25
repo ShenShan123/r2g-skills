@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "description": "按任务检索的只读合同目录；不是工具授权或执行凭据。",
+  "skills": [
+    {
+      "id": "compile_failure",
+      "name": "编译失败定位",
+      "version": 1,
+      "stages": [
+        "synth",
+        "compile"
+      ],
+      "execution_mode": "registered_repair_only"
+    },
+    {
+      "id": "simulation_mismatch",
+      "name": "仿真结果不一致诊断",
+      "version": 1,
+      "stages": [
+        "simulate",
+        "simulation",
+        "functional_check"
+      ],
+      "execution_mode": "advisory_only"
+    },
+    {
+      "id": "synthesis_diagnosis",
+      "name": "综合失败诊断",
+      "version": 1,
+      "stages": [
+        "synth"
+      ],
+      "execution_mode": "advisory_only"
+    },
+    {
+      "id": "timing_violations",
+      "name": "时序违例分析",
+      "version": 1,
+      "stages": [
+        "flow",
+        "signoff",
+        "timing"
+      ],
+      "execution_mode": "advisory_only"
+    },
+    {
+      "id": "lvs_mismatch",
+      "name": "LVS 不一致定位",
+      "version": 1,
+      "stages": [
+        "signoff",
+        "lvs"
+      ],
+      "execution_mode": "advisory_only"
+    },
+    {
+      "id": "dataset_delivery",
+      "name": "数据集验收与交付核对",
+      "version": 1,
+      "stages": [
+        "graph",
+        "verify",
+        "done"
+      ],
+      "execution_mode": "advisory_only"
+    }
+  ]
+}

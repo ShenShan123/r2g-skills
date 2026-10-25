@@ -502,6 +502,38 @@ class Pipeline:
                                       detail={"reason": "内部错误：%s" % e},
                                       event=("job", "fail", "内部错误：%s" % e, {}))
 
+    def _capability_gate(self, jid, name, pdir, platform, output) -> bool:
+        """Check tool/PDK prerequisites before spending synthesis/backend work.
+
+        This observes availability, never awards a design or toolchain PASS.
+        Unknown prerequisites stop alongside missing prerequisites; subsequent
+        signoff and dataset checks remain mandatory on every admitted design.
+        """
+        from . import capabilities, task_skills
+        from .input_snapshots import digest, write_json
+        self._check_cancel(jid)
+        observed = capabilities.inventory(platform)
+        admission = capabilities.check_requirements(observed, output=output)
+        contract = task_skills.load_skill("dataset_delivery")
+        write_json(pdir / "reports" / "toolchain_capabilities.json", observed)
+        write_json(pdir / "reports" / "task_contract.json", {
+            "skill_id": contract["id"], "version": contract["version"],
+            "contract_sha256": digest(contract), "contract": contract,
+            "admission": admission, "scope": "prerequisite observation; per-design checks remain required"})
+        self._check_cancel(jid)
+        self._update(jid, name, detail={"capability_admission": admission,
+                                       "task_contract_sha256": digest(contract)})
+        if admission["verdict"] != "READY":
+            reasons = admission["missing"] + admission["unsupported"] + admission["unverified"]
+            self._fail(jid, name, "prepare", "工具/PDK 前置检查未通过：%s（%s）" % (
+                admission["verdict"], "、".join(reasons[:8])),
+                {"failure_class": "environment", "capability_admission": admission,
+                 "backend_started": False})
+            return False
+        self._ok(jid, name, "prepare", "工具/PDK 前置条件已核对；仍需本设计的独立签核和数据集检查",
+                 {"inventory_id": admission["inventory_id"], "combination_verification": "UNVERIFIED"})
+        return True
+
     def _run_design_inner(self, jid, name, src, top, pdir, platform, output="graph") -> None:
         S = str(signoff_scripts())
         # prepare
@@ -523,6 +555,8 @@ class Pipeline:
         for m in meta["missing_data_files"]:
             self._fail_soft(jid, name, "prepare", "缺少数据文件：%s 里的 $readmem 读取 %s，%s；请补传这个文件"
                             % (m["file"], m["reference"], m["reason"]), m)
+        if not self._capability_gate(jid, name, pdir, platform, output):
+            return
         # synth, then at most one re-run per frontend recipe whose signature is in the log
         self._stage(jid, name, "synth")
         tried: list[str] = []
