@@ -503,8 +503,6 @@ rm -f "$LVS_RUN_LOG"
 # have a real lvs_run.log/6_lvs.log the skip marker is no longer authoritative.
 rm -f "$LVS_DIR/lvs_result.json"
 if [[ "$LVS_IMPLICIT_REBUILD" == "1" ]]; then
-  printf '{"status": "failed", "reason": "layout_changed_under_signoff", "note": "physical artifacts changed while make lvs ran; verdict does not describe the frozen backend layout (RMD-P0-01)"}\n' \
-    > "$LVS_DIR/lvs_result.json"
   if [[ $LVS_STATUS -eq 0 ]]; then LVS_STATUS=1; fi
 fi
 
@@ -546,6 +544,14 @@ if [[ -f "$LOGS_DIR/6_lvs.log" ]]; then
 fi
 if [[ -f "$RESULTS_DIR/6_final.cdl" ]]; then
   cp "$RESULTS_DIR/6_final.cdl" "$LVS_DIR/" 2>/dev/null || true
+fi
+
+# Publish invalidation after collecting artifacts: copying a match log updates
+# its mtime, and must not make it newer than the runner's failed postcondition.
+if [[ "$LVS_IMPLICIT_REBUILD" == "1" ]]; then
+  printf '{"status": "failed", "reason": "layout_changed_under_signoff", "note": "physical artifacts changed while make lvs ran; verdict does not describe the frozen backend layout (RMD-P0-01)"}\n' \
+    > "$LVS_DIR/lvs_result.json.tmp"
+  mv -f "$LVS_DIR/lvs_result.json.tmp" "$LVS_DIR/lvs_result.json"
 fi
 
 # nangate45 LVS FALLBACK (2026-10-23; the repair arm's lvs45 fallback, moved in).

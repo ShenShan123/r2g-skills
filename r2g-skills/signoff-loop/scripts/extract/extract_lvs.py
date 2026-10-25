@@ -301,9 +301,9 @@ def main():
     if skip_file.exists() and skip_file.stat().st_mtime >= _skip_supersede_mtime:
         try:
             skip_data = json.loads(skip_file.read_text(encoding='utf-8'))
-            if skip_data.get('status') == 'skipped':
-                # Even a skip is attributable (RMD-P0-02) — the gate accepts a
-                # skipped LVS, so it must know WHICH run the skip belongs to.
+            if skip_data.get('status') in ('skipped', 'failed', 'timeout', 'incomplete'):
+                # The runner's fresh invalidation overrides any match text:
+                # e.g. make lvs rebuilt the layout while checking it.
                 report_io.stamp_run_provenance(skip_data, project_root, run_dir)
                 out_path.parent.mkdir(parents=True, exist_ok=True)
                 report_io.write_json_atomic(out_path, skip_data)

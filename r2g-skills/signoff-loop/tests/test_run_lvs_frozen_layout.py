@@ -23,8 +23,10 @@ Observed on the 2026-10-06 nangate45 corpus run, where every design came back
 `lvs_failed` while the layouts were in fact clean.
 """
 import os
+import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 SKILL = Path(__file__).resolve().parents[1]
@@ -191,3 +193,19 @@ def test_missing_final_odb_keeps_failing_closed(tmp_path):
     out = r.stdout + r.stderr
     assert r.returncode != 0
     assert "no 6_final.odb" in out, out
+
+
+def test_layout_change_overrides_match_after_artifact_collection(tmp_path):
+    skill, orfs, proj, bin_dir = _setup(tmp_path, MISMATCH_MAKEFILE)
+    # Exercise the real producer order: failure marker, provenance, artifact
+    # copies. A log copied after invalidation must not resurrect a clean LVS.
+    (bin_dir / 'klayout').write_text(KLAYOUT_STUB + '\nprintf changed >> "$gds"\n')
+    run = _run_lvs(tmp_path, skill, orfs, proj, bin_dir,
+                   extra_env={'R2G_LVS_FROZEN': '1'})
+    assert run.returncode != 0, run.stdout + run.stderr
+    report = proj / 'reports/lvs.json'
+    subprocess.run([sys.executable, str(SKILL / 'scripts/extract/extract_lvs.py'),
+                    str(proj), str(report)], check=True, capture_output=True, text=True)
+    result = json.loads(report.read_text())
+    assert result['status'] == 'failed', result
+    assert result['reason'] == 'layout_changed_under_signoff'

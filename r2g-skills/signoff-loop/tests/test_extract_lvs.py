@@ -630,3 +630,12 @@ def test_fallback_never_overrides_a_klayout_verdict(tmp_path):
     _fallback(proj, "mismatch", "Final result: Netlists do not match.")
     r = _run_script(proj, tmp_path / "lvs.json")
     assert r["status"] == "clean" and "lvs_by" not in r
+
+
+def test_fresh_layout_invalidation_overrides_match_log(tmp_path):
+    proj = _make_project(tmp_path, log_6_lvs='CONGRATULATIONS! Netlists match.\n', lvsdb=True)
+    marker = proj / 'lvs/lvs_result.json'
+    marker.write_text(json.dumps({'status': 'failed', 'reason': 'layout_changed_under_signoff'}))
+    result = _run_script(proj, proj / 'reports/lvs.json')
+    assert result['status'] == 'failed'
+    assert result['reason'] == 'layout_changed_under_signoff'

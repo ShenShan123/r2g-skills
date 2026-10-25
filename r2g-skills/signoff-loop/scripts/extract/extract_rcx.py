@@ -4,6 +4,7 @@ Extract OpenRCX parasitic extraction results from SPEF output.
 Produces a JSON summary with net counts, total capacitance, and resistance stats.
 """
 from pathlib import Path
+import hashlib
 import json
 import re
 import sys
@@ -98,7 +99,7 @@ def parse_spef_header(spef_path: Path) -> dict:
     with open(spef_path, 'r', encoding='utf-8', errors='ignore') as f:
         for line in f:
             line = line.strip()
-            if line.startswith('*DESIGN'):
+            if line.split(maxsplit=1)[:1] == ['*DESIGN']:
                 header['design'] = line.split('"')[1] if '"' in line else line.split()[-1]
             elif line.startswith('*DATE'):
                 header['date'] = line.split('"')[1] if '"' in line else ' '.join(line.split()[1:])
@@ -150,18 +151,23 @@ def main():
 
     rcx_dir = project_root / 'rcx'
 
-    # Check for skip marker
+    # A recorded invocation outcome takes precedence over old output files.
+    receipt = None
     skip_file = rcx_dir / 'rcx_result.json'
     if skip_file.exists():
         try:
-            skip_data = json.loads(skip_file.read_text(encoding='utf-8'))
-            if skip_data.get('status') == 'skipped':
-                out_path.parent.mkdir(parents=True, exist_ok=True)
-                report_io.write_json_atomic(out_path, skip_data)
-                print(out_path)
-                return
-        except Exception:
-            pass
+            receipt = json.loads(skip_file.read_text(encoding='utf-8'))
+            if not isinstance(receipt, dict):
+                raise ValueError('invalid receipt')
+        except (OSError, ValueError):
+            receipt = {'status': 'incomplete', 'reason': 'RCX execution receipt is unreadable'}
+        if receipt.get('status') != 'complete' or receipt.get('exit_code') != 0:
+            result = dict(receipt)
+            if result.get('status') not in ('skipped', 'failed', 'timeout'):
+                result.update(status='incomplete', reason='RCX execution did not confirm completion')
+            report_io.write_json_atomic(out_path, result)
+            print(out_path)
+            return
 
     # Find SPEF file
     spef_path = rcx_dir / '6_final.spef'
@@ -188,8 +194,16 @@ def main():
     stats = parse_spef(spef_path)
     log_info = parse_rcx_log(rcx_dir)
 
+    status = 'complete' if stats.get('net_count', 0) > 0 else 'empty'
+    if receipt and receipt.get('spef_sha256') != hashlib.sha256(spef_path.read_bytes()).hexdigest():
+        status = 'incomplete'
+    elif not receipt and log_info.get('errors'):
+        # Legacy runs lack receipts; a recorded extraction error still rules out
+        # promoting a copied ORFS SPEF to a successful fresh RCX result.
+        status = 'failed'
+
     result = {
-        'status': 'complete' if stats.get('net_count', 0) > 0 else 'empty',
+        'status': status,
         'spef_file': str(spef_path),
         'spef_size_bytes': spef_path.stat().st_size,
         'header': header,
@@ -200,6 +214,8 @@ def main():
         'res_unit': stats.get('res_unit'),
         'log_info': log_info,
     }
+    if receipt:
+        result['execution'] = receipt
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     report_io.write_json_atomic(out_path, result)

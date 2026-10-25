@@ -102,13 +102,24 @@ def read_json(p: Path) -> dict:
 def signoff_verdict(project: Path) -> dict:
     drc = read_json(project / "reports" / "drc.json")
     lvs = read_json(project / "reports" / "lvs.json")
+    rcx = read_json(project / "reports" / "rcx.json")
     v = {
         "drc": drc.get("status") or "missing",
         "drc_violations": drc.get("total_violations"),
         "lvs": lvs.get("status") or "missing",
         "lvs_mismatches": lvs.get("mismatch_count"),
+        "rcx": rcx.get("status") or "missing",
     }
     v["dual_clean"] = v["drc"] == "clean" and v["lvs"] == "clean"
+    if lvs.get("reason") == "layout_changed_under_signoff":
+        v["infrastructure_error"] = "LVS 检查期间版图被重建，签核证据已失效"
+    elif v["lvs"] not in ("clean", "fail"):
+        v["infrastructure_error"] = "LVS 未获得可用的匹配判定（%s），需要检查工具与输入" % (
+            lvs.get("reason") or v["lvs"])
+    elif v["drc"] not in ("clean", "fail", "violations", "stuck"):
+        v["infrastructure_error"] = "DRC 未获得完整的规则检查结果（%s），需要检查工具与输入" % v["drc"]
+    elif v["rcx"] != "complete":
+        v["infrastructure_error"] = "RCX 未确认完成（%s），不能生成已验证数据集" % v["rcx"]
     return v
 
 
@@ -555,23 +566,30 @@ class Pipeline:
         self._ok(jid, name, "flow", "布局布线完成")
         # signoff
         self._stage(jid, name, "signoff")
-        self._sh(jid, name, "signoff", ["bash", str(tools_dir() / "run_signoff.sh"), str(pdir), platform], pdir)
+        self._sh(jid, name, "signoff", ["bash", str(tools_dir() / "run_signoff.sh"), str(pdir), platform], pdir,
+                 env={"R2G_LVS_FROZEN": "1"})
         v = signoff_verdict(pdir)
         self._update(jid, name, detail={"signoff": v})
+        if v.get("infrastructure_error"):
+            self._ingest(jid, name, pdir)
+            self._fail(jid, name, "signoff", v["infrastructure_error"], v)
+            return
         (self._ok if v["dual_clean"] else self._fail_soft)(
             jid, name, "signoff", "DRC %s（%s 处），LVS %s" % (v["drc"], v["drc_violations"] or 0, v["lvs"]), v)
         # repair
         if not v["dual_clean"]:
             self._stage(jid, name, "repair", "自动修复：诊断 → 修改 → 重跑 → 重新签核")
             self._sh(jid, name, "repair", ["bash", S + "/flow/fix_signoff.sh", str(pdir), platform,
-                                           "--check", "both", "--max-iters", "3"], pdir)
+                                           "--check", "both", "--max-iters", "3"], pdir,
+                     env={"R2G_LVS_FROZEN": "1"})
             v = signoff_verdict(pdir)
             fixes = [json.loads(l) for l in (pdir / "reports" / "fix_log.jsonl").read_text().splitlines()
                      if l.strip()] if (pdir / "reports" / "fix_log.jsonl").is_file() else []
             self._update(jid, name, detail={"signoff": v, "repair": fixes[-5:]})
-            if not v["dual_clean"]:
+            if not v["dual_clean"] or v.get("infrastructure_error"):
                 self._ingest(jid, name, pdir)
-                self._fail(jid, name, "repair", "修复后仍未双清：DRC %s，LVS %s" % (v["drc"], v["lvs"]), v)
+                self._fail(jid, name, "repair", v.get("infrastructure_error") or
+                           "修复后仍未双清：DRC %s，LVS %s" % (v["drc"], v["lvs"]), v)
                 return
             self._ok(jid, name, "repair", "修复成功，DRC/LVS 均已清零", v)
         self._ingest(jid, name, pdir)

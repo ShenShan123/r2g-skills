@@ -339,3 +339,29 @@ def test_terminal_design_cannot_start_another_stage(tmp_path):
     store.set_design(jid,'top',status='passed')
     assert store.begin_execution(jid,'top','late',OWNER,BOOT_ID,['should-not-start']) is None
     assert store.active_executions(jid) == []
+
+
+@pytest.mark.parametrize('drc,lvs,rcx,reason,expected', [
+    ('clean', 'clean', 'complete', None, False),
+    ('fail', 'clean', 'complete', None, False),
+    ('clean', 'fail', 'complete', 'netgen_fallback_mismatch', False),
+    ('clean', 'clean', 'failed', None, True),
+    ('clean', 'clean', 'missing', None, True),
+    ('clean', 'failed', 'complete', 'layout_changed_under_signoff', True),
+    ('clean', 'failed', 'complete', 'physical_rebuild_required', True),
+    ('clean', 'crash', 'complete', None, True),
+    ('clean', 'incomplete', 'complete', None, True),
+    ('clean', 'timeout', 'complete', None, True),
+    ('clean', 'stale', 'complete', None, True),
+    ('unknown', 'clean', 'complete', None, True),
+    ('timeout', 'clean', 'complete', None, True),
+])
+def test_signoff_distinguishes_infrastructure_failure_from_measured_mismatch(tmp_path, drc, lvs, rcx, reason, expected):
+    reports = tmp_path / 'reports'
+    reports.mkdir()
+    (reports / 'drc.json').write_text(json.dumps({'status': drc}))
+    (reports / 'lvs.json').write_text(json.dumps({'status': lvs, 'reason': reason}))
+    if rcx != 'missing':
+        (reports / 'rcx.json').write_text(json.dumps({'status':rcx}))
+    verdict = pipeline.signoff_verdict(tmp_path)
+    assert bool(verdict.get('infrastructure_error')) is expected

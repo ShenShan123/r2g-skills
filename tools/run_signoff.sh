@@ -33,7 +33,7 @@ fi
 # Must match the FLOW_VARIANT the flow ran under (run_orfs.sh defaults it to the
 # project basename), or the checkers restage into a different ORFS results tree.
 FLOW_VARIANT="${R2G_FLOW_VARIANT:-$NAME}"
-LOG_DIR="$REPO_ROOT/design_cases/_batch/logs_signoff"
+LOG_DIR="$PROJECT_DIR/reports/signoff_logs"
 mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/${NAME}.log"
 
