@@ -133,6 +133,13 @@ def read_json(p: Path) -> dict:
         return {}
 
 
+# KLayout's bound per DRC run. run_signoff.sh defaults to 1 h, and 5 of the first
+# 57 designs of the n45 reproduction (61k-99k cells) hit it in the deck's antenna
+# section (FreePDK45.lydrc:376) and read "stuck" -- the same layouts the experiment
+# graded under 6 h (experiments/signoff45.py --timeout 21600). Same ruler, same bound.
+DRC_TIMEOUT_S = 6 * 3600
+
+
 def signoff_verdict(project: Path) -> dict:
     drc = read_json(project / "reports" / "drc.json")
     lvs = read_json(project / "reports" / "lvs.json")
@@ -506,7 +513,8 @@ class Pipeline:
         self._ok(jid, name, "flow", "布局布线完成")
         # signoff
         self._stage(jid, name, "signoff")
-        self._sh(jid, name, "signoff", ["bash", str(tools_dir() / "run_signoff.sh"), str(pdir), platform], pdir)
+        self._sh(jid, name, "signoff", ["bash", str(tools_dir() / "run_signoff.sh"), str(pdir), platform], pdir,
+                 env={"DRC_TIMEOUT": str(DRC_TIMEOUT_S)}, timeout=DRC_TIMEOUT_S + 2 * 3600)
         v = signoff_verdict(pdir)
         self.store.set_design(jid, name, detail={"signoff": v})
         (self._ok if v["dual_clean"] else self._fail_soft)(
@@ -515,7 +523,9 @@ class Pipeline:
         if not v["dual_clean"]:
             self._stage(jid, name, "repair", "自动修复：诊断 → 修改 → 重跑 → 重新签核")
             self._sh(jid, name, "repair", ["bash", S + "/flow/fix_signoff.sh", str(pdir), platform,
-                                           "--check", "both", "--max-iters", "3"], pdir)
+                                           "--check", "both", "--max-iters", "3"], pdir,
+                     env={"DRC_TIMEOUT": str(DRC_TIMEOUT_S)},
+                     timeout=3 * (self.stage_timeout + DRC_TIMEOUT_S))
             v = signoff_verdict(pdir)
             fixes = [json.loads(l) for l in (pdir / "reports" / "fix_log.jsonl").read_text().splitlines()
                      if l.strip()] if (pdir / "reports" / "fix_log.jsonl").is_file() else []

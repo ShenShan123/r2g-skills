@@ -1055,7 +1055,9 @@ def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | Non
         # default.  A candidate can execute only through the separately frozen,
         # effect-fingerprint-bound attempt policy; shadow evidence always blocks it.
         if (s.get("lifecycle_status") in _LIVE_BLOCKED_LIFECYCLE
-                and not candidate_attempt):
+                and not candidate_attempt
+                and not (s.get("lifecycle_status") == "candidate"
+                         and s.get("lifecycle_untested_candidate"))):
             continue
         if s.get("dead_here") and not retry_dead:
             continue        # repeatedly failed on THIS design+check, never cleared
@@ -1871,6 +1873,19 @@ def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
                 statuses[s["id"]] = _lifecycle_status_with_scope_transfer(
                     conn, recipe_lifecycle, symptom_id=sid,
                     design_class=design_class, platform=platform, strategy=s)
+                # A cold-start catalog strategy (no requires_ab_promotion) is live with
+                # no lifecycle row. Its own success makes learn() enqueue an untested
+                # 'learner_diff' candidate, which then blocked it for every later
+                # design of that symptom+class: one success switched the fix off
+                # wherever no A/B runs (the agent; 9 of 13 antenna designs that the
+                # r2g arm cleared stopped at no_auto_strategy, 2026-10-24). Such a
+                # row carries no verdict, so it must not veto what cold start allows;
+                # shadow/parked and A/B-judged candidates still block.
+                if (statuses[s["id"]][0] == "candidate" and not s.get("requires_ab_promotion")
+                        and _untested_learner_candidate(
+                            conn, recipe_lifecycle, symptom_id=sid, design_class=design_class,
+                            platform=platform, strategy=s["id"])):
+                    s["lifecycle_untested_candidate"] = True
         for s in plan_strats:
             fp = fp_of.get(s["id"])
             if s["id"] in dead:

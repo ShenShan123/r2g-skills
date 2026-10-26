@@ -193,8 +193,14 @@ def main(argv=None):
     allbad = []
     drv = D / f"{args.root}.driver.log"
     if drv.is_file():
-        SPEC_MISS_LOGGED.update(
-            re.findall(r"SPEC MISS (\S+?):", drv.read_text(errors="replace")))
+        # A resumed campaign moves its first leg's log aside as
+        # <root>.driver.part*.log, and runs that leg produced and the resume kept
+        # logged their SPEC MISS THERE: reading only driver.log reported 10
+        # sky130hd designs as unlogged misses and stopped the campaign
+        # (2026-10-24), though every one was in part1_pre_portbuf.log.
+        for log in [drv, *sorted(D.glob(f"{args.root}.driver.part*.log"))]:
+            SPEC_MISS_LOGGED.update(
+                re.findall(r"SPEC MISS (\S+?):", log.read_text(errors="replace")))
         print("  驱动日志记录的 SPEC MISS: %d 份" % len(SPEC_MISS_LOGGED))
     else:
         print("  注意: 找不到 %s，无法确认 SPEC MISS 是否被记录" % drv.name)

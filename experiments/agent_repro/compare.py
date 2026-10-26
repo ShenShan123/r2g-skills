@@ -12,6 +12,7 @@ as their own line, expected to fail, so they never hide inside a percentage.
 """
 import collections
 import json
+import re
 import sys
 import urllib.request
 
@@ -23,7 +24,13 @@ def main() -> int:
     idx = json.load(open(sys.argv[1]))["designs"]
     url = sys.argv[sys.argv.index("--url") + 1] if "--url" in sys.argv else "http://127.0.0.1:8770"
     job = json.load(urllib.request.urlopen("%s/api/jobs/%s" % (url, sys.argv[2])))
+    # the agent names a design after its folder with every non-[A-Za-z0-9_] run
+    # turned into "_" (pipeline.py), so "sonic-speed" is "sonic_speed" there
     by = {d["name"]: d for d in job["designs"]}
+    for short in list(idx):
+        alias = re.sub(r"[^A-Za-z0-9_]+", "_", short)
+        if alias in by and short not in by:
+            by[short] = by[alias]
     rows = collections.defaultdict(lambda: collections.Counter())
     fails = collections.defaultdict(list)
     used = collections.defaultdict(collections.Counter)
