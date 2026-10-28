@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, Square, X, Image as ImageIcon, FileText, LayoutGrid, Grid3x3, ChevronDown, ChevronRight,
          CheckCircle2, XCircle, AlertTriangle, Circle, MessagesSquare, Wand2, Loader2, Search, PackageOpen } from "lucide-react";
-import { api, askAgent, Design, fmtClock, Job, JobEvent, OUTPUT_LABEL } from "../lib/api";
-import { StatusBadge, Stat, StepTrack, isActive } from "../components/ui";
+import { api, askAgent, Design, fmtClock, Job, jobStatus, JobEvent, OUTPUT_LABEL } from "../lib/api";
+import { StatusBadge, Stat, isActive } from "../components/ui";
+import DeleteResource from "../components/DeleteResource";
+import StageViews from "../components/StageViews";
 
 const KIND_ICON: Record<string, any> = { ok: CheckCircle2, fail: XCircle, warn: AlertTriangle };
 const KIND_CLS: Record<string, string> = { ok: "text-ok", fail: "text-bad", warn: "text-warn", start: "text-run" };
@@ -19,14 +21,17 @@ const STAGE_ZH: Record<string, string> = {
 
 export default function JobDetail() {
   const { id = "" } = useParams();
+  const navigate = useNavigate();
   const [job, setJob] = useState<Job | null>(null);
   const [events, setEvents] = useState<JobEvent[]>([]);
   const [sel, setSel] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelError, setCancelError] = useState("");
   const lastEv = useRef(0);
 
   useEffect(() => {
-    let alive = true; lastEv.current = 0; setEvents([]);
+    let alive = true; lastEv.current = 0; setEvents([]); setCancelBusy(false); setCancelError("");
     let t: any;
     // the page keeps at most the last 500 events; a big batch polls more slowly
     const tick = async () => {
@@ -46,6 +51,11 @@ export default function JobDetail() {
   const ds = job.designs ?? [];
   const passed = ds.filter((d) => d.status === "passed").length;
   const failed = ds.filter((d) => d.status === "failed").length;
+  const cancelled = ds.filter((d) => d.status === "cancelled").length;
+  const running = ds.filter((d) => d.status === "running").length;
+  const pending = ds.filter((d) => d.status === "pending").length;
+  const dual = ds.filter((d) => d.detail?.signoff?.dual_clean === true).length;
+  const stopping = job.status === "cancelling";
   const active = isActive(job.status);
   const started = events[0]?.ts ?? job.created;
   const minutes = Math.max(0, Math.round(((active ? Date.now() / 1000 : job.updated) - started) / 60));
@@ -63,7 +73,10 @@ export default function JobDetail() {
               ? <span className="text-accent2">自定义参数：{Object.entries(job.spec.params).map(([k, v]) => `${PARAM_ZH[k] ?? k} ${typeof v === "object" ? "已改" : v}`).join("、")}</span>
               : "r2g 经验参数"} · {job.id}</div>
         </div>
-        <StatusBadge status={job.status} />
+        <div className="flex items-center gap-2">
+          <StatusBadge status={jobStatus(job)} />
+          <DeleteResource kind="job" id={id} title={job.title} onDeleted={() => navigate('/jobs')} />
+        </div>
       </div>
 
       {/* what is going on, in one sentence, with the one action that matters now */}
@@ -72,21 +85,38 @@ export default function JobDetail() {
           {active ? (
             <>
               <div className="flex items-center gap-2 font-semibold"><Loader2 size={17} className="animate-spin text-run" />
-                正在处理 · 已完成 {passed + failed}/{ds.length}</div>
-              <div className="mt-1 truncate text-sm text-muted">{now ? `${now.design ?? ""} ${now.message}` : "准备中"} · 已用 {minutes} 分钟</div>
+                {stopping ? "正在停止所有未完成设计" : running ? "正在处理" : "排队等待计算资源"} · 已结束 {passed + failed + cancelled}/{ds.length}</div>
+              <div className="mt-1 text-sm text-muted">{running} 运行 · {pending} 排队 · {cancelled} 已取消 · 已用 {minutes} 分钟</div>
+              {now && running > 0 && !stopping && <div className="mt-1 truncate text-sm text-muted">{now.design ?? ""} {now.message}</div>}
             </>) : (
             <>
-              <div className="font-semibold">{passed ? `完成：${passed}/${ds.length} 个设计通过` : `没有设计通过（${failed}/${ds.length} 失败）`}</div>
+              <div className="font-semibold">{job.status === "cancelled" ? `任务已停止：${cancelled} 个设计已取消` : passed ? `完成：${passed}/${ds.length} 个设计通过` : `没有设计通过（${failed}/${ds.length} 失败）`}</div>
               <div className="mt-1 text-sm text-muted">
-                {passed ? "通过的设计都已签核（DRC、LVS 干净）并通过数据集校验，已打包。" : "点开失败的设计查看原因，或让 agent 帮你分析。"}
+                {job.status === "cancelled" ? "已完成的结果和报告保留。" : passed ? "通过的设计都已签核（DRC、LVS 干净）并通过数据集校验，已打包。" : "点开失败的设计查看原因，或让 agent 帮你分析。"}
                 {passed > 0 && failed > 0 && ` ${failed} 个失败的设计不在数据集里。`} 用时 {minutes} 分钟。
               </div>
             </>)}
         </div>
         {active && passed > 0 && <PartialDownload id={id} />}
-        {active && <button className="btn-ghost" onClick={() => api.cancel(id)}><Square size={14} /> 取消</button>}
+        {active && <button className="btn-ghost" disabled={cancelBusy || stopping}
+          title="取消所有排队设计，并停止运行中的设计；已完成的结果保留"
+          onClick={async () => {
+            setCancelBusy(true); setCancelError("");
+            try {
+              const response = await api.cancel(id);
+              if (response.error) throw new Error(response.error);
+              setJob(await api.job(id));
+            } catch (e) { setCancelError(e instanceof Error ? e.message : "停止请求失败，请重试"); }
+            finally { setCancelBusy(false); }
+          }}>
+          {cancelBusy || stopping ? <Loader2 size={14} className="animate-spin" /> : <Square size={14} />}
+          {cancelBusy ? "提交停止请求…" : stopping ? "正在停止…" : "停止整个任务"}
+        </button>}
         {job.result?.package && <a className="btn-primary" href={`/api/jobs/${id}/download`}><Download size={16} /> 下载数据集</a>}
       </div>
+      {cancelError && <div role="alert" className="mt-2 text-sm text-bad">停止失败：{cancelError}</div>}
+      <div className="mt-3 text-sm text-muted">DRC + LVS 双清：<strong className="text-ok">{dual}</strong> · 数据集通过：{passed} · 失败：{failed}
+        <span className="ml-2 text-xs">双清与数据集校验分别统计。</span></div>
 
       {ds.length > BIG ? <BatchList jobId={id} ds={ds} onOpen={setSel} /> : (
         <div className="mt-4 space-y-3">
@@ -156,10 +186,10 @@ function BatchList({ jobId, ds, onOpen }: { jobId: string; ds: Design[]; onOpen:
     && (!q || d.name.toLowerCase().includes(q.toLowerCase())));
   const pages = Math.max(1, Math.ceil(rows.length / PAGE));
   const shown = rows.slice(page * PAGE, page * PAGE + PAGE);
-  const tabs: [string, string][] = [["all", "全部"], ["running", "运行中"], ["pending", "排队中"], ["passed", "通过"], ["failed", "失败"]];
+  const tabs: [string, string][] = [["all", "全部"], ["running", "运行中"], ["pending", "排队中"], ["passed", "数据集通过"], ["failed", "失败"], ["cancelled", "已取消"]];
   return (
     <div className="mt-4 space-y-3">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
         {tabs.map(([k, l]) => (
           <button key={k} onClick={() => { setFilter(k); setReason(null); setPage(0); }}
             className={`rounded-xl border px-3 py-2 text-left ${filter === k ? "border-accent bg-accent/10" : "border-line bg-panel hover:bg-panel2"}`}>
@@ -230,7 +260,7 @@ function DesignCard({ jobId, d, onOpen }: { jobId: string; d: Design; onOpen: ()
         <StatusBadge status={d.status} />
         <button className="btn-ghost px-3 py-1.5" onClick={onOpen}>详情</button>
       </div>
-      <div className="mt-4"><StepTrack stage={d.stage} status={d.status} repaired={repaired} /></div>
+      <div className="mt-4"><StageViews jobId={jobId} d={d} /></div>
       <p className={`mt-3 text-sm ${d.status === "failed" ? "text-bad" : "text-muted"}`}>{plain(d)}</p>
       {(s || so) && (
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted">
@@ -238,6 +268,7 @@ function DesignCard({ jobId, d, onOpen }: { jobId: string; d: Design; onOpen: ()
           {so && <span>DRC <b className={so.drc === "clean" ? "text-ok" : "text-bad"}>{so.drc === "clean" ? "干净" : `${so.drc_violations ?? "?"} 处违例`}</b>
             {" · "}LVS <b className={so.lvs === "clean" ? "text-ok" : "text-bad"}>{so.lvs === "clean" ? "一致" : so.lvs}</b></span>}
         </div>)}
+      {so?.drc_scope && <p className="mt-2 text-xs text-muted">{so.drc_scope}</p>}
       {(fixes.length > 0 || repaired) && (
         <div className="mt-3 rounded-xl bg-accent2/10 px-3 py-2 text-xs">
           <div className="flex items-center gap-1.5 font-medium text-accent2"><Wand2 size={13} /> 自动修复</div>
@@ -260,7 +291,6 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
   const [rep, setRep] = useState<any>(null);
   const [logStage, setLogStage] = useState("flow");
   const [log, setLog] = useState("");
-  const [imgOk, setImgOk] = useState(true);
   useEffect(() => { setRep(null); api.reports(jobId, d.name).then(setRep).catch(() => {}); }, [jobId, d.name, d.status]);
   useEffect(() => {
     if (tab === "log") api.log(jobId, d.name, logStage).then((r) => setLog(r.log_tail ?? r.error ?? "")).catch(() => setLog(""));
@@ -336,10 +366,7 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
                 </div>)}
             </div>)}
           {tab === "images" && <ImagesTab jobId={jobId} d={d} />}
-          {tab === "layout" && (
-            imgOk ? <img src={`/api/jobs/${jobId}/designs/${d.name}/layout.png?ts=${d.updated}`} onError={() => setImgOk(false)}
-                      className="w-full rounded-xl border border-line bg-black" alt="layout" />
-                  : <div className="rounded-xl bg-panel2 p-10 text-center text-sm text-muted">版图预览在设计完成后生成</div>)}
+          {tab === "layout" && <StageViews jobId={jobId} d={d} />}
           {tab === "log" && (
             <div>
               <div className="mb-3 flex flex-wrap gap-1.5">

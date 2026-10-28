@@ -12,8 +12,8 @@ knowledge base learned from:
     core perimeter) and no smaller than the PDN grid needs,
   * a 2 um inset between die and core.
 
-Adding a platform means adding an entry here; nothing else in the agent is
-platform-specific.
+SKY130 and GF180 use the same frozen sizing formula, with their own measured
+constants. GF180 also requires the corrected PDN/tap apparatus in project.py.
 """
 from __future__ import annotations
 
@@ -45,7 +45,19 @@ PLATFORMS = {
         io_pos_per_um=1.80,
         pdn_floor_um=32.0,
     ),
+    "sky130hd": Platform(
+        name="sky130hd", period_bins=((100, 1.8), (1000, 3.6), (5000, 6.5), (None, 16.0)),
+        area_allowance=1.190, utilization=0.5, io_pos_per_um=0.90,
+        pdn_floor_um=32.0, port_buffer_um2=10.0096, sizing_period_ns=5.0,
+    ),
+    "gf180": Platform(
+        name="gf180", period_bins=((100, 2.2), (1000, 5.0), (5000, 9.0), (None, 16.0)),
+        area_allowance=1.144, utilization=0.5, io_pos_per_um=0.885,
+        pdn_floor_um=110.0, port_buffer_um2=42.336, sizing_period_ns=10.0,
+    ),
 }
+
+LABELS = {"nangate45": "Nangate45 · 45 nm", "sky130hd": "SKY130 HD · 130 nm", "gf180": "GF180 MCU · 180 nm"}
 
 
 def get(name: str) -> Platform:

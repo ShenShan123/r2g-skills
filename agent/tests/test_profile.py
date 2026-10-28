@@ -23,32 +23,35 @@ def frozen():
     return _load("make_spec_table"), _load("conformance_check")
 
 
-def test_defaults_equal_the_frozen_spec(frozen):
+@pytest.mark.parametrize("platform", platforms.PLATFORMS)
+def test_defaults_equal_the_frozen_spec(frozen, platform):
     mst, cc = frozen
-    d = profile.defaults("nangate45")
-    assert [tuple(t) for t in d["period_tiers"]] == [tuple(t) for t in mst.PERIOD_NS["nangate45"]]
+    d = profile.defaults(platform)
+    assert [tuple(t) for t in d["period_tiers"]] == [tuple(t) for t in mst.PERIOD_NS[platform]]
     assert d["utilization"] == mst.UTILIZATION == cc.FROZEN["utilization"]
-    assert d["area_allowance"] == mst.AREA_ALLOWANCE_DEFAULT["nangate45"]
-    assert d["pdn_floor_um"] == mst.PDN_FLOOR_UM["nangate45"]
+    assert d["area_allowance"] == mst.AREA_ALLOWANCE_DEFAULT[platform]
+    assert d["pdn_floor_um"] == mst.PDN_FLOOR_UM[platform]
     assert d["io_pct"] == cc.FROZEN["io_pct"] and d["setup_uncertainty_pct"] == cc.FROZEN["uncertainty_pct"]
-    p = platforms.get("nangate45")
-    assert p.io_pos_per_um == mst.IO_POS_PER_UM["nangate45"] and p.core_inset_um == mst.CORE_INSET_UM
-    assert p.port_buffer_um2 == mst.PORT_BUFFER_UM2.get("nangate45", 0.0)
+    p = platforms.get(platform)
+    assert p.io_pos_per_um == mst.IO_POS_PER_UM[platform] and p.core_inset_um == mst.CORE_INSET_UM
+    assert p.port_buffer_um2 == mst.PORT_BUFFER_UM2.get(platform, 0.0)
 
 
 @pytest.mark.parametrize("area,pins", [(50, 4), (900, 20), (1234.5, 64), (40000, 120), (250000, 900), (8000, 1700)])
-def test_die_equals_the_frozen_formula(frozen, area, pins, monkeypatch):
+@pytest.mark.parametrize("platform", platforms.PLATFORMS)
+def test_die_equals_the_frozen_formula(frozen, area, pins, monkeypatch, platform):
     mst, _ = frozen
     monkeypatch.setattr(mst, "area_allowance", lambda plat: mst.AREA_ALLOWANCE_DEFAULT[plat])
-    die, core, _ = mst.die_for("nangate45", area, pins)
-    ours = platforms.die_for(platforms.get("nangate45"), area, pins)
+    die, core, _ = mst.die_for(platform, area, pins)
+    ours = platforms.die_for(platforms.get(platform), area, pins)
     assert (ours["die_side_um"], ours["core_side_um"]) == (die, core)
 
 
 @pytest.mark.parametrize("cells", [1, 99, 100, 999, 1000, 4999, 5000, 10 ** 6])
-def test_period_equals_the_frozen_tiers(frozen, cells):
+@pytest.mark.parametrize("platform", platforms.PLATFORMS)
+def test_period_equals_the_frozen_tiers(frozen, cells, platform):
     mst, _ = frozen
-    assert profile.period(profile.defaults("nangate45"), cells) == mst.period_for("nangate45", cells)
+    assert profile.period(profile.defaults(platform), cells) == mst.period_for(platform, cells)
 
 
 def test_sdc_carries_the_frozen_margins(tmp_path):
@@ -62,6 +65,21 @@ def test_sdc_carries_the_frozen_margins(tmp_path):
     assert "set _per 2.0" in sdc                                # sizing synthesis at the pilot's period
     cfg = (tmp_path / "p" / "constraints" / "config.mk").read_text()
     assert "PLACE_DENSITY_LB_ADDON" not in cfg                  # the baseline never set it
+
+
+def test_gf180_uses_reviewed_apparatus_and_preserves_rtl(tmp_path):
+    import hashlib
+    src = tmp_path / "src"; src.mkdir()
+    rtl = "module t(input clk, output q); assign q = clk; endmodule\n"
+    (src / "t.v").write_text(rtl)
+    target = tmp_path / "project"
+    meta = project.create(src, target, "gf180")
+    cfg = (target / "constraints/config.mk").read_text()
+    assert "export PDN_TCL = " in cfg and "export TAPCELL_TCL = " in cfg
+    assert (target / "rtl/t.v").read_text() == rtl
+    for name, expected in meta["platform_apparatus"]["files"].items():
+        raw = (target / "constraints" / ("gf180_" + name)).read_bytes()
+        assert hashlib.sha256(raw).hexdigest() == expected["sha256"]
 
 
 def test_overrides_are_validated_and_recorded(tmp_path):

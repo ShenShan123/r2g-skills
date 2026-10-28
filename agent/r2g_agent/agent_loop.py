@@ -13,6 +13,7 @@ import json
 import sqlite3
 import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 from . import tools
@@ -32,11 +33,33 @@ class SessionStore:
         with self._c() as c:
             c.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, created REAL, "
                       "updated REAL, title TEXT, messages TEXT)")
+            c.execute('CREATE TABLE IF NOT EXISTS session_deletions (id TEXT PRIMARY KEY)')
 
+    @contextmanager
     def _c(self):
         c = sqlite3.connect(self.path, timeout=30, isolation_level=None)
         c.row_factory = sqlite3.Row
-        return c
+        try:
+            yield c
+        finally:
+            c.close()
+
+    def exists(self, sid: str) -> bool:
+        with self._c() as c:
+            return c.execute('SELECT 1 FROM sessions WHERE id=?', (sid,)).fetchone() is not None
+
+    def is_deleting(self, sid: str) -> bool:
+        with self._c() as c:
+            return c.execute('SELECT 1 FROM session_deletions WHERE id=?', (sid,)).fetchone() is not None
+
+    def mark_deleting(self, sid: str) -> None:
+        with self._c() as c:
+            c.execute('INSERT OR IGNORE INTO session_deletions VALUES (?)', (sid,))
+
+    def erase(self, sid: str) -> None:
+        with self._c() as c:
+            c.execute('DELETE FROM sessions WHERE id=?', (sid,))
+        # Keep the tiny tombstone so an old stream cannot revive the session.
 
     def create(self) -> str:
         sid = uuid.uuid4().hex[:12]
@@ -69,13 +92,29 @@ def _clip(obj) -> str:
 
 
 def run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
+    from .lifecycle import resource_lock
+    try:
+        with resource_lock('session', sid, exclusive=True, blocking=False):
+            if sessions.is_deleting(sid) or not sessions.exists(sid):
+                yield {'type': 'error', 'message': '对话正在删除或已删除'}
+                return
+            yield from _run_turn(adapter, sessions, sid, user_text)
+    except BlockingIOError:
+        yield {'type': 'error', 'message': '该对话正在处理上一条消息'}
+
+
+def _run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
     """Generator of UI events for one user turn."""
     messages = sessions.load(sid)
     messages.append({"role": "user", "content": user_text})
     title = user_text[:40]
     for step in range(MAX_STEPS):
+        if sessions.is_deleting(sid):
+            return
         text, thinking, calls, err = "", "", [], None
         for ev in adapter.stream(messages, tools.specs(), system_prompt()):
+            if sessions.is_deleting(sid):
+                return
             if ev["type"] == "text":
                 text += ev["delta"]
                 yield ev
@@ -96,8 +135,14 @@ def run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
         if not calls:
             break
         for c in calls:
+            if sessions.is_deleting(sid):
+                return
             yield {"type": "tool_call", "id": c["id"], "name": c["name"], "arguments": c["arguments"]}
-            result = tools.call(c["name"], c["arguments"])
+            token = tools.CURRENT_SESSION.set(sid)
+            try:
+                result = tools.call(c["name"], c["arguments"])
+            finally:
+                tools.CURRENT_SESSION.reset(token)
             yield {"type": "tool_result", "id": c["id"], "name": c["name"], "result": result}
             messages.append({"role": "tool", "tool_call_id": c["id"], "name": c["name"], "content": _clip(result)})
         sessions.save(sid, messages, title)

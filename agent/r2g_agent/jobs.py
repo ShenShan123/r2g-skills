@@ -32,6 +32,13 @@ CREATE TABLE IF NOT EXISTS events (
   stage TEXT, kind TEXT, message TEXT, data TEXT
 );
 CREATE INDEX IF NOT EXISTS ev_job ON events (job_id, id);
+CREATE TABLE IF NOT EXISTS job_cancellations (
+  job_id TEXT PRIMARY KEY, requested REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS deletions (
+  kind TEXT, target TEXT, status TEXT, requested REAL, updated REAL,
+  error TEXT, PRIMARY KEY(kind, target)
+);
 """
 
 # BEGIN IMMEDIATE attempts, each after busy_timeout (60 s) ran out
@@ -39,6 +46,7 @@ _LOCK_RETRIES = 5
 
 # design.status values
 PENDING, RUNNING, PASSED, FAILED, CANCELLED = "pending", "running", "passed", "failed", "cancelled"
+CANCELLING = "cancelling"
 
 
 class JobStore:
@@ -104,12 +112,79 @@ class JobStore:
         self.event(jid, None, "job", "created", "任务已创建：%d 个设计" % len(designs))
         return jid
 
+    def deletion(self, kind: str, target: str) -> dict | None:
+        with self._conn() as c:
+            row = c.execute('SELECT * FROM deletions WHERE kind=? AND target=?', (kind, target)).fetchone()
+        return dict(row) if row else None
+
+    def request_deletion(self, kind: str, target: str) -> dict:
+        now = time.time()
+        with self._conn(write=True) as c:
+            c.execute("INSERT INTO deletions VALUES (?,?,'pending',?,?,'') "
+                      "ON CONFLICT(kind,target) DO UPDATE SET status=CASE WHEN status='done' THEN status ELSE 'pending' END,error='',updated=excluded.updated",
+                      (kind, target, now, now))
+        return self.deletion(kind, target)
+
+    def set_deletion(self, kind: str, target: str, status: str, error: str = '') -> None:
+        with self._conn(write=True) as c:
+            c.execute('UPDATE deletions SET status=?,error=?,updated=? WHERE kind=? AND target=?',
+                      (status, error, time.time(), kind, target))
+
+    def pending_deletions(self) -> list[dict]:
+        with self._conn() as c:
+            return [dict(r) for r in c.execute("SELECT * FROM deletions WHERE status='pending' ORDER BY requested")]
+
+    def owned_jobs(self, sid: str) -> list[str]:
+        with self._conn() as c:
+            return [r[0] for r in c.execute("SELECT id FROM jobs WHERE json_extract(spec,'$.session_id')=?", (sid,))]
+
+    def erase_job(self, jid: str) -> None:
+        """Called only after exclusive artifact lock and successful disk cleanup."""
+        with self._conn(write=True) as c:
+            for table in ('events', 'designs', 'job_cancellations'):
+                c.execute(f'DELETE FROM {table} WHERE job_id=?', (jid,))
+            c.execute('DELETE FROM jobs WHERE id=?', (jid,))
+
     def set_job(self, jid: str, status: str, result: dict | None = None) -> None:
         with self._lock, self._conn(write=True) as c:
+            if c.execute("SELECT 1 FROM job_cancellations WHERE job_id=?", (jid,)).fetchone():
+                row = c.execute("SELECT status FROM jobs WHERE id=?", (jid,)).fetchone()
+                if row and row["status"] == CANCELLED:
+                    return
+                status = CANCELLED if status in ("done", FAILED, CANCELLED) else CANCELLING
             c.execute("UPDATE jobs SET status=?, updated=?, result=COALESCE(?, result) WHERE id=?",
                       (status, time.time(), json.dumps(result) if result is not None else None, jid))
 
-    def claim_job(self, jid: str, frm: tuple = ("running", "pending"), to: str = "finalizing") -> bool:
+    def request_cancel(self, jid: str) -> dict | None:
+        """Persist intent and remove queued designs immediately, even with a full pool.
+
+        Running designs remain running until their executor confirms termination.
+        This ports EDACode 13665730's persistent intent without changing the legacy
+        jobs table shape while existing experiment runtimes are still using it.
+        """
+        with self._lock, self._conn(write=True) as c:
+            row = c.execute("SELECT status FROM jobs WHERE id=?", (jid,)).fetchone()
+            if not row:
+                return None
+            if row["status"] not in ("done", FAILED, CANCELLED):
+                now = time.time()
+                first = c.execute("INSERT OR IGNORE INTO job_cancellations VALUES (?,?)", (jid, now)).rowcount
+                c.execute("UPDATE jobs SET status=?,updated=? WHERE id=? AND status != 'finalizing'",
+                          (CANCELLING, now, jid))
+                c.execute("UPDATE designs SET status=?,updated=? WHERE job_id=? AND status=?",
+                          (CANCELLED, now, jid, PENDING))
+                if first:
+                    c.execute("INSERT INTO events (job_id,design,ts,stage,kind,message,data) VALUES (?,NULL,?,'job','cancel',?,?)",
+                              (jid, now, "已请求停止：排队设计已取消，运行中的设计正在退出", "{}"))
+            status = c.execute("SELECT status FROM jobs WHERE id=?", (jid,)).fetchone()[0]
+            requested = c.execute("SELECT requested FROM job_cancellations WHERE job_id=?", (jid,)).fetchone()
+            return {"status": status, "cancel_requested": bool(requested)}
+
+    def cancel_requested(self, jid: str) -> bool:
+        with self._conn() as c:
+            return c.execute("SELECT 1 FROM job_cancellations WHERE job_id=?", (jid,)).fetchone() is not None
+
+    def claim_job(self, jid: str, frm: tuple = ("running", "pending", "cancelling"), to: str = "finalizing") -> bool:
         """Atomically move a job from one of `frm` to `to`. True only for the one
         caller that made the change -- so two processes never both close a job."""
         with self._lock, self._conn(write=True) as c:
@@ -145,20 +220,29 @@ class JobStore:
                 counts = c.execute("SELECT status, COUNT(*) n FROM designs WHERE job_id=? GROUP BY status",
                                    (r["id"],)).fetchall()
                 j["counts"] = {x["status"]: x["n"] for x in counts}
+                j["dual_clean"] = c.execute(
+                    "SELECT COUNT(*) FROM designs WHERE job_id=? AND json_extract(detail,'$.signoff.dual_clean')=1",
+                    (r["id"],)).fetchone()[0]
                 out.append(j)
         return out
 
     # -- designs ----------------------------------------------------------
     def set_design(self, jid: str, name: str, *, stage: str | None = None, status: str | None = None,
-                   detail: dict | None = None, project: str | None = None) -> None:
+                   detail: dict | None = None, project: str | None = None) -> bool:
         with self._lock, self._conn(write=True) as c:
-            row = c.execute("SELECT detail FROM designs WHERE job_id=? AND name=?", (jid, name)).fetchone()
+            row = c.execute("SELECT detail,status FROM designs WHERE job_id=? AND name=?", (jid, name)).fetchone()
+            if row and row["status"] == CANCELLED:
+                return False       # a late worker must never resurrect a cancelled queue entry
+            if status not in (None, CANCELLED) and c.execute(
+                    "SELECT 1 FROM job_cancellations WHERE job_id=?", (jid,)).fetchone():
+                return False
             merged = json.loads(row["detail"]) if row and row["detail"] else {}
             if detail:
                 merged.update(detail)
             c.execute("""UPDATE designs SET stage=COALESCE(?, stage), status=COALESCE(?, status),
                          detail=?, project=COALESCE(?, project), updated=? WHERE job_id=? AND name=?""",
                       (stage, status, json.dumps(merged), project, time.time(), jid, name))
+            return True
 
     def design(self, jid: str, name: str) -> dict | None:
         with self._conn() as c:
@@ -169,6 +253,8 @@ class JobStore:
     def event(self, jid: str, design: str | None, stage: str, kind: str, message: str,
               data: dict | None = None) -> None:
         with self._lock, self._conn(write=True) as c:
+            if not c.execute('SELECT 1 FROM jobs WHERE id=?', (jid,)).fetchone():
+                return
             c.execute("INSERT INTO events (job_id, design, ts, stage, kind, message, data) VALUES (?,?,?,?,?,?,?)",
                       (jid, design, time.time(), stage, kind, message, json.dumps(data or {})))
             c.execute("UPDATE jobs SET updated=? WHERE id=?", (time.time(), jid))

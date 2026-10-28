@@ -14,9 +14,10 @@ import json
 import os
 import re
 import subprocess
+from contextvars import ContextVar
 from pathlib import Path
 
-from . import knowledge
+from . import diagnosis, knowledge, platforms
 from .jobs import JobStore
 from .paths import examples_dir, repo_root, signoff_scripts, skills_dir
 from .pipeline import STAGE_LABEL, Pipeline
@@ -30,6 +31,7 @@ class Runtime:
 
 
 RT = Runtime()
+CURRENT_SESSION = ContextVar('r2g_session', default=None)
 REGISTRY: dict[str, dict] = {}
 
 
@@ -82,7 +84,7 @@ def list_examples() -> dict:
                             "path": {"type": "string", "description": "RTL directory or file path"},
                             "top": {"type": "string", "description": "top module (optional; inferred if omitted)"},
                             "name": {"type": "string", "description": "display name (optional)"}}}},
-            "platform": {"type": "string", "enum": ["nangate45"], "description": "process platform"},
+            "platform": {"type": "string", "enum": list(platforms.PLATFORMS), "description": "process platform"},
             "output": {"type": "string", "enum": ["graph", "image"],
                        "description": "dataset type: 'graph' = PyG graph datasets (b..f views + netlist graph); "
                                       "'image' = CircuitNet-style GCell feature maps (features from the placement "
@@ -108,18 +110,19 @@ def start_job(designs: list, platform: str = "nangate45", output: str = "graph",
     if not sources:
         return {"error": "no designs given"}
     try:
-        jid = RT.pipeline.submit(sources, platform=platform, title=title, output=output, params=params)
+        jid = RT.pipeline.submit(sources, platform=platform, title=title, output=output, params=params,
+                                 session_id=CURRENT_SESSION.get())
     except ValueError as e:
         return {"error": str(e)}
     return {"job_id": jid, "designs": [s["name"] for s in sources],
             "note": "running in background; use job_status to follow progress"}
 
 
-@tool("The flow parameters r2g uses by default (measured on 1249 nangate45 designs: clock period tiers "
+@tool("The flow parameters r2g uses by default (from the selected platform frozen baseline: clock period tiers "
       "by cell count, 50% utilization, area allowance, power-grid minimum, SDC margins) and what each "
       "may be set to. Use it to explain the defaults, or before passing `params` to start_job/start_batch "
       "when the user wants their own (e.g. a fixed clock period).",
-      _obj({"platform": {"type": "string", "enum": ["nangate45"]}}))
+      _obj({"platform": {"type": "string", "enum": list(platforms.PLATFORMS)}}))
 def flow_params(platform: str = "nangate45") -> dict:
     from . import profile
     return profile.describe(platform)
@@ -145,7 +148,7 @@ def scan_batch(path: str) -> dict:
       "thousands of designs; they queue under the machine-wide concurrency limit and survive a server "
       "restart. Designs whose top module cannot be decided are skipped and listed.",
       _obj({"path": {"type": "string"}, "output": {"type": "string", "enum": ["graph", "image"]},
-            "platform": {"type": "string", "enum": ["nangate45"]}, "title": {"type": "string"},
+            "platform": {"type": "string", "enum": list(platforms.PLATFORMS)}, "title": {"type": "string"},
             "params": {"type": "object", "description": "flow parameters overriding r2g's measured defaults (omit to use the defaults; call flow_params first). Keys: period_ns, period_tiers, utilization, area_allowance, pdn_floor_um, die_side_um, io_pct, setup_uncertainty_pct, hold_uncertainty_ns, place_density_lb_addon"}}, ["path", "output"]))
 def start_batch(path: str, output: str = "graph", platform: str = "nangate45", title: str = "",
                 params: dict | None = None) -> dict:
@@ -159,6 +162,7 @@ def start_batch(path: str, output: str = "graph", platform: str = "nangate45", t
         return {"error": "no design with a decidable top module under %s" % path}
     try:
         jid = RT.pipeline.submit(src, platform=platform, output=output, params=params,
+                                 session_id=CURRENT_SESSION.get(),
                                  title=title or "批量 · %s · %d 个设计" % (Path(r["root"]).name, len(src)))
     except ValueError as e:
         return {"error": str(e)}
@@ -252,10 +256,11 @@ def diagnose(job_id: str, design: str, check: str) -> dict:
     d = RT.store.design(job_id, design)
     if not d:
         return {"error": "no such design in job"}
-    r = subprocess.run(["python3", str(signoff_scripts() / "reports" / "diagnose_signoff_fix.py"),
-                        d["project"], "--check", check, "--list"], cwd=repo_root(),
+    r = subprocess.run(diagnosis.command(d["project"], check), cwd=repo_root(),
                        capture_output=True, text=True, timeout=300,
                        env={**os.environ, **knowledge.env()})
+    if r.returncode:
+        return {"error": "diagnosis failed", "stderr": r.stderr[-800:]}
     try:
         plan = json.loads(r.stdout)
     except ValueError:
@@ -343,8 +348,8 @@ def disk_usage() -> dict:
 
 @tool("Cancel a running job.", _obj({"job_id": {"type": "string"}}, ["job_id"]))
 def cancel_job(job_id: str) -> dict:
-    RT.pipeline.cancel(job_id)
-    return {"job_id": job_id, "cancel_requested": True}
+    result = RT.pipeline.cancel(job_id)
+    return {"job_id": job_id, **result} if result else {"error": "no such job"}
 
 
 @tool("Where the finished dataset of a job is and what it contains (only designs that passed sign-off "

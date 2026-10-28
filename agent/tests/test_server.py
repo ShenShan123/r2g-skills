@@ -20,6 +20,17 @@ def test_health_and_examples(monkeypatch):
     assert {e["name"] for e in c.get("/api/examples").json()["examples"]} >= {"counter8"}
 
 
+def test_platform_params_and_invalid_selection(monkeypatch):
+    c = _client(monkeypatch)
+    for platform, first_period, floor in (("nangate45", 0.5, 32), ("sky130hd", 1.8, 32), ("gf180", 2.2, 110)):
+        r = c.get("/api/params", params={"platform": platform})
+        assert r.status_code == 200
+        defaults = r.json()["defaults"]
+        assert defaults["period_tiers"][0][1] == first_period
+        assert defaults["pdn_floor_um"] == floor
+    assert c.get("/api/params?platform=unknown").status_code == 400
+
+
 def test_api_key_never_returned(monkeypatch):
     c = _client(monkeypatch)
     r = c.post("/api/config", json={"model": {"provider": "deepseek", "api_key": "sk-secret-123"}}).json()
@@ -49,3 +60,15 @@ def test_upload_keeps_only_hdl_and_sanitises(monkeypatch):
 def test_bad_job_request(monkeypatch):
     c = _client(monkeypatch)
     assert c.post("/api/jobs", json={"designs": [{"path": "/no/such/dir"}]}).status_code == 400
+
+
+def test_cancel_is_immediate_for_queued_and_missing_job_is_404(monkeypatch):
+    c = _client(monkeypatch)
+    store = server.tools.RT.store
+    jid = store.create_job("queued", {}, [{"name": "a"}])
+    store.set_job(jid, "running")
+    assert c.post("/api/jobs/no-such-job/cancel").status_code == 404
+    result = c.post(f"/api/jobs/{jid}/cancel")
+    assert result.status_code == 200 and result.json()["status"] == "cancelled"
+    assert c.get(f"/api/jobs/{jid}").json()["designs"][0]["status"] == "cancelled"
+    assert c.post(f"/api/jobs/{jid}/cancel").json() == result.json()

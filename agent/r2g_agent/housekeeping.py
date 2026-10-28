@@ -35,6 +35,7 @@ def design_slot(n: int, should_stop=lambda: False, on_wait=lambda: None, poll: f
     d.mkdir(parents=True, exist_ok=True)
     waited = False
     while True:
+        should_stop()
         # n may be a callable: the limit can change while designs wait
         for i in range(max(1, n() if callable(n) else n)):
             f = open(d / ("slot%d.lock" % i), "a+")
@@ -44,6 +45,7 @@ def design_slot(n: int, should_stop=lambda: False, on_wait=lambda: None, poll: f
                 f.close()
                 continue
             try:
+                should_stop()
                 f.seek(0)
                 f.truncate()
                 f.write("%d %s\n" % (os.getpid(), time.strftime("%F %T")))

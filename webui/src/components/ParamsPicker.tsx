@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Platform } from "../lib/api";
 import { RotateCcw } from "lucide-react";
 
 export type Params = Record<string, any>;
@@ -8,9 +9,18 @@ const ORDER = ["utilization", "die_side_um", "io_pct", "setup_uncertainty_pct", 
                "area_allowance", "pdn_floor_um", "place_density_lb_addon"];
 
 /** r2g's measured defaults (shown, not hidden), or the user's own values. */
-export default function ParamsPicker({ value, onChange }: { value: Params | null; onChange: (p: Params | null) => void }) {
+export default function ParamsPicker({ value, onChange, platform = "nangate45" }: { platform?: Platform; value: Params | null; onChange: (p: Params | null) => void }) {
   const [d, setD] = useState<Desc | null>(null);
-  useEffect(() => { fetch("/api/params").then((r) => r.json()).then(setD).catch(() => {}); }, []);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    setD(null); setError(false);
+    fetch(`/api/params?platform=${platform}`, { signal: controller.signal })
+      .then((r) => { if (!r.ok) throw new Error("params unavailable"); return r.json(); })
+      .then(setD).catch(() => { if (!controller.signal.aborted) setError(true); });
+    return () => controller.abort();
+  }, [platform]);
+  if (error) return <div className="text-sm text-muted">参数加载失败，请刷新后重试。</div>;
   if (!d) return <div className="text-sm text-muted">加载中…</div>;
   const custom = value !== null;
   const tiers: [number | null, number][] = (value?.period_tiers ?? d.defaults.period_tiers);
@@ -26,7 +36,7 @@ export default function ParamsPicker({ value, onChange }: { value: Params | null
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {[["r2g 经验参数（推荐）", false, "在 1249 个 nangate45 设计上实测定下的参数，和知识库学习时的条件一致"],
+        {[["r2g 经验参数（推荐）", false, d.source],
           ["自定义", true, "按自己的需要改时钟、利用率、die 等，没改的项仍用经验值"]].map(([t, c, s]) => (
           <button key={String(c)} type="button" onClick={() => onChange(c ? (value ?? {}) : null)} aria-pressed={custom === c}
             className={`rounded-xl border px-4 py-3 text-left ${custom === c ? "border-accent bg-accent/10" : "border-line hover:bg-panel2"}`}>

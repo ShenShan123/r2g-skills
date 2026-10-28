@@ -8,17 +8,18 @@ export const STATUS: Record<string, { label: string; cls: string; Icon: any }> =
   done: { label: "完成", cls: "bg-ok/15 text-ok", Icon: CheckCircle2 },
   failed: { label: "失败", cls: "bg-bad/15 text-bad", Icon: XCircle },
   running: { label: "进行中", cls: "bg-run/15 text-run", Icon: Loader2 },
+  cancelling: { label: "正在停止", cls: "bg-warn/15 text-warn", Icon: Loader2 },
   finalizing: { label: "打包中", cls: "bg-run/15 text-run", Icon: Loader2 },
   pending: { label: "排队中", cls: "bg-faint/15 text-muted", Icon: CircleDashed },
   cancelled: { label: "已取消", cls: "bg-warn/15 text-warn", Icon: Ban },
 };
-export const isActive = (s: string) => s === "running" || s === "pending" || s === "finalizing";
+export const isActive = (s: string) => ["running", "pending", "finalizing", "cancelling"].includes(s);
 
 export function StatusBadge({ status }: { status: string }) {
   const s = STATUS[status] ?? STATUS.pending;
   return (
     <span className={`chip whitespace-nowrap ${s.cls}`}>
-      <s.Icon size={13} className={status === "running" || status === "finalizing" ? "animate-spin" : ""} />
+      <s.Icon size={13} className={["running", "finalizing", "cancelling"].includes(status) ? "animate-spin" : ""} />
       {s.label}
     </span>
   );
@@ -71,22 +72,24 @@ export function stepStates(stage: string, status: string, repaired: boolean): St
 }
 
 /** A labelled step track: what has happened, what is happening, what is next. */
-export function StepTrack({ stage, status, repaired }: { stage: string; status: string; repaired: boolean }) {
+export function StepTrack({ stage, status, repaired, selected, onSelect }: { stage: string; status: string; repaired: boolean;
+  selected?: string; onSelect?: (index: number) => void }) {
   const st = stepStates(stage, status, repaired);
   const dot: Record<StepState, string> = {
     done: "bg-ok text-onaccent", now: "bg-run text-onaccent animate-pulse2", fail: "bg-bad text-onaccent",
     todo: "bg-panel2 text-faint border border-line", skip: "bg-panel2 text-faint border border-line",
   };
   return (
-    <ol className="flex items-start">
+    <ol className="flex items-start" aria-label="整体流程进度">
       {STEPS.map((s, i) => (
-        <li key={s.label} className="flex min-w-0 flex-1 flex-col items-center">
+        <li key={s.label} aria-current={st[i] === "now" ? "step" : undefined} className="flex min-w-0 flex-1 flex-col items-center">
           <div className="flex w-full items-center">
             <div className={`h-0.5 flex-1 ${i === 0 ? "invisible" : st[i] === "todo" ? "bg-line" : "bg-ok/60"}`} />
-            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${dot[st[i]]}`}>
+            <button type="button" disabled={!onSelect} onClick={() => onSelect?.(i)} aria-label={`查看${s.label}阶段图`}
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${dot[st[i]]} ${selected && s.stages.includes(selected) ? "ring-2 ring-accent ring-offset-2 ring-offset-panel" : ""}`}>
               {st[i] === "done" ? <CheckCircle2 size={14} /> : st[i] === "fail" ? <XCircle size={14} /> :
                st[i] === "skip" ? <Minus size={12} /> : i + 1}
-            </span>
+            </button>
             <div className={`h-0.5 flex-1 ${i === STEPS.length - 1 ? "invisible" : st[i + 1] === "todo" ? "bg-line" : "bg-ok/60"}`} />
           </div>
           <span className={`mt-1.5 truncate text-[11px] ${st[i] === "now" ? "font-medium text-run" : st[i] === "fail" ? "font-medium text-bad" : "text-muted"}`}>

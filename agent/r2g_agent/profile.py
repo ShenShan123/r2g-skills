@@ -112,4 +112,4 @@ def describe(platform: str) -> dict:
     return {"platform": platform, "defaults": defaults(platform),
             "fields": {k: {"label": f[0], "unit": f[1], "min": f[2], "max": f[3], "help": f[4]}
                        for k, f in FIELDS.items()},
-            "source": "nangate45 冻结基线（1249 个设计）：experiments/make_spec_table.py + conformance_check.py"}
+            "source": "%s 冻结基线：按平台采用已验证的尺寸、时钟和约束参数" % platforms.LABELS[platform]}

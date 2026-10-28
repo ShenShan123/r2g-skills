@@ -1,6 +1,6 @@
 """Frontend repairs: the RTL-side fixes that got designs through synthesis.
 
-Four recipes, each validated dual-clean on the nangate45 repair arm
+Recipes validated dual-clean on the nangate45 repair arm
 (2026-10-21/22) before it was moved here. Two run when the project is
 created, because they are facts about the file set, not guesses:
 
@@ -15,24 +15,31 @@ created, because they are facts about the file set, not guesses:
                       path. A data file that is not in the upload is reported,
                       never invented.
 
-Two run only after synthesis has failed with their exact log signature, then
-synthesis is re-run once. Both are yosys scripts sourced from
+The supported synthesis hook runs after a matching failure, then synthesis is
+re-run once. It is a yosys script sourced from
 SYNTH_CANONICALIZE_TCL (signoff-loop/scripts/flow/orfs_hooks/):
 
-  aldff_to_dffsr      an async-load flip-flop ($_ALDFF*, an FPGA idiom) has no
-                      cell on any supported platform; yosys's own equivalent
-                      set/reset emulation does.
   strip_vendor_attr   Intel's altera_attribute carries an SDC statement that
                       OpenSTA's Verilog reader rejects (STA-0171); it means
                       nothing to an ASIC flow.
 
-Every change is recorded in metadata.json `frontend_fixes` and shown to the
-user. Logic is never edited: a rewritten literal names the same file, a dropped
-header is still included, and the two yosys scripts touch only the cells or
-attribute named.
+  sv_frontend        on a source-parser failure, a separate oss-cad-suite
+                     Yosys/slang translates SystemVerilog to Verilog. The
+                     pinned ORFS synthesizer and physical flow still run.
+                     A failed translation never replaces the source list.
+
+The former aldff_to_dffsr recipe is quarantined: original-RTL simulation
+counterexamples on C01169 and C03509 invalidate its blanket equivalence claim.
+Physical DRC/LVS clearance alone does not establish behavioral equivalence.
+
+Every applied change is recorded in metadata.json `frontend_fixes` and shown
+to the user. Source path/header repairs preserve the original contents; any
+compiler transformation still needs behavioral review for its actual design.
 """
 from __future__ import annotations
 
+import hashlib
+import os
 import re
 from pathlib import Path
 
@@ -136,7 +143,9 @@ def fix_sources(copied: list[Path], src_root: Path, rtl_root: Path,
                       "detail": "被其他文件 `include 的头文件，不再单独编译" if h in inc
                       else "没有模块声明的代码片段（只能粘贴进模块里用），不单独编译"})
     for f in sources:
-        text = f.read_text(errors="replace")
+        # Source fixes change only path literals. Preserve non-UTF-8 comment
+        # bytes and CRLF instead of decoding with replacement/universal lines.
+        text = f.read_bytes().decode("utf-8", errors="surrogateescape")
         orig = src_root / f.relative_to(rtl_root)
         new = text
         for ref, how in dict.fromkeys(readmem_references(text)):
@@ -158,24 +167,48 @@ def fix_sources(copied: list[Path], src_root: Path, rtl_root: Path,
                           % (ref, how, dst.relative_to(rtl_root), {"relative": "按相对路径找到",
                              "unique_basename": "按唯一文件名找到"}.get(via, via))})
         if new != text:
-            f.write_text(new)
+            f.write_bytes(new.encode("utf-8", errors="surrogateescape"))
     return sources, fixes, missing
 
 
 # -- synthesis-failure recipes ------------------------------------------------
 
 SYNTH_RECIPES = (
-    {"id": "aldff_to_dffsr", "hook": "aldff_to_dffsr.tcl",
-     "signature": re.compile(r"unmapped internal cell of type \\?\$_ALDFFE?_"),
-     "label": "异步加载触发器（$aldff）转换为带置位/复位的触发器"},
     {"id": "strip_vendor_attr", "hook": "strip_vendor_attr.tcl",
      "signature": re.compile(r"STA-0171\].*1_2_yosys\.v line \d+, syntax error"),
      "needs": "altera_attribute",
      "label": "去掉 FPGA 厂商属性 altera_attribute"},
 )
 
+QUARANTINED_SYNTH_RECIPES = (
+    {"id": "aldff_to_dffsr",
+     "signature": re.compile(r"unmapped internal cell of type \\?\$_ALDFFE?_"),
+     "reason": "异步加载转换已停用：C01169、C03509 的原始 RTL 仿真存在复位行为反例；"
+               "需要证明原始功能等价，不能仅凭 DRC/LVS 通过启用"},
+)
+
+
+def semantic_blockers(log_text: str) -> list[dict]:
+    return [{"recipe": r["id"], "reason": r["reason"]}
+            for r in QUARANTINED_SYNTH_RECIPES if r["signature"].search(log_text)]
+
+SV_FRONTEND_RECIPE = {
+    "id": "sv_frontend",
+    "label": "用 Slang 前端转换 SystemVerilog，再交给原 ORFS 综合",
+    # Yosys source diagnostics, not STA netlist errors or arbitrary flow errors.
+    # A malformed source may also match; slang must actually compile it before
+    # anything is activated. Never suppress an error or infer a black box.
+    "signature": re.compile(
+        r"[^\n]+\.(?:sv|v|svh|vh):\d+: ERROR: (?:"
+        r"syntax error, unexpected (?:TOK_[A-Z0-9_]+|OP_CAST|'\[')|"
+        r"Failed to detect width for parameter )"),
+}
+
 
 def hook_path(recipe_id: str) -> Path:
+    for r in QUARANTINED_SYNTH_RECIPES:
+        if r["id"] == recipe_id:
+            raise ValueError(r["reason"])
     r = next(r for r in SYNTH_RECIPES if r["id"] == recipe_id)
     return signoff_scripts() / "flow" / "orfs_hooks" / r["hook"]
 
@@ -196,7 +229,60 @@ def match_synth_failure(log_text: str, netlist: Path | None, tried: list[str]) -
             except (OSError, AttributeError):
                 continue
         hits.append(r)
+    r = SV_FRONTEND_RECIPE
+    if r["id"] not in tried and r["signature"].search(log_text):
+        hits.append(r)
     return hits
+
+
+def _tcl_quote(value: str) -> str:
+    if any(c in value for c in "\n\r\0"):
+        raise ValueError("newline/NUL in synthesis argument")
+    for c in ('\\', '"', '$', '[', ']'):
+        value = value.replace(c, '\\' + c)
+    return '"' + value + '"'
+
+
+def prepare_slang(project: Path, meta: dict) -> dict:
+    """Prepare a bounded translation attempt; the pipeline owns its subprocess.
+
+    The plugin is loaded by its own Yosys, never by the incompatible ORFS one.
+    R2G_SLANG_YOSYS can point to another compatible oss-cad-suite installation.
+    """
+    override = os.environ.get("R2G_SLANG_YOSYS")
+    candidates = [Path(override)] if override else [
+        Path.home() / "r2g_toolchain/oss-cad-suite/bin/yosys",
+        Path("/opt/OpenROAD/oss-cad-suite/bin/yosys"),
+        Path("/r2g_toolchain/oss-cad-suite/bin/yosys"),
+    ]
+    binary = next((p for p in candidates if p.is_file() and os.access(p, os.X_OK)), None)
+    if binary is None:
+        raise FileNotFoundError("缺少配套的 Yosys/Slang；设置 R2G_SLANG_YOSYS 指向其 yosys")
+    work = project / "frontend"
+    work.mkdir(exist_ok=True)
+    output = work / "slang.v"
+    # Refuse stale output from a previous/partial attempt.
+    output.unlink(missing_ok=True)
+    args = ["-D", "SYNTHESIS", "--keep-hierarchy", "--compat=vcs",
+            "--ignore-assertions", "--top", meta["top"]]
+    for inc in meta["include_dirs"]:
+        args += ["-I", inc]
+    for define in meta.get("defines", []):
+        args += ["-D", define]
+    args += meta["files"]
+    # Tcl passes real argv words to plugins; a .ys script retains quotes in
+    # read_slang's argv, making even quoted switches look like filenames.
+    script = work / "slang.tcl"
+    script.write_text(
+        "yosys plugin -i slang\nyosys read_slang " + " ".join(map(_tcl_quote, args)) + "\n"
+        + "yosys hierarchy -check -top " + _tcl_quote(meta["top"]) + "\n"
+        + "yosys proc\nyosys opt_clean\nyosys write_verilog -noattr " + _tcl_quote(str(output)) + "\n")
+    return {
+        "command": [str(binary), "-T", "-c", str(script)],
+        "output": str(output), "script": str(script), "tool": str(binary),
+        "input_sha256": {str(p.relative_to(project)): hashlib.sha256(p.read_bytes()).hexdigest()
+                         for p in sorted((project / "rtl").rglob("*")) if p.is_file()},
+    }
 
 
 def write_synth_hook(project: Path, recipe_ids: list[str]) -> Path:

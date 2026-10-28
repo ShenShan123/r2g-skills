@@ -49,6 +49,14 @@ def _add_index(tar: tarfile.TarFile, name: str, index: dict) -> None:
 
 
 def package_job(store: JobStore, jid: str, partial: bool = False) -> Path:
+    from .lifecycle import resource_lock
+    with resource_lock('job', jid):
+        if store.deletion('job', jid) or not store.job(jid):
+            raise ValueError('任务正在删除或已删除')
+        return _package_job(store, jid, partial)
+
+
+def _package_job(store: JobStore, jid: str, partial: bool = False) -> Path:
     """All PASSED designs of a job. partial=True: a snapshot of those passed so
     far, written beside (never over) the final archive."""
     job = store.job(jid)
@@ -76,6 +84,14 @@ def package_job(store: JobStore, jid: str, partial: bool = False) -> Path:
 
 
 def package_design(store: JobStore, jid: str, name: str) -> Path:
+    from .lifecycle import resource_lock
+    with resource_lock('job', jid):
+        if store.deletion('job', jid) or not store.job(jid):
+            raise ValueError('任务正在删除或已删除')
+        return _package_design(store, jid, name)
+
+
+def _package_design(store: JobStore, jid: str, name: str) -> Path:
     job, d = store.job(jid), store.design(jid, name)
     if not job or not d or d["status"] != PASSED:
         raise ValueError("design has not passed")

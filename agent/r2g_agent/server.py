@@ -15,15 +15,16 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__, agent_loop, batch, config, frontend, housekeeping, knowledge, tools
+from . import __version__, agent_loop, batch, config, frontend, housekeeping, knowledge, tools, platforms
 from . import project as rtl_project
 from .jobs import JobStore
 from .llm import make_adapter
 from .paths import PKG_DIR, r2g_home
 from .pipeline import STAGE_LABEL, STAGES, Pipeline
+from .deletion import DeletionManager
 
 STATE: dict = {}
 
@@ -32,7 +33,9 @@ STATE: dict = {}
 async def _lifespan(_app):
     if not STATE:
         init_runtime(resume=True)      # the long-lived process resumes unfinished designs
+    STATE['deletions'].start()
     yield
+    STATE['deletions'].close()
     if tools.RT.pipeline:
         tools.RT.pipeline.shutdown()
 
@@ -50,6 +53,7 @@ def init_runtime(cfg: config.Config | None = None, resume: bool = False) -> None
     tools.RT.pipeline.recover(resume=resume)
     tools.RT.platform = cfg.platform
     STATE.update(cfg=cfg, sessions=agent_loop.SessionStore())
+    STATE['deletions'] = DeletionManager(store, STATE['sessions'], tools.RT.pipeline)
 
 
 def _sse(obj: dict) -> str:
@@ -131,6 +135,8 @@ def sessions():
 
 @app.get("/api/sessions/{sid}")
 def session(sid: str):
+    if not STATE['sessions'].exists(sid):
+        raise HTTPException(404, '对话不存在或已删除')
     return {"id": sid, "messages": STATE["sessions"].load(sid)}
 
 
@@ -138,6 +144,8 @@ def session(sid: str):
 async def chat(req: Request):
     body = await req.json()
     sid = body.get("session_id") or STATE["sessions"].create()
+    if not STATE['sessions'].exists(sid) or STATE['sessions'].is_deleting(sid):
+        raise HTTPException(409, '对话正在删除或已删除，请新建对话')
     text = (body.get("message") or "").strip()
     if not text:
         raise HTTPException(400, "empty message")
@@ -158,6 +166,41 @@ async def chat(req: Request):
 
 
 # --- jobs -------------------------------------------------------------------
+@app.delete('/api/jobs/{target}')
+async def delete_job(target: str, req: Request):
+    return await _request_delete('job', target, req)
+
+
+@app.delete('/api/sessions/{target}')
+async def delete_session(target: str, req: Request):
+    return await _request_delete('session', target, req)
+
+
+async def _request_delete(kind: str, target: str, req: Request):
+    try:
+        body = await req.json()
+    except ValueError:
+        raise HTTPException(400, '请先确认删除及生成数据清理')
+    if not isinstance(body, dict) or body.get('confirm') is not True:
+        raise HTTPException(400, '请先确认删除及生成数据清理')
+    try:
+        result = STATE['deletions'].request(kind, target)
+    except KeyError:
+        raise HTTPException(404, '任务或对话不存在')
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    STATE['deletions'].start()
+    return JSONResponse(result, status_code=200 if result['status'] == 'done' else 202)
+
+
+@app.get('/api/deletions/{kind}/{target}')
+def deletion_status(kind: str, target: str):
+    result = tools.RT.store.deletion(kind, target)
+    if not result:
+        raise HTTPException(404, '尚未请求删除')
+    return result
+
+
 @app.get("/api/examples")
 def examples():
     return tools.list_examples()
@@ -192,9 +235,17 @@ def job_events(jid: str, after: int = 0, tail: int = 0):
     return tools.RT.store.events(jid, after=after, tail=min(max(tail, 0), 2000))
 
 
+@app.get("/api/platforms")
+def available_platforms():
+    return {"platforms": [{"id": name, "label": platforms.LABELS[name]} for name in platforms.PLATFORMS]}
+
+
 @app.get("/api/params")
 def params(platform: str = "nangate45"):
-    return tools.flow_params(platform)
+    try:
+        return tools.flow_params(platform)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/api/batch/scan")
@@ -209,7 +260,10 @@ async def batch_scan(req: Request):
 
 @app.post("/api/jobs/{jid}/cancel")
 def cancel(jid: str):
-    return tools.cancel_job(jid)
+    result = tools.cancel_job(jid)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result
 
 
 @app.get("/api/jobs/{jid}/designs/{name}/download")
@@ -260,6 +314,42 @@ def layout(jid: str, name: str):
     if not p.is_file():
         raise HTTPException(404, "no preview yet")
     return FileResponse(p, media_type="image/png")
+
+
+@app.get('/api/jobs/{jid}/designs/{name}/stage-views')
+def stage_views(jid: str, name: str, version: str | None = None):
+    from . import stage_views as views
+    if version not in (None, 'final'):
+        raise HTTPException(400, 'unknown stage view version')
+    project = _design_project(jid, name)
+    rows = views.views(project, tools.RT.store.design(jid, name), version=version)
+    for row in rows:
+        row.pop('image', None)
+        row.pop('kind', None)
+    return {'stages': rows}
+
+
+@app.get('/api/jobs/{jid}/designs/{name}/stage-views/{stage}')
+def stage_view_image(jid: str, name: str, stage: str, version: str | None = None):
+    from . import stage_views as views
+    from .lifecycle import resource_lock
+    if version not in (None, 'final'):
+        raise HTTPException(400, 'unknown stage view version')
+    if stage not in views.IMAGE_STAGES:
+        raise HTTPException(404, 'unknown stage')
+    with resource_lock('job', jid):
+        project = _design_project(jid, name)
+        item = next((r for r in views.views(project, tools.RT.store.design(jid, name), version=version) if r['stage'] == stage), None)
+        if item is None:
+            raise HTTPException(404, 'no snapshot for this stage')
+        if not item['available']:
+            raise HTTPException(404, item['caption'])
+        try:
+            data, media = views.image(project, item)
+        except (OSError, ValueError) as exc:
+            raise HTTPException(404, str(exc)) from exc
+    return Response(data, media_type=media, headers={'Cache-Control': 'private, max-age=30',
+                    'Content-Security-Policy': "default-src 'none'; sandbox", 'X-Content-Type-Options': 'nosniff'})
 
 
 @app.get("/api/jobs/{jid}/designs/{name}/log/{stage}")

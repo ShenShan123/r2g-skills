@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FolderUp, Play, Loader2, X, FileCode2, MessagesSquare, ChevronRight, Check, FolderTree, Search, AlertTriangle } from "lucide-react";
-import { api, fmtTime, Job, Output, Scan } from "../lib/api";
+import { api, fmtTime, Job, Output, Scan, Platform, PLATFORM_LABEL } from "../lib/api";
 import OutputPicker from "../components/OutputPicker";
 import ParamsPicker, { cleanParams, Params } from "../components/ParamsPicker";
 import { StatusBadge } from "../components/ui";
@@ -16,6 +16,7 @@ export default function Home() {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [files, setFiles] = useState<File[]>([]);
   const [top, setTop] = useState("");
+  const [platform, setPlatform] = useState<Platform>("nangate45");
   const [output, setOutput] = useState<Output>("graph");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -42,7 +43,7 @@ export default function Home() {
       if (mode === "batch" && scan) {
         const designs = scan.designs.filter((d) => !d.problem).map((d) => ({ path: d.path, top: d.top, name: d.name }));
         const name = scan.root.split("/").pop();
-        const r = await api.createJob(designs, `批量 · ${name} · ${designs.length} 个设计`, output, cleanParams(params));
+        const r = await api.createJob(designs, `批量 · ${name} · ${designs.length} 个设计`, output, cleanParams(params), platform);
         nav(`/jobs/${r.job_id}`); return;
       }
       const designs: any[] = [...picked].map((example) => ({ example }));
@@ -50,7 +51,7 @@ export default function Home() {
         const up = await api.upload(files.filter((f) => SEND.test(f.name)));
         designs.push({ path: up.path, top: top || undefined, name: top || folder || undefined });
       }
-      const r = await api.createJob(designs, "", output, cleanParams(params));
+      const r = await api.createJob(designs, "", output, cleanParams(params), platform);
       nav(`/jobs/${r.job_id}`);
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }
@@ -64,7 +65,7 @@ export default function Home() {
 
       <div className="card mt-6 divide-y divide-line">
         {/* 1 */}
-        <Step n={1} title="选择设计" done={count > 0}>
+        <Step n={1} title="选择设计" done>
           <div className="mb-3 inline-flex rounded-xl bg-panel2 p-1 text-sm">
             {([["single", "一个设计"], ["batch", "批量（很多个设计）"]] as const).map(([k, l]) => (
               <button key={k} type="button" onClick={() => setMode(k)}
@@ -110,17 +111,34 @@ export default function Home() {
         </Step>
 
         {/* 2 */}
-        <Step n={2} title="选择数据集类型" done>
-          <OutputPicker value={output} onChange={setOutput} />
+        <Step n={2} title="选择工艺平台" done>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="group" aria-label="工艺平台">
+            {Object.entries(PLATFORM_LABEL).map(([id, label]) => (
+              <button key={id} type="button" disabled={busy} aria-pressed={platform === id}
+                onClick={() => { if (platform !== id) { setPlatform(id as Platform); setParams(null); } }}
+                className={`rounded-xl border px-4 py-3 text-left transition disabled:opacity-50 ${platform === id ? "border-accent bg-accent/10" : "border-line hover:bg-panel2"}`}>
+                <div className="flex items-center gap-2 font-medium">
+                  {label.split(" · ")[0]}
+                  <span aria-hidden="true" className={`ml-auto h-4 w-4 shrink-0 rounded-full border-2 ${platform === id ? "border-accent bg-accent shadow-[inset_0_0_0_2px_rgb(var(--panel))]" : "border-line"}`} />
+                </div>
+                <div className="mt-1 text-xs leading-5 text-muted">{label.split(" · ")[1]}</div>
+              </button>
+            ))}
+          </div>
         </Step>
 
         {/* 3 */}
-        <Step n={3} title="流程参数" done>
-          <ParamsPicker value={params} onChange={setParams} />
+        <Step n={3} title="选择数据集类型" done>
+          <OutputPicker value={output} onChange={setOutput} />
         </Step>
 
         {/* 4 */}
-        <Step n={4} title="开始" done={false}>
+        <Step n={4} title="流程参数" done>
+          <ParamsPicker key={platform} platform={platform} value={params} onChange={setParams} />
+        </Step>
+
+        {/* 5 */}
+        <Step n={5} title="开始" done={false}>
           <button className="btn-primary w-full justify-center py-3 text-base" onClick={start} disabled={busy || count === 0}>
             {busy ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
             {busy ? "提交中…" : count ? `开始处理 ${count} 个设计${cleanParams(params) ? "（自定义参数）" : ""}` : "先在第 1 步选择设计"}
@@ -151,7 +169,7 @@ export default function Home() {
               <Link key={j.id} to={`/jobs/${j.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-panel2/60">
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{j.title}</div>
-                  <div className="text-xs text-muted">{fmtTime(j.created)} · {j.counts?.passed ?? 0}/{Object.values(j.counts ?? {}).reduce((a, b) => a + b, 0)} 通过</div>
+                  <div className="text-xs text-muted">{fmtTime(j.created)} · {PLATFORM_LABEL[j.spec?.platform] ?? j.spec?.platform} · {j.counts?.passed ?? 0}/{Object.values(j.counts ?? {}).reduce((a, b) => a + b, 0)} 通过</div>
                 </div>
                 <StatusBadge status={j.status} />
               </Link>))}

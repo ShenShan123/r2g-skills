@@ -4,6 +4,7 @@ import { Send, Paperclip, X, ChevronDown, ChevronRight, Plus, MessageSquare, Ext
          Loader2, CheckCircle2, XCircle, Brain, History } from "lucide-react";
 import { api, chatStream } from "../lib/api";
 import { Md, Logo } from "../components/ui";
+import DeleteResource from "../components/DeleteResource";
 
 type Part =
   | { kind: "text"; text: string }
@@ -123,9 +124,15 @@ export default function Chat() {
         <Plus size={15} /> 新对话</button></div>
       <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
         {sessions.filter((s) => s.title).map((s) => (
-          <button key={s.id} onClick={() => open(s.id)}
-            className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm ${sid === s.id ? "bg-panel2 text-fg" : "text-muted hover:bg-panel2/60"}`}>
-            <MessageSquare size={14} className="shrink-0" /><span className="truncate">{s.title.replace(/^\[附件\] 已上传 RTL 文件夹 ([^（\s]+).*$/s, "📎 $1")}</span></button>))}
+          <div key={s.id} className="flex items-center rounded-lg hover:bg-panel2/60">
+          <button onClick={() => open(s.id)}
+            className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm ${sid === s.id ? "bg-panel2 text-fg" : "text-muted"}`}>
+            <MessageSquare size={14} className="shrink-0" /><span className="truncate">{s.title.replace(/^\[附件\] 已上传 RTL 文件夹 ([^（\s]+).*$/s, "📎 $1")}</span></button>
+          <DeleteResource kind="session" id={s.id} title={s.title} compact onDeleted={() => {
+            setSessions(ss => ss.filter(x => x.id !== s.id));
+            if (sid === s.id) { setSid(null); setMsgs([]); setBusy(false); }
+          }} />
+          </div>))}
       </div>
     </>);
 

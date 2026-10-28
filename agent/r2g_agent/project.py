@@ -15,6 +15,7 @@ CORE_UTILIZATION alone gets a core too narrow for the power grid (PDN-0185).
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import re
 import shutil
@@ -196,6 +197,7 @@ def create(src: Path, project: Path, platform: str, top: str | None = None,
         "source": str(src),
         "files": [str(p) for p in sources],
         "include_dirs": inc_dirs,
+        "defines": manifest.get("defines") or [],
         "frontend_fixes": fixes,
         "missing_data_files": missing,
         "synth_hooks": [],
@@ -219,7 +221,24 @@ def _write_config(project: Path, meta: dict, sizing: dict | None) -> None:
         "export ABC_AREA = 1",
         "export SYNTH_MEMORY_MAX_BITS = 131072",
     ]
+    if meta["platform"] == "gf180":
+        # These are apparatus corrections, identical for every design and rerun.
+        # Copy into the project so exported jobs remain reproducible.
+        import hashlib
+        from .paths import signoff_scripts
+        apparatus = signoff_scripts() / "flow/platforms/gf180"
+        provenance = json.loads((apparatus / "provenance.json").read_text())
+        for knob, filename in (("PDN_TCL", "pdn.tcl"), ("TAPCELL_TCL", "tapcell.tcl")):
+            raw = (apparatus / filename).read_bytes()
+            if hashlib.sha256(raw).hexdigest() != provenance["files"][filename]["sha256"]:
+                raise ValueError("GF180 apparatus hash mismatch: " + filename)
+            dest = project / "constraints" / ("gf180_" + filename)
+            dest.write_bytes(raw)
+            lines.append("export %s = %s" % (knob, dest))
+        meta["platform_apparatus"] = provenance
     prof = meta.get("flow_profile") or flow_profile.defaults(meta["platform"])
+    if meta.get("defines"):
+        lines.append("export VERILOG_DEFINES = %s" % " ".join("-D" + d for d in meta["defines"]))
     # not set by the frozen baseline the defaults come from; only on request
     if prof.get("place_density_lb_addon"):
         lines.append("export PLACE_DENSITY_LB_ADDON = %g" % prof["place_density_lb_addon"])
@@ -329,6 +348,31 @@ def add_synth_hooks(project: Path, recipe_ids: list[str]) -> dict:
     """Record synthesis-failure recipes and rewrite the synthesis config with them."""
     meta = json.loads((project / "metadata.json").read_text())
     meta["synth_hooks"] = list(dict.fromkeys(meta.get("synth_hooks", []) + recipe_ids))
+    _write_config(project, meta, sizing=None)
+    (project / "metadata.json").write_text(json.dumps(meta, indent=2))
+    return meta
+
+
+def activate_slang(project: Path, attempt: dict) -> dict:
+    """Switch only after a successful translator exit (checked by the pipeline).
+
+    Preserve original source configuration and hashes for inspection. Sizing
+    rewrites config from this metadata, so it cannot revert the repaired input.
+    """
+    output = Path(attempt["output"])
+    if not output.is_file() or not output.stat().st_size:
+        raise ValueError("Slang 没有生成非空 Verilog 文件")
+    meta = json.loads((project / "metadata.json").read_text())
+    if meta.get("sv_frontend"):
+        raise ValueError("Slang frontend already activated")
+    meta["sv_frontend"] = {
+        **attempt,
+        "original_files": meta["files"],
+        "original_include_dirs": meta["include_dirs"],
+        "original_defines": meta.get("defines", []),
+        "output_sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
+    }
+    meta["files"], meta["include_dirs"], meta["defines"] = [str(output)], [], []
     _write_config(project, meta, sizing=None)
     (project / "metadata.json").write_text(json.dumps(meta, indent=2))
     return meta
