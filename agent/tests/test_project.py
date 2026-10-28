@@ -182,3 +182,15 @@ def test_run_log_text_reads_flow_log_without_archived_logs(tmp_path):
     (run / "flow.log").write_text("[ERROR PPL-0024] Number of IO pins (4150) exceeds maximum number of "
                                   "available positions (4136). Increase the die perimeter from 2324.00um to 2324.00um.\n")
     assert "PPL-0024" in Pipeline._run_log_text(run)
+
+
+def test_graph_python_falls_back_to_declared_env_file(tmp_path, monkeypatch):
+    # A git-archive runtime has no gitignored env.local.sh; the deployment's
+    # R2G_ENV_FILE still pins the torch venv the verifier needs.
+    from r2g_agent import pipeline
+    env = tmp_path / "tools.env"
+    env.write_text('export R2G_GRAPH_PYTHON="/opt/venv/bin/python"\n')
+    monkeypatch.delenv("R2G_GRAPH_PYTHON", raising=False)
+    monkeypatch.setattr(pipeline, "skills_dir", lambda: tmp_path / "none")
+    monkeypatch.setenv("R2G_ENV_FILE", str(env))
+    assert pipeline.graph_python() == "/opt/venv/bin/python"

@@ -123,11 +123,18 @@ def graph_python() -> str | None:
     """The torch venv def-graph pins (R2G_GRAPH_PYTHON), for the verifier."""
     if os.environ.get("R2G_GRAPH_PYTHON"):
         return os.environ["R2G_GRAPH_PYTHON"]
-    pin = skills_dir() / "def-graph" / "references" / "env.local.sh"
-    if pin.is_file():
-        m = re.search(r'^export R2G_GRAPH_PYTHON="?([^"\n]+)"?', pin.read_text(), re.M)
-        if m:
-            return m.group(1)
+    # env.local.sh is gitignored, so a `git archive` runtime has none; the
+    # deployment's declared tool file (R2G_ENV_FILE) carries the same pin. Without
+    # either, the verifier ran under a bare python3, imported nothing and the
+    # attempt was voided as a zero-check verification (2026-10-28, four designs).
+    pins = [skills_dir() / "def-graph" / "references" / "env.local.sh"]
+    if os.environ.get("R2G_ENV_FILE"):
+        pins.append(Path(os.environ["R2G_ENV_FILE"]))
+    for pin in pins:
+        if pin.is_file():
+            m = re.search(r'^export R2G_GRAPH_PYTHON="?([^"\n]+)"?', pin.read_text(), re.M)
+            if m:
+                return m.group(1)
     return None
 
 
