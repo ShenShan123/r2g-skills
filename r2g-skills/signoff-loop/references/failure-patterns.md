@@ -961,6 +961,25 @@ auto-draining its escalations (`_mark_clean` → `escalations.resolve_for_design
   Across the current corpus the 14 fails resolve to **2 real defects (both wb2axip) + 12 symmetric
   residuals**; treat a `symmetric_matcher` label as a believed-clean residual, not a hard fail.
 
+#### Lifecycle gate failed closed on a transiently locked knowledge store (2026-10-28)
+
+- **Symptom:** `WARNING: recipe-lifecycle filter unavailable (OperationalError: database is locked)` then
+  `[drc] stop: fail no_auto_strategy` on a design the same diagnosis repairs a minute later (nangate45
+  C03368, 1107 antenna violations; `--next` → `antenna_diode_repair` once the lock cleared).
+- **Root cause:** the gate's `ensure_schema` takes a write lock even when nothing changes; ~20 designs
+  ingesting/learning into one service store can hold it past the 30 s busy_timeout, and P0-15 then fails
+  the gate closed for the whole repair.
+- **Fix:** `diagnose_signoff_fix._gate_connection` waits out a lock (backoff, `R2G_GATE_LOCK_WAIT_S`, default
+  900 s) before failing closed; other errors are not retried (`tests/test_diagnose_gate_lock.py`).
+
+#### Agent killed a whole flow at one stage's budget, before run_orfs archived it (2026-10-28)
+
+- **Symptom (SKY130 C01134, 590 µm fixed die):** detailed route grinding `stubborn tiles` for ~6 h, the flow
+  call returns 124, the failing `backend/RUN_*` has no results/logs/run-meta, `route.json` reads `unknown`
+  and the agent's route-repair gate never runs `fixed_area_route_relief` (the historical fix).
+- **Fix:** the agent bounds a whole `run_orfs.sh` call by `ORFS_FLOW_STAGES × stage_timeout + 30 min`, so the
+  per-stage `ORFS_TIMEOUT` fires first and the run is archived (`agent/tests/test_flow_outer_timeout.py`).
+
 #### LVS against a pre-repair CDL — false mismatch after a signoff repair (2026-10-28)
 
 - **Symptom (nangate45, KLayout):** DRC clean after an antenna/DRC repair that re-ran route, then

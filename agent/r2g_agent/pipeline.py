@@ -155,6 +155,7 @@ def read_json(p: Path) -> dict:
 # section (FreePDK45.lydrc:376) and read "stuck" -- the same layouts the experiment
 # graded under 6 h (experiments/signoff45.py --timeout 21600). Same ruler, same bound.
 DRC_TIMEOUT_S = 6 * 3600
+ORFS_FLOW_STAGES = 6     # synth floorplan place cts route finish
 
 
 def signoff_verdict(project: Path) -> dict:
@@ -426,6 +427,14 @@ class Pipeline:
             try:
                 self.store.set_design(jid, name, detail={"pgid": p.pid, "process_start": start,
                                                        "execution_id": invocation})
+                if timeout is None and any(str(c).endswith("/run_orfs.sh") for c in cmd):
+                    # run_orfs.sh bounds EACH stage with ORFS_TIMEOUT and archives the
+                    # run (route.json, logs) when one expires. Bounding the whole call
+                    # by one stage's budget killed it first: SKY130 C01134 spent ~6 h
+                    # in detailed route, the call was cut before the archive, route.json
+                    # read "unknown" and the area relief never ran. Leave room for every
+                    # stage so the per-stage bound is the one that fires.
+                    timeout = ORFS_FLOW_STAGES * self.stage_timeout + 1800
                 deadline = time.monotonic() + (timeout or self.stage_timeout)
                 while True:
                     self._check_cancel_while_running(jid)
@@ -828,7 +837,7 @@ class Pipeline:
         rc = self._sh(jid, name, "repair", ["bash", str(scripts / "flow/fix_signoff.sh"),
                       str(pdir), platform, "--check", "route", "--max-iters", "1"], pdir,
                       env={"NUM_CORES": str(cores), "OMP_NUM_THREADS": str(cores)},
-                      timeout=self.stage_timeout + 600)
+                      timeout=ORFS_FLOW_STAGES * self.stage_timeout + 1800)
         after = latest_run(pdir)
         route = read_json(reports / "route.json")
         complete = (rc == 0 and after is not None and after != before

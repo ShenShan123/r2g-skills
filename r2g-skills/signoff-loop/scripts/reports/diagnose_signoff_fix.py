@@ -1694,6 +1694,37 @@ def _load_heuristics(hp: Path):
         return None
 
 
+def _gate_connection(db_path=None):
+    """Open + schema-check the knowledge store for the lifecycle gates.
+
+    `ensure_schema` takes a write lock even when nothing changes, and with
+    20+ designs ingesting/learning into one store a writer can outlast the 30 s
+    busy_timeout. A transient "database is locked" used to fail the gate CLOSED
+    for the whole repair (nangate45 C03368: 1107 antenna violations, `stop:
+    no_auto_strategy`, while the same diagnosis selects antenna_diode_repair once
+    the lock clears). Wait it out -- bounded by R2G_GATE_LOCK_WAIT_S, default 900 s
+    -- and only then let the caller fail closed. Other errors are not retried."""
+    import time
+    import knowledge_db
+    deadline = time.monotonic() + float(os.environ.get("R2G_GATE_LOCK_WAIT_S", "900"))
+    delay = 5.0
+    while True:
+        conn = None
+        try:
+            conn = (knowledge_db.connect(db_path) if db_path else knowledge_db.connect())
+            knowledge_db.ensure_schema(conn)
+            return conn
+        except Exception as exc:
+            if conn is not None:
+                conn.close()
+            if "locked" not in str(exc) or time.monotonic() + delay > deadline:
+                raise
+            print(f"WARNING: knowledge store locked; retrying the lifecycle gate in {delay:.0f}s",
+                  file=sys.stderr)
+            time.sleep(delay)
+            delay = min(delay * 2, 60.0)
+
+
 def _load_recipes(proj: Path, *, check: str, drc: dict, lvs: dict,
                   heuristics: Path | None = None) -> dict | None:
     """Look up the Tier-3 fix_recipes entry for this design's family/platform and
@@ -1896,10 +1927,7 @@ def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
     A lifecycle-store failure is fail-closed for live auto-apply. Diagnosis still
     returns a visible plan, but `_live_auto_strategy` will not execute it blindly."""
     try:
-        import knowledge_db
-        conn = (knowledge_db.connect(db_path) if db_path
-                else knowledge_db.connect())
-        knowledge_db.ensure_schema(conn)
+        conn = _gate_connection(db_path)
     except Exception as exc:
         print(f"WARNING: negative-evidence gates unavailable "
               f"({type(exc).__name__}: {exc})", file=sys.stderr)
@@ -2234,10 +2262,8 @@ def main(argv=None) -> int:
     if idx_recipe is not None:
         recipes, pooled = idx_recipe, idx_pooled
         try:
-            import knowledge_db
             import recipe_lifecycle
-            _kc = knowledge_db.connect()
-            knowledge_db.ensure_schema(_kc)
+            _kc = _gate_connection()
             recipes = recipe_lifecycle.filter_promoted(
                 _kc, recipes, symptom_id=_sid, design_class=design_class,
                 platform=plat)
