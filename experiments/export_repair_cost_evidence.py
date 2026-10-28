@@ -24,14 +24,36 @@ def read(path, default=None):
     return json.loads(path.read_text()) if path.is_file() else default
 
 
+def fingerprint(path):
+    try:
+        s = path.stat()
+        return [s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns]
+    except FileNotFoundError:
+        return None
+
+
 def export(source):
     count = 0
     for folder in sorted((source / 'cases').glob('*')):
         summary = read(folder / 'summary.json', {})
         if summary.get('status') != 'complete':
             continue
+        target = folder / 'signoff_evidence.json'
+        cache_path = folder / '.signoff_evidence_cache.json'
+        cache = read(cache_path, {})
+        dependencies = cache.get('dependencies', {})
+        if (dependencies and target.is_file()
+                and cache.get('evidence_sha256') == digest(target)
+                and all(fingerprint(Path(p)) == value for p, value in dependencies.items())):
+            # Closed archives can be large. Rehash only if an input, report,
+            # artifact or containing run directory actually changed. Including
+            # ctime/inode also detects replacement with a preserved mtime.
+            count += 1
+            continue
+        paths = [folder / 'summary.json', folder / 'input_receipt.json']
         receipt = read(folder / 'input_receipt.json', {})
         inp = Path(receipt.get('input', '/nonexistent'))
+        paths.extend(inp / rel for rel in receipt.get('sha256', {}))
         input_hashes = {rel: digest(inp / rel) if (inp / rel).is_file() else None
                         for rel in receipt.get('sha256', {})}
         projects = []
@@ -40,9 +62,11 @@ def export(source):
             if not project.resolve().is_relative_to((source / 'runtime/workspace').resolve()):
                 raise ValueError(f'Project outside selected runtime: {project}')
             reports, report_hashes = {}, {}
+            paths.extend([project / 'metadata.json', project / 'reports', project / 'backend'])
             for name in ('drc.json', 'lvs.json', 'signoff_manifest.json',
                          'signoff_gate.json', 'verify.json'):
                 p = project / 'reports' / name
+                paths.append(p)
                 if p.is_file():
                     if p.stat().st_size > 4 * 1024 * 1024:
                         raise ValueError(f'Oversized evidence report: {p}')
@@ -59,6 +83,8 @@ def export(source):
                     p = project / 'backend' / run / 'results' / f'6_final.{ext}'
                     if not p.is_file():
                         p = project / 'backend' / run / 'final' / f'6_final.{ext}'
+                    paths.extend([p, project / 'backend' / run / 'results',
+                                  project / 'backend' / run / 'final'])
                     artifact_hashes[ext] = digest(p) if p.is_file() else None
             projects.append({'job_id': design['job_id'], 'name': design['name'],
                              'project': str(project), 'reports': reports,
@@ -67,13 +93,17 @@ def export(source):
                              'flow_fixes': metadata.get('flow_fixes', [])})
         evidence = {'schema_version': 1, 'session_id': summary['session_id'],
                     'source_input_sha256': input_hashes, 'projects': projects}
-        target = folder / 'signoff_evidence.json'
         text = json.dumps(evidence, ensure_ascii=False, indent=2) + '\n'
         # Stable receipt content makes repeated export auditable/idempotent.
         if not target.is_file() or target.read_text() != text:
             temp = target.with_suffix('.tmp')
             temp.write_text(text)
             temp.replace(target)
+        cache = {'evidence_sha256': digest(target),
+                 'dependencies': {str(p): fingerprint(p) for p in paths}}
+        temp = cache_path.with_suffix('.tmp')
+        temp.write_text(json.dumps(cache) + '\n')
+        temp.replace(cache_path)
         count += 1
     return count
 
