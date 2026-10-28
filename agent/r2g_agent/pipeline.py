@@ -156,6 +156,11 @@ def read_json(p: Path) -> dict:
 # graded under 6 h (experiments/signoff45.py --timeout 21600). Same ruler, same bound.
 DRC_TIMEOUT_S = 6 * 3600
 ORFS_FLOW_STAGES = 6     # synth floorplan place cts route finish
+# Signoff repair rounds. fix_signoff.sh still stops after two non-improving rounds
+# past its base 3; a cap of 3 cut the nangate45 antenna ladder (diode repair, deck
+# diodes, accumulate) before rung r3 (antenna_ratio_overconstrain), which alone
+# cleared C01972-class layouts in the historical arm (243 -> 8 -> 6 -> 6, stopped).
+REPAIR_MAX_ITERS = 5
 
 
 def signoff_verdict(project: Path) -> dict:
@@ -707,11 +712,11 @@ class Pipeline:
         if not v["dual_clean"]:
             self._stage(jid, name, "repair", "自动修复：诊断 → 修改 → 重跑 → 重新签核")
             self._sh(jid, name, "repair", ["bash", S + "/flow/fix_signoff.sh", str(pdir), platform,
-                                           "--check", "both", "--max-iters", "3"], pdir,
+                                           "--check", "both", "--max-iters", str(REPAIR_MAX_ITERS)], pdir,
                      env={"DRC_TIMEOUT": str(DRC_TIMEOUT_S), "LVS_TIMEOUT": str(DRC_TIMEOUT_S),
                           "NETGEN_TIMEOUT": str(DRC_TIMEOUT_S),
                           "R2G_POWERED_NETLIST_TIMEOUT": str(DRC_TIMEOUT_S)},
-                     timeout=3 * (self.stage_timeout + 3 * DRC_TIMEOUT_S + 3600))
+                     timeout=REPAIR_MAX_ITERS * (self.stage_timeout + 3 * DRC_TIMEOUT_S + 3600))
             v = signoff_verdict(pdir)
             fixes = [json.loads(l) for l in (pdir / "reports" / "fix_log.jsonl").read_text().splitlines()
                      if l.strip()] if (pdir / "reports" / "fix_log.jsonl").is_file() else []

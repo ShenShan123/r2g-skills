@@ -961,6 +961,14 @@ auto-draining its escalations (`_mark_clean` → `escalations.resolve_for_design
   Across the current corpus the 14 fails resolve to **2 real defects (both wb2axip) + 12 symmetric
   residuals**; treat a `symmetric_matcher` label as a believed-clean residual, not a hard fail.
 
+#### Agent capped signoff repair at 3 rounds, below the antenna ladder's depth (2026-10-28)
+
+- **Symptom (nangate45 C01972):** `antenna_diode_repair` 243→8, `deck_driven_antenna_diode` 8→6,
+  `deck_driven_antenna_diode_accumulate` 6→6, then the job failed: the agent passed `--max-iters 3`, so
+  `antenna_ratio_overconstrain` (rung r3, which alone cleared 10 historical designs) never ran.
+- **Fix:** `REPAIR_MAX_ITERS = 5` in the agent (the skill default is 8 with an early stop after two
+  non-improving rounds past base 3); the repair wall-clock bound scales with it.
+
 #### Antenna-dominated DRC with one routing leftover read as a fixed-die residual (2026-10-28)
 
 - **Symptom (nangate45 C01443, DIE_AREA-sized):** 17 `*_ANTENNA` + 1 `METAL1.5`; `[drc] stop: residual non-antenna

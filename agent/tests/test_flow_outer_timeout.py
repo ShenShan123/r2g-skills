@@ -30,3 +30,11 @@ def test_run_orfs_call_is_not_cut_at_one_stage_budget(tmp_path):
 
 def test_other_commands_keep_the_stage_bound(tmp_path):
     assert _run(tmp_path, "other.sh") == 124
+
+
+def test_signoff_repair_allows_the_full_antenna_ladder():
+    # nangate45 C01972: three rounds ended before antenna_ratio_overconstrain (r3).
+    from r2g_agent import pipeline
+    assert pipeline.REPAIR_MAX_ITERS >= 4
+    src = open(pipeline.__file__).read()
+    assert '"--max-iters", str(REPAIR_MAX_ITERS)' in src
