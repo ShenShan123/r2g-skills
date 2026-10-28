@@ -256,6 +256,74 @@ def prepare_adoption(args):
         raise
 
 
+def prepare_successor(args):
+    """Reconfigure an already-paused expander, preserving its active checkers."""
+    previous = args.previous_control
+    recorded = read(previous / 'controller.json')
+    controller = proc(args.legacy_pid)
+    if (recorded['pid'] != args.legacy_pid or recorded['start'] != controller['start']
+            or controller['state'] not in ('T', 't')):
+        raise RuntimeError('Previous expander is not the pinned stopped controller')
+    inherited = read(previous / 'legacy_adoption.json')
+    shells = [inherited['controller']] + inherited['shells']
+    known = {r['pid']: r for r in read(previous / 'fixed64_children.json')['children']}
+    known.update({r['pid']: r for r in inherited['active']})
+    active, readers, unknown = [], {}, []
+    direct = children(args.legacy_pid)
+    original = children(inherited['controller']['pid'])
+    try:
+        for p in direct + original:
+            cached = known.get(p['pid'], {})
+            command = argv(p['pid'])
+            if command:
+                info = classify_podman(command, args.projroot)
+            elif cached.get('design') and cached.get('project'):
+                info = {'design': cached['design'], 'project': cached['project'], 'top': cached.get('top')}
+            elif cached.get('info'):
+                info = cached['info']
+            else:
+                if p['state'] not in ('Z', 'X'):
+                    raise RuntimeError('Live checker has no project identity')
+                unknown.append(p)
+                continue
+            if read(args.runs / info['design'] / 'result.json', {}).get('drc_status'):
+                continue
+            row = {**p, **info}
+            readers[p['pid']] = pipe_readers(args.legacy_pid, p['pid']) if p['state'] not in ('Z', 'X') else []
+            row['gds_sha256'] = sha(args.runs / row['design'] / '6_final.gds')
+            if sha(Path(row['project']) / 'backend/RUN_1/results/6_final.gds') != row['gds_sha256']:
+                raise RuntimeError('Successor found a changed baseline layout')
+            active.append(row)
+        active_names = {a['design'] for a in active}
+        unattributed = [p for p in args.projroot.iterdir() if p.is_dir() and p.name not in active_names
+                        and not read(args.runs / p.name / 'result.json', {}).get('drc_status')]
+        # A finished child can lose argv before an operator snapshots it. Do
+        # not infer a per-design exit status from ordering or a report alone.
+        # Preserve those reports and repeat only those already finished checks.
+        archive = args.control / 'unattributed_finished'
+        for project in unattributed:
+            destination = archive / project.name
+            destination.mkdir(parents=True, exist_ok=True)
+            if (project / 'drc').is_dir():
+                shutil.copytree(project / 'drc', destination / 'drc', dirs_exist_ok=True)
+        save(args.control / 'unattributed_rechecks.json', {
+            'unattributed_finished_processes': unknown,
+            'recheck_designs': [p.name for p in unattributed],
+            'reason': 'Completed check could not be bound to its CLI exit status; not accepted without recheck'})
+        save(args.control / 'legacy_adoption.json', {
+            'controller': controller, 'shells': shells, 'active': active,
+            'driver_sha256': sha(args.driver), 'committed': True,
+            'previous_control': str(previous)})
+        return controller, shells, active, readers
+    except BaseException:
+        for fds in readers.values():
+            for fd in fds:
+                os.close(fd)
+        # Caller deliberately keeps the expander paused until this operation
+        # succeeds; do not reactivate its superseded automatic scaling policy.
+        raise
+
+
 def report_items(path):
     count, root, items = 0, None, False
     for event, node in ET.iterparse(path, events=('start', 'end')):
@@ -380,7 +448,10 @@ def snapshot(args, running, target, phase='drc'):
 
 
 def retire_legacy(controller, shells):
-    remaining = [p for p in children(controller['pid']) if p['state'] not in ('Z', 'X')]
+    identities = [controller] + shells
+    own = {p['pid'] for p in identities}
+    remaining = [p for identity in identities for p in children(identity['pid'])
+                 if p['pid'] not in own and p['state'] not in ('Z', 'X')]
     if remaining:
         raise RuntimeError('Cannot retire legacy controller with live children')
     # A stopped controller must never be resumed after new work was dispatched:
@@ -433,7 +504,8 @@ def run_lvs_stage(args):
                 return lvs.one_and_record(path, projroot, args.timeout, 'gf180')
         return lvs.one_and_record(path, projroot, args.timeout, 'gf180')
     results = []
-    with ThreadPoolExecutor(max_workers=80) as pool:
+    lvs_workers = args.workers if args.fixed_workers else 80
+    with ThreadPoolExecutor(max_workers=lvs_workers) as pool:
         futures = {pool.submit(check, cells, path): path.name for cells, path in todo}
         while futures:
             done, _ = wait(futures, timeout=15, return_when=FIRST_COMPLETED)
@@ -443,7 +515,7 @@ def run_lvs_stage(args):
                 results.append(result)
                 print(json.dumps({'lvs_finished': name, 'result': result}), flush=True)
             save(args.out.parent / 'netgen_lvs.json', results)
-            snapshot(args, len(futures), 80, phase='lvs')
+            snapshot(args, len(futures), lvs_workers, phase='lvs')
 
 
 def audit_official_reports(args):
@@ -489,7 +561,7 @@ def run(args):
     spec = importlib.util.spec_from_file_location('legacy_signoff', args.driver)
     driver = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(driver)
-    controller, shells, active, readers = prepare_adoption(args)
+    controller, shells, active, readers = prepare_successor(args) if args.previous_control else prepare_adoption(args)
     reserved = {a['design'] for a in active}
     pending = [p.parent for p in sorted(args.runs.glob('*/result.json'))
                if p.parent.name not in reserved and read(p, {}).get('status') == 'pass'
@@ -501,6 +573,8 @@ def run(args):
         'checker_switches': list(driver.GF180_SWITCHES)})
     legacy_remaining = len(active)
     target = args.workers
+    save(args.control / 'runtime_limits.json', {'design_workers': target,
+         'automatic': not args.fixed_workers, 'maximum': target if args.fixed_workers else args.max_workers})
     sample = cpu_sample()
     last_sample = time.monotonic()
     queue = iter(pending)
@@ -513,6 +587,11 @@ def run(args):
             f = pool.submit(adopt, a, readers[a['pid']], args, driver)
             futures[f] = ('adopt', a['design'])
         while futures or not exhausted:
+            limits = read(args.control / 'runtime_limits.json', {})
+            maximum = min(args.max_workers, int(limits.get('maximum', args.max_workers)))
+            automatic = limits.get('automatic', not args.fixed_workers)
+            if not automatic:
+                target = min(maximum, max(10, int(limits.get('design_workers', args.workers))))
             while not exhausted and len(futures) < target:
                 p = next(queue, None)
                 if p is None:
@@ -544,11 +623,11 @@ def run(args):
             if done or time.monotonic() - last_sample >= 30:
                 if time.monotonic() - last_sample >= 30:
                     sample, measured = resources(sample)
-                    if measured['available_gb'] < 64 or measured['iowait_pct'] > 20:
+                    if automatic and (measured['available_gb'] < 64 or measured['iowait_pct'] > 20):
                         target = max(16, target - 8)
-                    elif measured['cpu_busy_pct'] < 85:
-                        target = min(args.max_workers, target + 8)
-                    elif measured['cpu_busy_pct'] > 98 and measured['load1'] > (os.cpu_count() or 96) * 1.5:
+                    elif automatic and measured['cpu_busy_pct'] < 85:
+                        target = min(maximum, target + 8)
+                    elif automatic and measured['cpu_busy_pct'] > 98 and measured['load1'] > (os.cpu_count() or 96) * 1.5:
                         target = max(16, target - 8)
                     last_sample = time.monotonic()
                 else:
@@ -564,7 +643,7 @@ def run(args):
     commands = [
         ('official_drc', ['python3', '-I', str(base / 'gf180_hybrid_drc.py'), '--runs', str(args.runs),
                          '--out', str(args.out.parent / 'official_drc.json'),
-                         '--work', str(base / 'rerun_gf180_offdrc'), '--workers', '20', '--mp', '4',
+                         '--work', str(base / 'rerun_gf180_offdrc'), '--workers', str(args.workers // 4 if args.fixed_workers else 20), '--mp', '4',
                          '--timeout', str(args.timeout)]),
     ]
     for phase, command in commands:
@@ -595,6 +674,8 @@ def main():
     parser.add_argument('--projroot', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--control', type=Path, required=True)
+    parser.add_argument('--previous-control', type=Path)
+    parser.add_argument('--fixed-workers', action='store_true')
     parser.add_argument('--workers', type=int, default=40)
     parser.add_argument('--max-workers', type=int, default=96)
     parser.add_argument('--timeout', type=int, default=21600)
