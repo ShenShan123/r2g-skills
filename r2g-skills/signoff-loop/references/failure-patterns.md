@@ -961,6 +961,14 @@ auto-draining its escalations (`_mark_clean` → `escalations.resolve_for_design
   Across the current corpus the 14 fails resolve to **2 real defects (both wb2axip) + 12 symmetric
   residuals**; treat a `symmetric_matcher` label as a believed-clean residual, not a hard fail.
 
+#### Antenna-dominated DRC with one routing leftover read as a fixed-die residual (2026-10-28)
+
+- **Symptom (nangate45 C01443, DIE_AREA-sized):** 17 `*_ANTENNA` + 1 `METAL1.5`; `[drc] stop: residual non-antenna
+  DRC class (METAL1.5): no CORE_UTILIZATION knob`. Any non-antenna class sent the plan to density relief only.
+- **History:** the repair arm cleared this layout with deck-driven diodes alone; the reroute re-solved the spacing.
+- **Fix:** an antenna-dominated DRC (≥ 4× antenna, ≤ `_MIXED_ANTENNA_MAX_OTHER` = 5 others) is offered the antenna
+  strategies first, then density relief; the post-repair DRC must still be fully clean (`mixed_antenna_residue`).
+
 #### KLayout printed "Netlists match", then the lvsdb writer crashed — partial lvsdb read as a fail (2026-10-28)
 
 - **Symptom (nangate45 C02220):** `6_lvs.log` has `dbLayoutVsSchematicWriter.cc,151,i != net2id.end ()` and then

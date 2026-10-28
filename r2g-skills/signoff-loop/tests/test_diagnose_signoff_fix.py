@@ -791,3 +791,25 @@ def test_apply_edits_stacks_on_accepted_fixes():
     again = d.apply_edits(both, {"CORE_UTILIZATION": "12"})       # same key: override
     assert again.count("CORE_UTILIZATION = 1") == 1 and "= 12" in again
     assert again.count(d.BLOCK_START) == 1
+
+
+def test_antenna_dominated_mixed_drc_offers_antenna_repair_on_fixed_die(monkeypatch):
+    """nangate45 C01443: 17 antenna + 1 METAL1.5 on a DIE_AREA-sized design used to read
+    'no CORE_UTILIZATION knob' -> residual; the historical arm cleared it with the antenna
+    repair alone (its re-route re-solved the spacing). Offer the antenna strategies."""
+    monkeypatch.setattr(d, "_antenna_precondition", lambda platform: (True, "test fixture"))
+    cfg = {"PLATFORM": "nangate45", "DIE_AREA": "0 0 283 283", "CORE_AREA": "2 2 281 281"}
+    cats = {"METAL3_ANTENNA": {"count": 9}, "METAL4_ANTENNA": {"count": 8}, "METAL1.5": {"count": 1}}
+    plan = d.build_plan(_drc("fail", 18, cats), {}, cfg, check="drc")
+    ids = [s["id"] for s in plan["strategies"]]
+    assert "antenna_diode_repair" in ids and "deck_driven_antenna_diode" in ids
+    assert plan["status"] == "fail" and plan["residual_reason"] is None
+    assert plan["mixed_antenna_residue"] == {"antenna": 17, "other": 1, "other_classes": ["METAL1.5"]}
+
+
+def test_routing_dominated_mixed_drc_keeps_density_relief_only(monkeypatch):
+    monkeypatch.setattr(d, "_antenna_precondition", lambda platform: (True, "test fixture"))
+    cfg = {"PLATFORM": "nangate45", "DIE_AREA": "0 0 283 283", "CORE_AREA": "2 2 281 281"}
+    cats = {"METAL3_ANTENNA": {"count": 4}, "METAL1.5": {"count": 6}}
+    plan = d.build_plan(_drc("fail", 10, cats), {}, cfg, check="drc")
+    assert plan["strategies"] == [] and plan["status"] == "residual"

@@ -611,6 +611,22 @@ def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
         else:
             non_antenna = sorted(k for k in cats if not k.upper().endswith("_ANTENNA"))
             strategies = _routing_drc_strategies(cfg, exclude)
+            # Antenna-dominated with a few routing-geometry leftovers (nangate45
+            # C01443: 17 antenna + 1 METAL1.5). The antenna repair re-routes from
+            # GRT, which re-solves that local geometry too -- the historical arm
+            # cleared exactly this layout with deck-driven diodes alone. Offer it
+            # ahead of density relief; the post-repair DRC must still be clean.
+            n_other = sum(cats[k].get("count") or 0 for k in non_antenna)
+            n_ant = sum(cats[k].get("count") or 0 for k in cats if k not in non_antenna)
+            if n_ant and n_other <= _MIXED_ANTENNA_MAX_OTHER and n_ant >= 4 * n_other:
+                ant = [s for s in _antenna_strategies(cfg) if s["id"] not in exclude]
+                usable, precheck_why = _antenna_precondition(cfg.get("PLATFORM") or "")
+                if usable is False:
+                    ant = [s for s in ant if not _inserts_diodes(s)]
+                    plan["antenna_model_unusable"] = precheck_why
+                strategies = ant + [s for s in strategies if s["id"] not in {a["id"] for a in ant}]
+                plan["mixed_antenna_residue"] = {"antenna": n_ant, "other": n_other,
+                                                 "other_classes": non_antenna}
             plan["strategies"] = strategies
             if not strategies:
                 plan["status"] = "residual"
@@ -626,6 +642,11 @@ def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
         return plan
     plan["residual_reason"] = "drc status unknown — no report yet"
     return plan
+
+
+# Most non-antenna violations an antenna-dominated DRC may carry and still be
+# offered the antenna repair first (see the mixed branch of the DRC plan).
+_MIXED_ANTENNA_MAX_OTHER = 5
 
 
 FEEDTHROUGH_HOOK = (Path(__file__).resolve().parents[1] / "flow" / "orfs_hooks"
