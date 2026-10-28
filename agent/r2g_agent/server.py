@@ -140,6 +140,13 @@ def session(sid: str):
     return {"id": sid, "messages": STATE["sessions"].load(sid)}
 
 
+@app.get("/api/sessions/{sid}/usage")
+def session_usage(sid: str):
+    if not STATE['sessions'].exists(sid):
+        raise HTTPException(404, '对话不存在或已删除')
+    return STATE['sessions'].usage(sid)
+
+
 @app.post("/api/chat")
 async def chat(req: Request):
     body = await req.json()

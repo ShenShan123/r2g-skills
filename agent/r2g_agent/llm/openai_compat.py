@@ -6,6 +6,8 @@ import json
 
 import httpx
 
+from .usage import usage_event
+
 
 def thinking_params(mc) -> dict:
     """The provider's own deep-thinking switch (verified 2026-10-23 on deepseek-flash
@@ -49,12 +51,14 @@ class OpenAICompatAdapter:
 
     def stream(self, messages: list[dict], tools: list[dict], system: str = ""):
         body = {"model": self.mc.model, "messages": self.to_wire(messages, system), "stream": True,
+                "stream_options": {"include_usage": True},
                 "temperature": self.mc.temperature, "max_tokens": self.mc.max_tokens}
         if tools:
             body["tools"] = [{"type": "function", "function": t} for t in tools]
         body.update(thinking_params(self.mc))
         calls: dict[int, dict] = {}
         stop = "stop"
+        usage, response_id, complete, closing = {}, None, False, False
         try:
             with httpx.stream("POST", self.mc.base_url + "/chat/completions", headers=self._headers(),
                               json=body, timeout=httpx.Timeout(180, connect=20)) as r:
@@ -66,11 +70,15 @@ class OpenAICompatAdapter:
                         continue
                     data = line[5:].strip()
                     if data == "[DONE]":
+                        complete = True
                         break
                     try:
                         ev = json.loads(data)
                     except ValueError:
                         continue
+                    response_id = ev.get("id") or response_id
+                    if isinstance(ev.get("usage"), dict):
+                        usage.update(ev["usage"])
                     for ch in ev.get("choices") or []:
                         d = ch.get("delta") or {}
                         if d.get("reasoning_content"):
@@ -85,6 +93,9 @@ class OpenAICompatAdapter:
                             slot["args"] += fn.get("arguments") or ""
                         if ch.get("finish_reason"):
                             stop = ch["finish_reason"]
+        except GeneratorExit:
+            closing = True
+            raise
         except httpx.HTTPError as e:
             yield {"type": "error", "message": "连接模型失败：%s" % e}
             return
@@ -93,6 +104,9 @@ class OpenAICompatAdapter:
             # report it in the conversation instead of failing the request
             yield {"type": "error", "message": "调用模型出错：%s: %s" % (type(e).__name__, e)}
             return
+        finally:
+            if not closing:
+                yield usage_event(self.mc, usage, response_id, complete)
         for i in sorted(calls):
             c = calls[i]
             try:

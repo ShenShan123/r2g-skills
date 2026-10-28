@@ -10,10 +10,13 @@ Messages use one internal shape regardless of provider:
 
   {"type": "text", "delta": str}
   {"type": "tool_call", "id": str, "name": str, "arguments": dict}
+  {"type": "usage", "input_tokens": int | None, "output_tokens": int | None, ...}
   {"type": "done", "stop_reason": str}
   {"type": "error", "message": str}
 
 Tools are given as JSON-schema function specs: {"name", "description", "parameters"}.
+Usage counters come from the provider, including cache details when reported.
+Missing usage remains unknown (None), including failed or interrupted requests.
 """
 from __future__ import annotations
 

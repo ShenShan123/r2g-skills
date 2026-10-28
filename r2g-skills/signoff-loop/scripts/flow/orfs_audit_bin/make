@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+_audit_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ -z "${R2G_ORFS_REAL_MAKE:-}" ]]; then
+  # Resolve from PATH with this shim directory removed; do not recurse.
+  _audit_path=""
+  IFS=: read -ra _audit_parts <<< "$PATH"
+  for _audit_part in "${_audit_parts[@]}"; do
+    [[ "${_audit_part%/}" == "$_audit_dir/orfs_audit_bin" ]] && continue
+    _audit_path="${_audit_path:+$_audit_path:}$_audit_part"
+  done
+  R2G_ORFS_REAL_MAKE="$(PATH="$_audit_path" command -v make)"
+  export R2G_ORFS_REAL_MAKE
+fi
+if [[ -z "${R2G_ORFS_AUDIT_FILE:-}" ]]; then
+  exec "$R2G_ORFS_REAL_MAKE" "$@"
+fi
+# Isolate only the observer interpreter. Do not remove the caller's Python
+# variables: the real make and its tools must receive their original environment.
+exec "${R2G_ORFS_AUDIT_PYTHON:-python3}" -I "$_audit_dir/orfs_audit.py" make "$@"

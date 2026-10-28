@@ -23,6 +23,7 @@ import json
 import os
 import re
 import signal
+import shutil
 import subprocess
 import sys
 import threading
@@ -375,6 +376,16 @@ class Pipeline:
             e.update(R2G_STAGE_VIEW_PYTHON=sys.executable, R2G_STAGE_VIEW_PHASE=stage)
         invocation = uuid.uuid4().hex
         e["EDACODE_EXECUTION_ID"] = invocation
+        if e.get("R2G_ORFS_AUDIT_FILE"):
+            # Children include signoff restaging and repair wrappers, not just
+            # the pipeline's explicit run_orfs invocations.
+            audit_bin = str(signoff_scripts() / "flow" / "orfs_audit_bin")
+            e.setdefault("R2G_ORFS_REAL_MAKE", shutil.which("make", path=e.get("PATH")) or "/usr/bin/make")
+            e["PATH"] = audit_bin + os.pathsep + e.get("PATH", os.defpath)
+            e.update(R2G_ORFS_AUDIT_PYTHON=sys.executable,
+                     R2G_ORFS_AUDIT_JOB=jid, R2G_ORFS_AUDIT_DESIGN=name,
+                     R2G_ORFS_AUDIT_STAGE=stage, R2G_ORFS_AUDIT_PROJECT=str(project),
+                     R2G_ORFS_AUDIT_EXECUTION=invocation)
         with open(logdir / ("%s.log" % stage), "ab") as log:
             log.write(("\n$ %s\n" % " ".join(cmd)).encode())
             log.flush()

@@ -39,7 +39,7 @@ def test_openai_wire_and_stream(monkeypatch):
     ad = OpenAICompatAdapter(ModelConfig(provider="deepseek").resolved(), "k")
     evs = list(ad.stream(HIST, [{"name": "job_status", "description": "d", "parameters": {}}], "sys"))
     assert evs[0] == {"type": "text", "delta": "hi"}
-    assert evs[1] == {"type": "tool_call", "id": "c1", "name": "job_status", "arguments": {"job_id": "x"}}
+    assert next(e for e in evs if e['type'] == 'tool_call') == {"type": "tool_call", "id": "c1", "name": "job_status", "arguments": {"job_id": "x"}}
     assert evs[-1]["stop_reason"] == "tool_calls"
     assert _fake_stream.last["headers"]["Authorization"] == "Bearer k"
 
@@ -64,7 +64,7 @@ def test_anthropic_wire_and_stream(monkeypatch):
     ad = AnthropicAdapter(ModelConfig(provider="anthropic").resolved(), "k")
     evs = list(ad.stream(HIST, [{"name": "list_jobs", "description": "d", "parameters": {}}], "sys"))
     assert evs[0] == {"type": "text", "delta": "ok"}
-    assert evs[1] == {"type": "tool_call", "id": "tu1", "name": "list_jobs", "arguments": {"limit": 3}}
+    assert next(e for e in evs if e['type'] == 'tool_call') == {"type": "tool_call", "id": "tu1", "name": "list_jobs", "arguments": {"limit": 3}}
     assert _fake_stream.last["headers"]["x-api-key"] == "k"
     assert _fake_stream.last["json"]["tools"][0]["input_schema"] == {}
 

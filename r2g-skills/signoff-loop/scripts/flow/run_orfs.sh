@@ -1,6 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Optional accounting starts before preflight: a wrapper call is not proof that
+# make ran. The PATH shim separately records actual make starts and exits.
+if [[ -n "${R2G_ORFS_AUDIT_FILE:-}" && "${R2G_SOURCE_ONLY:-0}" != 1 ]]; then
+  _R2G_AUDIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  export R2G_ORFS_AUDIT_FILE="$(realpath -m "$R2G_ORFS_AUDIT_FILE")"
+  export R2G_ORFS_AUDIT_WRAPPER_ID="orfs-$$-$(date +%s%N)"
+  export R2G_ORFS_AUDIT_PROJECT="$(realpath -m "${1:-.}")"
+  export R2G_ORFS_AUDIT_PLATFORM="${2:-sky130hd}"
+  _r2g_audit_wrapper() {
+    env -u PYTHONHOME -u PYTHONPATH -u PYTHONSAFEPATH \
+      "${R2G_ORFS_AUDIT_PYTHON:-python3}" "$_R2G_AUDIT_DIR/orfs_audit.py" \
+      wrapper "$1" "$$" "${2:-0}" || true
+  }
+  _r2g_audit_wrapper wrapper_start
+  trap '_r2g_audit_wrapper wrapper_end "$?"' EXIT
+fi
+
 # usage: run_orfs.sh <project-dir> [platform] [flow_variant]
 # Runs OpenROAD-flow-scripts backend for the given project.
 # Expects <project-dir>/constraints/config.mk and constraint.sdc to exist.
@@ -143,6 +160,16 @@ fi
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
 
+if [[ -n "${R2G_ORFS_AUDIT_FILE:-}" ]]; then
+  if [[ -z "${R2G_ORFS_REAL_MAKE:-}" ]]; then
+    _r2g_make_path="$(command -v make || true)"
+    if [[ "$_r2g_make_path" != "$_R2G_AUDIT_DIR/orfs_audit_bin/make" ]]; then
+      export R2G_ORFS_REAL_MAKE="$_r2g_make_path"
+    fi
+  fi
+  export PATH="$_R2G_AUDIT_DIR/orfs_audit_bin:$PATH"
+fi
+
 # Absolute path to this script dir BEFORE any cd (resume_lineage.py lives here).
 FLOW_SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -260,6 +287,7 @@ fi
 _bd_pair="$(_r2g_new_backend_dir "$PROJECT_DIR/backend")" \
   || { echo "ERROR: could not create a unique backend RUN dir under $PROJECT_DIR/backend" >&2; exit 1; }
 BACKEND_DIR="${_bd_pair%%$'\t'*}"; RUN_TAG="${_bd_pair#*$'\t'}"; unset _bd_pair
+[[ -z "${R2G_ORFS_AUDIT_FILE:-}" ]] || export R2G_ORFS_AUDIT_RUN_ID="$RUN_TAG"
 echo "Starting ORFS run: $RUN_TAG"
 echo "Design: $DESIGN_NAME"
 echo "Platform: $PLATFORM"

@@ -5,6 +5,8 @@ import json
 
 import httpx
 
+from .usage import usage_event
+
 
 class AnthropicAdapter:
     VERSION = "2023-06-01"
@@ -47,6 +49,7 @@ class AnthropicAdapter:
                    "content-type": "application/json"}
         blocks: dict[int, dict] = {}
         stop = "end_turn"
+        usage, response_id, complete, closing = {}, None, False, False
         try:
             with httpx.stream("POST", self.mc.base_url + "/v1/messages", headers=headers, json=body,
                               timeout=httpx.Timeout(180, connect=20)) as r:
@@ -61,7 +64,13 @@ class AnthropicAdapter:
                     except ValueError:
                         continue
                     t = ev.get("type")
-                    if t == "content_block_start":
+                    if t == "message_start":
+                        msg = ev.get("message") or {}
+                        response_id = msg.get("id") or response_id
+                        usage.update(msg.get("usage") or {})
+                    elif t == "message_stop":
+                        complete = True
+                    elif t == "content_block_start":
                         cb = ev["content_block"]
                         blocks[ev["index"]] = {"type": cb["type"], "id": cb.get("id"), "name": cb.get("name"),
                                                "json": ""}
@@ -72,10 +81,14 @@ class AnthropicAdapter:
                         elif d.get("type") == "input_json_delta":
                             blocks[ev["index"]]["json"] += d.get("partial_json", "")
                     elif t == "message_delta":
+                        usage.update(ev.get("usage") or {})
                         stop = (ev.get("delta") or {}).get("stop_reason") or stop
                     elif t == "error":
                         yield {"type": "error", "message": str(ev.get("error"))}
                         return
+        except GeneratorExit:
+            closing = True
+            raise
         except httpx.HTTPError as e:
             yield {"type": "error", "message": "连接模型失败：%s" % e}
             return
@@ -84,6 +97,9 @@ class AnthropicAdapter:
             # report it in the conversation instead of failing the request
             yield {"type": "error", "message": "调用模型出错：%s: %s" % (type(e).__name__, e)}
             return
+        finally:
+            if not closing:
+                yield usage_event(self.mc, usage, response_id, complete)
         for i in sorted(blocks):
             b = blocks[i]
             if b["type"] == "tool_use":

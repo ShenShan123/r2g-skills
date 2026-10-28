@@ -34,6 +34,9 @@ class SessionStore:
             c.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, created REAL, "
                       "updated REAL, title TEXT, messages TEXT)")
             c.execute('CREATE TABLE IF NOT EXISTS session_deletions (id TEXT PRIMARY KEY)')
+            c.execute('CREATE TABLE IF NOT EXISTS model_usage '
+                      '(call_id TEXT PRIMARY KEY, session_id TEXT, created REAL, payload TEXT)')
+            c.execute('CREATE INDEX IF NOT EXISTS model_usage_session ON model_usage(session_id)')
 
     @contextmanager
     def _c(self):
@@ -59,6 +62,7 @@ class SessionStore:
     def erase(self, sid: str) -> None:
         with self._c() as c:
             c.execute('DELETE FROM sessions WHERE id=?', (sid,))
+            c.execute('DELETE FROM model_usage WHERE session_id=?', (sid,))
         # Keep the tiny tombstone so an old stream cannot revive the session.
 
     def create(self) -> str:
@@ -82,6 +86,29 @@ class SessionStore:
             rs = c.execute("SELECT id, created, updated, title FROM sessions ORDER BY updated DESC LIMIT ?",
                            (limit,)).fetchall()
         return [dict(r) for r in rs]
+
+    def record_usage(self, sid: str, call_id: str, payload: dict) -> None:
+        with self._c() as c:
+            c.execute('INSERT OR REPLACE INTO model_usage SELECT ?, ?, ?, ? '
+                      'WHERE EXISTS (SELECT 1 FROM sessions WHERE id=?)',
+                      (call_id, sid, time.time(), json.dumps(payload), sid))
+
+    def usage(self, sid: str) -> dict:
+        with self._c() as c:
+            rows = c.execute('SELECT call_id, created, payload FROM model_usage '
+                             'WHERE session_id=? ORDER BY created, call_id', (sid,)).fetchall()
+        calls = [{**json.loads(r['payload']), 'call_id': r['call_id'], 'created': r['created']} for r in rows]
+        counters = ('input_tokens', 'output_tokens', 'total_tokens', 'cache_read_input_tokens',
+                    'uncached_input_tokens', 'cache_creation_input_tokens', 'reasoning_tokens')
+        complete = bool(calls) and all(c.get('usage_reported') and c.get('stream_complete') for c in calls)
+        totals = {key: sum(c[key] for c in calls) if complete and all(c.get(key) is not None for c in calls)
+                  else None for key in counters}
+        observed = {key: sum(c[key] for c in calls if c.get(key) is not None)
+                    if any(c.get(key) is not None for c in calls) else None for key in counters}
+        return {'session_id': sid, 'model_calls': len(calls), 'totals': totals, 'calls': calls,
+                'observed_totals': observed, 'usage_complete': complete,
+                'complete_usage_calls': sum(bool(c.get('usage_reported') and c.get('stream_complete')
+                                                and c.get('total_tokens') is not None) for c in calls)}
 
 
 def _clip(obj) -> str:
@@ -112,6 +139,13 @@ def _run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
         if sessions.is_deleting(sid):
             return
         text, thinking, calls, err = "", "", [], None
+        call_id = uuid.uuid4().hex
+        mc = getattr(adapter, 'mc', None)
+        sessions.record_usage(sid, call_id, {
+            'provider': getattr(mc, 'provider', None), 'model': getattr(mc, 'model', None),
+            'protocol': getattr(mc, 'protocol', None), 'step': step + 1,
+            'usage_reported': False, 'stream_complete': False,
+        })
         for ev in adapter.stream(messages, tools.specs(), system_prompt()):
             if sessions.is_deleting(sid):
                 return
@@ -125,6 +159,10 @@ def _run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
                 calls.append(ev)
             elif ev["type"] == "error":
                 err = ev["message"]
+            elif ev["type"] == "usage":
+                ev = {**ev, "call_id": call_id, "step": step + 1}
+                sessions.record_usage(sid, call_id, ev)
+                yield ev
         if err:
             yield {"type": "error", "message": err}
             sessions.save(sid, messages, title)
