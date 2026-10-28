@@ -24,6 +24,17 @@ enough. Tool versions, rule hashes, actual recipe selection, repeat installation
 and new-session behavior need separate evidence. A container test does not
 constitute VM/OS-reboot acceptance.
 
+After the selftests finish, independently check their recorded job IDs:
+
+```sh
+python3 experiments/install_acceptance/audit_results.py JOB_N45 JOB_SKY130 JOB_GF180
+```
+
+The audit requires every design to pass, DRC/LVS to be clean, signoff reports
+to bind to the same run and layout, every dataset check to pass, and the final
+dataset archive to exist. It prints compact results and archive hashes. This
+checks the stored reports; it does not replace running the signoff tools.
+
 `run_namespace.sh` is an alternative host-side launcher when Docker is absent
 but unprivileged user namespaces and a distribution-provided bubblewrap binary
 are available. Its root filesystem must contain only the audited base OS. It
