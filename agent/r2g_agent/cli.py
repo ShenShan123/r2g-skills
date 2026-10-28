@@ -129,9 +129,10 @@ def cmd_params(a) -> int:
 
 
 def cmd_selftest(a) -> int:
-    a.example, a.paths = ["counter8"], []
     print("自检：用内置示例 counter8 跑完整流程（综合 → 布局布线 → 签核 → 转图 → 校验），约 3–5 分钟")
-    return cmd_run(a)
+    # Reuse run's parser so its complete defaults stay in sync. A selftest
+    # Namespace only has platform, and cannot be passed directly to cmd_run.
+    return main(["run", "--example", "counter8", "--platform", a.platform])
 
 
 def cmd_status(a) -> int:

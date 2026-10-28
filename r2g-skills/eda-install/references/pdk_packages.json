@@ -1,0 +1,14 @@
+{
+  "sky130A": {
+    "name": "open_pdks.sky130a",
+    "version": "1.0.471_0_g97d0844",
+    "build": "20240223_100318",
+    "sha256": "37736ab56036733eaaff5f8f77a42c98caf75c82bc6b5dae59a727d24eabdd83"
+  },
+  "gf180mcuC": {
+    "name": "open_pdks.gf180mcuc",
+    "version": "1.0.471_1_gd8bfd6f",
+    "build": "20240223_100318",
+    "sha256": "677c4d9b19543e8eacbc33c63f0d2e36191673acdb40fc4e0d09d532f83e1451"
+  }
+}

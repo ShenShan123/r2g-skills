@@ -58,6 +58,7 @@ _PROVISIONED_NOSUDO = {
     "MAGIC_EXE": "/x/magic", "NETGEN_EXE": "/x/netgen", "KLAYOUT_CMD": "/usr/bin/klayout",
     "PDK_ROOT": "/proj/me/pdk", "SKY130A_DIR": "/proj/me/pdk/sky130A",
     "GRAPH_PYTHON": "/proj/me/venv/bin/python",
+    "MAKE_EXE": "/usr/bin/make", "AWK_EXE": "/usr/bin/awk", "TIME_EXE": "/usr/bin/time",
 }
 
 _BARE_NOSUDO = {
@@ -115,6 +116,12 @@ def test_plan_provisioned_all_ok(tmp_path):
         assert rows[tier][0] == "OK", f"{tier} not OK: {rows[tier]}"
     assert "sudo=NO" in out
     assert "no-sudo" in out
+
+
+def test_plan_requires_make_even_when_eda_binaries_are_present(tmp_path):
+    _out, rows = _plan(tmp_path, dict(_PROVISIONED_NOSUDO, MAKE_EXE=""))
+    assert rows["frontend"][0] == "MISS"
+    assert "make" in rows["frontend"][2]
 
 
 def test_plan_bare_nosudo_uses_bundle_no_build(tmp_path):

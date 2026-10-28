@@ -176,14 +176,15 @@ eval_tier() {
         [[ "$SUDO" == "1" ]] && TIER_ACTION="$TIER_ACTION (a source build is install_core.sh --build)"
       fi ;;
     frontend)
-      if [[ -n "$(d IVERILOG_EXE)" && -n "$(d VVP_EXE)" ]]; then
+      if [[ -n "$(d IVERILOG_EXE)" && -n "$(d VVP_EXE)" \
+         && -n "$(d MAKE_EXE)" && -n "$(d AWK_EXE)" && -n "$(d TIME_EXE)" ]]; then
         TIER_STATUS="OK"; TIER_ACTION="present"
       else
         TIER_STATUS="MISS"
         if [[ "$SUDO" == "1" && "$PKG" != "none" ]]; then
           TIER_ACTION="$PKG install iverilog verilator"
         else
-          TIER_ACTION="conda -n $CONDA_ENV iverilog verilator"
+          TIER_ACTION="conda -n $CONDA_ENV iverilog verilator make gawk time"
         fi
       fi ;;
     sky130)
@@ -199,10 +200,14 @@ eval_tier() {
         TIER_STATUS="OPT"; TIER_ACTION="conda -n $CONDA_ENV klayout"
       fi ;;
     pdk)
-      if [[ -n "$(d SKY130A_DIR)" ]]; then
+      _pdk_missing=0
+      if [[ " $strict_platforms " == *" gf180 "* && ! -f "$(d PDK_ROOT)/gf180mcuC/libs.tech/magic/gf180mcuC.tech" ]]; then
+        _pdk_missing=1
+      fi
+      if [[ -n "$(d SKY130A_DIR)" && $_pdk_missing == 0 ]]; then
         TIER_STATUS="OK"; TIER_ACTION="present ($(d SKY130A_DIR))"
       else
-        TIER_STATUS="OPT"; TIER_ACTION="conda -n $CONDA_ENV open_pdks.sky130a -> $CONDA_ROOT/envs/$CONDA_ENV/share/pdk"
+        TIER_STATUS="OPT"; TIER_ACTION="pinned PDK packages for ${strict_platforms:-sky130hd} -> $CONDA_ROOT/envs/$CONDA_ENV/share/pdk"
       fi ;;
     graph)
       if [[ -n "$(d GRAPH_PYTHON)" ]]; then
@@ -328,6 +333,23 @@ _load_core_choice() {
   if [[ -n "${BIGV:-}" && -f "$BIGV/.r2g-install/core.env" ]]; then
     # shellcheck source=/dev/null
     source "$BIGV/.r2g-install/core.env"
+  fi
+  if [[ -n "${BIGV:-}" && -f "$BIGV/.r2g-install/pdk.env" ]]; then
+    source "$BIGV/.r2g-install/pdk.env"
+  fi
+  if [[ -n "${BIGV:-}" && -f "$BIGV/.r2g-install/runtime.env" ]]; then
+    source "$BIGV/.r2g-install/runtime.env"
+  fi
+  # Later tiers (in particular strict platform rules) must see tools that
+  # earlier tiers installed under a custom --prefix, before the final pin step.
+  local cbin="${BIGV:-}/miniconda3/envs/$CONDA_ENV/bin" pair var bin
+  if [[ -n "${BIGV:-}" && -d "$cbin" ]]; then
+    for pair in IVERILOG_EXE:iverilog VVP_EXE:vvp VERILATOR_EXE:verilator MAGIC_EXE:magic NETGEN_EXE:netgen; do
+      var="${pair%%:*}"; bin="${pair#*:}"
+      if [[ -x "$cbin/$bin" && ! -x "${!var:-}" ]]; then
+        export "$var=$cbin/$bin"
+      fi
+    done
   fi
 }
 _load_core_choice

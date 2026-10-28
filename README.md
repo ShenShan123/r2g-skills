@@ -9,7 +9,7 @@ Kimi、智谱 GLM、豆包、OpenAI、Gemini、Claude 或本地 Ollama，配置�
 
 ## 一键安装
 
-需要一台 x86_64 Linux 机器（Ubuntu 22.04 及以上、Debian 12 及以上等 glibc ≥ 2.35 的发行版；不需要 root 权限）、约 10 GB 磁盘空间，以及能访问 GitHub 的网络。全新机器上安装约需 30 分钟。
+需要一台 x86_64 Linux 机器（Ubuntu 22.04 及以上、Debian 12 及以上等 glibc ≥ 2.35 的发行版；安装过程不需要 root 权限），系统预先有 Git、curl、CA 证书及带 venv/ensurepip 的 Python 3.10+。三平台安装和小设计验收建议至少准备 80 GB 可用空间，其中包含默认运行磁盘保护要求的 50 GB 余量。下载需要访问 GitHub、Conda 和 Python 软件源；耗时取决于网络和磁盘速度。
 
 ```bash
 git clone https://github.com/ShenShan123/r2g-skills.git
@@ -19,12 +19,12 @@ bash install.sh
 
 `install.sh` 会依次：检查机器 → 安装 EDA 工具链（下载生成所有 r2g 数据集所用的同一套 OpenROAD、Yosys、
 KLayout 预编译包并校验 sha256，固定版本的 OpenROAD-flow-scripts，以及图数据集用的 PyTorch 环境；
-已经装好的会被识别并跳过）→ 验证 nangate45 平台可用 → 安装 agent →
+已安装的依赖会被识别并跳过；SKY130/GF180 PDK 固定到实验使用的包版本并核对包哈希）→ 分别严格验证 nangate45、sky130hd、gf180 平台可用 → 安装 agent →
 把 `r2g` 命令放进 `~/.local/bin` → 让你选择模型并填写 API 密钥（只保存在本机）→ 可选地跑一次自检
-（内置示例 counter8 从 RTL 到图数据集，约 3–5 分钟）。
+（在每个所选平台上运行内置 counter8，从 RTL 到图数据集）。安装器的成功退出不代表完整语料全部通过；是否执行了物理自检会单独打印。
 
-常用参数：`--yes`（不逐项确认）、`--prefix DIR`（大文件放哪里）、`--skip-toolchain`（工具链已就绪）、
-`--provider deepseek --key-env DEEPSEEK_API_KEY`（不交互地配置模型）。完整说明：`bash install.sh --help`。
+常用参数：`--yes`（不逐项确认）、`--prefix DIR`（大文件放哪里）、`--platforms nangate45`（只安装并验证指定平台，多个平台用逗号分隔）、`--skip-toolchain`（工具链已就绪）、
+`--provider deepseek --key-env DEEPSEEK_API_KEY`（不交互地配置模型）。无模型密钥的完整流程验收可以使用 `bash install.sh --yes --prefix /your/install/path --no-config --selftest`。完整说明：`bash install.sh --help`。
 
 ## 使用
 
@@ -65,8 +65,8 @@ KLayout 预编译包并校验 sha256，固定版本的 OpenROAD-flow-scripts，�
 
 ### 三个页面
 
-- **开始**：四步——选设计（上传一个设计的文件夹；或「批量」：一个文件夹里每个子文件夹一个设计，可上传也可直接填服务器上的路径）
-  → 选数据集类型（图 / 图像）→ 流程参数（默认用 r2g 在 1249 个设计上实测定下的经验参数，也可自定义时钟、利用率、die 等）
+- **开始**：五步——选设计（上传一个设计的文件夹；或「批量」：一个文件夹里每个子文件夹一个设计，可上传也可直接填服务器上的路径）
+  → 选平台（Nangate45 / SKY130 / GF180）→ 选数据集类型（图 / 图像）→ 流程参数（默认采用对应平台的经验参数，也可自定义时钟、利用率、die 等）
   → 开始。不需要配置模型。
 - **任务**：每个设计的进度条（综合 → 布局布线 → 签核 → 修复 → 数据集 → 校验）、失败原因、自动修复记录、
   版图与日志、数据集下载；批量任务按状态筛选、按失败原因归类，运行中也能下载已完成的部分。

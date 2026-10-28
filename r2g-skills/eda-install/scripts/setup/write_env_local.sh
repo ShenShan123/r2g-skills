@@ -112,6 +112,11 @@ build_content() {
 # Every value is optional; delete a line to fall back to autodetection.
 HDR
   echo
+  if [[ -n "${R2G_RUNTIME_BIN:-}" && -x "$R2G_RUNTIME_BIN/make" ]]; then
+    emit_export R2G_RUNTIME_BIN "$R2G_RUNTIME_BIN"
+    echo 'case ":$PATH:" in *":$R2G_RUNTIME_BIN:"*) ;; *) export PATH="$R2G_RUNTIME_BIN:$PATH" ;; esac'
+    echo
+  fi
   echo "# --- OpenROAD-flow-scripts checkout --------------------------------------"
   emit_export ORFS_ROOT "${ORFS_ROOT:-}"
   echo

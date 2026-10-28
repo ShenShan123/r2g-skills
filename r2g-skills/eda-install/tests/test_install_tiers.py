@@ -112,6 +112,52 @@ def test_pdk_installs_open_pdks_never_volare():
     assert "volare" not in (out.stdout + out.stderr).lower()
 
 
+@pytest.mark.parametrize("platforms, packages", [
+    ("nangate45", []),
+    ("gf180", ["open_pdks.gf180mcuc=1.0.471_1_gd8bfd6f=20240223_100318"]),
+    ("nangate45,sky130hd,gf180", [
+        "open_pdks.sky130a=1.0.471_0_g97d0844=20240223_100318",
+        "open_pdks.gf180mcuc=1.0.471_1_gd8bfd6f=20240223_100318",
+    ]),
+])
+def test_selected_platforms_install_their_pinned_pdks(platforms, packages):
+    out = _run("install_pdk.sh", "--dry-run", "--force",
+               env={"R2G_STRICT_PLATFORMS": platforms})
+    assert out.returncode == 0, out.stderr
+    for package in packages:
+        assert package in out.stdout
+    if platforms == "gf180":
+        assert "open_pdks.sky130a" not in out.stdout
+    if not packages:
+        assert "+ " not in out.stdout
+
+
+@pytest.mark.parametrize("platforms", ["", "bogus", "nangate45,", ",gf180", "sky130hd,,gf180"])
+def test_public_installer_rejects_invalid_platform_list_before_installing(platforms):
+    installer = EDA_ROOT.parents[1] / "install.sh"
+    out = subprocess.run(["bash", str(installer), "--platforms", platforms],
+                         capture_output=True, text=True)
+    assert out.returncode == 2
+    assert "1/7" not in out.stdout
+
+
+def test_runtime_utilities_survive_fresh_shell_pin_reload(tmp_path):
+    runtime = tmp_path / "runtime-bin"
+    runtime.mkdir()
+    make = runtime / "make"
+    make.write_text("#!/bin/sh\nexit 0\n")
+    make.chmod(0o755)
+    target = tmp_path / "references"
+    target.mkdir()
+    env = dict(os.environ, R2G_RUNTIME_BIN=str(runtime))
+    subprocess.run(["bash", str(SETUP / "write_env_local.sh"), "--target", str(target)],
+                   env=env, check=True, capture_output=True, text=True)
+    result = subprocess.run(["bash", "-c", 'source "$1"; source "$1"; command -v make',
+                             "pin-check", str(target / "env.local.sh")],
+                            env=env, check=True, capture_output=True, text=True)
+    assert result.stdout.strip() == str(make)
+
+
 def test_graph_builds_cpu_torch_venv(tmp_path):
     out = _run("install_graph.sh", "--dry-run", "--force",
                env={"R2G_PREFIX": str(tmp_path)}).stdout

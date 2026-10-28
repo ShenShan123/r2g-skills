@@ -116,6 +116,9 @@ emit NETGEN_EXE         "${NETGEN_EXE:-}"
 emit STA_EXE            "${STA_EXE:-}"
 emit PDK_ROOT           "${PDK_ROOT:-}"
 emit SKY130A_DIR        "${SKY130A_DIR:-}"
+emit MAKE_EXE           "$(command -v make 2>/dev/null || true)"
+emit AWK_EXE            "$(command -v awk 2>/dev/null || true)"
+emit TIME_EXE           "$(type -P time 2>/dev/null || true)"
 emit GRAPH_PYTHON       "$GRAPH_PYTHON"
 
 true

@@ -8,7 +8,7 @@
 #    the nangate45 LVS fallback, the torch venv for graph datasets). No root needed: without sudo it installs pre-built
 #    conda packages onto the largest free volume. Already-installed tools are
 #    detected and left alone.
-# 3. verifies the platform this version supports (nangate45) is STRICT-READY
+# 3. verifies each selected platform is STRICT-READY
 # 4. installs the agent (Python package + the pre-built web UI) into its own venv
 # 5. puts the `r2g` command on your PATH (~/.local/bin)
 # 6. asks which model to use and for its API key (stored only on this machine)
@@ -24,9 +24,11 @@
 #   --key-env VAR         read the API key from this environment variable
 #   --no-config           do not ask about the model now (run `r2g config` later)
 #   --selftest            run the self-test at the end without asking
+#   --platforms LIST      comma-separated platforms (default: nangate45,sky130hd,gf180)
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 YES=""; PREFIX=""; SKIP_TC=0; PROVIDER=""; MODEL=""; BASE_URL=""; KEY_ENV=""; NO_CONFIG=0; SELFTEST=""
+PLATFORMS="nangate45,sky130hd,gf180"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --yes|-y) YES="--yes"; shift ;;
@@ -38,8 +40,19 @@ while [[ $# -gt 0 ]]; do
     --key-env) KEY_ENV="$2"; shift 2 ;;
     --no-config) NO_CONFIG=1; shift ;;
     --selftest) SELFTEST=1; shift ;;
+    --platforms) PLATFORMS="$2"; shift 2 ;;
     -h|--help) sed -n 2,31p "$0"; exit 0 ;;
     *) echo "unknown option: $1 (see --help)" >&2; exit 2 ;;
+  esac
+done
+IFS=',' read -r -a PLATFORM_LIST <<< "$PLATFORMS"
+[[ -n "$PLATFORMS" && "$PLATFORMS" != *, && "$PLATFORMS" != ,* && "$PLATFORMS" != *,,* ]] || {
+  echo 'platform list must not be empty or contain empty entries' >&2; exit 2;
+}
+for platform in "${PLATFORM_LIST[@]}"; do
+  case "$platform" in
+    nangate45|sky130hd|gf180) ;;
+    *) echo "unsupported platform: $platform" >&2; exit 2 ;;
   esac
 done
 
@@ -66,7 +79,7 @@ done
 ok "Python $("$PY" -c 'import platform; print(platform.python_version())') ($PY)"
 [[ -n "$PREFIX" ]] && mkdir -p "$PREFIX"
 FREE_GB=$(df -Pk "${PREFIX:-$HOME}" 2>/dev/null | awk 'NR==2{print int($4/1048576)}' || true)
-ok "磁盘可用约 ${FREE_GB} GB（工具链约需 15 GB）"
+ok "磁盘可用约 ${FREE_GB} GB（三平台安装与小设计验收建议至少 80 GB，含运行阶段的 50 GB 余量）"
 
 # ---- 2. toolchain -------------------------------------------------------------
 if [[ $SKIP_TC -eq 0 ]]; then
@@ -80,7 +93,7 @@ if [[ $SKIP_TC -eq 0 ]]; then
   # under set -e a failing bootstrap used to end the script with no message at
   # all (fresh-user test, 2026-10-23) -- say what failed and how to resume
   bash "$REPO/r2g-skills/eda-install/bootstrap.sh" $YES ${PREFIX:+--prefix "$PREFIX"} \
-       --tiers core,frontend,klayout,platform_rules,sky130,graph --strict-platforms nangate45 \
+       --tiers core,frontend,klayout,sky130,pdk,platform_rules,graph --strict-platforms "$PLATFORMS" \
     || die "EDA 工具链没有装完整（失败的那一项见上方 \"installer returned non-zero\" 附近的输出）。
   已下载的内容会保留，修好后重新运行同一条 bash install.sh 命令即可接着装。"
 else
@@ -88,17 +101,19 @@ else
 fi
 
 # ---- 3. verify ----------------------------------------------------------------
-say "3/7 验证 nangate45 平台"
-CHK="$(bash "$REPO/r2g-skills/signoff-loop/scripts/flow/check_env.sh" --platform nangate45 2>&1 || true)"
+say "3/7 验证所选平台"
+for platform in "${PLATFORM_LIST[@]}"; do
+CHK="$(bash "$REPO/r2g-skills/signoff-loop/scripts/flow/check_env.sh" --platform "$platform" 2>&1 || true)"
 # exact: a line STARTING with the platform, second column STRICT-READY. A loose
 # pattern matched "MISS strict capability: nangate45 (... strict_signoff_ready ...)"
 # and passed an incomplete platform (fresh-user test, 2026-10-22).
-if echo "$CHK" | grep -qE "^nangate45[[:space:]]+STRICT-READY"; then
-  ok "nangate45：综合、布局布线、DRC、LVS、RCX 全部可用"
+if echo "$CHK" | grep -qE "^${platform}[[:space:]]+STRICT-READY"; then
+  ok "$platform：综合、布局布线、DRC、LVS、RCX 全部可用"
 else
   echo "$CHK" | tail -25
-  die "nangate45 还没有就绪（见上面的检查结果）。修好后重新运行 bash install.sh。"
+  die "$platform 还没有就绪（见上面的检查结果）。修好后重新运行 bash install.sh。"
 fi
+done
 
 # ---- 4. agent -----------------------------------------------------------------
 say "4/7 安装 r2g agent"
@@ -145,12 +160,14 @@ fi
 # ---- 7. self-test -------------------------------------------------------------
 say "7/7 自检"
 if [[ -z "$SELFTEST" ]] && tty; then
-  read -r -p "    现在跑一次自检吗？内置示例 counter8 从 RTL 到图数据集，约 3–5 分钟 [Y/n]: " a
+  read -r -p "    现在逐个平台自检吗？counter8 从 RTL 到图数据集，用时取决于平台和机器 [Y/n]: " a
   [[ "${a:-y}" =~ ^[Yy] ]] && SELFTEST=1
 fi
 if [[ -n "$SELFTEST" ]]; then
-  "$R2G" selftest || die "自检没有通过（日志见 ~/.r2g/workspace/）"
-  ok "自检通过"
+  for platform in "${PLATFORM_LIST[@]}"; do
+    "$R2G" selftest --platform "$platform" || die "$platform 自检没有通过（日志见 ~/.r2g/workspace/）"
+    ok "$platform 自检通过"
+  done
 else
   echo "    已跳过。之后运行：r2g selftest"
 fi
