@@ -281,3 +281,18 @@ def test_pipeline_retries_only_successful_translation(tmp_path, monkeypatch, tra
     if translator_rc == 1:
         assert m["files"] == [str(p / "rtl/top.sv")]
     pipe.pool.shutdown()
+
+
+def test_case_collisions_finds_bit_blasted_internal_net(tmp_path):
+    # nangate45 C03945: `input COUNT` beside `reg count`; LVS netlists are
+    # case-insensitive, so the internal net merges with the port.
+    from pathlib import Path
+    from r2g_agent import frontend
+    v = tmp_path / "1_2_yosys.v"
+    v.write_text("module timer(CLK, COUNT, DONE);\n  input CLK;\n  wire CLK;\n"
+                 "  input [1:0] COUNT;\n  wire [1:0] COUNT;\n  output DONE;\n  wire DONE;\n"
+                 "  wire \\count[0] ;\n  wire \\count[1] ;\n  wire _01_;\nendmodule\n")
+    assert frontend.case_collisions(v, "timer") == ["count"]
+    v.write_text(v.read_text().replace("count", "cnt"))
+    assert frontend.case_collisions(v, "timer") == []
+    assert frontend.hook_path("case_rename").name == "case_rename.tcl"

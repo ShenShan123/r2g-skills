@@ -271,11 +271,42 @@ SV_FRONTEND_RECIPE = {
 }
 
 
+# Applied after a SUCCESSFUL synthesis, from the netlist itself (no failure
+# signature): LVS netlists are case-insensitive, so a non-port net named like a
+# port up to case (`reg count` beside `input COUNT`, nangate45 C03945) merges with
+# it and KLayout reports "Net COUNT[0] is not matching any net". The hook renames
+# only such internal nets; ports, connectivity and logic are unchanged.
+CASE_RENAME_RECIPE = {"id": "case_rename", "hook": "case_rename.tcl",
+                      "label": "内部信号与端口名仅大小写不同（LVS 网表不分大小写），给内部信号改名"}
+
+_DECL_RE = re.compile(r"^\s*(input|output|inout|wire|reg)\s+(?:signed\s+)?(?:\[[^\]]*\]\s*)?"
+                      r"(\\\S+|[A-Za-z_][\w$]*)", re.M)
+
+
+def case_collisions(netlist: Path, top: str) -> list[str]:
+    """Internal nets of the synthesized top whose name equals a port's up to case."""
+    try:
+        t = netlist.read_text(errors="replace")
+    except OSError:
+        return []
+    m = re.search(r"^\s*module\s+\\?%s\b" % re.escape(top), t, re.M)
+    if not m:
+        return []
+    body = t[m.start():t.find("endmodule", m.start())]
+    ports, nets = set(), set()
+    for kind, name in _DECL_RE.findall(body):
+        # synthesis bit-blasts a register into escaped per-bit nets: `\count[3] `
+        name = re.sub(r"\[\d+\]$", "", name.lstrip("\\"))
+        (ports if kind in ("input", "output", "inout") else nets).add(name)
+    lower = {p.lower() for p in ports}
+    return sorted(n for n in nets - ports if n.lower() in lower)
+
+
 def hook_path(recipe_id: str) -> Path:
     for r in QUARANTINED_SYNTH_RECIPES:
         if r["id"] == recipe_id:
             raise ValueError(r["reason"])
-    r = next(r for r in SYNTH_RECIPES if r["id"] == recipe_id)
+    r = next(r for r in SYNTH_RECIPES + (CASE_RENAME_RECIPE,) if r["id"] == recipe_id)
     return signoff_scripts() / "flow" / "orfs_hooks" / r["hook"]
 
 

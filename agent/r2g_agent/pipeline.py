@@ -609,6 +609,17 @@ class Pipeline:
                 self._ok(jid, name, "synth", "前端修复：%s，重新综合" % h["label"], fx)
                 (pdir / "metadata.json").write_text(json.dumps(meta, indent=2))
             self.store.set_design(jid, name, detail={"frontend_fixes": meta["frontend_fixes"]})
+        # the flow synthesizes again from scratch, so a name-only hook added here
+        # takes effect there; ports and logic are untouched (see CASE_RENAME_RECIPE)
+        clash = frontend.case_collisions(run / "results" / "1_2_yosys.v", meta["top"])
+        if clash and "case_rename" not in meta.get("synth_hooks", []):
+            meta = proj.add_synth_hooks(pdir, ["case_rename"])
+            fx = {"recipe": "case_rename", "file": "constraints/frontend_fix.tcl",
+                  "detail": "%s：%s" % (frontend.CASE_RENAME_RECIPE["label"], ", ".join(clash[:5]))}
+            meta["frontend_fixes"].append(fx)
+            (pdir / "metadata.json").write_text(json.dumps(meta, indent=2))
+            self._ok(jid, name, "synth", "前端兼容修复：" + fx["detail"], fx)
+            self.store.set_design(jid, name, detail={"frontend_fixes": meta["frontend_fixes"]})
         # size
         self._stage(jid, name, "size")
         sizing = proj.apply_sizing(pdir, stat, run / "results" / "1_2_yosys.v")
