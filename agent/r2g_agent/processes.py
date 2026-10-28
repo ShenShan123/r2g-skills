@@ -7,10 +7,27 @@ import os
 from pathlib import Path
 import signal
 import time
+import logging
 
 
 class ProcessInspectionError(RuntimeError):
     pass
+
+
+def _departed(path: Path, start: str | None = None) -> bool:
+    """Recheck an unreadable /proc entry before declaring inspection unknown.
+
+    A process can exit or become a zombie between stat and environ, and Linux
+    may report EACCES rather than ENOENT during that transition. A live process
+    with the same identity must still fail closed.
+    """
+    try:
+        fields = (path / 'stat').read_text().rsplit(')', 1)[1].split()
+        return fields[0] in ('Z', 'X') or (start is not None and fields[19] != start)
+    except (FileNotFoundError, ProcessLookupError):
+        return True
+    except (OSError, ValueError, IndexError):
+        return False
 
 
 def _pidfd_syscall(number: int, *args) -> int:
@@ -46,14 +63,18 @@ def group_members(pgid: int) -> list[int]:
     for path in Path('/proc').iterdir():
         if not path.name.isdigit():
             continue
+        identity = None
         try:
             fields = (path / 'stat').read_text().rsplit(')', 1)[1].split()
+            identity = fields[19]
             if int(fields[2]) == pgid and fields[0] not in ('Z', 'X'):
                 members.append(int(path.name))
         except (FileNotFoundError, ProcessLookupError):
             continue
         except (OSError, ValueError, IndexError) as e:
-            raise ProcessInspectionError('cannot enumerate process group') from e
+            if _departed(path, identity):
+                continue
+            raise ProcessInspectionError('cannot enumerate process group: pid=' + path.name) from e
     return members
 
 
@@ -68,10 +89,12 @@ def execution_members(execution_id: str, not_before: str) -> list[int]:
     for path in Path('/proc').iterdir():
         if not path.name.isdigit():
             continue
+        identity = None
         try:
             if path.stat().st_uid != os.getuid():
                 continue
             fields = (path / 'stat').read_text().rsplit(')', 1)[1].split()
+            identity = fields[19]
             # A stage marker cannot have been inherited before its leader was
             # born. This also excludes pre-existing privileged login helpers.
             if fields[0] in ('Z', 'X') or int(fields[19]) < int(not_before):
@@ -81,7 +104,9 @@ def execution_members(execution_id: str, not_before: str) -> list[int]:
         except (FileNotFoundError, ProcessLookupError):
             continue
         except (OSError, ValueError, IndexError) as e:
-            raise ProcessInspectionError('cannot enumerate execution children') from e
+            if _departed(path, identity):
+                continue
+            raise ProcessInspectionError('cannot enumerate execution children: pid=' + path.name) from e
     return members
 
 
@@ -124,8 +149,10 @@ def stop_orphan(pgid, project: str, grace: float = 10.0, *,
         try:
             return _stop_orphan_once(pgid, project, grace,
                                      expected_start=expected_start, execution_id=execution_id)
-        except (OSError, ProcessInspectionError):
+        except (OSError, ProcessInspectionError) as exc:
             if time.monotonic() >= deadline:
+                logging.getLogger(__name__).warning('Unconfirmed stage cleanup pgid=%s: %s (%s)',
+                                                   pgid, exc, exc.__cause__ or type(exc).__name__)
                 return False
             time.sleep(0.1)
 

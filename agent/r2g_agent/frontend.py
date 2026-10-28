@@ -125,7 +125,8 @@ def readmem_references(text: str) -> list[tuple[str, str]]:
 
 
 def fix_sources(copied: list[Path], src_root: Path, rtl_root: Path,
-                only: set[Path] | None = None) -> tuple[list[Path], list[dict], list[dict]]:
+                only: set[Path] | None = None,
+                original_paths: dict[Path, Path] | None = None) -> tuple[list[Path], list[dict], list[dict]]:
     """Apply the two create-time recipes to the project's copies.
 
     `copied` are the project copies, laid out under `rtl_root` as the originals
@@ -147,7 +148,7 @@ def fix_sources(copied: list[Path], src_root: Path, rtl_root: Path,
         # Source fixes change only path literals. Preserve non-UTF-8 comment
         # bytes and CRLF instead of decoding with replacement/universal lines.
         text = f.read_bytes().decode("utf-8", errors="surrogateescape")
-        orig = src_root / f.relative_to(rtl_root)
+        orig = (original_paths or {}).get(f, src_root / f.relative_to(rtl_root))
         new = text
         for ref, how in dict.fromkeys(readmem_references(text)):
             if not ref or Path(ref).is_absolute() and Path(ref).is_file():

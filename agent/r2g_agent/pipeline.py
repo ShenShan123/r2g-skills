@@ -24,6 +24,7 @@ import os
 import re
 import signal
 import shutil
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -247,6 +248,18 @@ class Pipeline:
         if jid in self._cancel or self.store.cancel_requested(jid) or self.store.deletion('job', jid) or not self.store.job(jid):
             raise Cancelled()
 
+    def _check_cancel_while_running(self, jid: str) -> None:
+        # Losing a bookkeeping read must not kill a healthy EDA subprocess.
+        # The stage deadline still bounds execution, and the next poll retries
+        # the cancellation check. In-memory cancellation remains immediate.
+        if jid in self._cancel:
+            raise Cancelled()
+        try:
+            self._check_cancel(jid)
+        except sqlite3.OperationalError as exc:
+            if 'locked' not in str(exc).lower() and 'busy' not in str(exc).lower():
+                raise
+
     # -- internals ------------------------------------------------------------
     def _watch_job(self, jid: str) -> None:
         # never let one transient error (a busy database on a loaded machine)
@@ -408,7 +421,7 @@ class Pipeline:
                                                        "execution_id": invocation})
                 deadline = time.monotonic() + (timeout or self.stage_timeout)
                 while True:
-                    self._check_cancel(jid)
+                    self._check_cancel_while_running(jid)
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
                         rc = 124
@@ -419,6 +432,7 @@ class Pipeline:
                     except subprocess.TimeoutExpired:
                         pass
             finally:
+                prior_error = sys.exc_info()[0]
                 # Includes setsid() children in the bounded EDA checker. A TERM
                 # delivered to the shell alone is not proof that tools stopped.
                 stopped = stop_execution(p.pid, str(project), self.stop_grace,
@@ -426,6 +440,12 @@ class Pipeline:
                 with self._lock:
                     self._procs.pop((jid, name), None)
                 if not stopped:
+                    with (logdir / 'process_cleanup.jsonl').open('a') as diagnostic:
+                        diagnostic.write(json.dumps({'stage': stage, 'pgid': p.pid,
+                                                     'execution_id': invocation,
+                                                     'returncode': p.poll(),
+                                                     'prior_error': prior_error.__name__ if prior_error else None,
+                                                     'timestamp': time.time()}) + '\n')
                     raise StopUnconfirmed("无法确认子进程已停止，未标记为已取消")
                 p.wait()
         self._check_cancel(jid)

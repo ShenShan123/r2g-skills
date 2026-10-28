@@ -84,6 +84,12 @@ def find_hdl(src: Path) -> list[Path]:
     return sorted(p for p in src.rglob("*") if p.suffix.lower() in HDL_SUFFIXES and p.is_file())
 
 
+def _flow_path(relative: Path) -> Path:
+    """ORFS make lists cannot represent whitespace; keep source bytes intact."""
+    return Path(*(re.sub(r'\s+', '_', part) + '_' + hashlib.sha256(part.encode()).hexdigest()[:8]
+                  if re.search(r'\s', part) else part for part in relative.parts))
+
+
 def _strip_param_overrides(text: str) -> str:
     """Remove every `#( ... )` group, parentheses balanced.
 
@@ -170,31 +176,45 @@ def create(src: Path, project: Path, platform: str, top: str | None = None,
     (project / "constraints").mkdir(parents=True)
     rtl.mkdir()
     copied = []
+    original_paths = {}
+    path_map = {}
     base = src if src.is_dir() else src.parent
     for f in files:
-        dst = rtl / f.relative_to(base)
+        relative = f.relative_to(base)
+        dst = rtl / _flow_path(relative)
+        if dst in original_paths and original_paths[dst] != f:
+            raise ValueError('source staging path collision')
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(f, dst)
+        if _flow_path(relative) != relative:
+            # Preserve literal include paths as auxiliary copies as well.
+            original_copy = rtl / relative
+            original_copy.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(f, original_copy)
+            path_map[str(relative)] = str(_flow_path(relative))
         copied.append(dst)
+        original_paths[dst] = f
     if listed:
-        keep = {rtl / f.relative_to(base) for f in listed}
-        sources, fixes, missing = frontend.fix_sources(copied, base, rtl, only=keep)
+        keep = {rtl / _flow_path(f.relative_to(base)) for f in listed}
+        sources, fixes, missing = frontend.fix_sources(copied, base, rtl, only=keep, original_paths=original_paths)
         for f in listed:
             if f.suffix.lower() not in (".v", ".sv", ".vh", ".svh"):
                 fixes.append({"recipe": "header_not_source", "file": str(f.relative_to(base)),
                               "detail": "清单把 %s 文件列成了源文件，它不是可单独编译的 Verilog，不编译" % f.suffix})
     else:
-        sources, fixes, missing = frontend.fix_sources(copied, base, rtl)
+        sources, fixes, missing = frontend.fix_sources(copied, base, rtl, original_paths=original_paths)
     if not sources:
         raise ValueError("no compilable Verilog/SystemVerilog source under %s" % src)
-    inc_dirs = sorted({str(p.parent) for p in copied} |
-                      {str(rtl / d) for d in manifest.get("include_dirs") or [] if (rtl / d).is_dir()})
+    inc_dirs = sorted({str(p.parent) for p in copied} | ({str(rtl)} if path_map else set()) |
+                      {str(rtl / _flow_path(Path(d))) for d in manifest.get("include_dirs") or []
+                       if (rtl / _flow_path(Path(d))).is_dir()})
     meta = {
         "design_name": name or top,
         "top": top,
         "top_source": how,
         "platform": platform,
         "source": str(src),
+        "source_path_map": path_map,
         "files": [str(p) for p in sources],
         "include_dirs": inc_dirs,
         "defines": manifest.get("defines") or [],
