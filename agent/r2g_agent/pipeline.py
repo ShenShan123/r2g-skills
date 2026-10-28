@@ -33,7 +33,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import diagnosis, frontend, housekeeping, knowledge, profile
+from . import backend, diagnosis, frontend, housekeeping, knowledge, profile
 from . import project as proj
 from .jobs import CANCELLED, CANCELLING, FAILED, PASSED, RUNNING, JobStore
 from .processes import stop_orphan as stop_execution
@@ -641,6 +641,23 @@ class Pipeline:
             self._ok(jid, name, "flow", "自动修复：%s，从 floorplan 重跑" % fx["detail"], fx)
             rc = self._sh(jid, name, "flow", ["bash", S + "/flow/run_orfs.sh", str(pdir), platform], pdir,
                           env={"FROM_STAGE": "floorplan", "NUM_CORES": str(cores), "OMP_NUM_THREADS": str(cores)})
+        # Compatibility retries are selected from this run's actual diagnostic,
+        # once per mechanism. They retain the original RTL and signoff criteria.
+        for _ in range(2):
+            if rc == 0:
+                break
+            repair = backend.candidate(pdir, platform, self._run_log_text(latest_run(pdir)))
+            if repair is None:
+                break
+            backend.apply(pdir, repair)
+            meta = json.loads((pdir / 'metadata.json').read_text())
+            meta.setdefault('flow_fixes', []).append(repair)
+            (pdir / 'metadata.json').write_text(json.dumps(meta, indent=2))
+            self.store.set_design(jid, name, detail={'flow_fixes': meta['flow_fixes']})
+            self._ok(jid, name, 'flow', repair['detail'], repair)
+            rc = self._sh(jid, name, 'flow', ['bash', S + '/flow/run_orfs.sh', str(pdir), platform],
+                          pdir, env={'FROM_STAGE': repair['from_stage'], 'NUM_CORES': str(cores),
+                                     'OMP_NUM_THREADS': str(cores)})
         if rc != 0 and self._repair_failed_route(jid, name, pdir, platform, cores):
             rc = 0
         if rc != 0:

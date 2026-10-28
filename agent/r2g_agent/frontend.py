@@ -55,7 +55,7 @@ _PARAM_RE = r'\b(?:parameter|localparam)\b[^;=]*?\b%s\s*=\s*"([^"]*)"'
 
 def _strip_comments(text: str) -> str:
     text = re.sub(r"/\*.*?\*/", lambda m: re.sub(r"[^\n]", " ", m.group(0)), text, flags=re.S)
-    return re.sub(r"//[^\n]*", "", text)
+    return re.sub(r"//[^\n]*", lambda m: ' ' * len(m[0]), text)
 
 
 _UNIT_RE = re.compile(r"^\s*(?:module|macromodule|package|interface|primitive|program|class|config)\b", re.M)
@@ -124,6 +124,65 @@ def readmem_references(text: str) -> list[tuple[str, str]]:
     return out
 
 
+def memory_parameter_references(texts: dict[Path, str]) -> dict[Path, list[tuple[str, str, int, int]]]:
+    """Follow named parameter bindings to real $readmem consumers.
+
+    A parent often supplies the filename while the RAM's default is empty.
+    Follow identifier forwarding too; relocate only strings on that binding
+    chain, not arbitrary parameters which happen to have the same name.
+    """
+    modules = {}
+    for path, text in texts.items():
+        for match in re.finditer(r'\bmodule\s+([\w$]+)\b(.*?)\bendmodule\b', _strip_comments(text), re.S):
+            modules.setdefault(match[1], []).append((path, match[2], match.start(2)))
+    # Duplicate module definitions are ambiguous; leave them to the compiler.
+    modules = {name: entries[0] for name, entries in modules.items() if len(entries) == 1}
+    needed = {name: {m[1] for m in _READMEM_RE.finditer(body) if m[2] is None}
+              for name, (_, body, _) in modules.items()}
+    bindings = []
+    if modules:
+        instance = re.compile(r'(?<![\w$])(' + '|'.join(re.escape(n) for n in modules) + r')\s*#\s*\(')
+        for parent, (path, body, offset) in modules.items():
+            for match in instance.finditer(body):
+                depth, quoted, escaped, end = 1, False, False, match.end()
+                for end in range(match.end(), len(body)):
+                    char = body[end]
+                    if quoted:
+                        if escaped: escaped = False
+                        elif char == '\\': escaped = True
+                        elif char == '"': quoted = False
+                    elif char == '"': quoted = True
+                    elif char == '(': depth += 1
+                    elif char == ')':
+                        depth -= 1
+                        if not depth: break
+                if depth: continue
+                for arg in re.finditer(r'\.([\w$]+)\s*\(\s*("([^"\n]*)"|[A-Za-z_][\w$]*)\s*\)', body[match.end():end]):
+                    span = (offset + match.end() + arg.start(3), offset + match.end() + arg.end(3)) if arg[3] is not None else None
+                    bindings.append((parent, match[1], arg[1], arg[2], arg[3], path, span))
+    while True:
+        changed = False
+        for parent, child, parameter, argument, literal, _, _ in bindings:
+            if parameter in needed[child] and literal is None and argument not in needed[parent]:
+                needed[parent].add(argument)
+                changed = True
+        if not changed: break
+    result = {path: [] for path in texts}
+    for path, text in texts.items():
+        for match in _READMEM_RE.finditer(_strip_comments(text)):
+            if match[2] is not None:
+                result[path].append((match[2], 'literal', *match.span(2)))
+    for name, (path, body, offset) in modules.items():
+        for parameter in needed[name]:
+            match = re.search(_PARAM_RE % re.escape(parameter), body)
+            if match:
+                result[path].append((match[1], 'memory parameter %s.%s' % (name, parameter), offset + match.start(1), offset + match.end(1)))
+    for parent, child, parameter, _, literal, path, span in bindings:
+        if parameter in needed[child] and literal is not None:
+            result[path].append((literal, 'memory binding %s.%s' % (child, parameter), *span))
+    return result
+
+
 def fix_sources(copied: list[Path], src_root: Path, rtl_root: Path,
                 only: set[Path] | None = None,
                 original_paths: dict[Path, Path] | None = None) -> tuple[list[Path], list[dict], list[dict]]:
@@ -144,13 +203,16 @@ def fix_sources(copied: list[Path], src_root: Path, rtl_root: Path,
         fixes.append({"recipe": "header_not_source", "file": str(h.relative_to(rtl_root)),
                       "detail": "被其他文件 `include 的头文件，不再单独编译" if h in inc
                       else "没有模块声明的代码片段（只能粘贴进模块里用），不单独编译"})
+    texts = {f: f.read_bytes().decode('utf-8', errors='surrogateescape') for f in sources}
+    parameter_refs = memory_parameter_references(texts)
     for f in sources:
         # Source fixes change only path literals. Preserve non-UTF-8 comment
         # bytes and CRLF instead of decoding with replacement/universal lines.
-        text = f.read_bytes().decode("utf-8", errors="surrogateescape")
+        text = texts[f]
         orig = (original_paths or {}).get(f, src_root / f.relative_to(rtl_root))
         new = text
-        for ref, how in dict.fromkeys(readmem_references(text)):
+        edits = {}
+        for ref, how, start, end in dict.fromkeys(parameter_refs[f]):
             if not ref or Path(ref).is_absolute() and Path(ref).is_file():
                 continue
             found, via = _resolve_data(ref, orig, src_root)
@@ -163,11 +225,13 @@ def fix_sources(copied: list[Path], src_root: Path, rtl_root: Path,
             if not dst.is_file():
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 dst.write_bytes(found.read_bytes())
-            new = new.replace('"%s"' % ref, '"%s"' % dst)
+            edits[(start, end)] = str(dst)
             fixes.append({"recipe": "readmem_absolute", "file": str(f.relative_to(rtl_root)),
                           "detail": "$readmem 路径 %s（%s）→ %s（%s）"
                           % (ref, how, dst.relative_to(rtl_root), {"relative": "按相对路径找到",
                              "unique_basename": "按唯一文件名找到"}.get(via, via))})
+        for (start, end), replacement in sorted(edits.items(), reverse=True):
+            new = new[:start] + replacement + new[end:]
         if new != text:
             f.write_bytes(new.encode("utf-8", errors="surrogateescape"))
     return sources, fixes, missing

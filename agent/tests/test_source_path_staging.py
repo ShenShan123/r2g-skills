@@ -22,6 +22,36 @@ def test_whitespace_source_directory_keeps_bytes_and_compilation_roles(tmp_path)
     assert (folder / 'dut.v').read_bytes() == rtl
 
 
+def test_whitespace_filename_keeps_hdl_suffix(tmp_path):
+    source = tmp_path / 'input'
+    source.mkdir()
+    text = 'module dut(input a, output b); assign b=a; endmodule\n'
+    (source / 'dut - Copy.v').write_text(text)
+    (source / 'design.json').write_text(json.dumps({'top': 'dut', 'files': ['dut - Copy.v']}))
+    meta = project.create(source, tmp_path / 'project', 'sky130hd')
+    assert len(meta['files']) == 1
+    staged = Path(meta['files'][0])
+    assert staged.suffix == '.v' and not any(c.isspace() for c in str(staged))
+    assert staged.read_text() == text
+
+
+def test_parent_memory_parameter_is_relocated_but_unrelated_string_is_not(tmp_path):
+    source = tmp_path / 'input'
+    source.mkdir()
+    (source / 'coeff.hex').write_text('0a\n')
+    (source / 'dut.v').write_text('''module mem #(parameter FILE="")();
+reg [7:0] words[0:0]; initial $readmemh(FILE,words); endmodule
+module other #(parameter FILE="")(); endmodule
+module wrapper #(parameter ROM="coeff.hex")(); mem #(.FILE(ROM)) m(); endmodule
+module dut; wrapper w(); other #(.FILE("coeff.hex")) o(); endmodule
+''')
+    meta = project.create(source, tmp_path / 'project', 'nangate45', top='dut')
+    text = Path(meta['files'][0]).read_text()
+    assert 'parameter ROM="' + str(tmp_path / 'project/rtl/coeff.hex') + '"' in text
+    # Literal replacement must not accidentally rewrite an unrelated parameter.
+    assert 'other #(.FILE("coeff.hex"))' in text
+
+
 def test_whitespace_directory_resolves_original_relative_rom_with_duplicates(tmp_path):
     source = tmp_path / 'input'
     folder = source / 'core files'

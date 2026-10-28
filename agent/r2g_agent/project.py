@@ -86,8 +86,14 @@ def find_hdl(src: Path) -> list[Path]:
 
 def _flow_path(relative: Path) -> Path:
     """ORFS make lists cannot represent whitespace; keep source bytes intact."""
-    return Path(*(re.sub(r'\s+', '_', part) + '_' + hashlib.sha256(part.encode()).hexdigest()[:8]
-                  if re.search(r'\s', part) else part for part in relative.parts))
+    def component(part):
+        if not re.search(r'\s', part):
+            return part
+        safe = Path(re.sub(r'\s+', '_', part))
+        # Preserve the HDL suffix: discovery and synthesis use it to decide
+        # whether this is a compilable source rather than an auxiliary file.
+        return safe.stem + '_' + hashlib.sha256(part.encode()).hexdigest()[:8] + safe.suffix
+    return Path(*(component(part) for part in relative.parts))
 
 
 def _strip_param_overrides(text: str) -> str:

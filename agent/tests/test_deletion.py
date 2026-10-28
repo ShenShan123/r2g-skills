@@ -55,6 +55,7 @@ def test_removes_all_owned_outputs_preserves_input_other_job_and_symlink_target(
 def test_confirmation_required_at_http_boundary(monkeypatch):
     from fastapi.testclient import TestClient
     from r2g_agent import server, config
+    monkeypatch.setattr(housekeeping, 'orfs_flow_dir', lambda: None)
     server.STATE.clear(); server.init_runtime(config.Config(ingest=False))
     monkeypatch.setattr(server.STATE['deletions'], 'start', lambda: None)
     client = TestClient(server.app)

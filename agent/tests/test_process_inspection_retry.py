@@ -55,3 +55,28 @@ def test_unreadable_environment_rechecks_same_process_identity(monkeypatch, exit
     else:
         with pytest.raises(processes.ProcessInspectionError):
             processes.execution_members('marker', '0')
+
+
+@pytest.mark.parametrize('privileged', [True, False])
+def test_protected_login_needs_root_owned_daemon_ancestry(monkeypatch, privileged):
+    from types import SimpleNamespace
+    entries = {700: (701, 300), 701: (702, 250), 702: (1, 100)}
+    def read(path, *args, **kwargs):
+        pid = int(path.parent.name)
+        parent, start = entries[pid]
+        if path.name == 'comm': return 'sshd\n'
+        if path.name == 'status': return 'Uid:\t' + '\t'.join(['0' if privileged else '1017'] * 4) + '\n'
+        if path.name == 'stat':
+            fields = ['S', str(parent), '700'] + ['0'] * 16 + [str(start)]
+            return str(pid) + ' (sshd) ' + ' '.join(fields)
+        raise AssertionError(str(path))
+    monkeypatch.setattr(processes.os, 'getuid', lambda: 1017)
+    monkeypatch.setattr(Path, 'iterdir', lambda p: iter([Path('/proc/700')]))
+    monkeypatch.setattr(Path, 'stat', lambda *a: SimpleNamespace(st_uid=1017))
+    monkeypatch.setattr(Path, 'read_text', read)
+    monkeypatch.setattr(Path, 'read_bytes', lambda *a: (_ for _ in ()).throw(PermissionError('protected login')))
+    if privileged:
+        assert processes.execution_members('stage', '200') == []
+    else:
+        with pytest.raises(processes.ProcessInspectionError):
+            processes.execution_members('stage', '200')

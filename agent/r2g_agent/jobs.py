@@ -14,6 +14,7 @@ import sqlite3
 import threading
 import time
 import uuid
+import weakref
 from pathlib import Path
 
 from .paths import r2g_home
@@ -52,7 +53,14 @@ CANCELLING = "cancelling"
 class JobStore:
     def __init__(self, path: Path | None = None):
         self.path = Path(path or r2g_home() / "jobs.sqlite")
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
+        # Keep WAL open for the lifetime of the store. Closing the last
+        # connection after every read causes repeated exclusive checkpoint /
+        # recovery races under concurrent HTTP and pipeline traffic.
+        self._db = sqlite3.connect(self.path, timeout=60, isolation_level=None,
+                                   check_same_thread=False)
+        self._db.row_factory = sqlite3.Row
+        weakref.finalize(self, self._db.close)
         with self._conn() as c:
             # WAL is a property of the database FILE: set it once here. Setting it
             # on every connection needs an exclusive lock and, with several
@@ -60,12 +68,18 @@ class JobStore:
             # locked" -- which killed the job watcher and left a finished job
             # "running" with no dataset (2026-10-22).
             c.execute("PRAGMA journal_mode=WAL")
+            # WAL commits stay atomic; sync at checkpoints rather than forcing
+            # a disk flush for every progress event on a shared HDD. This has
+            # the same power-loss boundary as the application's JSON receipts.
+            c.execute("PRAGMA synchronous=NORMAL")
             c.executescript(SCHEMA)
 
     @contextlib.contextmanager
     def _conn(self, write: bool = False):
-        """One connection per call, CLOSED on exit (sqlite3's own context manager
-        only commits, so every call used to leak a connection until GC).
+        """Serialize access to one durable, persistent connection per store.
+
+        This avoids last-connection WAL checkpoints racing new readers on slow
+        disks, and prevents threads from interleaving one write transaction.
 
         A write is one BEGIN IMMEDIATE transaction, and taking that lock is retried
         while the file stays locked past busy_timeout: a bookkeeping write that lost
@@ -74,9 +88,8 @@ class JobStore:
         locked" (2026-10-24). Once IMMEDIATE holds the lock, set_design's
         read-modify-write cannot hit the snapshot-upgrade BUSY that busy_timeout
         never retries."""
-        c = sqlite3.connect(self.path, timeout=60, isolation_level=None)
-        c.row_factory = sqlite3.Row
-        try:
+        with self._lock:
+            c = self._db
             c.execute("PRAGMA busy_timeout=60000")
             if write:
                 for attempt in range(_LOCK_RETRIES):
@@ -95,8 +108,6 @@ class JobStore:
                 c.execute("COMMIT")
             else:
                 yield c
-        finally:
-            c.close()
 
     # -- jobs -------------------------------------------------------------
     def create_job(self, title: str, spec: dict, designs: list[dict]) -> str:

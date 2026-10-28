@@ -30,6 +30,40 @@ def _departed(path: Path, start: str | None = None) -> bool:
         return False
 
 
+def _privileged_login_branch(path: Path, not_before: str) -> bool:
+    """Prove that an unreadable sshd belongs to a separate root-owned login.
+
+    OpenSSH drops to the login uid but keeps its environment non-dumpable.
+    Its root-owned monitor and pre-existing root sshd daemon cannot descend
+    from this unprivileged EDA stage. A name alone, an orphan, or an ordinary
+    unreadable same-uid child provides no such proof and remains unresolved.
+    """
+    if os.getuid() == 0:
+        return False
+    try:
+        if (path / 'comm').read_text().strip() != 'sshd':
+            return False
+        fields = (path / 'stat').read_text().rsplit(')', 1)[1].split()
+        parent = int(fields[1])
+        for _ in range(8):
+            if parent <= 1:
+                return False
+            entry = Path('/proc') / str(parent)
+            if (entry / 'comm').read_text().strip() != 'sshd':
+                return False
+            status = (entry / 'status').read_text().splitlines()
+            uids = next(line.split()[1:] for line in status if line.startswith('Uid:'))
+            if len(uids) != 4 or any(int(uid) != 0 for uid in uids):
+                return False
+            fields = (entry / 'stat').read_text().rsplit(')', 1)[1].split()
+            if int(fields[19]) < int(not_before):
+                return True
+            parent = int(fields[1])
+    except (OSError, ValueError, IndexError, StopIteration):
+        return False
+    return False
+
+
 def _pidfd_syscall(number: int, *args) -> int:
     # Some Python builds omit pidfd wrappers even on a supporting Linux kernel.
     # These syscall numbers are shared by the supported 64-bit Linux ABIs.
@@ -105,6 +139,8 @@ def execution_members(execution_id: str, not_before: str) -> list[int]:
             continue
         except (OSError, ValueError, IndexError) as e:
             if _departed(path, identity):
+                continue
+            if isinstance(e, PermissionError) and _privileged_login_branch(path, not_before):
                 continue
             raise ProcessInspectionError('cannot enumerate execution children: pid=' + path.name) from e
     return members

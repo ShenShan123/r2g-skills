@@ -13,6 +13,8 @@ import json
 import sqlite3
 import time
 import uuid
+import threading
+import weakref
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -30,10 +32,16 @@ def system_prompt() -> str:
 class SessionStore:
     def __init__(self, path: Path | None = None):
         self.path = Path(path or r2g_home() / "sessions.sqlite")
+        self._lock = threading.RLock()
+        self._db = sqlite3.connect(self.path, timeout=30, isolation_level=None,
+                                   check_same_thread=False)
+        self._db.row_factory = sqlite3.Row
+        weakref.finalize(self, self._db.close)
         with self._c() as c:
             # Streaming token ledgers and read-only cost monitors run together.
             # A long reader must not block every streamed model write.
             c.execute('PRAGMA journal_mode=WAL')
+            c.execute('PRAGMA synchronous=NORMAL')
             c.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, created REAL, "
                       "updated REAL, title TEXT, messages TEXT)")
             c.execute('CREATE TABLE IF NOT EXISTS session_deletions (id TEXT PRIMARY KEY)')
@@ -43,12 +51,8 @@ class SessionStore:
 
     @contextmanager
     def _c(self):
-        c = sqlite3.connect(self.path, timeout=30, isolation_level=None)
-        c.row_factory = sqlite3.Row
-        try:
-            yield c
-        finally:
-            c.close()
+        with self._lock:
+            yield self._db
 
     def exists(self, sid: str) -> bool:
         with self._c() as c:

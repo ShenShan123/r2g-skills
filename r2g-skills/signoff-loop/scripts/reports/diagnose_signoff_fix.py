@@ -1510,7 +1510,15 @@ def _attach_port_feedthrough_evidence(plan: dict, project: Path, cfg: dict) -> N
     if definition is None and (project/'6_final.def').is_file():definition=project/'6_final.def'
     if definition is None:return
     mapped=definition.with_name('6_final.v')
-    if not mapped.is_file():return
+    if not mapped.is_file():
+        # run_orfs also keeps a final/ DEF snapshot without a Verilog copy.
+        # Use the mapped netlist from the SAME run only when its results/ DEF
+        # is byte-identical, so topology evidence cannot cross backend runs.
+        results=definition.parent.parent/'results'
+        companion=results/'6_final.def'
+        if not companion.is_file() or companion.read_bytes()!=definition.read_bytes():return
+        mapped=results/'6_final.v'
+        if not mapped.is_file():return
     try:
         extract=str(Path(__file__).resolve().parents[1]/'extract')
         if extract not in sys.path:sys.path.insert(0,extract)

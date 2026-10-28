@@ -57,3 +57,24 @@ def test_special_supply_inouts_are_separate_from_signal_ports(tmp_path):
     assert evidence['ignored_special_supply_ports']==2 and evidence['shared_top_port_nets']==1
     definition.write_text(text.replace('+ SPECIAL',''))
     assert diagnose(definition,netlist) is None
+
+
+@pytest.mark.parametrize('same_definition', [True, False])
+def test_final_snapshot_uses_only_its_identical_same_run_netlist(tmp_path, monkeypatch, same_definition):
+    import diagnose_signoff_fix as planner
+    definition, netlist = subject(tmp_path)
+    project = tmp_path / 'project'
+    run = project / 'backend/RUN_one'
+    (run / 'final').mkdir(parents=True)
+    (run / 'results').mkdir()
+    snapshot = run / 'final/6_final.def'
+    snapshot.write_bytes(definition.read_bytes())
+    (run / 'results/6_final.def').write_bytes(definition.read_bytes() + (b'' if same_definition else b'\n# other layout'))
+    (run / 'results/6_final.v').write_bytes(netlist.read_bytes())
+    monkeypatch.setattr(planner, '_latest_final_def', lambda _: snapshot)
+    plan = {'strategies': [planner._feedthrough_recipe()]}
+    planner._attach_port_feedthrough_evidence(plan, project, {'PLATFORM': 'sky130hd'})
+    evidence = plan['strategies'][0].get('port_feedthrough_evidence')
+    assert bool(evidence) == same_definition
+    if evidence:
+        assert evidence['mapped_netlist_path'] == str(run / 'results/6_final.v')

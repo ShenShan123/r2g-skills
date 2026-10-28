@@ -7349,10 +7349,32 @@ pilot failed every one of these designs too, so none is a regression.
 `$readmemh` image missing from the repository (7; deleting the `$readmem`
 changes ROM contents); multiple conflicting drivers in RTL (1); FPGA-fabric
 designs needing ~537 GB at floorplan (4); GPL-0301 at 111% utilization under a
-frozen die (the tighter period grows the cells, and the die may not move); SPEF
-net names with a negative bus index `cfgfb[\-1]` that OpenSTA rejects (1; the
-fix is a rename, with more risk than one design is worth); ports `CLK` and `clk`
+  frozen die (the tighter period grows the cells, and the die may not move); ports `CLK` and `clk`
 differing only by case, which CDL cannot distinguish (1).
+
+### Agent replay plumbing and compatibility fixes (2026-10-28)
+
+- A parameterized RAM can receive its filename from a parent module. Relocate
+  the original data through named parameter bindings and forwarded parameters;
+  resolving only the RAM's empty default misses the real file. Preserve source
+  bytes outside the filename literals and retain original asset hashes.
+- Whitespace staging aliases must preserve `.v`/`.sv` suffixes. Hashing after
+  the suffix silently turns a selected source into an unrecognized auxiliary
+  file. Keep the original compilation list and do not compile included headers.
+- A `final/6_final.def` snapshot may have no adjacent mapped Verilog. The port
+  feedthrough geometry gate may use `results/6_final.v` from the same backend
+  run only after checking that its DEF is byte-identical to the snapshot.
+  Missing evidence must continue to block automatic recipe application.
+- `[ERROR RSZ-0074] Failed to build tree from global routes` admits one bounded
+  retry with `SKIP_INCREMENTAL_REPAIR=1` from route. This skips an optional
+  optimizer; it keeps detailed routing, antenna checks and ordinary DRC/LVS.
+- Negative-index SPEF spelling such as `cfgfb[\-1]` has a reversible encoding
+  repair, rather than renaming the circuit net. The
+  `orfs_hooks/spef_name_encoding.tcl` hook keeps real extraction and `read_spef`;
+  `normalize_spef_names.py` verifies every decoded token, retains original SPEF,
+  and records hashes. The Agent retries finish only after an actual STA-1670
+  SPEF parse error and a witnessed negative-index token; other errors remain
+  failures. RC values and signoff criteria are unchanged.
 
 ### Method notes that changed decisions
 
