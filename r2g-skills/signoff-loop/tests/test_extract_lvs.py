@@ -630,3 +630,36 @@ def test_fallback_never_overrides_a_klayout_verdict(tmp_path):
     _fallback(proj, "mismatch", "Final result: Netlists do not match.")
     r = _run_script(proj, tmp_path / "lvs.json")
     assert r["status"] == "clean" and "lvs_by" not in r
+
+
+_MATCH_LOG_THEN_PARTIAL_LVSDB = """\
+KLayout 0.30.7
+Writing LVS database: 6_lvs.lvsdb ..
+ERROR: ../../../src/db/db/dbLayoutVsSchematicWriter.cc,151,i != net2id.end ()
+ERROR: RuntimeError: Internal error: dbLayoutVsSchematicWriter.cc:151 i != net2id.end () was not true in LayoutVsSchematic::write in Executable::cleanup
+CONGRATULATIONS! Netlists match.
+"""
+
+
+def _partial_lvsdb(proj):
+    (proj / "lvs" / "6_lvs.lvsdb").write_text(
+        "#%lvsdb-klayout\n  circuit(() 12 mismatch)\n  circuit(() 13 mismatch)\n", encoding="utf-8")
+
+
+def test_match_log_with_writer_crash_and_partial_lvsdb_is_crash(tmp_path):
+    """nangate45 C02220: the compare printed 'Netlists match', the lvsdb writer then
+    asserted and left stray mismatch entries. That is no verdict -> 'crash', not 'fail'."""
+    proj = _make_project(tmp_path, log_6_lvs=_MATCH_LOG_THEN_PARTIAL_LVSDB)
+    _partial_lvsdb(proj)
+    r = _run_script(proj, tmp_path / "lvs.json")
+    assert r["status"] == "crash" and r["reason"] == "lvs_writer_crash_partial_lvsdb", r
+
+
+def test_netgen_fallback_decides_a_partial_lvsdb_crash(tmp_path):
+    proj = _make_project(tmp_path, log_6_lvs=_MATCH_LOG_THEN_PARTIAL_LVSDB)
+    _partial_lvsdb(proj)
+    (proj / "lvs" / "lvs_run.log").write_text("make lvs\n", encoding="utf-8")
+    _fallback(proj, "match", "Final result: Circuits match uniquely.")
+    r = _run_script(proj, tmp_path / "lvs.json")
+    assert r["status"] == "clean" and r["lvs_by"] == "netgen_fallback", r
+    assert r["klayout_status"] == "crash"

@@ -961,6 +961,15 @@ auto-draining its escalations (`_mark_clean` → `escalations.resolve_for_design
   Across the current corpus the 14 fails resolve to **2 real defects (both wb2axip) + 12 symmetric
   residuals**; treat a `symmetric_matcher` label as a believed-clean residual, not a hard fail.
 
+#### KLayout printed "Netlists match", then the lvsdb writer crashed — partial lvsdb read as a fail (2026-10-28)
+
+- **Symptom (nangate45 C02220):** `6_lvs.log` has `dbLayoutVsSchematicWriter.cc,151,i != net2id.end ()` and then
+  `CONGRATULATIONS! Netlists match.`; `lvs.json` reads `fail`/`symmetric_matcher` (8 entries from the partial
+  lvsdb) although `lvs/netgen_fallback.json` (run because run_lvs.sh saw the crash) says `Circuits match uniquely`.
+- **Fix:** `extract_lvs.py` classifies log `match` + writer crash + mismatching lvsdb as `crash`
+  (`lvs_writer_crash_partial_lvsdb`), the mirror of `lvs_writer_crash_after_match`; the fresh Netgen fallback then
+  supplies the verdict with `lvs_by: netgen_fallback`.
+
 #### Lifecycle gate failed closed on a transiently locked knowledge store (2026-10-28)
 
 - **Symptom:** `WARNING: recipe-lifecycle filter unavailable (OperationalError: database is locked)` then

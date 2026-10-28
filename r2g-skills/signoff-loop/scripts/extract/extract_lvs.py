@@ -418,6 +418,13 @@ def main():
     if log_status == 'mismatch' and lvsdb_matched and log_info.get('crash'):
         status = 'crash'
         result_reason = 'lvs_writer_crash_after_match'
+    elif log_status == 'match' and mismatch_count > 0 and log_info.get('crash'):
+        # The mirror image (nangate45 C02220, 2026-10-28): the compare printed
+        # "Netlists match", then the same writer assert left a PARTIAL lvsdb whose
+        # stray entries read as mismatches. Neither artifact is a verdict, so this
+        # is a crash; run_lvs.sh already ran the Netgen fallback for it.
+        status = 'crash'
+        result_reason = 'lvs_writer_crash_partial_lvsdb'
     elif log_status == 'mismatch':
         status = 'fail'
     elif log_status == 'match' and mismatch_count <= 0:
