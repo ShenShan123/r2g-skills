@@ -20,7 +20,10 @@ def _layout(root):
         data=definition.read_bytes()
         return data.decode(errors='replace'), {'def':str(definition),'def_sha256':hashlib.sha256(data).hexdigest()}
     odb=root/'3_place.odb'
-    executable=os.environ.get('R2G_LAYOUT_OPENROAD') or shutil.which('openroad')
+    # OPENROAD_EXE is the pinned binary _env.sh exports; a bare PATH lookup can
+    # find a host openroad too old for this ODB (memlab203 /usr/bin/openroad).
+    executable=next((c for c in (os.environ.get('R2G_LAYOUT_OPENROAD'),os.environ.get('OPENROAD_EXE'),
+                                 shutil.which('openroad')) if c and os.access(c,os.X_OK)),None)
     if not odb.is_file() or not executable:return None
     # Tcl braced paths are literal except backslash-newline; reject unusual paths
     # rather than interpolate an executable Tcl expression from a project path.
@@ -62,7 +65,10 @@ def candidate(project, route, cfg):
         if not log.is_file():log=root.parent/'flow.log'
         if not log.is_file():continue
         text=log.read_text(errors='replace')
-        if not re.search(r'\[ERROR GRT-(?:0116|0118|0232)\]|stubborn tiles',text,re.I):continue
+        # GRT congestion, or the route stage's own re-legalization running out of
+        # room (DPL-0036 after the GRT resizer grew a fixed die to ~97%; SKY130
+        # C00435, historically cleared by the same 1.25 linear expansion).
+        if not re.search(r'\[ERROR (?:GRT-(?:0116|0118|0232)|DPL-0036)\]|stubborn tiles',text,re.I):continue
         layout=_layout(root)
         if layout is None:continue
         body,layout_evidence=layout

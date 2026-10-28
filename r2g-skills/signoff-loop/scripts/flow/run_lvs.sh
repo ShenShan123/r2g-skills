@@ -294,6 +294,19 @@ LVS_GDS_SHA_PRE="$(sha256sum "$GDS_FILE" 2>/dev/null | cut -d' ' -f1 || true)"
 LVS_DIGEST_SET_PRE="$(_r2g_lvs_digest_set)"
 LVS_STARTED_AT="$(date -Iseconds)"
 
+# Stale schematic (failure-patterns "LVS against a pre-repair CDL", 2026-10-28).
+# The schematic is DERIVED from the layout under test: 6_final.cdl <- cdl.tcl
+# <- 6_final.odb. No ORFS clean target removes it (clean_route/clean_finish
+# drop 6_*.odb/.v/.def/.gds only), and the restage above stamps every 6_* file
+# at one epoch, so after a repair re-ran route the PRE-repair 6_final.cdl reads
+# as up to date beside the new 6_final.v and make only re-cats it. KLayout then
+# grades the repaired GDS against the old netlist: nangate45 C00392/C00838/
+# C00458 read 174/7/10349 mismatches and all three match against a CDL written
+# from their own 6_final.odb. Drop the derived files so the netlist always comes
+# from the layout being graded; none of them is in the frozen digest set.
+rm -f "$RESULTS_DIR/6_final.cdl" "$RESULTS_DIR/6_lvs.lvsdb" \
+      "${ORFS_OBJECTS_DIR:-/nonexistent}/6_final_concat.cdl"
+
 # RMD2-P0-01 (2026-07-24, extended from run_drc.sh): the old
 # `setsid timeout … make lvs | tee` had BOTH known liveness defects — `setsid`
 # made timeout a group leader and silently disabled its tree-kill (#40), and

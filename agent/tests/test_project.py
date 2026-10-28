@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,32 @@ NETLIST = """module top(clk, d, q);
   wire x;
 endmodule
 """
+
+
+def test_include_with_non_hdl_suffix_is_staged(tmp_path):
+    # SKY130 C03281 (HardFloat): the include target is `.vi`, listed in the
+    # manifest and `include'd by fNToRecFN.v. Staging by HDL suffix dropped it
+    # and synthesis failed on "Can't open include file".
+    src = tmp_path / "src"
+    s = src / "extras" / "HardFloat-1" / "source"
+    s.mkdir(parents=True)
+    (s / "HardFloat_localFuncs.vi").write_text('`include "nested.inc"\nfunction f; endfunction\n')
+    (s / "nested.inc").write_text("// nested\n")
+    (s / "fNToRecFN.v").write_text('module fNToRecFN(input a, output y);\n'
+                                   '`include "HardFloat_localFuncs.vi"\nassign y = a;\nendmodule\n')
+    (src / "extras" / "COPYING.txt").write_text("license\n")
+    (src / "design.json").write_text(json.dumps({
+        "top": "fNToRecFN",
+        "files": ["extras/HardFloat-1/source/HardFloat_localFuncs.vi",
+                  "extras/HardFloat-1/source/fNToRecFN.v"],
+        "include_dirs": ["extras/HardFloat-1/source"]}))
+    meta = project.create(src, tmp_path / "p", "nangate45")
+    rtl = tmp_path / "p" / "rtl" / "extras" / "HardFloat-1" / "source"
+    assert (rtl / "HardFloat_localFuncs.vi").is_file()
+    assert (rtl / "nested.inc").is_file()       # transitive include
+    assert not (tmp_path / "p" / "rtl" / "extras" / "COPYING.txt").exists()
+    # staged for `include only, never compiled on its own
+    assert meta["files"] == [str(rtl / "fNToRecFN.v")]
 
 
 def test_synth_size_flat_and_hierarchical(tmp_path):

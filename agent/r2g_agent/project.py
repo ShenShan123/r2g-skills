@@ -84,6 +84,37 @@ def find_hdl(src: Path) -> list[Path]:
     return sorted(p for p in src.rglob("*") if p.suffix.lower() in HDL_SUFFIXES and p.is_file())
 
 
+def find_includes(src: Path, files: list[Path], listed: list[Path]) -> list[Path]:
+    """Upload files the sources need that `find_hdl` does not pick up by suffix.
+
+    An `include target can carry any suffix (`HardFloat_localFuncs.vi`,
+    `.inc`, `.h`); staging only HDL suffixes dropped it from the project and
+    synthesis stopped on "Can't open include file". Returns every manifest-listed
+    file plus every file an `include names, resolved by path suffix as
+    `frontend.included_headers` matches them, transitively. These are copied as
+    auxiliary files only: `fix_sources` still compiles HDL suffixes alone."""
+    if src.is_file():
+        return []
+    pool = [p for p in src.rglob("*") if p.is_file() and ".git" not in p.relative_to(src).parts]
+    have = set(files)
+    extra = [p for p in listed if p not in have]
+    have.update(extra)
+    todo = list(have)
+    while todo:
+        f = todo.pop()
+        text = _strip_comments(f.read_text(errors="replace"))
+        for name in frontend._INCLUDE_RE.findall(text):
+            parts = Path(name).parts
+            if any(h.parts[-len(parts):] == parts for h in have):
+                continue
+            hits = [p for p in pool if p.parts[-len(parts):] == parts]
+            if len(hits) == 1:
+                extra.append(hits[0])
+                have.add(hits[0])
+                todo.append(hits[0])
+    return sorted(set(extra))
+
+
 def _flow_path(relative: Path) -> Path:
     """ORFS make lists cannot represent whitespace; keep source bytes intact."""
     def component(part):
@@ -185,7 +216,7 @@ def create(src: Path, project: Path, platform: str, top: str | None = None,
     original_paths = {}
     path_map = {}
     base = src if src.is_dir() else src.parent
-    for f in files:
+    for f in files + find_includes(src, files, listed):
         relative = f.relative_to(base)
         dst = rtl / _flow_path(relative)
         if dst in original_paths and original_paths[dst] != f:

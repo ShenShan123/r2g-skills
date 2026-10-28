@@ -59,6 +59,10 @@ def test_generated_taps_only_and_terminal_congestion(tmp_path):
     for code in ('0116','0232'):
         (tmp_path/'flow.log').write_text('[ERROR GRT-'+code+'] congestion\n')
         assert candidate(tmp_path,{'status':'fail'},cfg)
+    (tmp_path/'flow.log').write_text('[ERROR DPL-0036] Detailed placement failed inside DPL.\n')
+    assert candidate(tmp_path,{'status':'fail'},cfg)
+    (tmp_path/'flow.log').write_text('[WARNING DPL-0036] noise\n')
+    assert candidate(tmp_path,{'status':'fail'},cfg) is None
 
 def test_route_index_uses_ingester_key(tmp_path):
     import json

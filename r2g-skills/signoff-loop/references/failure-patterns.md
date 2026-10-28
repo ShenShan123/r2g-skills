@@ -183,6 +183,13 @@ strategy_ids: [route_relief]
   `ab_trials` **win** (arm B route_relief routes; arm A control times out). DIE_AREA-sized designs
   (no `CORE_UTILIZATION` knob, e.g. `secworks_sha512_w_mem`) are an honest residual here — the v2
   lever is to enlarge `DIE_AREA`.
+- **DIE_AREA-sized sky130hd designs now get `fixed_area_route_relief`** (`scripts/reports/fixed_area_recipe.py`):
+  a 1.25 linear die expansion keeping the core margins, rerun from floorplan, bound to retained failure
+  evidence. Since 2026-10-28 that evidence includes `[ERROR DPL-0036]` — the GRT-stage resizer growing a
+  fixed die past legal capacity (SKY130 C00435: 54 µm die at 96.7 % → `DIE_AREA 0 0 68 68`, the exact
+  historical `area_expansion_1.25` delta). Without that evidence the selector printed STOP "enlarge
+  DIE_AREA manually". The layout read prefers the pinned `OPENROAD_EXE` over a PATH lookup (memlab203's
+  PATH openroad predates the ORFS build), and an unreadable layout still yields no candidate.
 - **Still honest residual:** a design that demands more routing than 5 metal layers can supply at
   *any* utilization (confirmed `aes_encipher_block`: GPL routability stays > 1.0) does NOT clear
   with route_relief — `route_relief` steps to the util floor and stops (no deck relaxation). Tell
@@ -940,6 +947,23 @@ auto-draining its escalations (`_mark_clean` → `escalations.resolve_for_design
   (needs review) from net balance + device agreement — see "LVS symmetric-matcher residual" below.
   Across the current corpus the 14 fails resolve to **2 real defects (both wb2axip) + 12 symmetric
   residuals**; treat a `symmetric_matcher` label as a believed-clean residual, not a hard fail.
+
+#### LVS against a pre-repair CDL — false mismatch after a signoff repair (2026-10-28)
+
+- **Symptom (nangate45, KLayout):** DRC clean after an antenna/DRC repair that re-ran route, then
+  `Netlists don't match` classed `real_connectivity` (VDD/VSS and ordinary logic cells "not matching
+  any net"). C00392 174, C00838 7, C00458 10349 mismatches in the API repair-cost cohort.
+- **Tell:** `lvs/lvs_run.log` starts with `cat .../6_final.cdl ... > 6_final_concat.cdl` and has no
+  `cdl.tcl` line; the instance set of `lvs/6_final.cdl` equals the PRE-repair `6_final.def` exactly and
+  lacks the repair's inserted diodes / re-buffered cells.
+- **Root cause:** `6_final.cdl` is derived from `6_final.odb` but no ORFS clean target removes it, and
+  `_restage_for_signoff.sh` stamps every `6_*` result at one epoch, so the leftover CDL reads as up to
+  date beside the new `6_final.v` and make only re-cats it. Accepted designs passed by luck: this deck
+  ignores ANTENNA cells, so a repair that leaves the logic netlist unchanged still matches.
+- **Fix:** `run_lvs.sh` deletes `6_final.cdl`, `6_lvs.lvsdb` and `objects/6_final_concat.cdl` before the
+  checker (none is in the frozen digest set), so the schematic always comes from the graded layout.
+  All three designs match against a CDL written from their own `6_final.odb`. Netgen (sky130) reads the
+  regenerated `6_final.v` and is not affected. Test: `tests/test_run_lvs_stale_cdl.py`.
 
 ### LVS Skipped (No Rules)
 - **Symptom:** `LVS is not supported on this platform` or `lvs_result.json` shows status "skipped"
@@ -2426,6 +2450,13 @@ The `copy RTL files` step in `tools/setup_rtl_designs.py` only copies `.v` files
   - Concatenate its contents inline at the top of the first RTL file, or
   - Drop the design from the batch and fetch the original header.
 - `tools/fix_orfs_failures.py` creates empty stub headers as a placeholder, but empty stubs only help if the includes are guards; designs that rely on `` `define MACRO `` macros inside the header will still fail synthesis.
+
+**Agent staging dropped non-HDL include targets (2026-10-28, SKY130 C03281).** `project.create`
+copied only `.v/.sv/.vh/.svh`, so `` `include "HardFloat_localFuncs.vi" `` (listed in `design.json` and
+present in the upload) never reached `rtl/` and synthesis stopped on `Can't open include file`. Staging
+now also copies every manifest-listed file and every upload file an `` `include `` names (path-suffix
+match, transitive) as auxiliary files; only HDL suffixes are compiled
+(`agent/r2g_agent/project.py::find_includes`, test `test_include_with_non_hdl_suffix_is_staged`).
 
 **Loop auto-handling (2026-06-28, `incomplete_missing_header`).** When the harvested RTL is
 genuinely incomplete (the header was never shipped upstream — `setup_rtl_designs.py` already marks
