@@ -863,8 +863,10 @@ class Pipeline:
 
     @staticmethod
     def _run_log_text(run: Path | None) -> str:
+        # flow.log as well: it tees every stage, and a run that stopped before
+        # run_orfs.sh archived logs/ (nangate45 C01347) has nothing else.
         parts = []
-        for p in (sorted((run / "logs").rglob("*.log")) if run else []):
+        for p in ([run / "flow.log"] + sorted((run / "logs").rglob("*.log")) if run else []):
             try:
                 parts.append(p.read_text(errors="replace"))
             except OSError:

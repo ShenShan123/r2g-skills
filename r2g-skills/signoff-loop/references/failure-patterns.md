@@ -544,6 +544,18 @@ The setup-time floor above only protects projects materialized by `mk_sky130_pro
 - **Tests:** `tests/test_pdn0185_recovery.py` (10 — detector, width parse, floor/no-op-when-wide, recover+retry+learnable-row, honest residual).
 - **Follow-up (open):** teach `setup_rtl_designs.py` to apply the same PDN floor at re-point time so the loop rarely has to self-heal it (the setup path and the loop path should size sky130 dies identically).
 
+#### Sub-variant: the PPL-0024 die correction never ran — place failure aborted the archive (2026-10-28)
+
+- **Symptom (nangate45 C01347, 4150 pins):** `PPL-0024 ... (4150) exceeds ... (4136)` at `3_2_place_iop`, job
+  `failed` at `flow`, no `ppl_die_correction` in `metadata.json` `flow_fixes`; the failing `backend/RUN_*`
+  holds only `flow.log` + stage logs — no `results/`, `logs/` or `run-meta.json`.
+- **Root cause:** run_orfs.sh's place HINT probe `LATEST_PLACE_TMP=$(ls -t .../3_4_place_resized.tmp.log | head -1)`
+  fails when the place stage dies before 3_4; under `set -euo pipefail` that exits the script before the
+  archive. The agent reads `RUN/logs/*.log` for in-flow recoveries, found nothing, and gave up.
+- **Fix:** `|| true` on the probe (`tests/test_run_orfs_failure_hints.py` runs the real HINT block for every
+  stage under the script's own options), and the agent's `_run_log_text` also reads the run's `flow.log`.
+  On C01347's own log the correction grows the die 581 → 589 µm.
+
 #### Sub-variant: sky130 high-pin-count floorplan (PPL-0024 on the PDN floor die)
 
 - **Symptom (sky130hd/sky130hs):** `[ERROR PPL-0024] Number of IO pins (1521) exceeds maximum number of available positions (718). Increase the die perimeter from 800.00um to 2068.56um.` → `Stage 'place' failed (exit 2)`. No final GDS/ODB; the campaign driver records `residual_class=orfs_incomplete` (now `orfs_place` after the `extract_ppa.py` fail-stage fix).

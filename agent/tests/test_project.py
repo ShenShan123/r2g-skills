@@ -171,3 +171,14 @@ def test_manifest_compiles_only_the_listed_sources(tmp_path):
     (src / "design.json").write_text(_j.dumps({"top": "top", "files": ["rtl/gone.v"]}))
     with pytest.raises(ValueError):
         project.create(src, tmp_path / "q", "nangate45")
+
+
+def test_run_log_text_reads_flow_log_without_archived_logs(tmp_path):
+    # nangate45 C01347: the place stage failed before run_orfs.sh archived
+    # logs/, so the PPL-0024 refusal lived only in the run's flow.log.
+    from r2g_agent.pipeline import Pipeline
+    run = tmp_path / "RUN_A"
+    run.mkdir()
+    (run / "flow.log").write_text("[ERROR PPL-0024] Number of IO pins (4150) exceeds maximum number of "
+                                  "available positions (4136). Increase the die perimeter from 2324.00um to 2324.00um.\n")
+    assert "PPL-0024" in Pipeline._run_log_text(run)

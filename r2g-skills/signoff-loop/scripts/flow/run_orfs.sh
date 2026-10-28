@@ -647,7 +647,10 @@ if [[ $MAKE_STATUS -ne 0 ]]; then
       GP_STUCK=1
     fi
     if [[ -n "${FLOW_DIR:-}" ]]; then
-      LATEST_PLACE_TMP=$(ls -t "$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT/3_4_place_resized.tmp.log" 2>/dev/null | head -1)
+      # `|| true`: under pipefail a missing log (failure before 3_4) made this
+      # assignment exit the script before the archive below (nangate45 C01347:
+      # no logs/ archived, so the agent's PPL-0024 die correction never ran).
+      LATEST_PLACE_TMP=$(ls -t "$FLOW_DIR/logs/$PLATFORM/$DESIGN_NAME/$FLOW_VARIANT/3_4_place_resized.tmp.log" 2>/dev/null | head -1 || true)
       if [[ -f "$LATEST_PLACE_TMP" ]] && tail -200 "$LATEST_PLACE_TMP" 2>/dev/null | grep -qE "Iteration\s+\|.*Resized.*Buffers.*Nets repaired"; then
         RESIZED_STUCK=1
       fi
