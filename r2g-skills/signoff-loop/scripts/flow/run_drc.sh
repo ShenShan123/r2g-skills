@@ -97,6 +97,18 @@ echo "Running DRC for design: $DESIGN_NAME (variant: $FLOW_VARIANT)"
 echo "Platform: $PLATFORM"
 echo "GDS: $GDS_FILE"
 
+# GF180 uses the foundry table interface, not the ORFS in_gds/report_file interface.
+if [[ "$PLATFORM" == "gf180" ]]; then
+  if [[ "$DRC_MODE" != "full" ]]; then
+    echo "ERROR: GF180 baseline DRC requires its complete baseline rule scope" >&2
+    exit 1
+  fi
+  exec python3 "$(dirname "${BASH_SOURCE[0]}")/gf180_drc.py" \
+    --project "$PROJECT_DIR" --gds "$GDS_FILE" --top "$DESIGN_NAME" \
+    --pdk "${PDK_ROOT:?GF180 PDK_ROOT is required}" --klayout "${KLAYOUT_CMD:?KLayout is required}" \
+    --timeout "${DRC_TIMEOUT:-21600}"
+fi
+
 # ── Resolve the platform DRC deck (RMD-P0-01: the checker-only path needs it
 # explicitly — there is no `make drc` left to resolve it for us). Order:
 # KLAYOUT_DRC_FILE from the platform config.mk, then platform drc/*.lydrc, then

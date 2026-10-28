@@ -42,6 +42,7 @@ import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 # Deliberate sibling deck borrows (NEVER generic): sky130hs uses the sky130hd
 # deck — pure sky130A process-layer geometry, shared tech (failure-patterns #32).
@@ -90,6 +91,7 @@ def find_flow_dir(explicit: str | None = None,
 # `_which` fallbacks consult it.
 _SIGNOFF_ENV_KEYS = ("ORFS_ROOT", "FLOW_DIR", "PDK_ROOT", "MAGIC_EXE",
                      "NETGEN_EXE", "KLAYOUT_CMD", "OPENROAD_EXE", "YOSYS_EXE",
+                     "TRACK_OPTION", "METAL_OPTION", "KVALUE", "POWER_OPTION", "CORNER",
                      "PATH")
 
 
@@ -146,6 +148,25 @@ def _resolve(raw: str | None, platform_dir: str, platform: str) -> str | None:
         return None
     out = raw.replace("$(PLATFORM_DIR)", platform_dir).replace("$(PLATFORM)", platform)
     return out if "$(" not in out else None  # unresolvable make var (e.g. $(PRIMARY_VT_TAG))
+
+
+def _gf180_path(cfg: str, key: str, platform_dir: str, env: dict) -> str | None:
+    """Resolve GF180's scalar defaults and corner indirection without running make."""
+    values = dict(re.findall(r"^\s*(?:export\s+)?(\w+)\s*\??=\s*([^\n]+)", cfg, re.M))
+    for option in ("TRACK_OPTION", "METAL_OPTION", "KVALUE", "POWER_OPTION", "CORNER"):
+        if option in env:
+            values[option] = env[option]
+    values["PLATFORM_DIR"] = platform_dir
+    value = values.get(key, "")
+    for _ in range(12):
+        previous = value
+        value = re.sub(r"\$\((\w+)\)", lambda m: values.get(m[1], m[0]).strip(), value)
+        value = re.sub(r"\$\(abspath\s+([^()]+)\)", lambda m: os.path.abspath(m[1]), value)
+        if value == previous:
+            break
+    # LIB_FILES appends optional libraries; inspect the actual primary corner.
+    first = value.split()[0] if value.split() else ""
+    return first if first and "$(" not in first else None
 
 
 def find_antenna_diodes(sc_lef_text: str) -> list[tuple[str, float | None]]:
@@ -269,14 +290,25 @@ def probe_platform(flow_dir: str, platform: str,
         if os.path.isfile(cand):
             deck, source = cand, f"sibling:{sib} (failure-patterns #32)"
     caps["drc_deck"] = {"ok": bool(deck), "path": deck, "source": source}
+    if platform == "gf180":
+        from gf180_drc import reviewed_rules, NOTE
+        rule_dir = Path(e.get("PDK_ROOT") or "") / "gf180mcuC/libs.tech/klayout/drc/rule_decks"
+        try:
+            raw, _ = reviewed_rules(rule_dir)
+            caps["drc_deck"] = {"ok": True, "path": str(rule_dir),
+                                "source": "reviewed GF180 baseline tables",
+                                "sha256": hashlib.sha256(raw).hexdigest(), "scope": NOTE}
+        except (OSError, ValueError, KeyError) as exc:
+            caps["drc_deck"] = {"ok": False, "path": str(rule_dir), "hint": str(exc)}
 
     # --- LVS path (mirrors fix_signoff.sh's engine selection) ------------
-    if platform.startswith("sky130"):
+    if platform.startswith("sky130") or platform == "gf180":
         magic = _which("MAGIC_EXE", "magic", env=e)
         netgen = _which("NETGEN_EXE", "netgen", "netgen-lvs", env=e)
         pdk = e.get("PDK_ROOT") or ""
-        tech = os.path.join(pdk, "sky130A", "libs.tech", "magic", "sky130A.tech")
-        setup = os.path.join(pdk, "sky130A", "libs.tech", "netgen", "sky130A_setup.tcl")
+        pdk_name = "gf180mcuC" if platform == "gf180" else "sky130A"
+        tech = os.path.join(pdk, pdk_name, "libs.tech", "magic", pdk_name + ".tech")
+        setup = os.path.join(pdk, pdk_name, "libs.tech", "netgen", pdk_name + "_setup.tcl")
         ok = bool(magic and netgen and os.path.isfile(tech) and os.path.isfile(setup))
         caps["lvs"] = {"ok": ok, "engine": "netgen",
                        "magic": magic, "netgen": netgen,
@@ -308,6 +340,9 @@ def probe_platform(flow_dir: str, platform: str,
     # --- antenna model + usable diode ------------------------------------
     tech_lef = _resolve(_mk_var(cfg, "TECH_LEF"), pdir, platform)
     sc_lef = _resolve(_mk_var(cfg, "SC_LEF"), pdir, platform)
+    if platform == "gf180":
+        tech_lef = _gf180_path(cfg, "TECH_LEF", pdir, e)
+        sc_lef = _gf180_path(cfg, "SC_LEF", pdir, e)
     tech_text, sc_text = _read(tech_lef), _read(sc_lef)
     # Any per-layer antenna-ratio family rule counts as "model present":
     # nangate45 (patched) uses ANTENNAAREARATIO; sky130 ships
@@ -335,8 +370,12 @@ def probe_platform(flow_dir: str, platform: str,
 
     # --- RCX rules + timing libs -----------------------------------------
     rcx = _resolve(_mk_var(cfg, "RCX_RULES"), pdir, platform)
+    if platform == "gf180":
+        rcx = _gf180_path(cfg, "RCX_RULES", pdir, e)
     caps["rcx"] = {"ok": bool(rcx and os.path.isfile(rcx)), "path": rcx}
     lib = _resolve(_mk_var(cfg, "LIB_FILES"), pdir, platform)
+    if platform == "gf180":
+        lib = _gf180_path(cfg, "LIB_FILES", pdir, e)
     if not (lib and os.path.isfile(lib)):
         found = sorted(glob.glob(os.path.join(pdir, "lib", "*.lib*")))
         lib = found[0] if found else None

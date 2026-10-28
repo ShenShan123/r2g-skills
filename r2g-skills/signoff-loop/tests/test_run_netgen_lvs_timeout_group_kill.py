@@ -43,6 +43,7 @@ OK_MAGIC = """#!/usr/bin/env bash
 tcl="${@: -1}"
 out=$(sed -n 's/^ext2spice -o "\\(.*\\)"$/\\1/p' "$tcl")
 printf '.subckt demo a b\\nX0 a b sky130_fd_sc_hd__inv_1\\n.ends\\n' > "$out"
+printf 'port "a" 1\\nport "b" 2\\n' > demo.ext
 echo "magic extraction ok"
 """
 

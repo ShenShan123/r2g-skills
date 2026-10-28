@@ -507,6 +507,13 @@ python3 "$(dirname "${BASH_SOURCE[0]}")/normalize_diode_spice.py" "$EXTRACTED_SP
 python3 "$(dirname "${BASH_SOURCE[0]}")/restore_ext_ports.py" \
   "$EXTRACTED_SPICE" "$DESIGN_NAME" "$EXT_SCRATCH/$DESIGN_NAME.ext" || true
 
+# Netgen can retain the Verilog escape on negative-index scalar ports while
+# reading their SPICE names without it. Encode both comparison inputs with a
+# recorded, invertible mapping. No port or device is removed or equated away.
+# Distinct case-alias ports also require independent Magic merge-class evidence.
+python3 "$(dirname "${BASH_SOURCE[0]}")/normalize_lvs_identifiers.py" \
+  "$EXTRACTED_SPICE" "$VERILOG_NETLIST" "$DESIGN_NAME" --ext "$EXT_SCRATCH/$DESIGN_NAME.ext"
+
 # Step 2: Run Netgen LVS comparison
 NETGEN_LOG="$LVS_DIR/netgen_lvs.log"
 NETGEN_REPORT="$LVS_DIR/netgen_lvs.rpt"
@@ -517,6 +524,9 @@ echo "Step 2: Running Netgen LVS comparison..."
 # OpenLane-style sky130 LVS pattern: readnet the cell library into circuit2 so its
 # black-box cells expand to transistors, matching the layout-extracted circuit1.
 NETGEN_TCL="$LVS_DIR/run_netgen_lvs.tcl"
+# Netgen treats any logfile argument containing "nolog" as a logging-disable
+# flag, including an ordinary project path such as panologic-g2. Resolve the
+# setup path before changing directory, then use a fixed report basename.
 if [[ -n "$SC_SPICE" ]]; then
   # Load the std-cell SPICE library FIRST so circuit2 already holds the transistor-level
   # cell definitions; then read the Verilog netlist INTO THE SAME circuit handle so its
@@ -527,17 +537,24 @@ if [[ -n "$SC_SPICE" ]]; then
 set circuit1 [readnet spice "$EXTRACTED_SPICE"]
 set circuit2 [readnet spice "$SC_SPICE"]
 readnet verilog "$VERILOG_NETLIST" \$circuit2
-lvs "\$circuit1 $DESIGN_NAME" "\$circuit2 $DESIGN_NAME" "$NETGEN_SETUP" "$NETGEN_REPORT"
+set lvs_setup [file normalize "$NETGEN_SETUP"]
+cd "$LVS_DIR"
+lvs "\$circuit1 $DESIGN_NAME" "\$circuit2 $DESIGN_NAME" \$lvs_setup "netgen_lvs.rpt"
 NETGEN_EOF
 else
   cat > "$NETGEN_TCL" << NETGEN_EOF
 set circuit1 [readnet spice "$EXTRACTED_SPICE"]
 set circuit2 [readnet verilog "$VERILOG_NETLIST"]
-lvs "\$circuit1 $DESIGN_NAME" "\$circuit2 $DESIGN_NAME" "$NETGEN_SETUP" "$NETGEN_REPORT"
+set lvs_setup [file normalize "$NETGEN_SETUP"]
+cd "$LVS_DIR"
+lvs "\$circuit1 $DESIGN_NAME" "\$circuit2 $DESIGN_NAME" \$lvs_setup "netgen_lvs.rpt"
 NETGEN_EOF
 fi
 
 LVS_STATUS=0
+# Netgen may fail before opening its report; never reuse a prior invocation's
+# report when deciding this run's verdict.
+rm -f "$NETGEN_LOG" "$NETGEN_REPORT"
 set +e
 # MAGIC_EXT_USE_GDS=1 tells the PDK's sky130A_setup.tcl that circuit1 came from a
 # GDS extraction, activating its `ignore class` rules for layout-only cells
@@ -551,17 +568,10 @@ set -e
 tail -n 25 "$NETGEN_LOG" 2>/dev/null || true
 
 # Parse results
-LVS_RESULT="unknown"
-MATCH_STATUS="unknown"
-if [[ -f "$NETGEN_LOG" ]]; then
-  if grep -qi "Circuits match uniquely\|Result: PASS\|netlists match" "$NETGEN_LOG" 2>/dev/null; then
-    LVS_RESULT="clean"
-    MATCH_STATUS="match"
-  elif grep -qi "mismatch\|NOT match\|Result: FAIL\|netlists do not match" "$NETGEN_LOG" 2>/dev/null; then
-    LVS_RESULT="mismatch"
-    MATCH_STATUS="mismatch"
-  fi
-fi
+IFS=$'\t' read -r LVS_RESULT MATCH_STATUS < <(
+  python3 "$(dirname "${BASH_SOURCE[0]}")/netgen_final_verdict.py" \
+    --log "$NETGEN_LOG" --report "$NETGEN_REPORT" --returncode "$LVS_STATUS"
+)
 
 # A "match" that Netgen reached by flattening a subcell it could not pair is
 # not a match. It prints the fact and then matches anyway:
@@ -581,7 +591,8 @@ fi
 _LVS_FLATTENED=0
 for _f in "$NETGEN_LOG" "$NETGEN_REPORT"; do
   [[ -f "$_f" ]] || continue
-  _n=$(grep -c "Flattening unmatched subcell" "$_f" 2>/dev/null || echo 0)
+  _n=$(grep -c "Flattening unmatched subcell" "$_f" 2>/dev/null || true)
+  _n=${_n:-0}
   (( _n > _LVS_FLATTENED )) && _LVS_FLATTENED=$_n
 done
 if [[ "$MATCH_STATUS" == "match" && "$_LVS_FLATTENED" -gt 0 ]]; then
@@ -590,17 +601,6 @@ if [[ "$MATCH_STATUS" == "match" && "$_LVS_FLATTENED" -gt 0 ]]; then
   grep -h "Flattening unmatched subcell" "$NETGEN_LOG" "$NETGEN_REPORT" 2>/dev/null | sed 's/^/         /' >&2
   LVS_RESULT="mismatch"
   MATCH_STATUS="flattened_unmatched_subcell"
-fi
-
-# Also check the report file
-if [[ -f "$NETGEN_REPORT" ]] && [[ "$MATCH_STATUS" == "unknown" ]]; then
-  if grep -qi "Circuits match\|PASS" "$NETGEN_REPORT" 2>/dev/null; then
-    LVS_RESULT="clean"
-    MATCH_STATUS="match"
-  elif grep -qi "mismatch\|FAIL" "$NETGEN_REPORT" 2>/dev/null; then
-    LVS_RESULT="mismatch"
-    MATCH_STATUS="mismatch"
-  fi
 fi
 
 # Classify the mismatch so the knowledge store's symptom index can key repair

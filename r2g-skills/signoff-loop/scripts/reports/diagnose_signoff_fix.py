@@ -1010,6 +1010,26 @@ def build_plan(drc: dict, lvs: dict, cfg: dict, *, check: str = "drc",
     return _rank_plan_strategies(plan, recipes)
 
 
+def _lifecycle_allows_auto_apply(plan: dict, strategy: dict) -> bool:
+    """Use the same freshly annotated lifecycle evidence at selection and apply.
+
+    An untested learner row must not disable an existing cold-start strategy.
+    Explicit promotion requirements and unreadable stores still fail closed;
+    preregistered attempts remain attempts, never lifecycle promotions.
+    """
+    if plan.get("lifecycle_gate_ok") is False:
+        return False
+    candidate_attempt = strategy.get("candidate_attempt_authorized") is True
+    status = strategy.get("lifecycle_status")
+    if (strategy.get("requires_ab_promotion") and status != "promoted"
+            and not candidate_attempt):
+        return False
+    return not (status in _LIVE_BLOCKED_LIFECYCLE
+                and not candidate_attempt
+                and not (status == "candidate"
+                         and strategy.get("lifecycle_untested_candidate")))
+
+
 def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | None:
     """The strategy a LIVE run should auto-apply: the first auto_apply strategy,
     SKIPPING an A/B-gated recipe until its exact lifecycle row is promoted, unless
@@ -1046,18 +1066,7 @@ def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | Non
     for s in strategies:
         if not s.get("auto_apply"):
             continue
-        candidate_attempt = s.get("candidate_attempt_authorized") is True
-        if (s.get("requires_ab_promotion")
-                and s.get("lifecycle_status") != "promoted"
-                and not candidate_attempt):
-            continue        # candidate recipe: live only after promotion or frozen authorization
-        # A/B-unvalidated ('candidate') or A/B-demoted ('shadow') recipe is inert by
-        # default.  A candidate can execute only through the separately frozen,
-        # effect-fingerprint-bound attempt policy; shadow evidence always blocks it.
-        if (s.get("lifecycle_status") in _LIVE_BLOCKED_LIFECYCLE
-                and not candidate_attempt
-                and not (s.get("lifecycle_status") == "candidate"
-                         and s.get("lifecycle_untested_candidate"))):
+        if not _lifecycle_allows_auto_apply(plan, s):
             continue
         if s.get("dead_here") and not retry_dead:
             continue        # repeatedly failed on THIS design+check, never cleared
@@ -1459,6 +1468,60 @@ def _edge_localized_pin_strategy(project: Path, drc: dict, cfg: dict) -> dict | 
     }
 
 
+def _pin_pdn_clearance_strategy(project: Path, drc: dict, cfg: dict) -> dict | None:
+    """Offer only a witnessed pin/PDN gap; normal A/B promotion is required."""
+    if (cfg.get('PLATFORM')!='sky130hd' or drc.get('status')=='clean'
+            or cfg.get('PRE_IO_PLACEMENT_TCL') or cfg.get('PLACE_PINS_ARGS')
+            or cfg.get('IO_PLACER_H') not in (None,'','met3')):
+        return None
+    final_def=_latest_final_def(project)
+    if final_def is None and (project/'6_final.def').is_file():final_def=project/'6_final.def'
+    report=next((p for p in (project/'drc/6_drc.lyrdb',project/'6_drc.lyrdb') if p.is_file()),None)
+    if final_def is None or report is None:return None
+    try:
+        extract_dir=str(Path(__file__).resolve().parents[1]/'extract')
+        if extract_dir not in sys.path:sys.path.insert(0,extract_dir)
+        from diagnose_pin_pdn_spacing import diagnose
+        evidence=diagnose(final_def,report)
+    except (OSError,ValueError):
+        return None
+    if evidence is None:return None
+    hook=Path(__file__).resolve().parents[1]/'flow/orfs_hooks/pin_pdn_clearance.tcl'
+    default_keys={'DESIGN_NAME','PLATFORM','SDC_FILE','VERILOG_FILES','VERILOG_INCLUDE_DIRS',
+                  'VERILOG_DEFINES','ABC_AREA','SYNTH_MEMORY_MAX_BITS','CORE_UTILIZATION',
+                  'DIE_AREA','CORE_AREA','IO_PLACER_H'}
+    return {
+        'id':'pin_pdn_clearance',
+        'rationale':('Current met3 DRC markers coincide with edge IO pins within '
+                     'the PDN spacing limit. Exclude only PDN obstacle intervals '
+                     'during IO placement, preserving RTL, die, PDN and constraints.'),
+        'config_edits':{'PRE_IO_PLACEMENT_TCL':str(hook)},
+        'rerun_from':'floorplan','recheck':'drc','auto_apply':True,
+        'requires_ab_promotion':True,'geometry_evidence':evidence,
+        'pdn_scope_evidence':{'generated_default_pdn_config':not bool(set(cfg)-default_keys)},
+    }
+
+
+def _attach_port_feedthrough_evidence(plan: dict, project: Path, cfg: dict) -> None:
+    if cfg.get('PLATFORM')!='sky130hd':return
+    strategies=[s for s in plan.get('strategies',[]) if s.get('id')=='lvs_port_feedthrough_buffer']
+    if not strategies:return
+    definition=_latest_final_def(project)
+    if definition is None and (project/'6_final.def').is_file():definition=project/'6_final.def'
+    if definition is None:return
+    mapped=definition.with_name('6_final.v')
+    if not mapped.is_file():return
+    try:
+        extract=str(Path(__file__).resolve().parents[1]/'extract')
+        if extract not in sys.path:sys.path.insert(0,extract)
+        from diagnose_port_feedthroughs import diagnose
+        evidence=diagnose(definition,mapped)
+    except (OSError,ValueError):
+        return
+    if evidence is not None:
+        for strategy in strategies:strategy['port_feedthrough_evidence']=evidence
+
+
 def _drc_geometry_inputs(project: Path, cfg: dict):
     """(lyrdb, def, [lef]) for a geometric DRC diagnosis, or (None, None, []).
 
@@ -1756,6 +1819,8 @@ def load_indexed_recipe(*, check: str, platform: str, design_class: str,
     elif check == "timing":
         report = tcheck or {}
         vclass = report.get("tier")
+    elif check == "route":
+        check, vclass, report = "orfs_stage", "route", {}
     else:
         vclass, report = None, {}
     sig = symptom.canonical_signature(check, vclass,
@@ -1870,6 +1935,10 @@ def _annotate_live_gates(plan: dict, proj: Path, *, check: str,
         if sid:
             import recipe_lifecycle
             for s in plan_strats:
+                # Preserve the pre-existing static route_relief contract. Only
+                # new route recipes enter lifecycle gating in this change.
+                if check == "route" and s["id"] == "route_relief" and not s.get("requires_ab_promotion"):
+                    continue
                 statuses[s["id"]] = _lifecycle_status_with_scope_transfer(
                     conn, recipe_lifecycle, symptom_id=sid,
                     design_class=design_class, platform=platform, strategy=s)
@@ -1936,6 +2005,29 @@ def _prioritize_geometric_pin_strategy(plan: dict) -> None:
     if plan.get("lifecycle_gate_ok") is not True or plan.get("action_policy_gate_ok") is False:
         return
     strategies = plan.get("strategies", [])
+    # Prefer the narrower, physically validated PDN interval exclusion over
+    # static whole-side rebalancing. This changes ordering, never authorization.
+    for index, strategy in enumerate(strategies):
+        evidence = strategy.get("geometry_evidence") or {}
+        count = evidence.get("marker_count")
+        covered = evidence.get("covered_marker_count")
+        hook = Path(__file__).resolve().parents[1] / 'flow/orfs_hooks/pin_pdn_clearance.tcl'
+        if (context.get('platform') == 'sky130hd'
+                and strategy.get('id') == 'pin_pdn_clearance'
+                and strategy.get('lifecycle_status') == 'promoted'
+                and strategy.get('config_edits') == {'PRE_IO_PLACEMENT_TCL': str(hook)}
+                and evidence.get('rule') == 'm3.2'
+                and type(count) is int and count >= 2
+                and type(covered) is int and 0.8 * count <= covered <= count
+                and evidence.get('witnesses')
+                and evidence.get('def_sha256') and evidence.get('report_sha256')
+                and _live_auto_strategy({**plan, 'strategies': [strategy]}) is strategy):
+            plan['strategies'] = [strategy] + strategies[:index] + strategies[index + 1:]
+            plan['geometric_priority'] = {
+                'strategy': strategy['id'], 'reason': 'promoted_pin_pdn_spacing_repair',
+                'covered_marker_count': covered, 'marker_count': count,
+            }
+            return
     for index, strategy in enumerate(strategies):
         key = (context.get("symptom_id"), context.get("platform"), strategy.get("id"))
         if (key in _PLATFORM_GEOMETRIC_SCOPE_TRANSFER
@@ -1975,9 +2067,8 @@ def _lifecycle_status_with_scope_transfer(conn, recipe_lifecycle, *,
                                           strategy: dict) -> tuple[str | None, str | None]:
     """Resolve an exact lifecycle row, then one narrowly approved scope transfer.
 
-    The transfer is deliberately not a generic design-class wildcard.  It is
-    available only for the Sky130HD m3.2 pin-placement mechanism and only when
-    diagnosis has independently proved a unique edge concentration.  An exact
+    Transfers are restricted to diagnosed mechanisms with validated scope
+    evidence, including pin geometry and bounded standard-cell area relief. An exact
     lifecycle row wins, including shadow/parked/demoted and A/B-judged candidates;
     the one exception is a learner auto-enqueued candidate with no A/B trial, which
     carries no verdict and so does not veto a promoted wildcard of this mechanism.
@@ -2010,7 +2101,34 @@ def _lifecycle_status_with_scope_transfer(conn, recipe_lifecycle, *,
                 strategy=strategy_id, default=None)
             if wild == "promoted":
                 return wild, "mechanism_over_untested_candidate"
+        import pin_pdn_scope
+        if (symptom_id == pin_pdn_scope.KEY['symptom_id'] and platform == 'sky130hd'
+                and pin_pdn_scope.validated(conn, recipe_lifecycle, strategy)):
+            return 'promoted', 'validated_pdn_over_untested_candidate'
+        import port_feedthrough_scope
+        if (symptom_id == port_feedthrough_scope.KEY['symptom_id'] and platform == 'sky130hd'
+                and port_feedthrough_scope.validated(conn, recipe_lifecycle, strategy)):
+            return 'promoted', 'validated_port_feedthrough_over_untested_candidate'
+        import fixed_area_scope
+        if (symptom_id == fixed_area_scope.KEY['symptom_id'] and platform == 'sky130hd'
+                and fixed_area_scope.validated(conn, recipe_lifecycle, strategy)):
+            return 'promoted', 'validated_fixed_area_over_untested_candidate'
         return exact, "exact"
+
+    import pin_pdn_scope
+    if (symptom_id == pin_pdn_scope.KEY['symptom_id'] and platform == 'sky130hd'
+            and pin_pdn_scope.validated(conn, recipe_lifecycle, strategy)):
+        return 'promoted', 'validated_pin_pdn_geometry'
+
+    import port_feedthrough_scope
+    if (symptom_id == port_feedthrough_scope.KEY['symptom_id'] and platform == 'sky130hd'
+            and port_feedthrough_scope.validated(conn, recipe_lifecycle, strategy)):
+        return 'promoted', 'validated_port_feedthrough_geometry'
+
+    import fixed_area_scope
+    if (symptom_id == fixed_area_scope.KEY['symptom_id'] and platform == 'sky130hd'
+            and fixed_area_scope.validated(conn, recipe_lifecycle, strategy)):
+        return 'promoted', 'validated_fixed_area_geometry'
 
     import setup_scope
     if platform == 'sky130hd' and setup_scope.matches(strategy):
@@ -2089,27 +2207,11 @@ def main(argv=None) -> int:
         design_class = _sc.detect_design_class(proj, cfg)
     except Exception:
         design_class = "unknown/unknown"
-    # Route (backend-abort) symptoms index under check=orfs_stage/class=route, not
-    # the drc/lvs report shape the indexed/symptom recipe readers assume. The static
-    # route_relief strategy already carries the cold-start fix; learned ranking for
-    # the route symptom rides through the learner -> heuristics, not this reader.
-    #
-    # P1-2 (recipe-lifecycle audit 2026-07-14, failure-patterns #48): this is an
-    # INTENTIONAL single-strategy live path. route_relief is the ONLY live route fix and
-    # is deliberately NOT lifecycle-stripped — demoting the sole route fix would leave
-    # route failures unfixable, so route is grandfathered/static (unlike drc/lvs, whose
-    # learned recipes ARE lifecycle-filtered). With one strategy there is no execution
-    # order to reorder, so learned RANKING is a no-op for route today. The guard just
-    # below fails LOUDLY the moment the route catalog grows past one strategy — at which
-    # point indexed ranking + lifecycle filtering MUST be wired here like drc/lvs.
-    if args.check == "route":
-        recipes, pooled = None, {}
-        idx_recipe = None
-    else:
-        recipes = pooled = None
-        idx_recipe, idx_pooled, idx_level = load_indexed_recipe(
-            check=args.check, platform=plat, design_class=design_class,
-            drc=drc, lvs=lvs, tcheck=tcheck, heuristics=heuristics_path)
+    # Share ingest_run's canonical backend-route key for learned ranking.
+    recipes = pooled = None
+    idx_recipe, idx_pooled, idx_level = load_indexed_recipe(
+        check=args.check, platform=plat, design_class=design_class,
+        drc=drc, lvs=lvs, tcheck=tcheck, heuristics=heuristics_path)
     # The symptom key for this diagnosis: shared by the lifecycle
     # filter below and the negative-evidence gates (_annotate_live_gates).
     _sid = None
@@ -2118,7 +2220,10 @@ def main(argv=None) -> int:
         _report = {"drc": drc, "lvs": lvs, "timing": tcheck}.get(args.check) or {}
         _sid = symptom.symptom_id(symptom.canonical_signature(
             args.check, _vc, symptom.predicates_for(args.check, _report)))
-    if args.check != "route" and idx_recipe is not None:
+    if args.check == "route":
+        _sid = symptom.symptom_id(symptom.canonical_signature(
+            "orfs_stage", "route", symptom.predicates_for("orfs_stage", {})))
+    if idx_recipe is not None:
         recipes, pooled = idx_recipe, idx_pooled
         try:
             import knowledge_db
@@ -2145,9 +2250,27 @@ def main(argv=None) -> int:
         recipes = sym_recipe if sym_recipe is not None else _load_recipes(
             proj, check=args.check, drc=drc, lvs=lvs,
             heuristics=heuristics_path)
+    if args.check == "route" and idx_recipe is None:
+        recipes, pooled = None, {}
     plan = build_plan(drc, lvs, cfg, check=args.check, exclude=exclude, recipes=recipes,
                       tcheck=tcheck, route=route, fmax_mode=_is_fmax_mode(proj),
                       fmax_winner=_fmax_winner(proj))
+    if args.check == 'lvs':
+        _attach_port_feedthrough_evidence(plan,proj,cfg)
+    if args.check == "route" and "fixed_area_route_relief" not in exclude:
+        from fixed_area_recipe import candidate as fixed_area_candidate
+        area_strategy = fixed_area_candidate(proj, route, cfg)
+        if area_strategy is not None:
+            plan.setdefault("strategies", []).append(area_strategy)
+            plan["status"] = route.get("status", "fail")
+            plan["residual_reason"] = None
+    if args.check == "drc" and "pin_pdn_clearance" not in exclude:
+        pdn_strategy = _pin_pdn_clearance_strategy(proj, drc, cfg)
+        if pdn_strategy is not None:
+            plan.setdefault("strategies", []).append(pdn_strategy)
+            if plan.get("status") == "residual":
+                plan["status"] = drc.get("status", "fail")
+                plan["residual_reason"] = None
     if args.check == "drc" and "pin_side_rebalance" not in exclude:
         pin_strategy = _edge_localized_pin_strategy(proj, drc, cfg)
         if pin_strategy is not None:
@@ -2170,18 +2293,6 @@ def main(argv=None) -> int:
                 plan["residual_reason"] = None
     _apply_repair_action_policy(plan)
     _rank_plan_strategies(plan, recipes, pooled=pooled)
-    if args.check == "route" and len(plan.get("strategies", [])) > 1:
-        # P1-2 self-announcing guard (recipe-lifecycle audit 2026-07-14): the live route
-        # path is single-strategy by design (see the comment above). A route catalog that
-        # now emits >1 strategy has outgrown that assumption — learned indexed ranking +
-        # recipe-lifecycle filtering are NOT wired here, so execution order is static and
-        # a demoted route recipe would still auto-apply. Fail loudly instead of silently
-        # mis-ordering: wire load_indexed_recipe(check='orfs_stage', class='route') +
-        # filter_promoted for route before shipping a second route strategy.
-        print("WARNING: route catalog emitted >1 strategy but learned indexed ranking + "
-              "recipe-lifecycle filtering are NOT wired for the live route path (P1-2, "
-              "failure-patterns #48); route execution order is static. Wire route indexed "
-              "ranking before adding a second route strategy.", file=sys.stderr)
     attach_lessons(plan, check=args.check,
                    vclass=_current_vclass(args.check, drc, lvs, tcheck), platform=plat)
     # Drop a strategy whose inputs this project cannot produce, at SELECTION time.
@@ -2245,10 +2356,7 @@ def main(argv=None) -> int:
                 gate_plan = _annotate_live_gates(
                     {"strategies": [strat]}, proj, check=args.check, sid=_sid,
                     design_class=design_class, platform=plat)
-            if ((strat.get("requires_ab_promotion")
-                 and strat.get("lifecycle_status") != "promoted")
-                    or strat.get("lifecycle_status") in _LIVE_BLOCKED_LIFECYCLE
-                    or gate_plan.get("lifecycle_gate_ok") is False):
+            if not _lifecycle_allows_auto_apply(gate_plan, strat):
                 print(json.dumps({
                     "status": "lifecycle_blocked", "applied": None,
                     "strategy": strat["id"],

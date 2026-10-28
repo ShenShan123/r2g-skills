@@ -89,7 +89,11 @@ if [[ -f "$REPORTS/lvs.json" ]]; then
 fi
 if [[ "$LVS_NEEDED" == "1" ]]; then
   echo "[$NAME] $(now) LVS begin" >> "$LOG"
-  bash "$SKILL_DIR/scripts/flow/run_lvs.sh" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" >>"$LOG" 2>&1
+  LVS_SCRIPT=run_lvs.sh
+  case "$PLATFORM" in sky130hd|sky130hs|gf180) LVS_SCRIPT=run_netgen_lvs.sh ;; esac
+  # Same production checker as the frozen SKY130/GF180 experiments.
+  timeout --signal=TERM --kill-after=60 "${LVS_TIMEOUT:-21600}" \
+    bash "$SKILL_DIR/scripts/flow/$LVS_SCRIPT" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" >>"$LOG" 2>&1
   LVS_EXIT=$?
   python3 "$SKILL_DIR/scripts/extract/extract_lvs.py" "$PROJECT_DIR" "$REPORTS/lvs.json" >>"$LOG" 2>&1 || true
   if [[ -f "$REPORTS/lvs.json" ]]; then

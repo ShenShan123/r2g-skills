@@ -22,7 +22,7 @@ def _fake_repo(tmp_path: Path) -> tuple[Path, Path]:
     flow = repo / "r2g-skills" / "signoff-loop" / "scripts" / "flow"
     flow.mkdir(parents=True)
     calls = tmp_path / "calls.txt"
-    for name in ("run_drc.sh", "run_lvs.sh", "run_rcx.sh"):
+    for name in ("run_drc.sh", "run_lvs.sh", "run_netgen_lvs.sh", "run_rcx.sh"):
         (flow / name).write_text(f'#!/bin/sh\necho "{name} $*" >> "{calls}"\n')
     return repo, calls
 
@@ -85,3 +85,14 @@ def test_comment_and_quotes_are_not_part_of_the_platform(tmp_path: Path) -> None
 
     assert out.returncode == 0, out.stderr
     assert all(" nangate45 " in line for line in calls.read_text().splitlines())
+
+
+def test_production_platforms_use_netgen(tmp_path):
+    repo, calls = _fake_repo(tmp_path)
+    for platform in ("sky130hd", "gf180"):
+        proj = _project(tmp_path / platform, "export PLATFORM = " + platform + "\n")
+        out = _run(repo, str(proj), platform)
+        assert out.returncode == 0
+        lines = calls.read_text().splitlines()[-3:]
+        assert lines[1] == f"run_netgen_lvs.sh {proj} {platform} t_42"
+        assert all(f" {platform} " in line for line in lines)

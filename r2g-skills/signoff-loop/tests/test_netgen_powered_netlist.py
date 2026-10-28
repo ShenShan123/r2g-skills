@@ -78,7 +78,7 @@ def test_missing_odb_is_not_executed_either(tmp_path: Path) -> None:
 def test_liberty_is_loaded_before_the_odb(tmp_path: Path) -> None:
     """Root cause: this OpenROAD's write_verilog corrupts the heap without Liberty."""
     skill, orfs, pdk, bindir, proj = _setup(
-        tmp_path, OK_MAGIC, "#!/usr/bin/env bash\necho 'Circuits match uniquely.'\n")
+        tmp_path, OK_MAGIC, "#!/usr/bin/env bash\necho 'Final result: Circuits match uniquely.'\n")
     r = _run(tmp_path, skill, orfs, pdk, bindir, proj)
 
     assert r.returncode == 0, r.stdout + r.stderr

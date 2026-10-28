@@ -16,6 +16,12 @@ elif [[ -n "$PROJECT_DIR" && -d "$PROJECT_DIR" ]]; then
 else
   FLOW_VARIANT="base"
 fi
+# Use the same production Magic/Netgen checker for initial signoff and repairs.
+case "$PLATFORM" in
+  sky130hd|sky130hs|gf180)
+    exec bash "$(dirname "${BASH_SOURCE[0]}")/run_netgen_lvs.sh" "$PROJECT_DIR" "$PLATFORM" "$FLOW_VARIANT" ;;
+esac
+
 # Auto-detect ORFS + tools (honors ORFS_ROOT / *_EXE env overrides)
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"

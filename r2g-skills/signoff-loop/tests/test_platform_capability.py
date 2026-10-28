@@ -18,6 +18,23 @@ import platform_capability as pc
 
 MOD = Path(pc.__file__).resolve()
 
+
+def test_gf180_corner_and_track_resolution():
+    cfg = """export TRACK_OPTION ?= 9t
+export CORNER ?= BC
+export TECH_LEF ?= $(PLATFORM_DIR)/lef/$(TRACK_OPTION).lef
+export BC_RCX_RULES = $(PLATFORM_DIR)/best.rules
+export WC_RCX_RULES = $(PLATFORM_DIR)/worst.rules
+export RCX_RULES = $($(CORNER)_RCX_RULES)
+export BC_LIB_FILES = $(abspath $(PLATFORM_DIR)/lib/best.lib.gz)
+export LIB_FILES = $($(CORNER)_LIB_FILES) $(ADDITIONAL_LIBS)
+"""
+    assert pc._gf180_path(cfg, "TECH_LEF", "/p", {}) == "/p/lef/9t.lef"
+    assert pc._gf180_path(cfg, "RCX_RULES", "/p", {}) == "/p/best.rules"
+    assert pc._gf180_path(cfg, "RCX_RULES", "/p", {"CORNER": "WC"}) == "/p/worst.rules"
+    assert pc._gf180_path(cfg, "LIB_FILES", "/p", {}) == "/p/lib/best.lib.gz"
+    assert pc._gf180_path(cfg, "RCX_RULES", "/p", {"CORNER": "UNKNOWN"}) is None
+
 TECH_WITH_MODEL = """\
 LAYER metal1
   TYPE ROUTING ;

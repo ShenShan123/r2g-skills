@@ -39,6 +39,17 @@ runner = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(runner)
 
 
+@pytest.fixture(autouse=True)
+def archived_protocol(monkeypatch):
+    # This suite binds the REAL registry to its frozen external protocol, which
+    # the repository policy keeps in the operator's local notes archive.
+    # Do not invent a replacement document or weaken its digest/coverage gates.
+    protocol = json.loads(_REGISTRY.read_text(encoding="utf-8"))["protocol"]
+    if not (ROOT / protocol["source"]).is_file():
+        pytest.skip("requires archived frozen V1 protocol (not shipped in Git)")
+    monkeypatch.setattr(runner, "REPO", ROOT)
+
+
 # --------------------------------------------------------------------------- #
 # helpers — mutate the REAL registry so the lint (spec digest, GC/VAL coverage) #
 # still passes and only the probed condition differs                           #

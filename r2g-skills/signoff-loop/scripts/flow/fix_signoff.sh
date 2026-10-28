@@ -157,11 +157,12 @@ RUN_DRC="${R2G_RUN_DRC:-$SCRIPT_DIR/run_drc.sh}"
 # clean (validated 2026-06-17: wbsafety + blob_merge KLayout-fail -> Netgen-clean).
 # Routing the autonomous loop through KLayout LVS on sky130 was escalating
 # already-clean designs as lvs:fail. KLayout LVS stays the default everywhere
-# else (nangate45/gf180/ihp). An explicit R2G_RUN_LVS override always wins.
+# else (nangate45/ihp). GF180 also uses Magic+Netgen, matching its baseline.
+# An explicit R2G_RUN_LVS override always wins.
 # See references/failure-patterns.md "sky130 LVS".
 if [[ -n "${R2G_RUN_LVS:-}" ]]; then
   RUN_LVS="$R2G_RUN_LVS"
-elif [[ "$PLATFORM" == sky130* ]]; then
+elif [[ "$PLATFORM" == sky130* || "$PLATFORM" == gf180 ]]; then
   RUN_LVS="$SCRIPT_DIR/run_netgen_lvs.sh"
 else
   RUN_LVS="$SCRIPT_DIR/run_lvs.sh"

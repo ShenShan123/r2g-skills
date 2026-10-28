@@ -53,3 +53,22 @@ def test_idempotent_on_already_normalized_netlist():
     twice, c2 = n.normalize_lines(list(once))
     assert c1 == 1 and c2 == 0
     assert twice == once
+
+
+def test_wide_subckt_preserves_physical_continuations_and_first_instance():
+    lines = ['.subckt wide VDD VSS']
+    lines += ['+ ' + ' '.join(f'port[{i}]' for i in range(start, start+12))
+              for start in range(0, 600, 12)]
+    lines += ['Xfirst VSS VDD VDD VSS port[0] port[1] sky130_fd_sc_hd__buf_4', '.ends']
+    out, count = n.normalize_lines(lines)
+    assert count == 0
+    assert out == lines
+    assert max(map(len, out)) < 200
+
+
+def test_diode_rewrite_does_not_reformat_neighboring_continuations():
+    lines = ['.subckt top a', '+ b c', DIODE_LINE, 'Xother a b', '+ c ordinary_cell', '.ends']
+    out, count = n.normalize_lines(lines)
+    assert count == 1
+    assert out[:2] == lines[:2]
+    assert out[3:] == lines[3:]

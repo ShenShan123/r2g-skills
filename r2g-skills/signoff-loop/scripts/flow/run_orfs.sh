@@ -514,6 +514,14 @@ run_stage() {
       --design "$DESIGN_NAME" --flow-variant "$FLOW_VARIANT" \
       --toolchain "$_R2G_TOOLCHAIN_FP" \
       || echo "WARNING: stage-artifact manifest row not recorded for '$stage' — a future resume over this run will degrade to legacy lineage (RMD2-P0-02)" >&2
+    # Agent-only previews: read the completed stage's database, preserve a small
+    # view before later stages/slimming, and never change the flow verdict.
+    if [[ -n "${R2G_STAGE_VIEW_PYTHON:-}" ]]; then
+      env -u PYTHONHOME -u PYTHONPATH -u PYTHONSAFEPATH "$R2G_STAGE_VIEW_PYTHON" -P -m r2g_agent.stage_views \
+        --project "$PROJECT_DIR" --run "$BACKEND_DIR" --results "$_rdir" \
+        --stage "$stage" --phase "${R2G_STAGE_VIEW_PHASE:-flow}" \
+        || echo "WARNING: stage preview unavailable for '$stage' (flow result unchanged)" >&2
+    fi
   fi
 
   if [[ $STAGE_STATUS -ne 0 ]]; then

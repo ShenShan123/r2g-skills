@@ -12,9 +12,9 @@ Prose cannot be trusted to stay true, so the table is now machine-checked: this
 test parses the matrix out of SKILL.md and asserts every probed column against
 `probe_platform`. Editing the table to disagree with the toolchain fails here.
 
-Only the three columns the probe actually measures are asserted (KLayout DRC,
-KLayout LVS, RCX) plus the tier. "Magic DRC" / "Netgen LVS" describe sky130
-tool availability rather than a per-platform deck, so they stay prose.
+Only the capabilities the probe actually measures are asserted (KLayout DRC,
+the selected LVS engine, RCX) plus the tier. A working Netgen setup does not
+establish that a KLayout LVS deck exists. Magic DRC remains outside this probe.
 """
 from __future__ import annotations
 
@@ -181,6 +181,8 @@ def test_matrix_row_matches_probe(row):
         return
 
     for column, cap_key in PROBED_COLUMNS.items():
+        if cap_key == "lvs" and caps[cap_key].get("engine") == "netgen":
+            column = "Netgen LVS"
         documented = _cell_says_yes(row[column])
         probed = bool(caps[cap_key]["ok"])
         assert documented == probed, (

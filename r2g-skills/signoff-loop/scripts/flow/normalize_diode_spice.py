@@ -35,7 +35,14 @@ def join_continuations(lines):
 def normalize_lines(lines):
     """Rewrite diode X-instances to D-devices. Returns (new_lines, count)."""
     out, count = [], 0
-    for ln in join_continuations(lines):
+    groups = []
+    for line in lines:
+        if line.startswith('+') and groups:
+            groups[-1].append(line)
+        else:
+            groups.append([line])
+    for group in groups:
+        ln = join_continuations(group)[0]
         m = DIODE_X_RE.match(ln)
         if m:
             name, anode, cathode, model, props = m.groups()
@@ -43,7 +50,12 @@ def normalize_lines(lines):
             out.append(f"D{name or '0'} {anode} {cathode} {model} {props}".rstrip())
             count += 1
         else:
-            out.append(ln)
+            # Keep unrelated physical lines exactly as Magic emitted them.
+            # Collapsing a wide .subckt header (C00953: 4,998 characters)
+            # makes Netgen 1.5.272 consume the following first instance as
+            # extra header tokens. That creates a false missing-device LVS
+            # mismatch although the extracted connectivity is correct.
+            out.extend(group)
     return out, count
 
 

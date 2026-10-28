@@ -48,7 +48,8 @@
 
 ### Frontend recipes (validated on the nangate45 repair arm, 2026-10-21/22)
 
-Four synthesis failures with a fixed cause and a fix that changes no logic. The
+Historical frontend repair families, with the async-load conversion withdrawn
+after original-RTL counterexamples on 2026-10-26. The
 Designs column lists those the recipe took dual-clean under the frozen spec; the
 ones in parentheses got through synthesis with it and then failed later in the
 flow (C03391/C03782 hit the stage bound; C00339 ended with 28 DRC violations
@@ -60,18 +61,23 @@ automatically (`agent/r2g_agent/frontend.py`) and records every one in
 |---|---|---|---|
 | `header_not_source` | `syntax error, unexpected TOK_INITIAL` (or any loose statement) in a file another source `` `include``s (in the corpus, a `.vh` the file list compiled) | drop it from `VERILOG_FILES`, keep its dir on `VERILOG_INCLUDE_DIRS` (applied at project creation) | C01292, C02831 (C03391, C03782) |
 | `readmem_absolute` | `can not open file ... for $readmem`, or the data file listed as a source (`syntax error, unexpected TOK_CONSTVAL` in a `.hex`) | yosys runs in the ORFS flow dir, so a relative path in `$readmem` -- literal, or the parameter default it names -- resolves to nothing; rewrite it to the absolute path of the copied data file (applied at project creation; a file absent from the upload is reported, never invented) | C00303 (C00339) |
-| `aldff_to_dffsr` | `unmapped internal cell of type $_ALDFFE_PNP_` then `Found N problems in 'check -assert'` | `SYNTH_CANONICALIZE_TCL = orfs_hooks/aldff_to_dffsr.tcl`: `simplemap` + `dfflegalize` turn only the async-load flops into set/reset flops + gating, which `dfflibmap` maps (DFFRS) | C01169, C03509 |
+| `aldff_to_dffsr` — withdrawn | `unmapped internal cell of type $_ALDFFE_PNP_` then `Found N problems in 'check -assert'` | Do not automatically convert: original-RTL reset-behavior counterexamples exist for both designs. The live hook rejects invocation; the old implementation is retained only as an experiment replay fixture. | C01169, C03509 had physical dual-clean results, not verified behavioral equivalence |
 | `strip_vendor_attr` | `[ERROR STA-0171] .../1_2_yosys.v line N, syntax error` with `altera_attribute` in that netlist | `SYNTH_CANONICALIZE_TCL = orfs_hooks/strip_vendor_attr.tcl`: unset `altera_attribute` (an embedded Quartus SDC statement OpenSTA's reader rejects) | C02098 |
 
-The two `SYNTH_CANONICALIZE_TCL` recipes fire only on their signature, after a
-failed synthesis, and synthesis is re-run once per recipe; `strip_vendor_attr`
-also requires the attribute in the netlist, so a STA-0171 on another construct
-is not touched. A design needing both gets one hook that sources both.
+`strip_vendor_attr` fires only on its signature after failed synthesis and
+requires the attribute in the netlist, so a STA-0171 on another construct is
+not touched. Async-load failures now report the semantic-review reason and
+do not automatically invoke the rejected conversion. Reproduce both original
+behavior counterexamples with
+`experiments/sky130_repair/replay_aldff_counterexamples.py`; no undocumented
+reset/input-stability assumption is sufficient to reinstate the recipe.
 
-Not ported: SystemVerilog the Yosys frontend cannot parse (the `sv_frontend`
-arm needs a slang plugin built for the bundled yosys 0.64), and fetching a data
-file the RTL names but the repository never shipped (`datafile_fetch`, which
-needs the upstream repo; for an uploaded design the agent asks for the file).
+`sv_frontend` is now available through a separate compatible oss-cad-suite
+Yosys/Slang, then the original pinned ORFS synthesizer runs on its output.
+Translation success is not by itself original-RTL equivalence evidence.
+Fetching omitted upstream data is currently an isolated SKY130 campaign
+capability with exact commit/source/data identity checks; the generic upload
+frontend still reports missing files instead of inventing their contents.
 
 ## ORFS Backend Issues
 
@@ -7312,8 +7318,11 @@ pilot failed every one of these designs too, so none is a regression.
   value — an FPGA idiom with no nangate45 cell, and `dfflibmap` does not
   legalize it. A `SYNTH_CANONICALIZE_TCL` hook that runs `proc`, then
   `simplemap t:$aldff t:$aldffe` and `dfflegalize -cell $_DFFSR_PPP_ 01 -cell
-  $_DFFSRE_PPPP_ 01 t:$_ALDFF* t:$_ALDFFE*` — yosys's own functionally-equivalent
-  emulation, restricted to those cells — → **2/2 dual-clean**. Read-back:
+  $_DFFSRE_PPPP_ 01 t:$_ALDFF* t:$_ALDFFE*` produced **2/2 physical dual-clean**
+  results. **Withdrawn 2026-10-26:** original-RTL simulation exposes reset
+  behavior differences for both designs, so this is not an accepted
+  semantics-preserving repair. The old equivalence claim was incorrect.
+  Historical physical read-back:
   unmapped-cell warnings 0 (baseline 2); the netlist gains exactly the 2 DFFRS.
   In Tcl every cell-type `$` must be escaped (`t:\$aldff`), or the hook dies on
   variable substitution.

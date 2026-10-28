@@ -65,7 +65,14 @@ def _run_deck(klayout: str, deck: pathlib.Path, gds: pathlib.Path,
 @pytest.mark.skipif(_klayout() is None, reason="KLayout 不可用")
 def test_tiled_contact3_matches_untiled(tmp_path: pathlib.Path) -> None:
     klayout = _klayout()
-    assert FIXTURE.is_file(), f"缺少 fixture {FIXTURE}"
+    # Generated GDS is intentionally gitignored. Rebuild this synthetic fixture
+    # from its tracked source in a fresh checkout, keeping all verdict checks.
+    fixture = FIXTURE
+    if not fixture.is_file():
+        fixture = tmp_path / "nangate45_contact3.gds"
+        subprocess.run([klayout, "-b", "-r", str(HERE / "fixtures/make_nangate45_contact3.rb")],
+                       cwd=tmp_path, capture_output=True, text=True, timeout=30, check=True)
+    assert fixture.is_file(), f"缺少 fixture {fixture}"
 
     # Reconstruct the pre-patch deck by stripping the tiling the patch added,
     # so the comparison has a reference even though upstream's copy is not in
@@ -107,8 +114,8 @@ def test_tiled_contact3_matches_untiled(tmp_path: pathlib.Path) -> None:
     stock_deck = tmp_path / "stock.lydrc"
     stock_deck.write_text(stock, encoding="utf-8")
 
-    got_stock = _run_deck(klayout, stock_deck, FIXTURE, tmp_path / "s.lyrdb")
-    got_tiled = _run_deck(klayout, BUNDLED, FIXTURE, tmp_path / "t.lyrdb")
+    got_stock = _run_deck(klayout, stock_deck, fixture, tmp_path / "s.lyrdb")
+    got_tiled = _run_deck(klayout, BUNDLED, fixture, tmp_path / "t.lyrdb")
 
     # The fixture exists to make the rule fire; if it does not, the comparison
     # below is vacuous and the test would pass without testing anything.
