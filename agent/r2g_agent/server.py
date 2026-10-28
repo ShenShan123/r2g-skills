@@ -66,6 +66,10 @@ def init_runtime(cfg: config.Config | None = None, resume: bool = False, *, mode
     _bridge = BridgeWorker(sessions, store, lambda: make_adapter(cfg.model), model_reviews=model_reviews)
     STATE.update(cfg=cfg, sessions=sessions, bridge=_bridge, executor=HostExecutor(sessions, store))
     install_repairs(STATE)
+    from .debug_actions import DependencyDebugController
+    debug = DependencyDebugController(sessions.path, store, tools.RT.pipeline)
+    debug.recover()
+    _bridge.add_hook(debug.tick)
     _bridge.start()
 
 
@@ -151,8 +155,12 @@ def sessions():
 
 @app.get("/api/sessions/{sid}")
 def session(sid: str):
+    from .task_state import TaskStateStore
+    tasks = TaskStateStore(STATE["sessions"].path)
+    task = tasks.get_for_session(sid)
     return {"id": sid, "messages": STATE["sessions"].load(sid),
-            "model_calls": STATE["sessions"].model_calls(sid), "turns": STATE["sessions"].turns.list(sid)}
+            "model_calls": STATE["sessions"].model_calls(sid), "turns": STATE["sessions"].turns.list(sid),
+            "task": tasks.view(task["id"]) if task else None}
 
 
 @app.get("/api/sessions/{sid}/tool-outputs/{artifact_id}")

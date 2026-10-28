@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import time
 import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -20,7 +21,7 @@ from .turns import OWNER, TERMINAL, TurnConflict, digest
 
 HOST_FIELDS = frozenset({"session_id", "turn_id", "action_id", "grant_id", "read_only",
                          "allow_session_tools", "execution_context", "review_enabled"})
-JOB_CREATORS = frozenset({"start_job", "start_batch", "execute_rtl_repair"})
+JOB_CREATORS = frozenset({"start_job", "start_batch", "execute_rtl_repair", "execute_dependency_debug"})
 
 
 @dataclass(frozen=True)
@@ -113,6 +114,35 @@ class HostExecutor:
             return {"error": "read-only execution cannot invoke this tool", "error_code": "read_only_review"}
         if context.grant_id and name not in tools.REVIEW_TOOLS | {"execute_rtl_repair"}:
             return {"error": "repair turn cannot bypass the registered action policy", "error_code": "repair_action_scope"}
+        return None
+
+    def _stage_denial(self, name: str, arguments: dict, context: ExecutionContext) -> dict | None:
+        turn = self.sessions.turns.get(context.turn_id)
+        if turn["kind"] != "debug_review":
+            return None
+        if name not in tools.DEBUG_TOOLS:
+            return {"error": "automatic diagnosis cannot invoke this action", "error_code": "debug_action_scope"}
+        if arguments.get("job_id") and arguments["job_id"] != context.job_id:
+            return {"error": "automatic diagnosis is bound to its failed job", "error_code": "debug_job_scope"}
+        from . import stage_actions
+        from .task_runtime import diagnostic_capabilities
+        from .debug_actions import DependencyDebugController
+        job = self.jobs.job(context.job_id)
+        if not job:
+            return {"error": "linked job unavailable", "error_code": "debug_job_unavailable"}
+        if name in stage_actions.READ_TOOLS:
+            return None
+        authority = DependencyDebugController(self.sessions.path, self.jobs, tools.RT.pipeline).authority(
+            context.session_id, context.job_id)
+        authorized = bool(authority and authority.get("status") == "approved" and authority["deadline"] > time.time())
+        budget = {"remaining_actions": max(0, turn["max_actions"] - len(self.sessions.turns.actions(turn["id"])) + 1),
+                  "remaining_recovery_attempts": int(authorized)}
+        decision = stage_actions.validate_action(name, arguments, job, self.jobs.events(job["id"], tail=200),
+            capabilities=diagnostic_capabilities(job),
+            budget=budget, debug_authorized=authorized)
+        if not decision["allowed"]:
+            return {"error": "action is not legal for the current EDA evidence and stage",
+                    "error_code": "stage_action_denied", "decision": decision}
         return None
 
     @staticmethod
@@ -235,6 +265,8 @@ class HostExecutor:
             normalized, result = {}, {"error": str(exc), "error_code": "invalid_tool_arguments"}
         snapshot = expected_snapshot
         if result is None:
+            result = self._stage_denial(name, normalized, context)
+        if result is None:
             try:
                 snapshot = snapshot if snapshot is not None else self._snapshot(name, normalized)
             except (ValueError, OSError) as exc:
@@ -267,6 +299,11 @@ class HostExecutor:
                          "content": json.dumps(view, ensure_ascii=False), "output_ref": ref,
                          "turn_id": context.turn_id, "action_id": context.action_id})
         job_id = result.get("job_id") if name in JOB_CREATORS and isinstance(result, dict) and not result.get("error") else None
+        if name == "execute_dependency_debug" and isinstance(result, dict):
+            job_id = result.get("child_job_id")
         self.sessions.turns.complete_action(context.action_id, view, ref, messages, title, job_id=job_id)
+        if job_id:
+            from .task_runtime import task_for_turn
+            task_for_turn(self.sessions, self.sessions.turns.get(context.turn_id))
         return self._receipt(context, view, status="error" if isinstance(result, dict) and result.get("error") else "complete",
                              output_ref=ref)

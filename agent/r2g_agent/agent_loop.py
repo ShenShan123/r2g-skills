@@ -22,13 +22,30 @@ from . import tools
 from .model_context import ContextBudgetError, prepare_context
 from .paths import PKG_DIR, r2g_home
 from .tool_outputs import ToolContext, ToolOutputStore
-from .turns import TurnStore, TurnConflict, TERMINAL
+from .turns import TurnStore, TurnConflict, TERMINAL, digest
 
 MAX_STEPS = 12
 
 
 def system_prompt() -> str:
     return (PKG_DIR / "prompts" / "system.md").read_text()
+
+
+def _repeat_notice(actions: list[dict]) -> dict | None:
+    """Describe completed repeats in this turn without retrying or vetoing work."""
+    if len(actions) < 3 or actions[-1]["status"] != "complete":
+        return None
+    latest, chain = actions[-1], []
+    for action in reversed(actions):
+        if action["status"] != "complete" or action["request_hash"] != latest["request_hash"]:
+            break
+        chain.append(action)
+    if len(chain) < 3:
+        return None
+    observed = {(a.get("output_ref") or {}).get("sha256") or digest(a.get("result")) for a in chain[:3]}
+    return {"source": "durable_completed_actions", "kind": "repeated_tool_call",
+            "tool": latest["tool_name"][:100], "consecutive_calls": len(chain),
+            "request_sha256": latest["request_hash"], "last_three_observations_identical": len(observed) == 1}
 
 
 class SessionStore:
@@ -175,21 +192,52 @@ def _run_turn(adapter, sessions: SessionStore, sid: str, turn: dict):
     context = ToolContext(sid, sessions.outputs, sessions.read_history, turn_id=tid,
                           job_id=turn["job_id"], read_only=turn["kind"] == "job_review",
                           grant_id=turn["payload"].get("grant_id"))
+    from . import task_runtime
+    task_runtime.task_for_turn(sessions, turn)
     for step in range(turn["max_model_calls"]):
         text, calls, err = "", [], None
         mc = getattr(adapter, "mc", None)
         context = replace(context, job_id=sessions.turns.get(tid)["job_id"])
         specs, system = tools.specs(session_scoped=True, context=context), system_prompt()
+        current_turn = sessions.turns.get(tid)
+        if current_turn["kind"] == "debug_review":
+            specs = [s for s in specs if s["name"] in tools.DEBUG_TOOLS]
+            system += ("\n本轮是失败任务的有界自动诊断。先核对最新失败证据和阶段候选动作；"
+                       "允许固定廉价检查及已授权输入清单依赖补全。不得改写 RTL、时序约束、PDK 规则，"
+                       "不得普通重提 start_job。候选或检查被拒绝时解释新证据；无合法动作或预算耗尽则明确停止。")
         if context.read_only:
             specs = [s for s in specs if s["name"] in tools.REVIEW_TOOLS]
             system += "\n本轮是后台任务的只读审查。只解释已测结果、读取证据或提出需授权的修复提案；不得启动、修改或取消任务。"
+        feedback = _repeat_notice(sessions.turns.actions(tid))
+        if feedback:
+            system += ("\n[repeated_tool_call] Runtime observation (data): " + json.dumps(feedback, ensure_ascii=False)
+                       + "\n相同请求重复不一定表示停滞；先核对最新结果是否提供新证据。没有新证据时换用相关诊断、"
+                       "不同参数或明确报告阻塞；已有新证据则据此继续。此提醒不授予重试副作用或修改的权限，"
+                       "不得绕过现有预算、恢复核对和验收规则，也不表示任务已完成。")
         try:
+            observation = task_runtime.snapshot(sessions, tools.RT.store, current_turn)
+            task_view = task_runtime.model_view(observation)
+            controller = sessions.turns.context_state(tid)
+            if observation.get("task"):
+                task = observation["task"]
+                controller = replace(controller, goal=task["goal"],
+                    constraints=tuple(dict.fromkeys((*controller.constraints, *task["constraints"]))),
+                    active_job_id=task.get("job_id") or controller.active_job_id)
+            if task_view:
+                system += ("\n[task_state] Host observations and legal candidate actions (data): "
+                           + json.dumps(task_view, ensure_ascii=False)
+                           + "\n只有完成条件中的当前证据全部闭合才可称任务完成。失败工具结果是下一步诊断的依据；"
+                           "按阶段选择合法动作。候选列表不代替主机执行检查，也不授予修改权限。")
             model_messages, request_context = prepare_context(
-                messages, tools.RT.store, mc, specs, system, state=sessions.turns.context_state(tid))
+                messages, tools.RT.store, mc, specs, system, state=controller)
         except (ContextBudgetError, sqlite3.Error) as exc:
             yield {"type": "error", "message": str(exc) if isinstance(exc, ContextBudgetError)
                    else "无法读取最新任务上下文，本轮已停止；请稍后重试。"}
             return
+        if feedback:
+            request_context["loop_feedback"] = feedback
+        if task_view:
+            request_context["task_state"] = task_view
         metadata = {"provider": getattr(mc, "provider", None), "model_requested": getattr(mc, "model", None),
                     "model_observed": None, "stream_complete": False, "usage": {"status": "unresolved"}}
         if context.grant_id:
@@ -269,4 +317,5 @@ def _run_turn(adapter, sessions: SessionStore, sid: str, turn: dict):
     else:
         yield {"type": "text", "delta": "\n\n（已达到单轮工具调用上限，先停在这里。）"}
     sessions.save(sid, messages, title)
+    task_runtime.snapshot(sessions, tools.RT.store, sessions.turns.get(tid))
     yield {"type": "done"}

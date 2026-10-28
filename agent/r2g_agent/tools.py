@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sqlite3
 import subprocess
 from pathlib import Path
 
@@ -35,7 +36,8 @@ REGISTRY: dict[str, dict] = {}
 REVIEW_TOOLS = frozenset({"list_examples", "job_status", "list_jobs", "design_detail", "read_log",
                          "dataset_info", "read_rtl", "read_tool_output", "read_session_history",
                          "flow_params", "knowledge_lookup", "disk_usage", "propose_rtl_repair",
-                         "eda_capabilities", "task_skill", "plan_next_step", "review_evidence"})
+                         "eda_capabilities", "task_skill", "plan_next_step", "review_evidence", "task_status"})
+DEBUG_TOOLS = REVIEW_TOOLS | {"inspect_design", "check_design", "check_environment", "execute_dependency_debug"}
 
 
 def tool(description: str, parameters: dict, *, session_scoped: bool = False):
@@ -83,7 +85,7 @@ def call(name: str, arguments: dict, *, context: ToolContext | None = None) -> d
             if not isinstance(arguments, dict) or "_context" in arguments:
                 return {"error": "bad arguments"}
             return REGISTRY[name]["fn"](**arguments, _context=context)
-        if name in ("start_job", "start_batch"):
+        if name in ("start_job", "start_batch", "plan_next_step"):
             return REGISTRY[name]["fn"](**arguments, _context=context)
         return REGISTRY[name]["fn"](**(arguments or {}))
     except TypeError as e:
@@ -502,6 +504,33 @@ def execute_rtl_repair(proposal_id: str, *, _context: ToolContext) -> dict:
     return RepairController(_context.outputs.database, RT.store, RT.pipeline).execute(_context, proposal_id)
 
 
+@tool("Recover an evidenced missing-module synthesis failure by completing an explicit input "
+      "manifest using only HDL already present in the authorized source snapshot. One bounded "
+      "attempt in an isolated copy, fixed compilation/structure checks before child submission. "
+      "No RTL bytes, constraints or signoff policy may change. Host debug authority required.",
+      _obj({"job_id": {"type": "string"}, "design": {"type": "string"},
+            "evidence_event_id": {"type": "integer", "minimum": 1}},
+           ["job_id", "design", "evidence_event_id"]), session_scoped=True)
+def execute_dependency_debug(job_id: str, design: str, evidence_event_id: int, *, _context: ToolContext) -> dict:
+    from .debug_actions import DependencyDebugController
+    with sqlite3.connect(_context.outputs.database) as c:
+        row = c.execute("SELECT kind,session_id,job_id FROM turns WHERE id=?", (_context.turn_id,)).fetchone()
+    if not row or row != ("debug_review", _context.session_id, job_id):
+        return {"error": "input recovery requires its host-bound debug turn", "error_code": "debug_action_scope"}
+    return DependencyDebugController(_context.outputs.database, RT.store, RT.pipeline).execute(
+        _context, job_id=job_id, design=design, evidence_event_id=evidence_event_id)
+
+
+@tool("Read the host task goal, immutable completion conditions and unresolved evidence for "
+      "this turn. Chat ending and job status done do not establish delivery or PASS.",
+      _obj({}), session_scoped=True)
+def task_status(*, _context: ToolContext) -> dict:
+    from .task_state import TaskStateStore
+    store = TaskStateStore(_context.outputs.database)
+    task = store.get_for_turn(_context.turn_id)
+    return store.view(task["id"]) if task else {"error": "no task bound to this turn"}
+
+
 @tool("Observe the host's selected open-source tools and platform assets, including versions, "
       "content hashes, cell libraries/corners, DRC/LVS/RCX prerequisites and refused combinations. "
       "READY means prerequisites observed, never signoff PASS or manufacturing qualification. "
@@ -529,15 +558,27 @@ def task_skill(skill_id: str = "") -> dict:
       "Returns candidate task skills with evidence IDs and refusals. Does not execute a repair, "
       "start a job, or mark anything passed. Load the selected task contract before acting.",
       _obj({"job_id": {"type": "string"}, "design": {"type": "string"}}, ["job_id"]))
-def plan_next_step(job_id: str, design: str = "") -> dict:
-    from . import capabilities, task_skills
+def plan_next_step(job_id: str, design: str = "", *, _context: ToolContext | None = None) -> dict:
+    from . import capabilities, task_skills, stage_actions
     current = RT.store.job(job_id)
     if not current:
         return {"error": "no such job"}
     platform = current.get("spec", {}).get("platform", RT.platform)
     observed = capabilities.inventory(platform)
+    actions = stage_actions.action_view(current, RT.store.events(job_id, tail=200),
+                                        capabilities=observed, design=design)
+    if _context and _context.turn_id:
+        from .agent_loop import SessionStore
+        from .task_runtime import snapshot
+        sessions = SessionStore(_context.outputs.database)
+        turn = sessions.turns.get(_context.turn_id)
+        if turn and turn["job_id"] == job_id:
+            actions = snapshot(sessions, RT.store, turn).get("stage_actions", actions)
+    else:
+        actions["authorization_scope"] = "unscoped advice; read current task_status in a bound turn"
     return {**task_skills.select_tasks(current, RT.store.events(job_id, tail=200),
                                       capabilities=observed, design=design),
+            "stage_actions": actions,
             "capability_admission": capabilities.check_requirements(
                 observed, output=current.get("spec", {}).get("output", "graph"))}
 

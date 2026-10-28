@@ -13,7 +13,7 @@ type Msg = {
 };
 
 function turnKind(value: unknown): ConversationTurnKind {
-  return value === "job_review" || value === "repair_review" ? value : "user";
+  return value === "job_review" || value === "repair_review" || value === "debug_review" ? value : "user";
 }
 
 const SUGGEST = [
@@ -107,6 +107,14 @@ export default function Chat() {
       if (p.kind !== "tool") return;
       const id = toolJobId(p);
       if (id) latestJobs.set(id, i);
+    });
+    // The recovery result owns the child card. Keep the parent's failed
+    // observation in the expandable tool history, rather than combining its
+    // verdict with the new child's progress in this turn.
+    m.parts.forEach((p) => {
+      if (p.kind !== "tool" || p.name !== "execute_dependency_debug" || p.result?.error) return;
+      if (typeof p.result?.child_job_id === "string" && p.result.child_job_id !== p.result.job_id
+          && latestJobs.get(p.result.job_id) === i) latestJobs.delete(p.result.job_id);
     });
   });
 
@@ -254,7 +262,7 @@ export default function Chat() {
               <div className="space-y-6">
                 {msgs.map((m, i) => m.role === "user" ? (
                   <div key={i} className={m.turnKind && m.turnKind !== "user" ? "text-xs text-muted" : "flex justify-end"}>
-                    {m.turnKind === "repair_review" ? "已授权的修复与验证" : m.turnKind === "job_review"
+                    {m.turnKind === "debug_review" ? "失败后的自动诊断与恢复" : m.turnKind === "repair_review" ? "已授权的修复与验证" : m.turnKind === "job_review"
                       ? "任务结束后的自动审查" : <UserBubble text={(m.parts[0] as any).text} />}
                   </div>
                 ) : (

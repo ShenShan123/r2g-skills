@@ -12,11 +12,11 @@ import { Md } from "./ui";
 export type ConversationPart =
   | { kind: "text"; text: string }
   | { kind: "tool"; id: string; name: string; args: any; result?: any; output_ref?: ToolOutputRef };
-export type ConversationTurnKind = "user" | "job_review" | "repair_review";
+export type ConversationTurnKind = "user" | "job_review" | "repair_review" | "debug_review";
 
 export function toolJobId(p: Extract<ConversationPart, { kind: "tool" }>): string | null {
   if (!p.result || typeof p.result !== "object" || p.result.error) return null;
-  const id = p.result.job_id;
+  const id = p.name === "execute_dependency_debug" ? p.result.child_job_id ?? p.result.job_id : p.result.job_id;
   return typeof id === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(id) ? id : null;
 }
 
@@ -32,6 +32,7 @@ const ACTIONS: Record<string, string> = {
   eda_capabilities: "核对工具与工艺资产", task_skill: "读取任务检查规则",
   plan_next_step: "依据当前证据选择下一项检查", inspect_design: "核对候选设计的接口与依赖",
   check_design: "执行编译或结构检查",
+  execute_dependency_debug: "补齐已授权输入依赖并验证隔离副本", task_status: "核对完成条件与未决证据",
   search_rtl: "搜索 RTL 设计", fetch_rtl: "读取仓库中的设计", disk_usage: "检查可用磁盘空间",
 };
 const PUBLIC_EVENTS = new Set(["created", "start", "ok", "warn", "fail", "done", "cancelled", "recovery_required"]);
@@ -50,7 +51,7 @@ export function ConversationRun({ parts, sid, busy, error, jobIds, turnKind = "u
     const id = p.result?.repair_proposal;
     return typeof id === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(id) ? [id] : [];
   }))];
-  const reviewing = turnKind === "job_review" || turnKind === "repair_review";
+  const reviewing = turnKind !== "user";
   const settled = reviewing && busy ? false : jobIds.length > 0
     ? jobIds.every((id) => states[id]?.job && jobFinished(states[id].job!)) : !busy;
   useEffect(() => { setExpanded(!settled); }, [settled]);
@@ -65,9 +66,9 @@ export function ConversationRun({ parts, sid, busy, error, jobIds, turnKind = "u
   const needsReview = jobs.some((j) => j.status === "recovery_required");
   const failed = jobs.some((j) => ["failed", "partial"].includes(j.status));
   const disconnected = jobIds.some((id) => states[id]?.error);
-  const headline = queued ? turnKind === "repair_review" ? "已授权修复正在排队…" : turnKind === "job_review" ? "任务审查正在排队…" : "请求正在排队…"
+  const headline = queued ? turnKind === "debug_review" ? "自动诊断正在排队…" : turnKind === "repair_review" ? "已授权修复正在排队…" : turnKind === "job_review" ? "任务审查正在排队…" : "请求正在排队…"
     : reviewing && busy
-    ? turnKind === "repair_review" ? "正在执行已授权的有限修复…" : "正在审查任务结果…"
+    ? turnKind === "debug_review" ? "正在诊断报错并尝试合法恢复…" : turnKind === "repair_review" ? "正在执行已授权的有限修复…" : "正在审查任务结果…"
     : disconnected ? "正在重新连接任务" : needsReview ? "任务需要核对" : settled
     ? jobs.some((j) => j.status === "cancelled") ? "任务已取消" : failed ? "任务已结束，未全部通过" : "处理已结束"
     : running ? designSummary(running) : jobs.some((j) => j.status === "cancelling") ? "正在确认任务停止"

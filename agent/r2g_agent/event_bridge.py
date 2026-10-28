@@ -33,15 +33,15 @@ class BridgeWorker:
     def enqueue(self, session_id: str, message: str, *, request_id: str | None = None,
                 kind: str = "user", job_id: str | None = None, grant_id: str | None = None,
                 allow_queue: bool = False) -> dict:
-        if kind not in ("user", "job_review", "repair_review"):
+        if kind not in ("user", "job_review", "repair_review", "debug_review"):
             raise ValueError("unsupported turn kind")
         payload = {"message": message, "job_id": job_id}
         if grant_id:
             payload["grant_id"] = grant_id  # Only server-validated callers supply this.
         turn, _ = self.sessions.turns.create(
             session_id, request_id or uuid.uuid4().hex, payload, kind=kind,
-            job_id=job_id, max_model_calls=4 if kind == "job_review" else agent_loop.MAX_STEPS,
-            max_actions=12 if kind == "job_review" else 24, allow_queue=allow_queue)
+            job_id=job_id, max_model_calls=4 if kind in {"job_review", "debug_review"} else agent_loop.MAX_STEPS,
+            max_actions=12 if kind in {"job_review", "debug_review"} else 24, allow_queue=allow_queue)
         self.launch(turn)
         return self.sessions.turns.get(turn["id"])
 
@@ -84,12 +84,29 @@ class BridgeWorker:
                 continue  # Leave chat reviews pending for an authorized model worker.
             # The unique request key closes the cross-database crash window:
             # if enqueue committed but reviewed() did not, the same turn is reused.
+            key = "job-review:" + event["job_id"]
+            previous = self.sessions.turns.by_key(key)
+            if previous:
+                self.jobs.reviewed(event["id"], previous["id"])
+                continue
+            kind = "job_review"
+            if event["status"] == "failed":
+                from .debug_actions import DependencyDebugController, DebugDenied
+                try:
+                    DependencyDebugController(self.sessions.path, self.jobs, None).authorize(
+                        event["session_id"], event["job_id"])
+                    kind = "debug_review"
+                except (DebugDenied, ValueError, OSError):
+                    pass  # No valid input authority: preserve the read-only review.
+            message = ("【自动任务审查】任务 %s 已进入 %s。读取该任务的最新报告与验证状态，解释实际结果、"
+                       "失败原因和下一步；证据不足请明确说明。" % (event["job_id"], event["status"]))
+            message += ("在主机给出的合法候选和预算内继续诊断；若缺失模块确由已授权输入清单漏选，"
+                        "可补齐清单、通过廉价检查后提交隔离验证任务。不要停在第一次可恢复的报错，"
+                        "也不得把编译成功称为完整交付。" if kind == "debug_review" else
+                        "只允许读取或提出需用户授权的修复提案。")
             self.enqueue(
                 event["session_id"],
-                "【自动任务审查】任务 %s 已进入 %s。读取该任务的最新报告与验证状态，解释实际结果、"
-                "失败原因和下一步；证据不足请明确说明。只允许读取或提出需用户授权的修复提案。"
-                % (event["job_id"], event["status"]),
-                request_id="job-review:" + event["job_id"], kind="job_review",
+                message, request_id=key, kind=kind,
                 job_id=event["job_id"], allow_queue=True)
             turn = self.sessions.turns.by_key("job-review:" + event["job_id"])
             self.jobs.reviewed(event["id"], turn["id"])
