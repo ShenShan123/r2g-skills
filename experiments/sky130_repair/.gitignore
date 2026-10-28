@@ -1,0 +1,9 @@
+# Campaign evidence stays in platform/batch/design archives, not the tool repo.
+# Keep the original working paths available to replay/audit tools.
+/*.json
+/*.jsonl
+/*.v
+/README.md
+/semantic_evidence/
+/upstream_memory_assets/
+/auxiliary208_evidence/
