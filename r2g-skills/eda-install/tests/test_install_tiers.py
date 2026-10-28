@@ -80,6 +80,13 @@ def test_frontend_uses_conda_litexhub():
     assert "iverilog" in out and "verilator" in out
 
 
+def test_slang_dry_run_uses_historical_pinned_release(tmp_path):
+    out = _run("install_slang.sh", "--dry-run", env={"R2G_PREFIX": str(tmp_path)})
+    assert out.returncode == 0, out.stderr
+    assert "2025-03-29" in out.stderr and "sha256=" in out.stderr
+    assert not list(tmp_path.iterdir())
+
+
 def test_sky130_installs_magic_netgen():
     out = _run("install_sky130.sh", "--dry-run", "--force").stdout
     assert CONDA_CH in out

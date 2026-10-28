@@ -23,6 +23,8 @@ KLayout 预编译包并校验 sha256，固定版本的 OpenROAD-flow-scripts，�
 把 `r2g` 命令放进 `~/.local/bin` → 让你选择模型并填写 API 密钥（只保存在本机）→ 可选地跑一次自检
 （在每个所选平台上运行内置 counter8，从 RTL 到图数据集）。安装器的成功退出不代表完整语料全部通过；是否执行了物理自检会单独打印。
 
+SystemVerilog 修复使用独立的实验版 Yosys/Slang（OSS CAD Suite 2025-03-29），安装器会自动下载并校验归档和二进制哈希，保存其路径；它不会替换布局布线流程使用的 Yosys。
+
 常用参数：`--yes`（不逐项确认）、`--prefix DIR`（大文件放哪里）、`--platforms nangate45`（只安装并验证指定平台，多个平台用逗号分隔）、`--skip-toolchain`（工具链已就绪）、
 `--provider deepseek --key-env DEEPSEEK_API_KEY`（不交互地配置模型）。无模型密钥的完整流程验收可以使用 `bash install.sh --yes --prefix /your/install/path --no-config --selftest`。完整说明：`bash install.sh --help`。
 

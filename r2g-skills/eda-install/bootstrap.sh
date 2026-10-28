@@ -177,14 +177,14 @@ eval_tier() {
       fi ;;
     frontend)
       if [[ -n "$(d IVERILOG_EXE)" && -n "$(d VVP_EXE)" \
-         && -n "$(d MAKE_EXE)" && -n "$(d AWK_EXE)" && -n "$(d TIME_EXE)" ]]; then
+         && -n "$(d MAKE_EXE)" && -n "$(d AWK_EXE)" && -n "$(d TIME_EXE)" && -n "$(d R2G_SLANG_YOSYS)" ]]; then
         TIER_STATUS="OK"; TIER_ACTION="present"
       else
         TIER_STATUS="MISS"
         if [[ "$SUDO" == "1" && "$PKG" != "none" ]]; then
           TIER_ACTION="$PKG install iverilog verilator"
         else
-          TIER_ACTION="conda -n $CONDA_ENV iverilog verilator make gawk time"
+          TIER_ACTION="conda -n $CONDA_ENV iverilog verilator make gawk time + pinned OSS CAD Suite Slang"
         fi
       fi ;;
     sky130)
@@ -339,6 +339,9 @@ _load_core_choice() {
   fi
   if [[ -n "${BIGV:-}" && -f "$BIGV/.r2g-install/runtime.env" ]]; then
     source "$BIGV/.r2g-install/runtime.env"
+  fi
+  if [[ -n "${BIGV:-}" && -f "$BIGV/.r2g-install/slang.env" ]]; then
+    source "$BIGV/.r2g-install/slang.env"
   fi
   # Later tiers (in particular strict platform rules) must see tools that
   # earlier tiers installed under a custom --prefix, before the final pin step.

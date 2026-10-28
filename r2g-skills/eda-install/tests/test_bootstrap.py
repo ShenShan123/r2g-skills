@@ -59,6 +59,7 @@ _PROVISIONED_NOSUDO = {
     "PDK_ROOT": "/proj/me/pdk", "SKY130A_DIR": "/proj/me/pdk/sky130A",
     "GRAPH_PYTHON": "/proj/me/venv/bin/python",
     "MAKE_EXE": "/usr/bin/make", "AWK_EXE": "/usr/bin/awk", "TIME_EXE": "/usr/bin/time",
+    "R2G_SLANG_YOSYS": "/proj/me/oss-cad-suite/bin/yosys",
 }
 
 _BARE_NOSUDO = {
@@ -92,6 +93,11 @@ def _plan(tmp_path: Path, dump: dict, *extra: str) -> tuple[str, dict]:
         if m:
             rows[m["tier"]] = (m["status"], m["need"], m["action"])
     return out, rows
+
+
+def test_missing_slang_requires_frontend_install(tmp_path):
+    _, rows = _plan(tmp_path, dict(_PROVISIONED_NOSUDO, R2G_SLANG_YOSYS=""))
+    assert rows["frontend"][0] == "MISS"
 
 
 # --- detect_env.sh ------------------------------------------------------------

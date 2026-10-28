@@ -1,0 +1,10 @@
+{
+  "release": "2025-03-29",
+  "url": "https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2025-03-29/oss-cad-suite-linux-x64-20250329.tgz",
+  "sha256": "e21f0c28537d2d936d34ad581eb3f4579935e7cd70e9aaf604cec19dc8b210c7",
+  "yosys_version": "0.51+101 (314842d2a)",
+  "files": {
+    "libexec/yosys": "2b9b80c56b0955236882eb437435765a184c95057be6464ac3c1967427033f7a",
+    "share/yosys/plugins/slang.so": "ab4e93cd8f92b96ed81fae219522fb3201c2ffa105d51b1735f65c769b6e546e"
+  }
+}

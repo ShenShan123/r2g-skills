@@ -198,6 +198,21 @@ def test_other_failures_do_not_select_sv_frontend(log):
     assert frontend.match_synth_failure(log, None, []) == []
 
 
+def test_slang_resolves_custom_prefix_pin_in_fresh_process(tmp_path, monkeypatch):
+    import shlex
+    binary = _w(tmp_path / "custom tools/yosys", "#!/bin/sh\nexit 0\n")
+    binary.chmod(0o755)
+    scripts = tmp_path / "scripts"
+    _w(scripts / "flow/_env.sh", "export R2G_SLANG_YOSYS=" + shlex.quote(str(binary)) + "\n")
+    monkeypatch.delenv("R2G_SLANG_YOSYS", raising=False)
+    monkeypatch.setattr(frontend, "signoff_scripts", lambda: scripts)
+    src = tmp_path / "src"
+    _w(src / "top.sv", "module top(input a,output y);assign y=a;endmodule\n")
+    p = tmp_path / "project"
+    meta = project.create(src, p, "nangate45")
+    assert frontend.prepare_slang(p, meta)["tool"] == str(binary)
+
+
 def test_slang_activation_preserves_sources_defines_hooks_and_sizing(tmp_path, monkeypatch):
     binary = _w(tmp_path / "yosys", "#!/bin/sh\nexit 0\n")
     binary.chmod(0o755)

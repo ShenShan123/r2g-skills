@@ -123,6 +123,7 @@ HDR
   echo "# --- Tool binaries (pinned only when outside \$ORFS_ROOT/tools/install) ----"
   emit_export OPENROAD_EXE  "${OPENROAD_EXE:-}"  "$_orfs_install_prefix"
   emit_export YOSYS_EXE     "${YOSYS_EXE:-}"     "$_orfs_install_prefix"
+  emit_export R2G_SLANG_YOSYS "${R2G_SLANG_YOSYS:-}"
   emit_export STA_EXE       "${STA_EXE:-}"       "$_orfs_install_prefix"
   emit_export IVERILOG_EXE  "${IVERILOG_EXE:-}"
   emit_export VVP_EXE       "${VVP_EXE:-}"

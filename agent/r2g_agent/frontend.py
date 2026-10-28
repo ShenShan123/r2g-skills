@@ -41,6 +41,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import subprocess
 from pathlib import Path
 
 from .paths import signoff_scripts
@@ -250,6 +251,16 @@ def prepare_slang(project: Path, meta: dict) -> dict:
     R2G_SLANG_YOSYS can point to another compatible oss-cad-suite installation.
     """
     override = os.environ.get("R2G_SLANG_YOSYS")
+    if not override:
+        # Load the installer's custom-prefix pin in fresh CLI/web processes.
+        # Keep Slang's Yosys separate from the pinned physical-flow synthesizer.
+        resolved = subprocess.run(
+            ["bash", "-c", 'source "$1" >/dev/null && printf "%s" "${R2G_SLANG_YOSYS:-}"',
+             "r2g-slang-pin", str(signoff_scripts() / "flow/_env.sh")],
+            capture_output=True, text=True, timeout=30,
+        )
+        if resolved.returncode == 0:
+            override = resolved.stdout.strip()
     candidates = [Path(override)] if override else [
         Path.home() / "r2g_toolchain/oss-cad-suite/bin/yosys",
         Path("/opt/OpenROAD/oss-cad-suite/bin/yosys"),
