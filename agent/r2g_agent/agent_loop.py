@@ -31,6 +31,9 @@ class SessionStore:
     def __init__(self, path: Path | None = None):
         self.path = Path(path or r2g_home() / "sessions.sqlite")
         with self._c() as c:
+            # Streaming token ledgers and read-only cost monitors run together.
+            # A long reader must not block every streamed model write.
+            c.execute('PRAGMA journal_mode=WAL')
             c.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, created REAL, "
                       "updated REAL, title TEXT, messages TEXT)")
             c.execute('CREATE TABLE IF NOT EXISTS session_deletions (id TEXT PRIMARY KEY)')

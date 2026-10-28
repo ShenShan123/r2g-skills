@@ -62,3 +62,44 @@ separates actual repair attempts from historical cases that now pass directly.
 For live updates, add `--watch --interval 20 --runner-pid <pid>`; the watcher
 exits after the runner ends and never spends model tokens. Supplemental cohorts
 use separate output directories and denominators, preserving original failures.
+
+## Full historical population
+
+The full campaign includes 148 Nangate45 historical repair entries and 80 SKY130
+entries. Known semantic counterexamples remain in the inventory as original-RTL
+attempts under the normal transformation guards; inclusion does not validate an
+unsafe historical transformation. `prepare_full_n45_cost.py` inventories the
+original corpus and authenticated local ROM assets. `prepare_full_sky130_cost.py`
+reads original baseline source metadata and hashes; it does not transfer source
+contents and refuses to overwrite an existing inventory without an explicit flag.
+
+To include an already measured case, set `reuse_case_directory` to its original
+case receipt directory after checking source identity. The runner follows that
+attempt and its original owner without another API POST. It never treats the
+mere presence of a directory as proof of a completed measurement. Compilation
+defines are preserved when creating neutral input manifests.
+
+`summarize_repair_population.py` merges cohort CSV files against the complete
+parent manifests, retaining unsubmitted and blocked entries in the denominator.
+It deduplicates by platform and CID and rejects conflicting measurements. The
+full report distinguishes all planned cases from cases whose API requests have
+actually started and from completed measurements.
+
+To compare thread budgets, use `R2G_FIXED_CORES=1` with the desired
+`cores_per_design`; this prevents the interactive small-design cap from reducing
+ORFS to four threads. It does not change checker decks' internal thread settings
+or impose a CPU affinity/cgroup limit. Keep different thread-budget campaigns in
+separate homes and reports.
+
+For workers on another host, `serve_model_relay.py` forwards only the configured
+model to its fixed HTTPS provider through loopback and an SSH tunnel. Provider
+credentials stay on the controller. `sync_remote_cost_reports.py` copies only
+bounded experiment receipts and reports, then updates platform-specific totals.
+Calibration sessions are excluded because only case-associated sessions count.
+
+Session ledgers use SQLite WAL so report snapshots do not block streamed usage
+writes. Status GET requests can retry transient failures without another model
+POST. `--recover-unsubmitted` permits one recorded recovery turn in an existing
+session only after a closed initial stream and a server check that no associated
+job exists; the old attempt remains in the same ledger. Existing jobs are polled
+and never automatically resubmitted.

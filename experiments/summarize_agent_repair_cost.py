@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import datetime
 import fcntl
 import importlib.util
 import io
@@ -68,6 +69,21 @@ def session_usage(conn, sid, folder):
         rows = conn.execute("SELECT call_id,created,payload FROM model_usage WHERE session_id=? ORDER BY created", (sid,))
         return {"calls": [{**json.loads(r["payload"]), "call_id": r["call_id"], "created": r["created"]} for r in rows]}
     return read(folder / "usage.json") or read(folder / "usage_partial.json") or read(folder / "usage_initial.json") or {"calls": []}
+
+
+def phase_usage(raw, initial, state):
+    """A missing dispatch snapshot does not turn submission tokens into explanation."""
+    start = state.get('explanation_started')
+    if not start:
+        return measurement.usage_subset(raw), measurement.usage_subset({'calls': []})
+    cutoff = datetime.datetime.fromisoformat(start).timestamp()
+    initial_ids = {c['call_id'] for c in initial.get('calls', [])}
+    dispatch, explanation = [], []
+    for call in raw.get('calls', []):
+        created = call.get('created')
+        before = created < cutoff if isinstance(created, (float, int)) else call.get('call_id') in initial_ids
+        (dispatch if before else explanation).append(call)
+    return measurement.usage_subset({'calls': dispatch}), measurement.usage_subset({'calls': explanation})
 
 
 def jobs_for_case(conn, sid, state, folder):
@@ -163,8 +179,7 @@ def summarize(args):
             raw_usage = session_usage(sessions, sid, folder)
             usage = measurement.usage_subset(raw_usage)
             initial_raw = read(folder / "usage_initial.json", {})
-            dispatch = measurement.usage_subset(initial_raw)
-            explanation = measurement.usage_subset(raw_usage, {c["call_id"] for c in initial_raw.get("calls", [])})
+            dispatch, explanation = phase_usage(raw_usage, initial_raw, state)
             jobs, events = jobs_for_case(jobs_conn, sid, state, folder)
             audit = measurement.read_audit(args.orfs_audit, jobs)
             stage_counts = {}
@@ -311,7 +326,12 @@ def main():
             "runner_pid": args.runner_pid, "runner_start_ticks": identity,
             "interval_seconds": args.interval, "started_at": measurement.now()})
     while True:
-        summarize(args)
+        try:
+            summarize(args)
+        except (sqlite3.OperationalError, OSError) as exc:
+            if not args.watch:
+                raise
+            print(json.dumps({'report_retry': type(exc).__name__, 'message': str(exc)[:200]}), flush=True)
         if not args.watch or identity is None or process_identity(args.runner_pid) != identity:
             break
         time.sleep(args.interval)

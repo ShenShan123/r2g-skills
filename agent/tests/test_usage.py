@@ -131,3 +131,20 @@ def test_usage_endpoint_existing_and_deleted_session(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         server.session_usage(sid)
     assert exc.value.status_code == 404
+
+
+def test_live_usage_writer_is_not_blocked_by_report_snapshot():
+    import sqlite3
+    from concurrent.futures import ThreadPoolExecutor
+    ss = agent_loop.SessionStore()
+    sid = ss.create()
+    reader = sqlite3.connect(ss.path, isolation_level=None)
+    reader.execute('BEGIN')
+    reader.execute('SELECT * FROM sessions').fetchall()
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(ss.record_usage, sid, 'live', {'stream_complete': True}).result(timeout=3)
+        assert reader.execute('PRAGMA journal_mode').fetchone()[0] == 'wal'
+    finally:
+        reader.close()
+    assert ss.usage(sid)['model_calls'] == 1

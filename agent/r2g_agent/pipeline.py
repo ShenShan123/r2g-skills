@@ -177,6 +177,9 @@ class Pipeline:
         self.pool = ThreadPoolExecutor(max_workers=max(32, workers * 2))
         self.workers = max(1, workers)
         self.cores = cores_per_design
+        # Opt-in experiment control: preserve the requested thread budget even
+        # for small designs. Normal interactive runs retain their adaptive cap.
+        self.fixed_cores = os.environ.get("R2G_FIXED_CORES") == "1"
         self.ingest = ingest
         self.stage_timeout = stage_timeout
         self._procs: dict[tuple, subprocess.Popen] = {}
@@ -360,6 +363,9 @@ class Pipeline:
                 self.finalize_if_done(jid)
             touched.append(jid)
         return touched
+
+    def _flow_cores(self, cells: int) -> int:
+        return self.cores if self.fixed_cores or cells >= 5000 else min(self.cores, 4)
 
     def _sh(self, jid: str, name: str, stage: str, cmd: list[str], project: Path,
             env: dict | None = None, timeout: int | None = None) -> int:
@@ -589,10 +595,7 @@ class Pipeline:
         if sizing["binding"] == "fixed" and sizing["rule_die_side_um"] > sizing["die_side_um"]:
             self._fail_soft(jid, name, "size", "固定 die %g µm 小于规则算出的 %g µm，可能放不下或拥塞"
                             % (sizing["die_side_um"], sizing["rule_die_side_um"]))
-        if sizing["cells"] < 5000:
-            cores = min(self.cores, 4)    # small designs: more threads only thrash
-        else:
-            cores = self.cores
+        cores = self._flow_cores(sizing["cells"])
         # flow
         self._stage(jid, name, "flow")
         # from synthesis again, under the final SDC: the first synthesis only measured

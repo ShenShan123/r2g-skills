@@ -21,6 +21,7 @@ import shutil
 import threading
 import time
 import urllib.request
+import urllib.error
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "design_cases/api_repair_cost_20261028"
@@ -55,8 +56,17 @@ def progress(case, message):
 def get(api, route):
     # Ignore ambient HTTP proxies for this explicitly selected local service.
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    with opener.open(api.rstrip("/") + route, timeout=60) as response:
-        return json.load(response)
+    for attempt in range(5):
+        try:
+            with opener.open(api.rstrip("/") + route, timeout=90) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500 or attempt == 4:
+                raise
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            if attempt == 4:
+                raise
+        time.sleep(min(2 ** attempt, 8))
 
 
 def stream_chat(api, message, sid, raw_path, on_event, timeout):
@@ -115,7 +125,8 @@ def prepare_input(case, output):
         p = Path(name)
         return str(p.relative_to(source)) if p.is_absolute() else str(p)
     meta = {"top": case["top"], "files": [relative(f) for f in case["source_files"]],
-            "include_dirs": [relative(f) for f in case.get("include_dirs", [])]}
+            "include_dirs": [relative(f) for f in case.get("include_dirs", [])],
+            "defines": case.get("defines") or []}
     # No origin, baseline category, recipe names, or repaired constraints.
     save(target / "design.json", meta)
     hashes = {str(f.relative_to(target)): hashlib.sha256(f.read_bytes()).hexdigest()
@@ -241,7 +252,46 @@ def collect(api, state, folder, audit_paths):
     return jobs, designs, audit
 
 
+def reuse_case(case, args):
+    """Follow an existing measured attempt without a second model request.
+
+    The original runner remains the sole writer and owns its final explanation.
+    Linking its case directory lets the full-population read-only report include
+    the live receipt without copying a stale snapshot or overwriting evidence.
+    """
+    source = Path(case['reuse_case_directory']).resolve(strict=True)
+    state_path = source / 'state.json'
+    if not state_path.is_file():
+        raise ValueError('reused case has no submission state: ' + str(source))
+    state = load(state_path)
+    if state.get('case_id') != case['id'] or not state.get('initial_started'):
+        raise ValueError('reused case identity or submission receipt does not match')
+    dest = args.output / 'cases' / case['id']
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists() or dest.is_symlink():
+        if dest.resolve() != source:
+            raise ValueError('existing case directory conflicts with reuse receipt')
+    else:
+        dest.symlink_to(source, target_is_directory=True)
+    if args.dry_run:
+        return {'case_id': case['id'], 'status': 'dry_run', 'reused_case': str(source)}
+    progress(case['id'], 'following existing API attempt; no new POST')
+    deadline = time.monotonic() + args.job_timeout
+    while True:
+        state = load(state_path)
+        if state.get('status') == 'complete':
+            summary = load(source / 'summary.json')
+            if summary:
+                return summary
+        if state.get('status') == 'incomplete' or time.monotonic() >= deadline:
+            return {**state, 'status': 'incomplete', 'reused_case': str(source),
+                    'reuse_note': 'Original attempt retained; no automatic duplicate submission'}
+        time.sleep(args.poll_seconds)
+
+
 def run_case(case, args):
+    if case.get('reuse_case_directory'):
+        return reuse_case(case, args)
     folder = args.output / "cases" / case["id"]
     folder.mkdir(parents=True, exist_ok=True)
     state_path = folder / "state.json"
@@ -276,12 +326,33 @@ def run_case(case, args):
             raise RuntimeError("No session receipt; initial POST outcome ambiguous, will not resubmit automatically")
         state["job_ids"] = sorted(set(state["job_ids"] + associated_jobs(args.api, state["session_id"])))
         save(state_path, state)
+        if (not state['job_ids'] and getattr(args, 'recover_unsubmitted', False)
+                and state.get('initial_finished') and not state.get('recovery_started')):
+            # A completed/closed initial stream with no server-side session job
+            # can be retried explicitly. Keep the same session/token ledger and
+            # preserve the original stream. Never retry an ambiguous POST blindly.
+            state['recovery_started'] = now()
+            save(state_path, state)
+            stream_chat(args.api, prompt + ' 上次请求未产生关联任务；这是一次恢复请求。已有该设计任务时仅报告其ID，避免重复启动。',
+                        state['session_id'], folder / 'recovery.sse', on_event, args.chat_timeout)
+            state['job_ids'] = sorted(set(state['job_ids'] + associated_jobs(args.api, state['session_id'])))
+            state['recovery_finished'] = now()
+            save(state_path, state)
         usage_initial = get(args.api, f"/api/sessions/{state['session_id']}/usage")
+        if state.get('recovery_finished') and not state.get('recovery_usage_snapshotted'):
+            old_usage = folder / 'usage_initial.json'
+            if old_usage.exists():
+                save(folder / 'usage_initial.before_recovery.json', load(old_usage))
+            save(old_usage, usage_initial)
+            state['recovery_usage_snapshotted'] = True
+            save(state_path, state)
         if not (folder / "usage_initial.json").exists():
             save(folder / "usage_initial.json", usage_initial)
         if not state["job_ids"]:
             raise RuntimeError("Agent did not submit a job; see initial.sse (no direct-job fallback permitted)")
         deadline = time.time() + args.job_timeout
+        if state.get('error'):
+            state.setdefault('recovered_errors', []).append(state.pop('error'))
         state["status"] = "polling"
         save(state_path, state)
         progress(case["id"], "polling " + ",".join(state["job_ids"]))
@@ -351,6 +422,8 @@ def main():
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument('--recover-unsubmitted', action='store_true',
+                        help='One recorded recovery turn in an existing session after a closed stream and confirmed absence of a job')
     parser.add_argument("--orfs-audit", type=Path, action="append", default=[])
     parser.add_argument("--poll-seconds", type=float, default=10)
     parser.add_argument("--job-timeout", type=float, default=28800)
