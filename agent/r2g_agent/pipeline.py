@@ -41,7 +41,9 @@ from .paths import defgraph_scripts, r2g_home, repo_root, signoff_scripts, skill
 
 STAGES = ["prepare", "synth", "size", "flow", "signoff", "repair", "graph", "verify", "preview"]
 # the "graph" stage builds whichever dataset the job asked for (graph or image)
-OUTPUTS = ("graph", "image")
+# "signoff" stops once DRC and LVS are clean: the task of the R2G vs bare-agent
+# comparison (experiments/bare_agent), where neither arm builds a dataset.
+OUTPUTS = ("graph", "image", "signoff")
 STAGE_LABEL = {"prepare": "准备工程", "synth": "综合", "size": "定尺寸与时钟", "flow": "按最终时钟综合并布局布线",
                "signoff": "签核 DRC/LVS", "repair": "自动修复", "graph": "生成数据集", "verify": "数据集校验",
                "preview": "版图预览"}
@@ -727,6 +729,10 @@ class Pipeline:
                 return
             self._ok(jid, name, "repair", "修复成功，DRC/LVS 均已清零", v)
         self._ingest(jid, name, pdir)
+        if output == "signoff":
+            self.store.set_design(jid, name, status=PASSED, stage="done", detail={"output": "signoff"})
+            self.store.event(jid, name, "done", "ok", "完成：DRC/LVS 签核通过（仅签核，不生成数据集）")
+            return
         if output == "image":
             n_ok, n_all = self._image_dataset(jid, name, pdir, platform)
             if n_ok is None:

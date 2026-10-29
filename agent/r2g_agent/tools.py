@@ -85,10 +85,11 @@ def list_examples() -> dict:
                             "top": {"type": "string", "description": "top module (optional; inferred if omitted)"},
                             "name": {"type": "string", "description": "display name (optional)"}}}},
             "platform": {"type": "string", "enum": list(platforms.PLATFORMS), "description": "process platform"},
-            "output": {"type": "string", "enum": ["graph", "image"],
+            "output": {"type": "string", "enum": ["graph", "image", "signoff"],
                        "description": "dataset type: 'graph' = PyG graph datasets (b..f views + netlist graph); "
                                       "'image' = CircuitNet-style GCell feature maps (features from the placement "
-                                      "layout, congestion/IR-drop label maps from the routed one). Ask the user if "
+                                      "layout, congestion/IR-drop label maps from the routed one); 'signoff' = "
+                                      "stop once DRC and LVS are clean, no dataset. Ask the user if "
                                       "they did not say which."},
             "title": {"type": "string"}, "params": {"type": "object", "description": "flow parameters overriding r2g's measured defaults (omit to use the defaults; call flow_params first). Keys: period_ns, period_tiers, utilization, area_allowance, pdn_floor_um, die_side_um, io_pct, setup_uncertainty_pct, hold_uncertainty_ns, place_density_lb_addon"}}, ["designs"]))
 def start_job(designs: list, platform: str = "nangate45", output: str = "graph", title: str = "",

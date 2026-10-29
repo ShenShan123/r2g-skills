@@ -38,3 +38,10 @@ def test_signoff_repair_allows_the_full_antenna_ladder():
     assert pipeline.REPAIR_MAX_ITERS >= 4
     src = open(pipeline.__file__).read()
     assert '"--max-iters", str(REPAIR_MAX_ITERS)' in src
+
+
+def test_signoff_output_is_accepted():
+    from r2g_agent import pipeline, tools
+    assert "signoff" in pipeline.OUTPUTS
+    spec = next(s for s in tools.specs() if s["name"] == "start_job")
+    assert "signoff" in spec["parameters"]["properties"]["output"]["enum"]
