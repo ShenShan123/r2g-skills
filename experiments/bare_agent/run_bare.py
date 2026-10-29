@@ -33,8 +33,19 @@ from bare_tools import SPECS, BareTools, ToolError  # noqa: E402
 
 COUNTERS = ("input_tokens", "output_tokens", "total_tokens", "cache_read_input_tokens",
             "uncached_input_tokens", "cache_creation_input_tokens", "reasoning_tokens")
-DEFAULT_CAPS = {"model_calls": 60, "total_tokens": 2_000_000, "run_flow": 10, "run_signoff": 16,
+# Budget by work and money, not by raw tokens: a total-token cap counted the same
+# re-sent context over and over (94% cache hits) and stopped harness v1 after one
+# flow run. Tokens stay a reported metric. Cost uses deepseek-flash PEAK prices
+# (CNY per 1M tokens: uncached input 2, cache-hit input 0.04, output 8).
+DEFAULT_CAPS = {"model_calls": 100, "cost_cny": 5.0, "run_flow": 10, "run_signoff": 16,
                 "wall_seconds": 24 * 3600}
+PEAK_CNY = {"uncached": 2.0, "cached": 0.04, "output": 8.0}
+# Context management: when the full-length tool results in the conversation exceed
+# this many characters, all but the newest KEEP_RECENT are replaced at once by a
+# short stub. Compacting in blocks (not every call) keeps the prompt prefix, and so
+# the provider's cache, stable between compactions.
+COMPACT_AT_CHARS = 120_000
+KEEP_RECENT = 4
 MAX_TOOL_RESULT_CHARS = 12000          # same clip as the R2G agent loop
 MAX_NUDGES = 3                         # consecutive truncated/empty replies tolerated
 
@@ -53,7 +64,7 @@ TASK = """设计：顶层模块 {top}，平台 {platform}。
 - 保持原设计功能：不得删除或简化逻辑、缩小存储器、把输出接常量、替换为空模块；只允许不改变行为的源码修正（如文件清单、include/路径问题）。
 - 不得修改时钟周期和 constraint.sdc，不得修改 PDK、平台文件或签核规则（工具也不允许）。
 - 可以修改 config.mk 中的 ORFS 变量（面积/利用率/布局布线选项等）、添加由 config.mk 引用的 Tcl hook。
-预算：最多 {run_flow} 次 run_flow、{run_signoff} 次 run_signoff、{model_calls} 次模型调用。
+预算：最多 {run_flow} 次 run_flow、{run_signoff} 次 run_signoff、{model_calls} 次模型调用。较早的工具输出会被压缩成摘要，需要时请重新读取。
 先运行流程和签核了解现状；完成或判断无法修复时调用 finish 说明结果。"""
 
 
@@ -177,6 +188,32 @@ def audit_counts(journal: Path, job: str) -> dict:
             "gaps": {"make_without_end": len(set(starts) - ends), "wrapper_without_end": len(wrappers - wends)}}
 
 
+def call_cost(c: dict) -> float:
+    cached = c.get("cache_read_input_tokens") or 0
+    uncached = c.get("uncached_input_tokens")
+    if uncached is None:
+        uncached = (c.get("input_tokens") or 0) - cached
+    return (uncached * PEAK_CNY["uncached"] + cached * PEAK_CNY["cached"]
+            + (c.get("output_tokens") or 0) * PEAK_CNY["output"]) / 1e6
+
+
+def compact(messages: list, transcript: list) -> bool:
+    """Shrink old tool results in place once they pass COMPACT_AT_CHARS; True if it did."""
+    full = [i for i, m in enumerate(messages) if m["role"] == "tool" and not m.get("_compacted")]
+    if sum(len(messages[i]["content"]) for i in full) <= COMPACT_AT_CHARS or len(full) <= KEEP_RECENT:
+        return False
+    args = {tc["id"]: tc for m in messages if m["role"] == "assistant" for tc in m.get("tool_calls") or []}
+    for i in full[:-KEEP_RECENT]:
+        m = messages[i]
+        a = json.dumps((args.get(m["tool_call_id"]) or {}).get("arguments", {}), ensure_ascii=False)[:160]
+        head = m["content"][:240].replace("\n", " ")
+        m["content"] = ("[较早的工具结果已压缩以控制上下文；需要细节请重新读取] %s %s → %s ..."
+                        % (m.get("name"), a, head))
+        m["_compacted"] = True
+    transcript.append({"harness_compaction": len(full) - KEEP_RECENT})
+    return True
+
+
 def clip(obj) -> str:
     s = json.dumps(obj, ensure_ascii=False, default=str)
     return s if len(s) <= MAX_TOOL_RESULT_CHARS else s[:MAX_TOOL_RESULT_CHARS] + "...(truncated)"
@@ -189,12 +226,14 @@ def run_loop(adapter, tools: BareTools, task: str, caps: dict, transcript: list,
     while True:
         if len(calls) >= caps["model_calls"]:
             return "cap_model_calls"
-        if sum(c.get("total_tokens") or 0 for c in calls) >= caps["total_tokens"]:
-            return "cap_tokens"
+        if sum(call_cost(c) for c in calls) >= caps["cost_cny"]:
+            return "cap_cost"
+        compact(messages, transcript)
         if time.monotonic() - t0 >= caps["wall_seconds"]:
             return "cap_wall"
         text, tool_calls, usage, err, stop_reason = "", [], None, None, None
-        for ev in adapter.stream(messages, SPECS, SYSTEM):
+        wire = [{k: v for k, v in m.items() if k != "_compacted"} for m in messages]
+        for ev in adapter.stream(wire, SPECS, SYSTEM):
             if ev["type"] == "text":
                 text += ev["delta"]
             elif ev["type"] == "tool_call":
@@ -343,6 +382,8 @@ def main():
               "stop_reason": stop, **v, "caps": caps, "model_calls": len(calls),
               "usage_complete": complete_usage, "provider_usage": usage_totals,
               "transport_retries": sum(len(c.get("transport_retries") or []) for c in calls),
+              "cost_cny_peak": round(sum(call_cost(c) for c in calls), 5),
+              "compactions": sum(1 for e in transcript if "harness_compaction" in e),
               "tool_counts": agent_counts, "agent_wall_seconds": round(agent_wall, 1),
               "agent_eda_seconds": round(agent_eda, 1), "harness_signoff": harness_signoff,
               "orfs_audit": audit, "writes": tools.writes, "finish": tools.finished,

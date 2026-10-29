@@ -46,8 +46,22 @@ so the comparison is conservative.
 
 ## Budgets per design (both arms, same values)
 
-60 model calls, 2,000,000 tokens, 10 flow runs, 16 signoff runs, 24 h wall.
-A design that hits a cap is a failure and keeps its full cost.
+100 model calls, 5 CNY at deepseek-flash peak prices, 10 flow runs, 16 signoff
+runs, 24 h wall. A design that hits a cap is a failure and keeps its full cost.
+Total tokens are reported, never capped.
+
+Harness v1 capped total tokens (2M, cache reads included) and kept every tool
+output in the conversation. Its bare runs spent ~94% of their tokens re-sending
+context and stopped after one flow run: a naive loop, not a competent agent.
+They are archived as `harness_v1_naive/` and excluded from the comparison.
+
+## Context management (bare arm)
+
+When the full-length tool results in the conversation exceed 120k characters,
+all but the newest four are replaced at once by a stub (tool, arguments, first
+line of the result); the model can re-read anything it needs. Compacting in
+blocks keeps the prompt prefix stable between compactions so the provider's
+cache stays effective. The R2G arm's conversations (~6 calls) never reach it.
 
 ## Outcome
 

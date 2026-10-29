@@ -169,3 +169,36 @@ def test_janitor_keeps_the_graded_layout_and_reports(tmp_path):
     assert left == ["backend/RUN_A/flow.log", "backend/RUN_B/flow.log",
                     "backend/RUN_B/results/6_final.def", "backend/RUN_B/results/6_final.gds",
                     "reports/drc.json"]
+
+
+def test_compaction_shrinks_old_results_in_one_block_and_keeps_recent():
+    msgs = [{"role": "user", "content": "task"}]
+    for i in range(10):
+        msgs.append({"role": "assistant", "content": "", "tool_calls": [
+            {"id": "t%d" % i, "name": "read_file", "arguments": {"path": "f%d.v" % i}}]})
+        msgs.append({"role": "tool", "tool_call_id": "t%d" % i, "name": "read_file", "content": "x" * 15000})
+    transcript = []
+    assert rb.compact(msgs, transcript) is True
+    tools = [m for m in msgs if m["role"] == "tool"]
+    assert all(m.get("_compacted") for m in tools[:-rb.KEEP_RECENT])
+    assert all(len(m["content"]) == 15000 for m in tools[-rb.KEEP_RECENT:])
+    assert "f0.v" in tools[0]["content"] and len(tools[0]["content"]) < 600
+    # below the threshold again: no further rewrite, so the cached prefix stays stable
+    assert rb.compact(msgs, transcript) is False
+
+
+def test_cost_cap_replaces_the_token_cap(tmp_path):
+    t, proj, orfs = _tools(tmp_path)
+
+    class Pricey(FakeAdapter):
+        def stream(self, messages, specs, system):
+            yield {"type": "tool_call", "id": "x%d" % self.n, "name": "list_dir", "arguments": {"path": "."}}
+            self.n += 1
+            yield {"type": "usage", "usage_reported": True, "stream_complete": True,
+                   "input_tokens": 1_000_000, "cache_read_input_tokens": 0, "uncached_input_tokens": 1_000_000,
+                   "output_tokens": 0, "total_tokens": 1_000_000}
+            yield {"type": "done", "stop_reason": "tool_calls"}
+    calls = []
+    stop = rb.run_loop(Pricey([]), t, "task", {**rb.DEFAULT_CAPS, "cost_cny": 5.0}, [], calls)
+    assert stop == "cap_cost" and len(calls) == 3          # 2 CNY per call at peak uncached price
+    assert "total_tokens" not in rb.DEFAULT_CAPS
