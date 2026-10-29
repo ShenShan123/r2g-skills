@@ -44,6 +44,14 @@ def live_runner(out: Path):
     return None
 
 
+def cleanup_workspace(case):
+    variant = case["id"] + "_bare"
+    flow = Path(os.environ["ORFS_ROOT"]) / "flow"
+    for sub in ("results", "logs", "objects", "reports"):
+        for d in (flow / sub / case["platform"]).glob("*/" + variant):
+            shutil.rmtree(d, ignore_errors=True)
+
+
 def run_one(case, a):
     out = a.root / "cases" / case["id"]
     if (out / "result.json").exists():
@@ -60,25 +68,31 @@ def run_one(case, a):
         dest = a.root / "interrupted" / ("%s_%d" % (case["id"], int(time.time())))
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(out), str(dest))
-    wait_for_load(a)
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "case.json").write_text(json.dumps(case, indent=1, ensure_ascii=False))
-    baseline = a.baselines / case["id"]
-    cmd = [sys.executable, str(HERE / "run_bare.py"), "--case", str(out / "case.json"),
-           "--baseline", str(baseline), "--out", str(out), "--repo", str(a.repo),
-           "--base-url", a.base_url, "--model", a.model]
-    if a.caps:
-        cmd += ["--caps", a.caps]
-    t0 = time.time()
-    with (out / "runner.log").open("ab") as log:
-        rc = subprocess.call(cmd, stdout=log, stderr=subprocess.STDOUT, cwd=a.repo)
-    variant = case["id"] + "_bare"
-    flow = Path(os.environ["ORFS_ROOT"]) / "flow"
-    top = json.loads((out / "case.json").read_text()).get("top")
-    for sub in ("results", "logs", "objects", "reports"):
-        for d in (flow / sub / case["platform"]).glob("*/" + variant):
-            shutil.rmtree(d, ignore_errors=True)
-    return case["id"], "rc=%s %.0fs" % (rc, time.time() - t0)
+    for attempt in (1, 2):
+        wait_for_load(a)
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "case.json").write_text(json.dumps(case, indent=1, ensure_ascii=False))
+        baseline = a.baselines / case["id"]
+        cmd = [sys.executable, str(HERE / "run_bare.py"), "--case", str(out / "case.json"),
+               "--baseline", str(baseline), "--out", str(out), "--repo", str(a.repo),
+               "--base-url", a.base_url, "--model", a.model, "--max-tokens", str(a.max_tokens)]
+        if a.caps:
+            cmd += ["--caps", a.caps]
+        t0 = time.time()
+        with (out / "runner.log").open("ab") as log:
+            rc = subprocess.call(cmd, stdout=log, stderr=subprocess.STDOUT, cwd=a.repo)
+        res = out / "result.json"
+        if attempt == 1 and res.is_file() and not json.loads(res.read_text()).get("usage_complete"):
+            # voided by the invocation (a stream ended without provider usage), not
+            # by the model: kept outside the cohort, one fresh attempt (PROTOCOL.md)
+            cleanup_workspace(case)
+            dest = a.root / "voided" / ("%s_%d" % (case["id"], int(time.time())))
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(out), str(dest))
+            continue
+        break
+    cleanup_workspace(case)
+    return case["id"], "rc=%s %.0fs attempt %d" % (rc, time.time() - t0, attempt)
 
 
 def main():
@@ -91,6 +105,7 @@ def main():
     ap.add_argument("--model", default="deepseek-flash")
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--caps", default="")
+    ap.add_argument("--max-tokens", type=int, default=32768)
     ap.add_argument("--max-load", type=float, default=0.0,
                     help="start a new design only while loadavg/cpus is below this (0 = no gate)")
     a = ap.parse_args()
@@ -98,7 +113,7 @@ def main():
     (a.root / "cases").mkdir(parents=True, exist_ok=True)
     cases = json.loads(a.cases.read_text())
     (a.root / "launch.json").write_text(json.dumps({"started": time.time(), "workers": a.workers,
-        "model": a.model, "repo": str(a.repo), "base_url": a.base_url, "caps": a.caps,
+        "model": a.model, "max_tokens": a.max_tokens, "repo": str(a.repo), "base_url": a.base_url, "caps": a.caps,
         "cases": [c["id"] for c in cases]}, indent=1))
     with concurrent.futures.ThreadPoolExecutor(max_workers=a.workers) as pool:
         for cid, status in pool.map(lambda c: run_one(c, a), cases):

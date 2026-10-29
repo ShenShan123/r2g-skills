@@ -14,8 +14,12 @@ without that orchestration?
 | Model (bare) | everything: reads logs, edits `config.mk`, writes Tcl hooks, reruns | the same ORFS and signoff scripts, invoked by the model through `bare_tools.py` |
 
 Same model, model client, retry layer and usage counters in both LLM arms
-(first round: deepseek-flash, thinking on, 4096-token responses; second
-round: deepseek-v4-pro). One frozen runtime commit per round
+(first round: deepseek-flash, thinking on, 32768-token responses; second
+round: deepseek-v4-pro). The repair-pool R2G results reused here were measured
+at 4096; R2G's ~6 calls per design never hit that limit, and a smaller limit can
+only hurt R2G, so reusing them keeps the comparison conservative. Pilot v2 ran
+the bare arm at 4096: thinking alone used the whole reply on hard steps, the
+model returned nothing and the attempt ended `model_stopped` (6 of 18 designs). One frozen runtime commit per round
 (`runtime_commit.json`), deployed byte-identically on every host.
 
 ## Sample
@@ -41,8 +45,14 @@ so the comparison is conservative.
   ORFS platform files and rule decks are read-only (re-hashed at the end).
 - The R2G skill tree (recipes, knowledge base, docs) is outside every readable root.
 - `constraint.sdc` must be byte-identical at the end (no clock or I/O relaxation).
-- Every RTL write is journaled; a design passes automatically only with no RTL
-  change, otherwise it goes to a semantics review (same rule R2G was held to).
+- Every RTL write is journaled. RTL edits go through a semantics review (same
+  rule R2G was held to). Its automatic part (`semantic_review`) clears, and
+  records why: `rtl/design.json` (a description the flow never reads); line
+  endings, trailing whitespace and a final newline; a file added as a copy of an
+  original, or an original moved elsewhere, line for line; edits confined to
+  double-quoted path literals (`include`, `$readmemh`). Anything else is
+  `pending_semantic_review` for a human. All four pilot-v2 pending cases were
+  location fixes of these kinds.
 
 ## Budgets per design (both arms, same values)
 
@@ -81,5 +91,6 @@ retries; agent wall time and EDA time. Tables: `COMPARISON_TABLES.md`.
 
 One attempt per design and arm. An attempt voided by an invocation failure
 (transport error, incomplete provider usage) gets one fresh attempt; voided
-attempts are kept and reported. Harness defects found during the run are
+attempts are kept under `voided/` and reported. A second incomplete attempt is
+graded as it stands, with its usage reported as incomplete. Harness defects found during the run are
 fixed, recorded, and the affected designs re-run from scratch.

@@ -7,6 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bare_agent"))
 import bare_tools as bt  # noqa: E402
+import launch_bare  # noqa: E402,F401
 import run_bare as rb  # noqa: E402
 
 
@@ -202,3 +203,54 @@ def test_cost_cap_replaces_the_token_cap(tmp_path):
     stop = rb.run_loop(Pricey([]), t, "task", {**rb.DEFAULT_CAPS, "cost_cny": 5.0}, [], calls)
     assert stop == "cap_cost" and len(calls) == 3          # 2 CNY per call at peak uncached price
     assert "total_tokens" not in rb.DEFAULT_CAPS
+
+
+def test_semantic_review_clears_location_fixes_and_flags_logic(tmp_path):
+    case, base = _case(tmp_path)
+    (Path(case["input_root"]) / "src/rtl/mem.v").write_text(
+        'module mem; initial $readmemh("C:\\\\proj\\\\a b\\\\init.hex", m); endmodule\r\n')
+    proj = tmp_path / "out" / "nangate45_C1_bare"
+    r = rb.prepare(case, base, proj)
+    rtl = proj / "rtl"
+    (rtl / "design.json").write_text("{}")                                         # metadata
+    (rtl / "src/rtl/mem.v").write_text('module mem; initial $readmemh("init.hex", m); endmodule\n')
+    (rtl / "flat").mkdir()
+    (rtl / "flat/top.v").write_text((rtl / "src/rtl/top.v").read_text())          # copy
+    (rtl / "src/rtl/defs.vh").rename(rtl / "flat/defs.vh")                         # move
+    assert rb.semantic_review(proj, r) == {"pending": [], "cleared": [
+        {"file": "flat/defs.vh", "why": "copy_of_original"},
+        {"file": "flat/top.v", "why": "copy_of_original"},
+        {"file": "src/rtl/mem.v", "why": "path_literals_only"},
+        {"file": "src/rtl/defs.vh", "why": "moved"}]}
+    (rtl / "src/rtl/top.v").write_text("module top(input a, output y); assign y = 1'b0; endmodule\n")
+    (rtl / "src/rtl/mem.v").write_text('module mem; initial $readmemh("init.hex", n); endmodule\n')
+    assert rb.semantic_review(proj, r)["pending"] == ["src/rtl/mem.v", "src/rtl/top.v"]
+    # a changed non-path literal is logic, not location
+    assert not rb._path_literals_only(['$display("a");'], ['$display("b");'])
+
+
+def test_launcher_gives_an_invocation_voided_attempt_one_fresh_retry(tmp_path, monkeypatch):
+    import launch_bare as lb
+    monkeypatch.setenv("ORFS_ROOT", str(tmp_path / "orfs"))
+    runs = []
+
+    def fake_call(cmd, **kw):
+        out = Path(cmd[cmd.index("--out") + 1])
+        runs.append(out)
+        complete = len(runs) > 1 or "C2" in str(out)
+        (out / "result.json").write_text(json.dumps({"usage_complete": complete}))
+        return 0
+    monkeypatch.setattr(lb.subprocess, "call", fake_call)
+    a = type("A", (), dict(root=tmp_path / "root", baselines=tmp_path, repo=tmp_path, base_url="u",
+                           model="m", max_tokens=32768, caps="", max_load=0))
+    cid, status = lb.run_one({"id": "n_C1", "platform": "nangate45"}, a)
+    assert status.endswith("attempt 2") and len(runs) == 2
+    assert json.loads((a.root / "cases/n_C1/result.json").read_text())["usage_complete"]
+    assert len(list((a.root / "voided").iterdir())) == 1
+    runs.clear()
+    # an incomplete second attempt is kept as the result, not retried again
+    monkeypatch.setattr(lb.subprocess, "call", lambda cmd, **kw: (runs.append(1), Path(
+        cmd[cmd.index("--out") + 1], "result.json").write_text('{"usage_complete": false}'))[0] and 0)
+    cid, status = lb.run_one({"id": "n_C3", "platform": "nangate45"}, a)
+    assert status.endswith("attempt 2") and len(runs) == 2
+    assert (a.root / "cases/n_C3/result.json").is_file()

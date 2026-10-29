@@ -291,6 +291,71 @@ def run_loop(adapter, tools: BareTools, task: str, caps: dict, transcript: list,
             return "finished"
 
 
+_LITERAL = re.compile(r'"[^"\n]*"')
+_PATHLIKE = re.compile(r'/|\.[A-Za-z0-9]{1,6}$')
+
+
+def _lines(p: Path) -> list[str]:
+    lines = [l.rstrip() for l in p.read_text(errors="replace").replace("\r\n", "\n").split("\n")]
+    while lines and not lines[-1]:
+        lines.pop()                    # a final newline added or dropped is not an edit
+    return lines
+
+
+def _path_literals_only(old: list[str], new: list[str]) -> bool:
+    """Same lines except inside double-quoted literals that are paths on both
+    sides (`include "x.vh"`, $readmemh("mem/x.hex")): a location fix, not logic."""
+    if len(old) != len(new):
+        return False
+    for a, b in zip(old, new):
+        if a == b:
+            continue
+        if _LITERAL.sub('""', a) != _LITERAL.sub('""', b):
+            return False
+        for la, lb in zip(_LITERAL.findall(a), _LITERAL.findall(b)):
+            if la != lb and not (_PATHLIKE.search(la[1:-1]) and _PATHLIKE.search(lb[1:-1])):
+                return False
+    return True
+
+
+def semantic_review(project: Path, receipt: dict) -> dict:
+    """Automatic part of the semantics review of the model's RTL edits.
+
+    Cleared without a human: rtl/design.json (a description, not read by the
+    flow); line endings / trailing whitespace; an added file whose lines equal
+    an original's (a copy or a move to a space-free path); a moved original
+    present elsewhere line-for-line; edits confined to path string literals.
+    Anything else goes to a human review (pending)."""
+    rtl, src = project / "rtl", Path(receipt["input_root"])
+    originals = {rel: src / rel for rel in receipt["rtl_sha256"] if rel != "design.json" and (src / rel).is_file()}
+    final = {str(p.relative_to(rtl)): p for p in rtl.rglob("*") if p.is_file()}
+    final.pop("design.json", None)
+    orig_lines = {rel: _lines(p) for rel, p in originals.items()}
+    cleared, pending = [], []
+    for rel, p in sorted(final.items()):
+        h = receipt["rtl_sha256"].get(rel)
+        if h and sha(p) == h:
+            continue
+        new = _lines(p)
+        if rel in orig_lines and new == orig_lines[rel]:
+            cleared.append({"file": rel, "why": "whitespace_only"})
+        elif rel in orig_lines and _path_literals_only(orig_lines[rel], new):
+            cleared.append({"file": rel, "why": "path_literals_only"})
+        elif rel not in orig_lines and any(new == ol for ol in orig_lines.values()):
+            cleared.append({"file": rel, "why": "copy_of_original"})
+        elif rel not in orig_lines and any(_path_literals_only(ol, new) for ol in orig_lines.values()):
+            cleared.append({"file": rel, "why": "copy_with_path_literals_only"})
+        else:
+            pending.append(rel)
+    finals = [_lines(p) for p in final.values()]
+    for rel in sorted(set(orig_lines) - set(final)):
+        if any(f == orig_lines[rel] or _path_literals_only(orig_lines[rel], f) for f in finals):
+            cleared.append({"file": rel, "why": "moved"})
+        else:
+            pending.append(rel)
+    return {"cleared": cleared, "pending": pending}
+
+
 def verdict(tools: BareTools, project: Path, receipt: dict, platform_dir: Path, deck_hash: str) -> dict:
     s = tools.signoff_summary()
     drc = json.loads((project / "reports/drc.json").read_text()) if (project / "reports/drc.json").is_file() else {}
@@ -312,13 +377,14 @@ def verdict(tools: BareTools, project: Path, receipt: dict, platform_dir: Path, 
                        if p.is_file() and str(p.relative_to(project / "rtl")) not in receipt["rtl_sha256"])
     sdc_ok = sha(project / "constraints/constraint.sdc") == receipt["sdc_sha256"]
     deck_ok = tree_hash(platform_dir) == deck_hash
+    review = semantic_review(project, receipt) if (rtl_changed or rtl_added) else {"cleared": [], "pending": []}
     if dual and bound and sdc_ok and deck_ok:
-        outcome = "pending_semantic_review" if (rtl_changed or rtl_added) else "dual_clean"
+        outcome = "pending_semantic_review" if review["pending"] else "dual_clean"
     else:
         outcome = "not_dual_clean"
     return {"outcome": outcome, "signoff": s, "bound_to_layout": bound, "run": run.name if run else None,
             "gds_sha256": gds, "sdc_unchanged": sdc_ok, "platform_unchanged": deck_ok,
-            "rtl_changed": rtl_changed, "rtl_added": rtl_added}
+            "rtl_changed": rtl_changed, "rtl_added": rtl_added, "semantic_review": review}
 
 
 def main():
@@ -330,6 +396,9 @@ def main():
     ap.add_argument("--base-url", required=True)
     ap.add_argument("--model", default="deepseek-flash")
     ap.add_argument("--caps", default="", help="JSON overrides of the budget caps")
+    # 4096 was used up by thinking alone on hard steps (empty replies, then
+    # model_stopped): pilot v2. Both arms use the same value.
+    ap.add_argument("--max-tokens", type=int, default=32768)
     a = ap.parse_args()
     case = json.loads(a.case.read_text())
     caps = {**DEFAULT_CAPS, **(json.loads(a.caps) if a.caps else {})}
@@ -353,7 +422,7 @@ def main():
     journal = out / "orfs_audit.jsonl"
     tools = BareTools(project, platform, a.repo, orfs, audit_env(job, name, project, journal, a.repo))
     mc = ModelConfig(provider="deepseek", model=a.model, base_url=a.base_url,
-                     api_key_env="R2G_LOCAL_RELAY_AUTH", thinking=True, max_tokens=4096, temperature=0.2)
+                     api_key_env="R2G_LOCAL_RELAY_AUTH", thinking=True, max_tokens=a.max_tokens, temperature=0.2)
     os.environ.setdefault("R2G_LOCAL_RELAY_AUTH", "local-relay-only-not-a-provider-key")
     adapter = OpenAICompatAdapter(mc.resolved(), os.environ["R2G_LOCAL_RELAY_AUTH"])
     task = TASK.format(top=case["top"], platform=platform, project=project, **caps)
@@ -379,6 +448,7 @@ def main():
     usage_totals = {k: (sum(c.get(k) or 0 for c in calls) if complete_usage else None) for k in COUNTERS}
     audit = audit_counts(journal, job)
     result = {"case_id": case["id"], "platform": platform, "arm": "bare", "model": a.model, "job": job,
+              "max_tokens": a.max_tokens,
               "stop_reason": stop, **v, "caps": caps, "model_calls": len(calls),
               "usage_complete": complete_usage, "provider_usage": usage_totals,
               "transport_retries": sum(len(c.get("transport_retries") or []) for c in calls),
