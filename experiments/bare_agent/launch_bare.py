@@ -28,10 +28,32 @@ def wait_for_load(a):
         time.sleep(60)
 
 
+def live_runner(out: Path):
+    """PID of a run_bare.py still working on this case directory (e.g. its
+    launcher was restarted to rebalance hosts), else None."""
+    needle = str(out / "case.json").encode()
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            cmd = (proc / "cmdline").read_bytes()
+        except OSError:
+            continue
+        if b"run_bare.py" in cmd and needle in cmd:
+            return int(proc.name)
+    return None
+
+
 def run_one(case, a):
     out = a.root / "cases" / case["id"]
     if (out / "result.json").exists():
         return case["id"], "skipped"
+    pid = live_runner(out) if out.exists() else None
+    if pid:
+        # adopt the running attempt instead of restarting it
+        while live_runner(out):
+            time.sleep(30)
+        return case["id"], "adopted pid %d" % pid
     if out.exists():
         # interrupted by a harness restart (never by the model): keep it for the
         # record, outside the measured cohort, and start the design fresh
