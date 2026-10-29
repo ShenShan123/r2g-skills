@@ -8,7 +8,8 @@ reads are an input subset), dispatch vs final-explanation split, ORFS wrapper
 calls and top-level make launches, per-case distribution, and repair classes.
 Run the same script over another model's ledger to compare like for like.
 
-Money is printed only when prices are given (USD per million tokens); nothing
+Money is printed only for price sets passed with --prices (per million tokens,
+uncached input / cache-hit input / output, output including reasoning); nothing
 is estimated from a price sheet the script does not know.
 """
 from __future__ import annotations
@@ -48,7 +49,66 @@ def _money(usage, prices):
             + (usage.get("output_tokens") or 0) * prices["output"]) / 1e6
 
 
-def report(ledger: Path, model: str, prices: dict | None) -> str:
+def effective_orfs(attempt: dict) -> dict:
+    """ORFS work that contributed to the accepted result, from the case receipts.
+
+    Excluded as redundant (a run that picks the working strategy first would not
+    pay for it): (1) a signoff repair round whose verdict is not `cleared`, with
+    its reflow wrapper and every make it spawned up to the next round; (2) a
+    failed synthesis wrapper superseded by a later synthesis (resynthesis starts
+    over); (3) a failed flow wrapper superseded by a partial rerun: the wrapper,
+    its failing make(s) and the rerun's clean makes -- the stages it completed
+    are reused by the rerun and stay counted. Model tokens are unaffected: repair
+    rounds are deterministic and make no model calls."""
+    folder = Path(attempt["attempt"])
+    audit = json.loads((folder / "orfs_audit.json").read_text())
+    job = json.loads((folder / (attempt["job_ids"][0] + ".job.json")).read_text())
+    detail = (job.get("designs") or [{}])[0].get("detail") or {}
+    rounds = [r for r in detail.get("repair") or [] if r.get("strategy") not in (None, "none", "stop_clean")]
+    events = sorted(audit["matched_events"], key=lambda e: e["timestamp"])
+    ends = {e.get("invocation_id"): e.get("exit_code") for e in events if e["event"] == "make_end"}
+    wend = {e.get("wrapper_id"): e.get("exit_code") for e in events if e["event"] == "wrapper_end"}
+    # Group top-level makes under the latest wrapper of the same pipeline stage;
+    # makes outside any wrapper (signoff checks, graph, verify) form their own group.
+    wrappers, current = [], {}
+    for e in events:
+        stage = e.get("stage")
+        if e["event"] == "wrapper_start":
+            current[stage] = {"stage": stage, "id": e.get("wrapper_id"), "makes": []}
+            wrappers.append(current[stage])
+        elif e["event"] == "make_start" and int(e.get("make_level") or 0) == 0:
+            if stage not in current:
+                current[stage] = {"stage": stage, "id": None, "makes": []}
+                wrappers.append(current[stage])
+            current[stage]["makes"].append({"kind": e.get("kind"),
+                                            "exit": ends.get(e.get("invocation_id"))})
+    total_w = sum(1 for w in wrappers if w["id"])
+    total_m = sum(len(w["makes"]) for w in wrappers)
+    drop_w = drop_m = 0
+    why = []
+    repair_w = [w for w in wrappers if w["stage"] == "repair" and w["id"]]
+    if len(repair_w) == len(rounds):
+        for w, r in zip(repair_w, rounds):
+            if r.get("verdict") != "cleared":
+                drop_w += 1; drop_m += len(w["makes"]); why.append("repair:" + str(r.get("strategy")))
+    for stage in ("synth", "flow"):
+        ws = [w for w in wrappers if w["stage"] == stage and w["id"]]
+        for i, w in enumerate(ws[:-1]):
+            if wend.get(w["id"]) in (0, None):
+                continue
+            drop_w += 1
+            if stage == "synth":
+                drop_m += len(w["makes"])
+            else:
+                drop_m += sum(1 for m in w["makes"] if m["exit"] not in (0, None))
+                drop_m += sum(1 for m in ws[i + 1]["makes"] if m["kind"] == "clean")
+            why.append(stage + ":failed_superseded")
+    return {"wrapper_calls": total_w, "make_launches": total_m,
+            "effective_wrapper_calls": total_w - drop_w, "effective_make_launches": total_m - drop_m,
+            "excluded": why, "repair_attribution_ok": len(repair_w) == len(rounds)}
+
+
+def report(ledger: Path, model: str, prices: dict | None, effective: bool = False) -> str:
     rows = list(json.loads(ledger.read_text()).values())
     by = defaultdict(lambda: {"repair": [], "clean": []})
     for r in rows:
@@ -66,6 +126,11 @@ def report(ledger: Path, model: str, prices: dict | None) -> str:
             disp = _sum(group, "total_tokens", "dispatch_usage")
             expl = _sum(group, "total_tokens", "explanation_usage")
             n = len(group)
+            eff = None
+            if effective:
+                eff = [effective_orfs(r) for r in group]
+                for r, e in zip(group, eff):
+                    r["_effective"] = e
             out += [f"## {platform}: {label}, {n} cases", "",
                     "| Metric | Total | Per case (mean) |", "|---|---:|---:|"]
             for name, val in (("Model calls", _sum(group, "model_calls")),
@@ -78,17 +143,25 @@ def report(ledger: Path, model: str, prices: dict | None) -> str:
                               ("  of which reasoning", usage["reasoning_tokens"]),
                               ("Dispatch tokens (job submission)", disp),
                               ("Explanation tokens (final read-only summary)", expl),
-                              ("ORFS wrapper calls", _sum(group, "orfs_wrapper_calls")),
-                              ("Top-level make launches", _sum(group, "orfs_make_launches"))):
+                              ("ORFS wrapper calls (as measured)", _sum(group, "orfs_wrapper_calls")),
+                              ("ORFS wrapper calls (contributing only)", eff and sum(e["effective_wrapper_calls"] for e in eff)),
+                              ("Top-level make launches (as measured)", _sum(group, "orfs_make_launches")),
+                              ("Top-level make launches (contributing only)", eff and sum(e["effective_make_launches"] for e in eff))):
+                if val is None and "contributing" in name:
+                    continue
                 out.append(f"| {name} | {val:,} | {val / n:,.1f} |" if val is not None
                            else f"| {name} | unknown | |")
-            money = _money(usage, prices)
-            if money is not None:
-                out.append(f"| Cost (USD, given prices) | {money:,.4f} | {money / n:,.5f} |")
+            for label_p, pr in (prices or {}).items():
+                money = _money(usage, pr)
+                out.append(f"| Cost, {label_p} | {money:,.4f} | {money / n:,.5f} |")
             out += ["", "Per case, mean / median / p90 / max:", "",
                     f"- tokens: {_dist(r['provider_usage'].get('total_tokens') for r in group)}",
                     f"- model calls: {_dist(r.get('model_calls') for r in group)}",
                     f"- ORFS wrapper calls: {_dist(r.get('orfs_wrapper_calls') for r in group)}", ""]
+            if eff:
+                excluded = Counter(x for e in eff for x in e["excluded"])
+                out += ["Excluded as non-contributing: " + (", ".join(f"{k} {v}" for k, v in excluded.most_common()) or "none")
+                        + f" (in {sum(bool(e['excluded']) for e in eff)} cases)", ""]
             if key == "repair":
                 classes = Counter(r.get("classification") for r in group)
                 strategies = Counter(s for r in group for s in r.get("strategies") or [])
@@ -101,15 +174,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--ledger", type=Path, required=True, help="accepted_attempts.json")
     ap.add_argument("--model", default="unnamed model")
-    ap.add_argument("--price-input", type=float, help="USD per 1M uncached input tokens")
-    ap.add_argument("--price-cached-input", type=float, help="USD per 1M cache-read input tokens")
-    ap.add_argument("--price-output", type=float, help="USD per 1M output tokens")
+    ap.add_argument("--prices", type=Path,
+                    help="JSON {label: {input, cached_input, output}} in currency per 1M tokens")
+    ap.add_argument("--effective", action="store_true",
+                    help="also count only contributing ORFS work (needs local case receipts)")
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
-    prices = None
-    if None not in (a.price_input, a.price_cached_input, a.price_output):
-        prices = {"input": a.price_input, "cached_input": a.price_cached_input, "output": a.price_output}
-    text = report(a.ledger, a.model, prices)
+    prices = json.loads(a.prices.read_text()) if a.prices else None
+    text = report(a.ledger, a.model, prices, a.effective)
     if a.out:
         a.out.write_text(text)
     print(text)
