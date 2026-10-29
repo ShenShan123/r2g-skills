@@ -36,6 +36,7 @@ COUNTERS = ("input_tokens", "output_tokens", "total_tokens", "cache_read_input_t
 DEFAULT_CAPS = {"model_calls": 60, "total_tokens": 2_000_000, "run_flow": 10, "run_signoff": 16,
                 "wall_seconds": 24 * 3600}
 MAX_TOOL_RESULT_CHARS = 12000          # same clip as the R2G agent loop
+MAX_NUDGES = 3                         # consecutive truncated/empty replies tolerated
 
 SYSTEM = """你是一名数字后端工程师，使用 OpenROAD-flow-scripts（ORFS）把一个 RTL 设计做到签核干净。
 你只能通过提供的工具操作：读文件、在工程的 constraints/、rtl/、hooks/ 下写文件、从某一阶段运行 ORFS 流程、运行签核（全套 DRC + LVS，平台官方规则）、读日志、结束任务。
@@ -68,13 +69,31 @@ def tree_hash(root: Path) -> str:
     return h.hexdigest()
 
 
-def remap(paths: str, rtl: Path) -> tuple[list[str], list[str]]:
-    """Map baseline absolute paths onto the project's rtl/ copy by longest existing suffix."""
-    mapped, missing = [], []
+def source_root(paths: str, rtl: Path) -> str | None:
+    """The baseline directory that corresponds to the project's rtl/ (from any file that maps)."""
     for raw in paths.split():
         parts = Path(raw).parts
-        hit = next((rtl.joinpath(*parts[i:]) for i in range(1, len(parts))
-                    if rtl.joinpath(*parts[i:]).exists()), None)
+        for i in range(1, len(parts)):
+            if (rtl.joinpath(*parts[i:])).is_file():
+                return str(Path(*parts[:i]))
+    return None
+
+
+def remap(paths: str, rtl: Path, root: str | None = None) -> tuple[list[str], list[str]]:
+    """Map baseline absolute paths onto the project's rtl/ copy.
+
+    Under the baseline source root: replace the prefix (so the root itself maps
+    to rtl/); otherwise fall back to the longest existing suffix."""
+    mapped, missing = [], []
+    for raw in paths.split():
+        hit = None
+        if root and (raw == root or raw.startswith(root + "/")):
+            cand = rtl / raw[len(root):].lstrip("/")
+            hit = cand if cand.exists() else None
+        if hit is None:
+            parts = Path(raw).parts
+            hit = next((rtl.joinpath(*parts[i:]) for i in range(1, len(parts))
+                        if rtl.joinpath(*parts[i:]).exists()), None)
         (mapped if hit else missing).append(str(hit) if hit else raw)
     return mapped, missing
 
@@ -97,12 +116,15 @@ def prepare(case: dict, baseline: Path, project: Path) -> dict:
     cons.mkdir(parents=True)
     shutil.copyfile(baseline / "constraint.sdc", cons / "constraint.sdc")
     out, unmapped = [], []
-    for line in (baseline / "config.mk").read_text().splitlines():
+    cfg_text = (baseline / "config.mk").read_text()
+    files = re.search(r"^\s*export\s+VERILOG_FILES\s*=\s*(.*)$", cfg_text, re.M)
+    root = source_root(files.group(1), rtl) if files else None
+    for line in cfg_text.splitlines():
         m = re.match(r"\s*export\s+(VERILOG_FILES|VERILOG_INCLUDE_DIRS|SDC_FILE)\s*=\s*(.*)$", line)
         if m and m.group(1) == "SDC_FILE":
             line = "export SDC_FILE = %s" % (cons / "constraint.sdc")
         elif m:
-            mapped, missing = remap(m.group(2), rtl)
+            mapped, missing = remap(m.group(2), rtl, root)
             unmapped += missing
             line = "export %s = %s" % (m.group(1), " ".join(mapped + missing))
         out.append(line)
@@ -152,6 +174,7 @@ def clip(obj) -> str:
 def run_loop(adapter, tools: BareTools, task: str, caps: dict, transcript: list, calls: list) -> str:
     messages = [{"role": "user", "content": task}]
     t0 = time.monotonic()
+    nudges = 0
     while True:
         if len(calls) >= caps["model_calls"]:
             return "cap_model_calls"
@@ -159,7 +182,7 @@ def run_loop(adapter, tools: BareTools, task: str, caps: dict, transcript: list,
             return "cap_tokens"
         if time.monotonic() - t0 >= caps["wall_seconds"]:
             return "cap_wall"
-        text, tool_calls, usage, err = "", [], None, None
+        text, tool_calls, usage, err, stop_reason = "", [], None, None, None
         for ev in adapter.stream(messages, SPECS, SYSTEM):
             if ev["type"] == "text":
                 text += ev["delta"]
@@ -169,6 +192,8 @@ def run_loop(adapter, tools: BareTools, task: str, caps: dict, transcript: list,
                 usage = ev
             elif ev["type"] == "error":
                 err = ev["message"]
+            elif ev["type"] == "done":
+                stop_reason = ev.get("stop_reason")
         calls.append({**(usage or {"usage_reported": False, "stream_complete": False}),
                       "call_index": len(calls) + 1, "at": time.time()})
         if err:
@@ -180,7 +205,18 @@ def run_loop(adapter, tools: BareTools, task: str, caps: dict, transcript: list,
         transcript.append({"assistant": text, "tool_calls": [{"name": c["name"], "arguments": c["arguments"]}
                                                               for c in tool_calls]})
         if not tool_calls:
+            # A reply cut at the response limit (often all reasoning) or empty is not
+            # a decision to stop: say so and let the model continue, a few times.
+            if (stop_reason == "length" or not text.strip()) and nudges < MAX_NUDGES:
+                nudges += 1
+                note = ("（上一条回复达到长度上限被截断，没有输出工具调用。请直接调用工具继续，"
+                        "或调用 finish 结束并说明结果。）" if stop_reason == "length" else
+                        "（上一条回复为空。请直接调用工具继续，或调用 finish 结束并说明结果。）")
+                messages.append({"role": "user", "content": note})
+                transcript.append({"harness_nudge": note})
+                continue
             return "model_stopped"
+        nudges = 0
         for c in tool_calls:
             name, args = c["name"], c["arguments"] if isinstance(c["arguments"], dict) else {}
             t_start = time.time()

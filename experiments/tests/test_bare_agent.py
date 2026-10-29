@@ -22,7 +22,7 @@ def _case(tmp_path):
         "export VERILOG_FILES = /proj/x/sources/R1__a__b/src/rtl/top.v /proj/x/sources/R1__a__b/src/rtl/defs.vh "
         "/proj/x/sources/R1__a__b/gone.v\n"
         "export SDC_FILE = /work/constraint.sdc\n"
-        "export VERILOG_INCLUDE_DIRS = /proj/x/sources/R1__a__b/src/rtl\n"
+        "export VERILOG_INCLUDE_DIRS = /proj/x/sources/R1__a__b /proj/x/sources/R1__a__b/src/rtl\n"
         "export DIE_AREA  = 0 0 50 50\n")
     (base / "constraint.sdc").write_text("create_clock -period 3.0 [get_ports a]\n")
     case = {"id": "nangate45_C1", "platform": "nangate45", "top": "top", "input_root": str(src),
@@ -38,6 +38,8 @@ def test_prepare_remaps_the_baseline_onto_the_project(tmp_path):
     assert str(proj / "rtl/src/rtl/top.v") in cfg and str(proj / "rtl/src/rtl/defs.vh") in cfg
     assert "export SDC_FILE = %s" % (proj / "constraints/constraint.sdc") in cfg
     assert str(proj / "rtl/src/rtl") in cfg and "DIE_AREA  = 0 0 50 50" in cfg
+    # the baseline source root itself maps onto rtl/ (smoke test: it was left unmapped)
+    assert "export VERILOG_INCLUDE_DIRS = %s %s" % (proj / "rtl", proj / "rtl/src/rtl") in cfg
     # a baseline path absent from the original inputs is kept and reported, not invented
     assert r["unmapped_baseline_paths"] == ["/proj/x/sources/R1__a__b/gone.v"]
     with pytest.raises(SystemExit):
@@ -101,3 +103,27 @@ def test_loop_finishes_and_enforces_budgets(tmp_path):
     rb.run_loop(FakeAdapter([[("run_flow", {"from_stage": "route"})], [("finish", {"summary": "x"})]]),
                 t3, "task", dict(rb.DEFAULT_CAPS), transcript, [])
     assert transcript[1]["result"] == {"error": "budget exhausted for run_flow"}
+
+
+class TruncatingAdapter:
+    """First reply is all reasoning, cut at the length limit; then the model finishes."""
+    def __init__(self):
+        self.n = 0
+
+    def stream(self, messages, specs, system):
+        self.n += 1
+        if self.n == 1:
+            yield {"type": "usage", "usage_reported": True, "stream_complete": True, "total_tokens": 4096}
+            yield {"type": "done", "stop_reason": "length"}
+            return
+        yield {"type": "tool_call", "id": "f", "name": "finish", "arguments": {"summary": "ok"}}
+        yield {"type": "usage", "usage_reported": True, "stream_complete": True, "total_tokens": 10}
+        yield {"type": "done", "stop_reason": "tool_calls"}
+
+
+def test_a_truncated_reply_is_continued_not_taken_as_a_stop(tmp_path):
+    t, proj, orfs = _tools(tmp_path)
+    transcript, calls = [], []
+    stop = rb.run_loop(TruncatingAdapter(), t, "task", dict(rb.DEFAULT_CAPS), transcript, calls)
+    assert stop == "finished" and len(calls) == 2
+    assert any("harness_nudge" in e for e in transcript)
