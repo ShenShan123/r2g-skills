@@ -61,8 +61,8 @@ class Memory:
                 {'role':'system','content':'Extract retrieval keywords only. Return {"keywords":["..."]}. Do not propose repair actions.'},
                 {'role':'user','content':text}], self.project/f'amem-query-{self.helpers}',purpose='query')
             try:answer=json.loads(content)
-            except ValueError:answer={}
-            values=answer.get('keywords')
+            except (ValueError,TypeError):answer={}
+            values=answer.get('keywords') if isinstance(answer,dict) else None
             if not isinstance(values,list) or any(not isinstance(v,str) for v in values):
                 # Malformed auxiliary response consumes a call; no extra generation.
                 T.event(self.H,self.project,'memory_helper_invalid',{'arm':self.arm,'usage':usage})
@@ -71,7 +71,7 @@ class Memory:
         if self.arm=='RECIPE':text='No remaining exact verified recipe. Select a tool from current evidence.'
         elif self.arm=='TM0':text,ids=self.adaptive_context(query,sit)
         elif self.arm in ('REME','REASONINGBANK'):text,ids=self.inner.context(query)
-        else:text,ids=self.inner.context(query,sit,auxiliary=keywords,max_bytes=72000)
+        else:text,ids=self.inner.context(query,sit,auxiliary=keywords,max_bytes=None)
         self.receipt={'arm':self.arm,'selected_ids':ids,'context_sha256':hashlib.sha256(text.encode()).hexdigest(),
             'context_bytes':len(text.encode()),'shared_units_sha256':json.loads((self.root/'shared/manifest.json').read_text())['units_sha256'],
             'write_back':False,'wall_s':time.time()-start,'cpu_s':time.process_time()-cpu}

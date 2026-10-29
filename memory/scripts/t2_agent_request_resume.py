@@ -126,6 +126,9 @@ def policy():
 
 def configure_harness(H):
     """Keep the original metering/transport intact; override only token settings."""
+    if hasattr(H,'final_verdict'):
+        from t2_signoff_integrity import install
+        install(H)
     if getattr(H,'_AGENT_REQUEST_POLICY',None)==POLICY:return
     original=H.llm_call
     H.LLM_MAX_TOKENS=PROVIDER_MAX_OUTPUT

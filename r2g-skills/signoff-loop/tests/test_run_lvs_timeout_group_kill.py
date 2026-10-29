@@ -18,6 +18,7 @@ TERM-ignoring parent + TERM-ignoring grandchild, and the preflight
 passes rc=0.
 """
 import os
+import hashlib
 import shutil
 import subprocess
 import time
@@ -40,6 +41,32 @@ CLEAN_MAKEFILE = """\
 lvs:
 \t@echo "Netlists match"
 """
+
+
+def test_lvs_only_tool_pin_is_used_and_recorded(tmp_path):
+    skill,orfs,proj=_setup(tmp_path,'lvs:\n\t@$(KLAYOUT_CMD) -b\n')
+    tool=tmp_path/'isolated-klayout'
+    tool.write_text('#!/bin/sh\necho "KLayout fixture"\necho "Netlists match"\n')
+    tool.chmod(0o755)
+    digest=hashlib.sha256(tool.read_bytes()).hexdigest()
+    p=_run_lvs(tmp_path,skill,orfs,proj,{'R2G_LVS_KLAYOUT_CMD':str(tool),
+        'R2G_LVS_KLAYOUT_SHA256':digest,'LVS_CRASH_RETRIES':'1'})
+    assert p.returncode==0,p.stdout+p.stderr
+    assert 'KLayout fixture' in (proj/'lvs/lvs_run.log').read_text()
+    import json
+    provenance=json.loads((proj/'lvs/lvs_provenance.json').read_text())
+    assert provenance['checker_executable']==str(tool)
+    assert provenance['checker_executable_sha256']==digest
+
+
+def test_lvs_only_tool_pin_fails_closed_on_hash_drift(tmp_path):
+    skill,orfs,proj=_setup(tmp_path,CLEAN_MAKEFILE)
+    tool=tmp_path/'isolated-klayout';tool.write_text('#!/bin/sh\nexit 0\n');tool.chmod(0o755)
+    p=_run_lvs(tmp_path,skill,orfs,proj,{'R2G_LVS_KLAYOUT_CMD':str(tool),
+        'R2G_LVS_KLAYOUT_SHA256':'not-the-digest'})
+    assert p.returncode!=0
+    assert 'LVS checker pin' in p.stderr
+    assert not (proj/'lvs/lvs_run.log').exists()
 
 
 def _setup(tmp_path, makefile: str):

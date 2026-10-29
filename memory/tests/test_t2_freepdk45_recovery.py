@@ -13,6 +13,12 @@ sys.path.insert(0,str(Path(__file__).parents[1]/'scripts'))
 import t2_freepdk45_recovery as C
 
 
+def original_batch():
+    root=Path('/data1/zhangdy/tehm-experiments/t2-freepdk45-main50-adamem-20261022-r3')
+    archived=root/'geometry-recovery-20261022/original/nb/code/memory/scripts/t2a_batch.py'
+    return archived if archived.exists() else root/'nb/code/memory/scripts/t2a_batch.py'
+
+
 def fixture(tmp_path):
     p=tmp_path/'A__initial__NB__r1';(p/'backend/RUN_0').mkdir(parents=True)
     (p/'constraints').mkdir();(p/'reports').mkdir()
@@ -55,8 +61,7 @@ def test_unfinished_episode_cannot_be_silently_skipped(tmp_path):
 
 
 def test_integrated_worker_has_no_repeated_initial_flow_and_has_original_costs():
-    root=Path('/data1/zhangdy/tehm-experiments/t2-freepdk45-main50-adamem-20261022-r3')
-    text=(root/'nb/code/memory/scripts/t2a_batch.py').read_text()
+    text=original_batch().read_text()
     out=C.integrate_batch(text)
     compile(out,'integrated_worker','exec')
     assert 'if not resume_initial:\n            rc=H.run(' in out
@@ -68,7 +73,7 @@ def test_integrated_worker_has_no_repeated_initial_flow_and_has_original_costs()
 
 def test_execute_real_integrated_checkpoint_branch_without_model_or_eda(tmp_path,monkeypatch):
     """Execute the actual amended episode function; stub only external boundaries."""
-    source=Path('/data1/zhangdy/tehm-experiments/t2-freepdk45-main50-adamem-20261022-r3/nb/code/memory/scripts/t2a_batch.py')
+    source=original_batch()
     tree=ast.parse(C.integrate_batch(source.read_text()))
     function=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='episode')
     root=tmp_path/'nb';project=root/'episodes/A__initial__NB__r1'

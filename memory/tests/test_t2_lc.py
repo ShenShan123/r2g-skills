@@ -115,6 +115,60 @@ class Done:
         return 0
 
 
+def lsu_timeout_fixture(root, create=True):
+    step = {'name': 'lsu_probe', 'role': 'PROBE',
+            'task': 'C02309__lsu__miaow/initial'}
+    rec = {**step, 'status': 'TECHNICALLY_TERMINATED',
+           'episode_status': 'UNVERIFIED_OR_SAFETY_STOP',
+           'accounting_passed': True, 'write': 'NOT_ATTEMPTED'}
+    project = root / 'episodes' / step['name']
+    episode = {'accepted': False, 'status': 'UNVERIFIED_OR_SAFETY_STOP',
+               'terminal_reason': 'restoration_unverified_or_safety_stop',
+               'final': {'execution_recovery': 'SAFETY_STOP', 'recovery_rc': 124},
+               'accounting': {'passed': True, 'errors': []},
+               'resources': {'open_holds': 0}}
+    if create:
+        project.mkdir(parents=True)
+        (project / 'episode.json').write_text(json.dumps(episode))
+    return step, rec, episode, project
+
+
+def test_registered_lsu_timeout_is_kept_but_does_not_block_next_probe(tmp_path, monkeypatch):
+    import t2a_batch as B
+    step, rec, episode, project = lsu_timeout_fixture(tmp_path, create=False)
+    steps = [step, {**step, 'name': 'next_probe'}]
+    monkeypatch.setattr(B, 'preflight', lambda *a:
+                        {'steps': steps, 'scheduler': {'cpu_slots': [[0]]}, 'files': {}})
+    launched = []
+    def launcher(i):
+        launched.append(i)
+        if i == 0:
+            project.mkdir(parents=True)
+            (project / 'episode.json').write_text(json.dumps(episode))
+        (tmp_path / 'steps').mkdir(exist_ok=True)
+        L.save(tmp_path / 'steps' / f'{i:03d}.json', rec if i == 0 else {'status': 'OK'})
+        return Done()
+    state = L.dispatch(tmp_path, launcher=launcher, poll_s=0)
+    assert state['status'] == 'COMPLETED' and launched == [0, 1]
+    assert state['technical_skips'] == [0]
+    assert L.load(tmp_path / 'steps/000.json') == rec
+
+
+@pytest.mark.parametrize('mutation', ['learn', 'other_task', 'write', 'accounting',
+                                    'open_hold', 'wrong_rc', 'accepted'])
+def test_lsu_continuation_never_masks_other_faults(tmp_path, mutation):
+    step, rec, episode, project = lsu_timeout_fixture(tmp_path)
+    if mutation == 'learn': step['role'] = 'LEARN'
+    elif mutation == 'other_task': step['task'] = 'C99999__other/initial'
+    elif mutation == 'write': rec['write'] = 'WRITTEN'
+    elif mutation == 'accounting': episode['accounting']['passed'] = False
+    elif mutation == 'open_hold': episode['resources']['open_holds'] = 1
+    elif mutation == 'wrong_rc': episode['final']['recovery_rc'] = 76
+    elif mutation == 'accepted': episode['accepted'] = True
+    (project / 'episode.json').write_text(json.dumps(episode))
+    assert not L.known_lsu_probe_timeout(tmp_path, step, rec)
+
+
 def test_dispatcher_pauses_when_the_first_learn_fails_and_never_reruns(tmp_path, monkeypatch):
     import t2a_batch as B
     steps = L.plan_steps(LEARN, PROBE[:1])[:4]                # 2 probes (c0), then LEARN 1..2
@@ -146,6 +200,54 @@ def test_dispatcher_pauses_for_disk_safety_before_launching(tmp_path, monkeypatc
     launched = []
     st = L.dispatch(tmp_path, launcher=lambda i: launched.append(i), poll_s=0)
     assert st['status'] == 'PAUSED' and 'safety' in st['reason'] and launched == []
+
+
+def test_phase_gate_stops_before_any_expensive_episode(tmp_path, monkeypatch):
+    import t2a_batch as B
+    steps = L.plan_steps(LEARN, PROBE[:1])[:2]
+    monkeypatch.setattr(B, 'preflight', lambda *a: {
+        'steps': steps, 'scheduler': {'cpu_slots': [[0]]}, 'files': {}})
+    monkeypatch.setattr(L, 'phase_admission', lambda *a: (False, 'unresolved UNKNOWN'))
+    launched = []
+    state = L.dispatch(tmp_path, launcher=lambda i: launched.append(i), poll_s=0)
+    assert state['status'] == 'PAUSED' and state['next_step'] == 0
+    assert 'unresolved UNKNOWN' in state['reason'] and launched == []
+    assert not (tmp_path / 'episodes').exists()
+
+
+def test_phase_gate_uses_frozen_ledger_and_preserves_actual_unknown(tmp_path):
+    import importlib.util
+    source = ROOT / 'r2g-skills/signoff-loop/scripts/flow/resource_ledger.py'
+    target = tmp_path / 'code/r2g-skills/signoff-loop/scripts/flow/resource_ledger.py'
+    target.parent.mkdir(parents=True)
+    target.write_bytes(source.read_bytes())
+    budget = tmp_path / 'phase-budget.json'
+    L.save(budget, {'budget_id': 'test', 'caps': {}, 'reserve': {}, 'halt_on_unknown_usage': True})
+    ledger = tmp_path / 'phase/resource_ledger.jsonl'
+    ledger.parent.mkdir()
+    events = [
+        {'type': 'budget_hold', 'hold_id': 'lost', 'needs': {'tokens_in': 8, 'tokens_out': 2}, 'ts': 1},
+        {'type': 'budget_settle', 'hold_id': 'lost', 'booked': {'tokens_in': 8, 'tokens_out': 2},
+         'actual': {'tokens_in': 'UNKNOWN', 'tokens_out': 'UNKNOWN'}, 'ts': 2}]
+    ledger.write_text(''.join(json.dumps(e)+'\n' for e in events))
+    reg = {'phase_binding': {'ledger_path': str(ledger), 'budget_file': str(budget),
+                            'budget_sha256': L.sha(budget)}, 'files': {str(target): L.sha(target)}}
+    assert L.phase_admission(tmp_path, reg)[0] is False
+    grant = tmp_path / 'approval.json'
+    L.save(grant, {'schema': 'r2g-unknown-occupancy-authorization-v1', 'user_approved': True,
+                  'targets': [{'ledger_path': str(ledger.resolve()), 'hold_id': 'lost',
+                               'upper_bound': {'tokens_in': 8, 'tokens_out': 2}}]})
+    events.append({'type': 'budget_unknown_occupancy', 'hold_id': 'lost',
+                   'upper_bound': {'tokens_in': 8, 'tokens_out': 2}, 'authorization': str(grant),
+                   'authorization_sha256': L.sha(grant), 'ledger_path': str(ledger), 'ts': 3})
+    ledger.write_text(''.join(json.dumps(e)+'\n' for e in events))
+    assert L.phase_admission(tmp_path, reg)[0] is True
+    assert '"actual": {"tokens_in": "UNKNOWN"' in ledger.read_text()
+    with ledger.open('a') as f:
+        f.write(json.dumps({'type': 'budget_hold', 'hold_id': 'open', 'needs': {}, 'ts': 4})+'\n')
+    assert L.phase_admission(tmp_path, reg)[0] is False
+    budget.write_text('{}')
+    assert L.phase_admission(tmp_path, reg)[0] is False
 
 
 def test_the_runtime_copy_needs_nothing_from_excluded_directories():

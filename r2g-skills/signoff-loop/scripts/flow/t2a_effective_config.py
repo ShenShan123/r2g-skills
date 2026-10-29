@@ -17,6 +17,20 @@ import t2a_envelope as E
 def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def make_arguments(manifest, project, environment):
+    """Bind explicitly selected, permitted knobs above platform Make defaults.
+
+    Both the execution and its resolver use this exact argument list. Never
+    override an immutable/non-allowlisted key or accept environment injection.
+    """
+    config=E.effective_config((project/'constraints/config.mk').read_text())
+    guard=E.check_config(manifest,config,env=environment,project=project)
+    if not guard['ok']:raise ValueError('Invalid task config: '+json.dumps(guard['violations']))
+    immutable=set(manifest.get('immutable',{}).get('knobs',[]))
+    keys=sorted(set(config)&set(manifest.get('allowlist',{}))-immutable)
+    return [k+'='+config[k] for k in keys]
+
+
 def verify(manifest, project, executed, values, environment):
     config=E.effective_config((project/'constraints/config.mk').read_text())
     errors=[]
@@ -49,7 +63,7 @@ def capture(project, backend, flow, design_config, variant):
     start,cpu=time.time(),resource.getrusage(resource.RUSAGE_CHILDREN)
     cmd=['make','--no-print-directory','-f',str(flow/'Makefile'),'-f',str(Path(__file__).with_suffix('.mk')),
          'DESIGN_CONFIG='+str(design_config),'FLOW_VARIANT='+variant,'R2G_SNAPSHOT_KEYS='+' '.join(sorted(keys)),
-         'r2g-effective-config']
+         *make_arguments(manifest,project,os.environ),'r2g-effective-config']
     result=subprocess.run(cmd,capture_output=True,text=True,timeout=60)
     values={}
     for line in result.stdout.splitlines():
@@ -71,7 +85,15 @@ def capture(project, backend, flow, design_config, variant):
 
 if __name__=='__main__':
     ap=argparse.ArgumentParser(description=__doc__)
-    for key in ('project','backend','flow','design-config'):ap.add_argument('--'+key,type=Path,required=True)
-    ap.add_argument('--variant',required=True)
+    ap.add_argument('--make-args',action='store_true',help='NUL-separated validated Make arguments')
+    ap.add_argument('--project',type=Path,required=True)
+    for key in ('backend','flow','design-config'):ap.add_argument('--'+key,type=Path)
+    ap.add_argument('--variant')
     a=ap.parse_args()
+    if a.make_args:
+        manifest=json.loads(Path(os.environ['R2G_TASK_MANIFEST']).read_text())
+        for arg in make_arguments(manifest,a.project,os.environ):
+            sys.stdout.buffer.write(arg.encode()+b'\0')
+        sys.exit(0)
+    if not all((a.backend,a.flow,a.design_config,a.variant)):ap.error('capture requires backend, flow, design-config and variant')
     sys.exit(capture(a.project,a.backend,a.flow,a.design_config,a.variant))

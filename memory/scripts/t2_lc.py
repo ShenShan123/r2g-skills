@@ -558,6 +558,71 @@ def e2e_check(root: Path, step: dict, record: dict) -> dict:
     return {"ok": all(checks.values()), "checks": checks}
 
 
+def known_lsu_probe_timeout(root: Path, step: dict, rec: dict) -> bool:
+    """Keep the registered LSU safety cell; only the independent queue may continue.
+
+    No acceptance, repair-failure relabel, store write, new timeout or retry.
+    Every other technical fault and every failed LEARN still pauses the queue.
+    """
+    if not (step.get("role") == rec.get("role") == "PROBE"
+            and step.get("task") == rec.get("task") == "C02309__lsu__miaow/initial"
+            and step.get("name") == rec.get("name")
+            and rec.get("status") == "TECHNICALLY_TERMINATED"
+            and rec.get("episode_status") == "UNVERIFIED_OR_SAFETY_STOP"
+            and rec.get("accounting_passed") is True
+            and rec.get("write") == "NOT_ATTEMPTED"):
+        return False
+    try:
+        episode = load(root / "episodes" / step["name"] / "episode.json")
+    except (OSError, ValueError):
+        return False
+    final = episode.get("final") or {}
+    resources = episode.get("resources") or {}
+    accounting = episode.get("accounting") or {}
+    return (episode.get("accepted") is False
+            and episode.get("status") == "UNVERIFIED_OR_SAFETY_STOP"
+            and episode.get("terminal_reason") == "restoration_unverified_or_safety_stop"
+            and final.get("execution_recovery") == "SAFETY_STOP"
+            and final.get("recovery_rc") == 124
+            and accounting.get("passed") is True and not accounting.get("errors")
+            and resources.get("open_holds") == 0)
+
+
+def phase_admission(root: Path, reg: dict) -> tuple[bool, str]:
+    """Check the frozen phase ledger BEFORE paying for another episode's EDA.
+
+    Read only: no request booking, settlement, occupancy or usage relabel.
+    The existing per-request gate remains authoritative when a request is sent.
+    """
+    binding = reg.get("phase_binding")
+    if not binding:                 # legacy packages without a shared phase ledger
+        return True, "no phase ledger"
+    import importlib.util
+    try:
+        source = root / "code/r2g-skills/signoff-loop/scripts/flow/resource_ledger.py"
+        if sha(source) != reg["files"][str(source)]:
+            raise ValueError("phase ledger runtime changed")
+        if sha(binding["budget_file"]) != binding["budget_sha256"]:
+            raise ValueError("phase budget changed")
+        spec = importlib.util.spec_from_file_location("_lc_phase_ledger", source)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        budget = load(binding["budget_file"])
+        budget.setdefault("caps", {})
+        budget.setdefault("reserve", {})
+        ledger = Path(binding["ledger_path"])
+        with ledger.open() as stream:
+            fcntl.flock(stream, fcntl.LOCK_SH)
+            events = [json.loads(line) for line in stream if line.strip()]
+        held = {e["hold_id"] for e in events if e.get("type") == "budget_hold"}
+        settled = {e["hold_id"] for e in events if e.get("type") == "budget_settle"}
+        if held - settled:
+            return False, "open phase request holds"
+        return module.check(events, budget, {}, "repair")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return False, "phase accounting validation failed: " + str(exc)
+
+
 def dispatch(root: Path, launcher=None, poll_s: float = 30) -> dict:
     import t2a_batch as B
     reg = B.preflight(root, "DEV")
@@ -587,6 +652,9 @@ def dispatch(root: Path, launcher=None, poll_s: float = 30) -> dict:
             return _pause(root, state, i, "episode directory without a step record; no implicit retry")
         if (root / "dispatch-pause.json").exists():
             return _pause(root, state, i, "operator pause request")
+        clear, why = phase_admission(root, reg)
+        if not clear:
+            return _pause(root, state, i, "phase ledger blocks new episode: " + why)
         free = shutil.disk_usage(root).free / 2 ** 30
         if free < DISK_FLOOR_GIB:
             return _pause(root, state, i, f"safety: {free:.0f} GiB free on the package's file system (< {DISK_FLOOR_GIB})")
@@ -606,6 +674,16 @@ def dispatch(root: Path, launcher=None, poll_s: float = 30) -> dict:
                 return _pause(root, state, i + 1, "end-to-end validation failed: " +
                               ",".join(k for k, v in e2e["checks"].items() if not v))
         if rec.get("status") != "OK":
+            if known_lsu_probe_timeout(root, step, rec):
+                # Costs and original technical outcome stay in the denominator.
+                state.setdefault("technical_skips", []).append(i)
+                save(root / "dispatch-state.json", state)
+                save(root / "operator-notes" / f"step-{i:03d}-timeout-continuation.json",
+                     {"index": i, "name": step["name"], "status": rec["status"],
+                      "episode_status": rec["episode_status"], "write": rec["write"],
+                      "action": "continue next independent step; no rerun or history write",
+                      "step_sha256": sha(out), "recorded_at": time.time()})
+                continue
             return _pause(root, state, i + 1, f"step {i} {rec.get('status')}: {rec.get('write_error', '')}")
         state.setdefault("done", []).append(i)
         save(root / "dispatch-state.json", state)

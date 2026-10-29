@@ -1,0 +1,101 @@
+"""One official-provider request, no SDK/internal retries, independent accounting."""
+from __future__ import annotations
+
+import json
+import fcntl
+from pathlib import Path
+import time
+import urllib.error
+import urllib.request
+import uuid
+
+from bridge import Journal, digest, stable
+
+
+class UnknownUsage(RuntimeError):
+    pass
+
+
+class OnlineRequestLimit(BaseException):
+    """A normal request opportunity stop, not provider/accounting failure.
+
+    BaseException crosses native Exception retry handlers without being retried.
+    """
+
+
+class MeteredProvider:
+    def __init__(self, episode: Path, key: str, *, model="deepseek-flash"):
+        self.episode, self.key, self.model = episode, key, model
+        episode.mkdir(parents=True, exist_ok=False)
+        self.journal = Journal(episode / "requests.jsonl")
+        self.blocked = False
+
+    def request(self, payload: dict, *, transport=None, purpose="decision"):
+        if self.blocked:
+            self.journal.append("request_refused", reason="previous UNKNOWN usage unresolved",
+                                sent=False, model=self.model)
+            raise UnknownUsage("previous request usage unresolved; no additional request sent")
+        if payload.get("stream"):
+            raise ValueError("first integration batch uses non-streamed native requests")
+        body = {**payload, "model": self.model, "stream": False}
+        ident = uuid.uuid4().hex
+        with (self.episode / 'admission.lock').open('a') as gate:
+            fcntl.flock(gate, fcntl.LOCK_EX)
+            previous = [json.loads(line) for line in self.journal.path.read_text().splitlines()
+                        if line.strip()] if self.journal.path.exists() else []
+            sent = sum(row['event'] == 'request_started' for row in previous)
+            if sent >= 3:
+                self.journal.append('request_refused', reason='three total online requests exhausted',
+                                    sent=False, model=self.model, purpose=purpose, online_request_limit=3)
+                raise OnlineRequestLimit('three total online requests exhausted; no fourth request sent')
+            (self.episode / (ident + ".request.json")).write_text(stable(body) + "\n")
+            self.journal.append("request_started", request_local_id=ident,
+                                body_sha256=digest(body), body_bytes=len(stable(body).encode()),
+                                model=self.model, purpose=purpose)
+        started, cpu = time.monotonic(), time.process_time()
+        request = urllib.request.Request("https://api.deepseek.com/chat/completions",
+            data=stable(body).encode(), method="POST",
+            headers={"Authorization": "Bearer " + self.key, "Content-Type": "application/json"})
+        send = transport or urllib.request.urlopen
+        try:
+            with send(request, timeout=300) as response:
+                raw = response.read()
+                headers = dict(response.headers)
+                code = response.status
+        except Exception as exc:
+            self.blocked = True
+            detail = str(getattr(exc, "reason", exc)).replace(self.key, "[REDACTED]")[:2000]
+            status = getattr(exc, "code", None)
+            if isinstance(exc, urllib.error.HTTPError):
+                error_body = exc.read().replace(self.key.encode(), b"[REDACTED]")
+                (self.episode / (ident + ".error-response.txt")).write_bytes(error_body)
+            self.journal.append("request_ended", request_local_id=ident, usage="UNKNOWN",
+                exception=type(exc).__name__, status=status, reason=detail, wall_s=time.monotonic()-started,
+                cpu_s=time.process_time()-cpu)
+            raise UnknownUsage("request failed; raw accounting retained, no retry") from exc
+        (self.episode / (ident + ".response.json")).write_bytes(raw)
+        # Do not retain arbitrary proxy/cookie headers or authorization material.
+        safe_headers = {k: v for k, v in headers.items()
+                        if k.lower() in {"x-request-id", "request-id", "date", "content-type"}}
+        try:
+            data = json.loads(raw)
+            usage = data.get("usage")
+            if not isinstance(usage, dict) or any(type(usage.get(k)) is not int or usage[k] < 0
+                    for k in ("prompt_tokens", "completion_tokens", "total_tokens")):
+                raise ValueError("missing or invalid usage")
+            if usage["prompt_tokens"] + usage["completion_tokens"] != usage["total_tokens"]:
+                raise ValueError("usage arithmetic mismatch")
+            if not data.get("model") or not data.get("id"):
+                raise ValueError("missing provider model or response identity")
+        except (ValueError, AttributeError) as exc:
+            self.blocked = True
+            self.journal.append("request_ended", request_local_id=ident, status=code,
+                usage="UNKNOWN", response_headers=safe_headers,
+                wall_s=time.monotonic()-started, cpu_s=time.process_time()-cpu)
+            raise UnknownUsage("provider response lacks auditable usage") from exc
+        self.journal.append("request_ended", request_local_id=ident, status=code,
+            usage=usage, provider_model=data["model"], provider_id=data["id"],
+            response_headers=safe_headers, wall_s=time.monotonic()-started,
+            cpu_s=time.process_time()-cpu, api_cost=None,
+            api_cost_note="derive later from pinned applicable pricing; never zero by default")
+        return data

@@ -17,11 +17,32 @@ import json
 import os
 import subprocess
 import sys
+import pytest
 from pathlib import Path
 
 import extract_lvs as e
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "extract" / "extract_lvs.py"
+
+
+@pytest.mark.parametrize('verdict',["CONGRATULATIONS! Netlists match.","ERROR : Netlists don't match"])
+def test_crash_never_becomes_a_measured_verdict(tmp_path,verdict):
+    proj=_make_project(tmp_path,log_run=verdict+'\nERROR: Signal number: 11\n')
+    assert _run_script(proj,proj/'reports/lvs.json')['status']=='crash'
+
+
+def test_caught_compare_exception_is_not_a_layout_mismatch(tmp_path):
+    proj=_make_project(tmp_path,log_run="VERBOSE-LVS: compare raised exception: RuntimeError: internal failure\nERROR : Netlists don't match\n")
+    assert _run_script(proj,proj/'reports/lvs.json')['status']=='crash'
+
+
+def test_checker_identity_is_carried_into_normalized_report(tmp_path):
+    proj=_make_project(tmp_path,log_run='CONGRATULATIONS! Netlists match.\n',lvsdb=True)
+    (proj/'lvs/lvs_provenance.json').write_text(json.dumps({'checker_executable':'/isolated/checker',
+        'checker_executable_sha256':'recorded-hash'}))
+    result=_run_script(proj,proj/'reports/lvs.json')
+    assert result['checker_executable']=='/isolated/checker'
+    assert result['checker_executable_sha256']=='recorded-hash'
 
 # ---------------------------------------------------------------------------
 # Helpers

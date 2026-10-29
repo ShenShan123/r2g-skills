@@ -46,7 +46,11 @@ status=0
 run_leg() {
   local name="$1"; shift
   echo "[strict-signoff] $name"
-  "$@"
+  if [[ "${R2G_METER_STRICT_CHECKERS:-0}" == "1" && "$name" =~ ^(drc|lvs|rcx)$ ]]; then
+    python3 "$SCRIPT_DIR/meter_checker.py" "$PROJECT_DIR" "$name" "$@"
+  else
+    "$@"
+  fi
   local rc=$?
   if [[ "$rc" -ne 0 ]]; then
     echo "[strict-signoff] $name failed (rc=$rc)" >&2

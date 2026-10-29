@@ -273,7 +273,9 @@ class PromptMemory:
                 if auxiliary is None:
                     raise ValueError('A-MEM requires its online query keyword call')
                 keywords = auxiliary(query)
+                if not keywords:return '',[]
                 query = ' '.join(keywords)
+                if not query.strip():return '',[]
             for i in self.index.search(query, k):
                 row = self.rows[i]
                 candidates = [row]
@@ -283,11 +285,11 @@ class PromptMemory:
                     if r['id'] not in ids:
                         choices.append(note_text(r) if self.arm == 'AMEM' else r['text'])
                         ids.append(r['id'])
-        if len(prefix.encode()) > max_bytes:
+        if max_bytes is not None and len(prefix.encode()) > max_bytes:
             raise ValueError('Full insight/workflow set exceeds frozen context ceiling')
         kept, used = [], []
         for ident, text in zip(ids, choices):
             candidate = prefix + '\n\n'.join(kept + [text])
-            if len(candidate.encode()) <= max_bytes:
+            if max_bytes is None or len(candidate.encode()) <= max_bytes:
                 kept.append(text); used.append(ident)
         return prefix + '\n\n'.join(kept), used

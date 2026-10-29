@@ -408,6 +408,8 @@ cd "$WORK_HOME"
 
 # Prevent env collision: ORFS Makefile uses SCRIPTS_DIR internally
 unset SCRIPTS_DIR 2>/dev/null || true
+source "$FLOW_SCRIPTS_DIR/_formal_make_args.sh"
+r2g_formal_make_args "$PROJECT_DIR" || exit 76
 if [[ "$R2G_SYNTH_FRONTEND" == "slang" ]]; then
   export SCRIPTS_DIR="$R2G_ORFS_SCRIPT_OVERLAY"
 fi
@@ -415,7 +417,7 @@ fi
 if [[ -z "$FROM_STAGE" ]]; then
   echo "Cleaning previous ORFS state for variant=$FLOW_VARIANT ..."
   _r2g_clean_rc=0
-  make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" clean_all 2>&1 | tail -5 || _r2g_clean_rc=$?
+  make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" "${R2G_FORMAL_MAKE_ARGS[@]}" clean_all 2>&1 | tail -5 || _r2g_clean_rc=$?
   _r2g_clean_status=PASS
   [[ $_r2g_clean_rc -eq 0 ]] || _r2g_clean_status=FAIL
   printf '{"from_stage":"","clean_all_rc":%d,"status":"%s"}\n' \
@@ -436,6 +438,10 @@ fi
 # Timeout and CPU limit support
 ORFS_TIMEOUT="${ORFS_TIMEOUT:-7200}"
 MAKE_CMD="make -f \"$FLOW_DIR/Makefile\" DESIGN_CONFIG=\"$ORFS_DESIGN_DIR/config.mk\" FLOW_VARIANT=\"$FLOW_VARIANT\""
+for _formal_arg in "${R2G_FORMAL_MAKE_ARGS[@]}"; do
+  printf -v _formal_quoted '%q' "$_formal_arg"
+  MAKE_CMD+=" $_formal_quoted"
+done
 
 # Formal T2a runs require an execution-bound configuration receipt, not merely
 # a parser's prediction of Make precedence. All arms use this identical query.
@@ -611,7 +617,7 @@ if [[ -n "$FROM_STAGE" ]]; then
       [[ $_r2g_downstream -eq 1 ]] || continue
       echo "Invalidating resumed/downstream stage: make clean_$_r2g_st (from clean_$FROM_STAGE) — reason: $RERUN_REASON (earlier stages reused)" \
         | tee -a "$BACKEND_DIR/flow.log"
-      make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" "clean_$_r2g_st" 2>&1 | tail -3 \
+      make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_DESIGN_DIR/config.mk" FLOW_VARIANT="$FLOW_VARIANT" "${R2G_FORMAL_MAKE_ARGS[@]}" "clean_$_r2g_st" 2>&1 | tail -3 \
         || echo "WARNING: clean_$_r2g_st returned non-zero (stage may have no artifacts yet)" >&2
     done
   else

@@ -36,6 +36,13 @@ sys.path[:0]=[str(code/'memory/scripts'),str(code/'memory')]
 import t2a_construct as C
 import t2a_adapters as A
 shutil.copytree(source,out)
+source_output=source/'AWM.json'
+source_output_sha=None
+if source_output.exists():
+ source_output_sha=hashlib.sha256(source_output.read_bytes()).hexdigest()
+ # The historical queue has since completed. Only reset the derived output
+ # in this scratch copy; all paid replies and accounting remain identical.
+ (out/'AWM.json').rename(out/'AWM.completed-source.json')
 assert not (out/'AWM.json').exists()
 def digest(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 old={str(p.relative_to(out)):digest(p) for p in out.rglob('*') if p.is_file() and
@@ -59,7 +66,7 @@ for rel,h in old.items():assert digest(out/rel)==h,'Historical artifact changed:
 m=A.PromptMemory('AWM',out)
 sit=dict(zip(A.GROUP_KEYS,json.loads(data['empty_workflow_results'][0]['group'])))
 assert m.context('repair',sit)==('',[])
-assert not (source/'AWM.json').exists(),'Replay modified original queue'
+assert (hashlib.sha256(source_output.read_bytes()).hexdigest() if source_output.exists() else None)==source_output_sha,'Replay modified original queue'
 print('REAL_CACHE_REPLAY_PASS: 2 cached answers, 0 new requests, unchanged raw files/ledgers, empty context accepted')
 '''
     result=subprocess.run([sys.executable,'-c',script,str(root),str(tmp_path/'controls'),
@@ -70,9 +77,11 @@ print('REAL_CACHE_REPLAY_PASS: 2 cached answers, 0 new requests, unchanged raw f
 def test_delta_gate_rejects_unrelated_constructor_change(tmp_path):
     import t2_nb_awm_resume as R
     base=R.QUEUE/'code/memory/scripts/t2a_construct.py'
-    old=base.read_text();new=C.__file__
-    R.validate_builder_delta(old,Path(new).read_text())
-    with pytest.raises(ValueError):R.validate_builder_delta(old,Path(new).read_text()+'\n# unrelated delta\n')
+    revised=R.QUEUE/'revisions/awm-empty-v1-20261020/code/memory/scripts/t2a_construct.py'
+    old=base.read_text();new=revised.read_text()
+    # This gate bound the historical delta, not all later development work.
+    R.validate_builder_delta(old,new)
+    with pytest.raises(ValueError):R.validate_builder_delta(old,new+'\n# unrelated delta\n')
 
 
 def test_prefix_protection_rejects_rewriting_prior_cost(tmp_path):

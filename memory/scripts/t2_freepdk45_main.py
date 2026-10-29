@@ -145,6 +145,25 @@ def configure(registry,slots):
     G.ARMS=ARMS[1:];G.BUILDS=BUILDS
 
 
+def registered_checker_stop(project,episode):
+    from t2_signoff_integrity import effective_episode,known_checker_stop
+    reviewed=effective_episode(project)
+    if known_checker_stop(project,reviewed.get('reviewed_verdict') or episode.get('final') or episode.get('initial') or {}):
+        return True
+    # Legacy timeouts may also have truncated LVS under the old 9,000 s
+    # aggregate watchdog. Only an explicit, frozen review may acknowledge them.
+    project=Path(project);registration=project.parent.parent/'registration.json'
+    if not registration.exists():return False
+    bound=(load(registration).get('acknowledged_technical_stops') or {}).get(str(project))
+    if not bound:return False
+    path=Path(bound['path'])
+    if sha(path)!=bound['sha256']:return False
+    review=load(path)
+    return (review.get('classification')=='UNVERIFIED_OR_SAFETY_STOP'
+        and review.get('episode_sha256')==sha(project/'episode.json')
+        and all(Path(p).is_file() and sha(p)==h for p,h in review['reports'].items()))
+
+
 def worker_popen(cmd,**kwargs):
     cmd=list(cmd)
     if Path(cmd[4]).name!='t2a_batch.py' or cmd[5]!='episode':raise ValueError('Unexpected worker boundary')
@@ -175,14 +194,28 @@ def collect(root):
         for arm in ARMS:
             base=root/'nb' if arm=='NB' else root/'folds'/hid
             project=base/'episodes'/(origin['task'].replace('/','__')+'__'+arm+'__r1')
-            file=project/'episode.json';e=load(file) if file.exists() else {}
+            file=project/'episode.json'
+            if file.exists():
+                from t2_signoff_integrity import effective_episode
+                e=effective_episode(project)
+            else:e={}
             events=F.rows(project/'reports/resource_ledger.jsonl') if file.exists() else []
+            cost=F.ledger_cost(project/'reports/resource_ledger.jsonl') if file.exists() else None
+            startup=(reg.get('technical_startup_episodes') or {}).get(hid) if arm=='NB' else None
+            startup_wall=0
+            if startup:
+                prior=Path(startup);overhead=F.ledger_cost(prior/'reports/resource_ledger.jsonl')
+                if cost is None:cost=overhead
+                else:cost={key:cost.get(key,0)+overhead.get(key,0) for key in set(cost)|set(overhead)}
+                startup_wall=load(prior/'episode.json').get('total_worker_wall_s',0)
             trajectories=e.get('repair_turns') or []
             local=[v for v in events if v.get('type')=='memory_procedure_consumption']
             harmful=sum(bool((v.get('comparison') or {}).get('regressions')) for v in trajectories)
             records.append({'design':hid,'task':origin['task'],'arm':arm,'status':e.get('status','NOT_STARTED'),
-                'episode':str(file),'cost':F.ledger_cost(project/'reports/resource_ledger.jsonl') if file.exists() else None,
-                'worker_wall_s':e.get('total_worker_wall_s'),'harness_cpu_s':e.get('harness_cpu_s'),
+                'raw_status':e.get('raw_status',e.get('status','NOT_STARTED')),
+                'episode':str(file),'cost':cost,'technical_startup_episode':startup,
+                'worker_wall_s':(e.get('total_worker_wall_s') or 0)+startup_wall if file.exists() or startup else None,
+                'harness_cpu_s':e.get('harness_cpu_s'),
                 'harmful_attempts_observed':harmful,
                 'harmful_attempts_basis':'explicit run-vector regressions, not all failed/rolled-back trials',
                 'rollback_attempts':sum(v.get('rolled_back') is True for v in trajectories),
@@ -240,6 +273,7 @@ def collect(root):
         'construction_costs_separate':construction,'ReMe_disabled':True,'AdaMEM_configuration':ADA.CONFIG,
         'superseded_platform_startup_costs_separate':technical_costs,
         'complete':all(r['status'] in ('ACCEPTED','NOT_ACCEPTED') for r in records),
+        'all_registered_episodes_ended':all(r['status'] not in ('NOT_STARTED','RUNNING') for r in records),
         'all_registered_means_include_unfinished_as_cost_so_far_not_zero_final_cost':True})
     with (root/'table2-matrix.csv').open('w') as out:
         w=csv.writer(out);w.writerow(['design',*['R2G' if a=='NB' else 'TEHM' if a=='TM0' else a for a in ARMS]])
@@ -271,13 +305,17 @@ def prepare(root,tests):
     (root/'nb/logs').mkdir(parents=True);nb=root/'nb';code=root/'code'
     shutil.copytree(BASE/'code',code,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
     for name in ('t2_freepdk45_main.py','t2_nb_followup.py','t2a_task_manifests.py',
-                 't2_adamem.py','t2_agent_memories.py','t2_agent_dispatch.py','t2_agent_runtime.py'):
+                 't2_adamem.py','t2_agent_memories.py','t2a_adapters.py','t2_agent_dispatch.py','t2_agent_runtime.py',
+                 't2_nb_firstlook.py','t2_agent_request_resume.py','t2_agent_verdict.py',
+                 't2_signoff_integrity.py','t2_freepdk45_corrective.py'):
         shutil.copy2(REPO/'memory/scripts'/name,code/'memory/scripts'/name)
     worker=code/'memory/scripts/t2a_batch.py'
     worker.write_text(replace_once(worker.read_text(),"if reg.get('schema')=='nb-firstlook8-v1':",
                                    "if man.get('area_reference_policy'):"))
     runtime=code/'memory/scripts/t2a_runtime.py'
     wt,rt=integrate_provenance_guards(worker.read_text(),runtime.read_text())
+    from t2_freepdk45_corrective import integrate_batch as integrate_checker_integrity
+    wt=integrate_checker_integrity(wt)
     rt=replace_once(rt,"ARMS = ('NB', 'RET', 'RECIPE', 'EXPEL', 'AWM', 'AMEM', 'TM0', 'REME', 'REASONINGBANK')",
                     'ARMS = '+repr(D.ARMS))
     worker.write_text(wt);runtime.write_text(rt)
@@ -287,6 +325,9 @@ def prepare(root,tests):
         adamem_sources[str(src)]=sha(src)
     shutil.copy2(REPO/'r2g-skills/signoff-loop/scripts/flow/run_lvs.sh',
                  code/'r2g-skills/signoff-loop/scripts/flow/run_lvs.sh')
+    for name in ('run_strict_signoff.sh','meter_checker.py'):
+        shutil.copy2(REPO/'r2g-skills/signoff-loop/scripts/flow'/name,
+                     code/'r2g-skills/signoff-loop/scripts/flow'/name)
     protocol=REPO/'memory/evaluation/r2g_Table2_FreePDK45_50design_Protocol_20261022.md'
     shutil.copy2(protocol,root/'protocol.md')
     native=Path('/data2/zhangdy/tehm-experiments/t2-freepdk45-lvs-check-20261022-r2/technical-receipt.json')
@@ -314,6 +355,7 @@ def prepare(root,tests):
         project=nb/'tasks'/(item['name']+'__initial');(project/'constraints').mkdir(parents=True)
         for p in repo.rglob('*'):F.N.checked_inside(repo,p)
         shutil.copytree(repo,project/'rtl')
+        cfg.pop('DIE_AREA',None);cfg.pop('CORE_AREA',None)
         cfg.update(PLATFORM='nangate45',CORE_UTILIZATION='20',ABC_AREA='1',SYNTH_MEMORY_MAX_BITS='131072',
             VERILOG_FILES=' '.join(str(project/'rtl'/p.relative_to(repo)) for p in files),
             VERILOG_INCLUDE_DIRS=' '.join(str(project/'rtl'/source(p).relative_to(repo)) for p in cfg['VERILOG_INCLUDE_DIRS'].split()),
@@ -405,8 +447,11 @@ def nb_gate(nb):
     if len(reg['plan'])!=50 or reg['arms']!=['NB']:raise ValueError('Wrong R2G denominator')
     import t2a_runtime as T
     for row in reg['plan']:
-        p=nb/'episodes'/(row['task'].replace('/','__')+'__NB__r1');e=load(p/'episode.json')
-        if e['status'] not in ('ACCEPTED','NOT_ACCEPTED') or not e['accounting']['passed']:raise RuntimeError('Incomplete R2G trajectory')
+        p=nb/'episodes'/(row['task'].replace('/','__')+'__NB__r1')
+        from t2_signoff_integrity import effective_episode
+        e=effective_episode(p)
+        if (e['status'] not in ('ACCEPTED','NOT_ACCEPTED') and not registered_checker_stop(p,e)) or not e['accounting']['passed']:
+            raise RuntimeError('Unacknowledged incomplete R2G trajectory')
         if e['accounting']['llm_requests']>3:raise ValueError('Online request limit exceeded')
         R.ledger_complete(p/'reports/resource_ledger.jsonl')
         if not T.accounting_check(F.rows(p/'reports/resource_ledger.jsonl'),list((p/'backend').glob('RUN_*')))['passed']:
@@ -452,11 +497,14 @@ def drain_technical_run(root):
         'operator_receipt':str(root/'operator-technical-pause.json')})
 
 
-def run(root,continuation=None):
+def run(root,continuation=None,correction=None):
     root=Path(root).resolve()
     if Path(__file__).resolve()!=root/'code/memory/scripts'/Path(__file__).name:raise ValueError('Run the frozen private controller')
     lease=(root/'supervisor.lock').open('a');fcntl.flock(lease,fcntl.LOCK_EX|fcntl.LOCK_NB)
-    if continuation:
+    if correction:
+        from t2_freepdk45_corrective import validate_activation
+        validate_activation(root,correction)
+    elif continuation:
         from t2_freepdk45_recovery import validate_continuation
         validate_continuation(root,continuation)
     elif (root/'launch.json').exists():raise FileExistsError('No implicit resume or rerun')
@@ -468,11 +516,14 @@ def run(root,continuation=None):
     os.environ.update(TMPDIR=str(root/'tmp'),PYTHONDONTWRITEBYTECODE='1',
         R2G_EMBEDDING_PYTHON=q['embedding_python'],R2G_EMBEDDING_LIBRARY_PATH=q['embedding_library_path'])
     registry=load(nb/'origin-registry.json');configure(registry,reg['slots']);R.install_online()
-    if not continuation:
+    if not continuation and not correction:
         save(root/'launch.json',{'started':time.time(),'pid':os.getpid(),'registration_sha256':sha(root/'registration.json')})
     try:
         jobs=[{'root':str(nb),'task':x['task'],'arm':'NB','design':hid} for hid,x in registry.items()]
-        if continuation:
+        if correction:
+            from t2_freepdk45_corrective import remaining_jobs
+            remaining=remaining_jobs(jobs)
+        elif continuation:
             from t2_freepdk45_recovery import run_initial,never_started
             run_initial(root,continuation,reg['slots'])
             remaining=never_started(jobs)
@@ -487,10 +538,20 @@ def run(root,continuation=None):
             save(root/'first-episode-integrity.json',first)
             remaining=jobs[1:]
         save(root/'dispatch-state.json',{'status':'R2G_BASELINE_RUNNING','pending':len(ARMS)*50-1,'state':str(nb/'dispatch-state.json')})
-        state=F.dispatch(nb,remaining,popen=worker_popen)
+        state=F.dispatch(nb,remaining,popen=worker_popen,terminal_policy=registered_checker_stop)
         if state['status']!='COMPLETED':raise RuntimeError('R2G queue paused; no hidden retry')
         nb_gate(nb);collect(root)
-        units,inputs=F.raw_units(nb,registry)
+        from t2_signoff_integrity import effective_episode
+        history_registry={};history_excluded=[]
+        for hid,origin in registry.items():
+            p=nb/'episodes'/(origin['task'].replace('/','__')+'__NB__r1')
+            e=effective_episode(p)
+            if e['status'] in ('ACCEPTED','NOT_ACCEPTED'):history_registry[hid]=origin
+            else:history_excluded.append({'design':hid,'episode':str(p/'episode.json'),'episode_sha256':sha(p/'episode.json'),
+                'reason':'technical/non-measured outcome; not repair failure or positive experience','status':e['status']})
+        units,inputs=F.raw_units(nb,history_registry)
+        save(root/'shared-history-technical-exclusions.json',{'excluded_from_every_method_identically':history_excluded,
+             'all_50_tasks_remain_in_table':True,'strict_success_criterion_unchanged':True})
         for u in units:
             if 'episode_context' in u:
                 p=nb/'episodes'/(registry[u['source_handoff_id']]['task'].replace('/','__')+'__NB__r1')
@@ -533,7 +594,7 @@ def run(root,continuation=None):
             B.preflight(fold,'TEST')
         jobs=[{'root':str(f),'task':registry[f.name]['task'],'arm':a,'design':f.name} for f in folds for a in ARMS[1:]]
         save(root/'frozen-memory-plan.json',{'jobs':jobs,'registrations':{str(f/'registration.json'):sha(f/'registration.json') for f in folds}})
-        F.dispatch(root,jobs,popen=worker_popen);collect(root)
+        F.dispatch(root,jobs,popen=worker_popen,terminal_policy=registered_checker_stop);collect(root)
     except Exception as exc:
         save(root/'dispatch-state.json',{'status':'PAUSED_TECHNICAL','reason':str(exc),'updated':time.time()});collect(root)
         raise
@@ -543,9 +604,9 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('command',choices=('prepare','run','collect','construct','drain'))
     parser.add_argument('--root',type=Path,required=True);parser.add_argument('--tests',type=Path)
     parser.add_argument('--controls',type=Path);parser.add_argument('--arm')
-    parser.add_argument('--continuation',type=Path);args=parser.parse_args()
+    parser.add_argument('--continuation',type=Path);parser.add_argument('--correction',type=Path);args=parser.parse_args()
     if args.command=='prepare':prepare(args.root,args.tests)
-    elif args.command=='run':run(args.root,args.continuation)
+    elif args.command=='run':run(args.root,args.continuation,args.correction)
     elif args.command=='collect':collect(args.root)
     elif args.command=='drain':drain_technical_run(args.root)
     else:

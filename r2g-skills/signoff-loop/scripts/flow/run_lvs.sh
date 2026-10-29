@@ -19,6 +19,16 @@ fi
 # Auto-detect ORFS + tools (honors ORFS_ROOT / *_EXE env overrides)
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
+# A separately frozen LVS checker must not silently upgrade DRC/streamout.
+# The wrapper and its dependency tree belong in the experiment's hash manifest.
+if [[ -n "${R2G_LVS_KLAYOUT_CMD:-}" ]]; then
+  if [[ ! -x "$R2G_LVS_KLAYOUT_CMD" || -z "${R2G_LVS_KLAYOUT_SHA256:-}" ]] || \
+      [[ "$(sha256sum "$R2G_LVS_KLAYOUT_CMD" | cut -d' ' -f1)" != "$R2G_LVS_KLAYOUT_SHA256" ]]; then
+    echo "ERROR: LVS checker pin missing or changed" >&2
+    exit 76
+  fi
+  export KLAYOUT_CMD="$R2G_LVS_KLAYOUT_CMD"
+fi
 # Bounded process-group checker supervisor (RMD2-P0-01)
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/_bounded_run.sh"
@@ -42,6 +52,8 @@ PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 FLOW_SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KNOWLEDGE_DIR_J="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../knowledge" && pwd)"
 CONFIG_MK="$PROJECT_DIR/constraints/config.mk"
+source "$FLOW_SCRIPTS_DIR/_formal_make_args.sh"
+r2g_formal_make_args "$PROJECT_DIR" || exit 76
 
 if [[ ! -f "$CONFIG_MK" ]]; then
   echo "ERROR: config.mk not found at $CONFIG_MK" >&2
@@ -227,7 +239,7 @@ _PREFLIGHT_TARGETS=("$RESULTS_DIR/5_route.odb" "$RESULTS_DIR/6_final.def"
                     "$RESULTS_DIR/6_final.v" "$RESULTS_DIR/6_final.sdc")
 set +e
 make -f "$FLOW_DIR/Makefile" --question DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" \
-  "${_CDL_MAKE_ARGS[@]}" "${_PREFLIGHT_TARGETS[@]}" >/dev/null 2>&1
+  "${R2G_FORMAL_MAKE_ARGS[@]}" "${_CDL_MAKE_ARGS[@]}" "${_PREFLIGHT_TARGETS[@]}" >/dev/null 2>&1
 _PREFLIGHT_RC=$?
 set -e
 if [[ $_PREFLIGHT_RC -ne 0 ]]; then
@@ -283,7 +295,7 @@ LVS_STATUS=0
 for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
   set +e +o pipefail
   r2g_bounded_run "$LVS_TIMEOUT" "${LVS_KILL_GRACE:-60}" "$LVS_RUN_LOG" \
-    make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" "${_LVS_FROZEN_MAKE_ARGS[@]}" "${_CDL_MAKE_ARGS[@]}" lvs
+    make -f "$FLOW_DIR/Makefile" DESIGN_CONFIG="$ORFS_CONFIG" FLOW_VARIANT="$FLOW_VARIANT" "${R2G_FORMAL_MAKE_ARGS[@]}" "${_LVS_FROZEN_MAKE_ARGS[@]}" "${_CDL_MAKE_ARGS[@]}" lvs
   LVS_STATUS=$?
   set -e -o pipefail
   # Output goes straight to the log (no pipe reader can outlive the checker) —
@@ -307,7 +319,7 @@ for _attempt in $(seq 1 "$LVS_CRASH_RETRIES"); do
       echo "LVS crashed (KLayout comparer/lvsdb-writer heisenbug); retry $_attempt/$LVS_CRASH_RETRIES ..." >&2
       continue
     fi
-    echo "ERROR: LVS still crashing after $LVS_CRASH_RETRIES attempts (KLayout 0.30.7 comparer bug, no newer build on host)" >&2
+    echo "ERROR: LVS still crashing after $LVS_CRASH_RETRIES attempts (checker: $KLAYOUT_CMD); result remains unverified" >&2
     break
   fi
 
@@ -346,9 +358,11 @@ fi
 # lvs_result.json (that file is the skip/failure marker in extract_lvs.py's
 # freshness logic).
 python3 - "$LVS_DIR/lvs_provenance.json" "${R2G_BACKEND_RUN:-}" "$GDS_FILE" \
-  "$LVS_GDS_SHA_PRE" "$KLAYOUT_LVS_RESOLVED" "$LVS_STARTED_AT" <<'PYEOF' || true
+  "$LVS_GDS_SHA_PRE" "$KLAYOUT_LVS_RESOLVED" "$LVS_STARTED_AT" "${KLAYOUT_CMD:-}" <<'PYEOF' || true
 import hashlib, json, os, sys, time
 out, run_dir, gds, gds_sha, rule, started = sys.argv[1:7]
+checker = sys.argv[7]
+checker_sha = hashlib.sha256(open(checker,'rb').read()).hexdigest() if os.path.isfile(checker) else None
 deck_sha = None
 try:
     h = hashlib.sha256()
@@ -361,6 +375,7 @@ except OSError:
 doc = {"engine": "klayout", "run_tag": os.path.basename(run_dir) if run_dir else None,
        "gds_path": gds, "gds_sha256": gds_sha or None,
        "rule_path": rule, "rule_sha256": deck_sha,
+       "checker_executable": checker, "checker_executable_sha256": checker_sha,
        "started_at": started, "ended_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
 with open(out, "w") as f:
     json.dump(doc, f, indent=2)

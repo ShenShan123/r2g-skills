@@ -460,7 +460,7 @@ def recover_execution(H, project, env, final=False):
         # original cost; a new restore transaction/config has a new identity.
         event(H,project,'restoration_not_retried',{'config_sha256':config_sha,
               'recovery_rc':failed['recovery_rc'],'reason':'same restored configuration already failed'})
-        return {'accepted':False,'execution_recovery':'UNVERIFIED',
+        return {'accepted':False,'execution_recovery':failed.get('execution_recovery','UNVERIFIED'),
                 'recovery_rc':failed['recovery_rc'],'recovery_not_retried':True}
     purpose='final_acceptance' if final else 'repair'
     rc,raw=H._ledger(project,'remaining','--purpose',purpose)
@@ -490,8 +490,12 @@ def recover_execution(H, project, env, final=False):
             marker.unlink()
             return {'accepted':False,'final_layout':False,'execution_recovery':'PARTIAL_VERIFIED',
                     'recovery_rc':code,'partial_execution':proof,'continuation_only':True}
-        if code not in (75,76,-9,124,137):
-            marker_data['failed_recovery']={'config_sha256':config_sha,'sdc_sha256':sdc_sha,'recovery_rc':code}
+        # An executed restore stopped by the watchdog is not permission for
+        # terminal verification to repeat it. Non-launch/accounting refusals
+        # remain distinct; preserve the safety classification and unsafe marker.
+        if code not in (75,76):
+            marker_data['failed_recovery']={'config_sha256':config_sha,'sdc_sha256':sdc_sha,'recovery_rc':code,
+                'execution_recovery':'SAFETY_STOP' if code in (-9,124,137) else 'UNVERIFIED'}
             temporary=marker.with_suffix('.tmp');temporary.write_text(A.stable(marker_data)+'\n')
             temporary.replace(marker)
         return {'accepted':False,'execution_recovery':'SAFETY_OR_ACCOUNTING_STOP' if code==76 else

@@ -42,6 +42,8 @@ def terminal_verdict(H,project,env):
 
 
 def terminal_status(verdict):
+    if verdict.get('technical_signoff'):
+        return 'UNVERIFIED_OR_SAFETY_STOP'
     r=verdict.get('native_failure_receipt') or {}
     if (r.get('schema')==SCHEMA and (r.get('accounting') or {}).get('passed')
             and (r.get('proof') or {}).get('status')=='KNOWN_INCOMPLETE'

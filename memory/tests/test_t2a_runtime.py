@@ -181,6 +181,24 @@ def test_failed_recovery_is_not_implicitly_retried_by_terminal_verification(ep,m
     assert len(calls)==1  # final verification must not repeat the same failed clean flow
 
 
+@pytest.mark.parametrize('code', [124, -9, 137])
+def test_safety_stopped_recovery_is_not_retried_at_terminal(ep, monkeypatch, code):
+    project, _, _ = ep
+    T.restore(project, T.snapshot_state(project, 1), execution_changed=True)
+    monkeypatch.setattr(H, '_ledger', lambda p, *a, **k:
+                        (0, '{"wall_s":500}' if a[0] == 'remaining' else ''))
+    calls = []
+    monkeypatch.setattr(H, 'run', lambda *a: calls.append(a) or code)
+    monkeypatch.setattr(H, 'final_verdict', lambda *a: pytest.fail('unsafe state'))
+    first = T.recover_execution(H, project, {})
+    final = T.terminal_verdict(H, project, {})
+    assert first['execution_recovery'] == final['execution_recovery'] == 'SAFETY_STOP'
+    assert final['recovery_not_retried'] is True
+    assert final['recovery_rc'] == code and len(calls) == 1
+    assert T.terminal_status(final) == 'UNVERIFIED_OR_SAFETY_STOP'
+    assert (project / 'reports/t2a-workspace-unsafe.json').exists()
+
+
 def test_terminal_status_requires_all_eleven_checks_and_consistent_acceptance():
     checks={key:'pass' for key in ('A1_flow_complete','A2_drc_full_deck','A3_lvs','A4_route',
         'A5_antenna','A6_setup','A7_hold','A8_drv_limits','A9_task_clock','A10_rcx','A11_provenance')}

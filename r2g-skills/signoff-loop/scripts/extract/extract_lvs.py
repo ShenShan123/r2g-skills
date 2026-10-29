@@ -148,7 +148,8 @@ _CRASH_RE = re.compile(
     # retry-fixable tool crash, NOT a layout mismatch: the lvsdb-writer net2id assert
     # ('dbLayoutVsSchematicWriter.cc ... i != net2id.end ()') / 'Internal error ... in
     # Executable::cleanup'. Misread as lvs=fail before (2026-06-28 PicoRV32_..._fifo_basic).
-    r"|dblayoutvsschematicwriter|net2id\.end|internal error.*executable::cleanup",
+    r"|dblayoutvsschematicwriter|net2id\.end|internal error.*executable::cleanup"
+    r"|VERBOSE-LVS: compare raised exception|VERBOSE-LVS: report_lvs failed",
     re.I,
 )
 
@@ -420,6 +421,10 @@ def main():
     if log_status == 'mismatch' and lvsdb_matched and log_info.get('crash'):
         status = 'crash'
         result_reason = 'lvs_writer_crash_after_match'
+    elif log_info.get('crash'):
+        # A printed verdict does not override a failed comparer/report writer.
+        status = 'crash'
+        result_reason = 'klayout_cpp_crash'
     elif log_status == 'mismatch':
         status = 'fail'
     elif log_status == 'match' and mismatch_count <= 0:
@@ -485,7 +490,8 @@ def main():
         try:
             if _prov_file.stat().st_mtime >= _runlog_m - 2.0:
                 _prov = json.loads(_prov_file.read_text(encoding='utf-8'))
-                for k in ('run_tag', 'gds_path', 'gds_sha256', 'rule_sha256'):
+                for k in ('run_tag', 'gds_path', 'gds_sha256', 'rule_sha256',
+                          'checker_executable', 'checker_executable_sha256'):
                     if isinstance(_prov, dict) and _prov.get(k):
                         result[k] = _prov[k]
         except (ValueError, OSError):

@@ -242,11 +242,21 @@ def ledger_cost(path):
             tokens+=u['prompt_tokens']+u['completion_tokens']
         else:unknown+=1
     metrics=rows(Path(path).with_name('embedding-calls.jsonl'))
+    checkers=[v for v in ev if v.get('type')=='checker_run']
+    log=Path(path).parent.parent/'eval_arm.log'
+    observed=sum(line.strip() in ('[strict-signoff] drc','[strict-signoff] lvs','[strict-signoff] rcx')
+                 for line in log.read_text(errors='replace').splitlines()) if log.exists() else 0
+    strict_events=sum(v.get('source')=='strict_signoff' for v in checkers)
+    strict_calls=max(observed,strict_events)
+    checker_calls=strict_calls+sum(v.get('source')!='strict_signoff' for v in checkers)
+    orchestrator_calls=sum(v.get('type')=='tool_call' for v in ev)
     return {'requests':len(req),'known_tokens':tokens,'unknown_requests':unknown,
             'embedding_operations':len(metrics),'embedding_cpu_s':sum(v.get('cpu_s',0) for v in metrics),
             'embedding_wall_s':sum(v.get('wall_s',0) for v in metrics),
             'flows':sum(v.get('type')=='budget_charge' and v.get('resource')=='flows' for v in ev),
-            'tool_calls':sum(v.get('type')=='tool_call' for v in ev),'checker_runs':sum(v.get('type')=='checker_run' for v in ev)}
+            'tool_calls':orchestrator_calls+checker_calls,'checker_runs':checker_calls,
+            'tool_calls_orchestrator':orchestrator_calls,
+            'legacy_strict_checker_calls_reconstructed':max(0,observed-strict_events)}
 
 
 def collect(root):
@@ -315,7 +325,7 @@ def seal_runtime(root,fold,nb,registry,hid):
     save(fold/'registration.json',reg);B.preflight(fold,'TEST')
 
 
-def dispatch(root,jobs,popen=None,sleep=time.sleep):
+def dispatch(root,jobs,popen=None,sleep=time.sleep,terminal_policy=None):
     """Seven slots; never retry completed/partial episodes. Drain on a technical fault."""
     popen=popen or subprocess.Popen;pending=list(jobs);live={};done=[];reason=None
     while pending or live:
@@ -333,7 +343,9 @@ def dispatch(root,jobs,popen=None,sleep=time.sleep):
         for i,(p,log,row,name) in list(live.items()):
             if p.poll() is None:continue
             log.close();file=Path(row['root'])/'episodes'/name/'episode.json';e=load(file) if file.exists() else {}
-            if p.returncode or e.get('status') not in ('ACCEPTED','NOT_ACCEPTED') or not e.get('accounting',{}).get('passed'):
+            valid_terminal=(e.get('status') in ('ACCEPTED','NOT_ACCEPTED') or
+                            (terminal_policy is not None and terminal_policy(file.parent,e)))
+            if p.returncode or not valid_terminal or not e.get('accounting',{}).get('passed'):
                 reason='technical/accounting fault: '+name
             done.append({**row,'status':e.get('status'),'returncode':p.returncode});del live[i]
         save(root/'dispatch-state.json',{'status':'PAUSED_DRAINING' if reason and live else 'PAUSED' if reason else 'RUNNING',
