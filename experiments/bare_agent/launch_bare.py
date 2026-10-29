@@ -19,10 +19,26 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 
+def wait_for_load(a):
+    """Start a design only while the machine has headroom (shared hosts: other
+    users' jobs come and go). Contention would turn stage timeouts and the wall
+    budget into failures that say nothing about the arm being measured."""
+    cpus = os.cpu_count() or 1
+    while a.max_load and os.getloadavg()[0] > a.max_load * cpus:
+        time.sleep(60)
+
+
 def run_one(case, a):
     out = a.root / "cases" / case["id"]
     if (out / "result.json").exists():
         return case["id"], "skipped"
+    if out.exists():
+        # interrupted by a harness restart (never by the model): keep it for the
+        # record, outside the measured cohort, and start the design fresh
+        dest = a.root / "interrupted" / ("%s_%d" % (case["id"], int(time.time())))
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(out), str(dest))
+    wait_for_load(a)
     out.mkdir(parents=True, exist_ok=True)
     (out / "case.json").write_text(json.dumps(case, indent=1, ensure_ascii=False))
     baseline = a.baselines / case["id"]
@@ -53,6 +69,8 @@ def main():
     ap.add_argument("--model", default="deepseek-flash")
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--caps", default="")
+    ap.add_argument("--max-load", type=float, default=0.0,
+                    help="start a new design only while loadavg/cpus is below this (0 = no gate)")
     a = ap.parse_args()
     a.root = a.root.resolve()
     (a.root / "cases").mkdir(parents=True, exist_ok=True)
