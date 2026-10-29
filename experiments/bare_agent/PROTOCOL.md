@@ -30,6 +30,12 @@ already clean 2, unresolved 2), SKY130 21 (LVS feedthrough 7, front-end 7, flow
 compatibility 3, already clean 2, unresolved 2). GF180 is drawn once its
 baseline LVS defines a repair pool. All sampled designs are baseline failures.
 
+Full run (harness v2.1): every frozen-baseline failure, N45 327 and SKY130 128.
+33 N45 outside-pool designs leave the cohort for **both** arms: none of their
+RTL is in the corpus (every baseline source path is missing), so there is nothing
+to repair (`cohort_exclusions.json`). Cohort: N45 294 (148 pool + 146 outside),
+SKY130 128.
+
 ## Starting state of the bare arm
 
 The original RTL (hash-checked against the population manifest) plus the
