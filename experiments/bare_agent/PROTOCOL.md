@@ -107,7 +107,16 @@ reported. Added in v2.2 after the 2026-10-29 05:20-05:35 relay outage (a pooled
 connection leak in the relay, fixed the same day) ended 38 attempts on their
 first timeout, five of them already dual-clean. Those 38 designs are a harness
 defect: their attempts are kept under `harness_defect/` and the designs re-run
-from scratch on v2.2. Harness defects found during the run are
+from scratch on v2.2.
+
+Same day, ~06:00-06:45: 203's `/home/yangao` (a 7.3 TB disk shared with other
+users) reached 0 bytes free and every flow failed with ENOSPC. All 40 finished
+attempts that hit it and the 10 interrupted with it are harness defects
+(`bare_v21_home_ENOSPC_harness_defect/` on 203) and re-run from scratch. 203
+moved to `/data`: work root `/data/yangao/r2g_vs_bare_work/bare_v21`, ORFS
+workspace in a shadow root `/data/yangao/orfs203` (results/logs/objects/reports/
+designs real, every other entry a symlink to the checkout), harness v2.3 (the
+sandbox resolves its roots like the paths it checks; no other change). Harness defects found during the run are
 fixed, recorded, and the affected designs re-run from scratch.
 
 ## Memory: independent designs first, a memory arm second
