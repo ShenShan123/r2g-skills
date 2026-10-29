@@ -99,6 +99,7 @@ class BareTools:
         rc = self._sh("flow", ["bash", str(self.repo / "r2g-skills/signoff-loop/scripts/flow/run_orfs.sh"),
                                str(self.project), self.platform], env,
                       timeout=len(STAGES) * self.stage_timeout + 1800)
+        self._prune_archives()
         run = self._latest_run()
         failed = None
         if run and (run / "stage_log.jsonl").is_file():
@@ -166,6 +167,17 @@ class BareTools:
                 s["mismatch_class"] = d.get("mismatch_class")
             out[name] = s
         return out
+
+    def _prune_archives(self, keep: int = 2):
+        """Drop layout databases from all but the newest `keep` archived runs.
+
+        A resume reads the live ORFS workspace, not these copies; logs, reports
+        and stage logs stay, so the transcript and the audit remain complete."""
+        runs = sorted((self.project / "backend").glob("RUN_*"), key=lambda p: p.stat().st_mtime)
+        for run in runs[:-keep]:
+            for pattern in ("*.odb", "*.gds", "*.def", "*.spef", "*.v.gz"):
+                for f in run.rglob(pattern):
+                    f.unlink(missing_ok=True)
 
     def _latest_run(self):
         runs = sorted((self.project / "backend").glob("RUN_*"), key=lambda p: p.stat().st_mtime)
