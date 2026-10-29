@@ -33,7 +33,10 @@ def normalize_usage(raw: dict, protocol: str) -> dict:
             "usage_reported": bool(raw), "raw_usage": raw}
 
 
-def usage_event(mc, raw: dict, response_id: str | None, complete: bool) -> dict:
+def usage_event(mc, raw: dict, response_id: str | None, complete: bool,
+                retries: list | None = None) -> dict:
+    # transport_retries: reconnects before any token was streamed (llm/retry.py);
+    # they are part of this one call, not extra calls.
     return {"type": "usage", "provider": mc.provider, "model": mc.model,
             "protocol": mc.protocol, "response_id": response_id, "stream_complete": complete,
-            **normalize_usage(raw, mc.protocol)}
+            **normalize_usage(raw, mc.protocol), "transport_retries": list(retries or [])}

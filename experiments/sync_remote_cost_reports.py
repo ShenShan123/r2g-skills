@@ -20,7 +20,8 @@ root=Path(REMOTE_DIR)
 names=['STATUS.md','costs.csv','status_snapshot.json','measurement_summary.json',
        'launch_parameters.json','orfs_audit.jsonl']
 paths=[root/name for name in names if (root/name).is_file()]
-for folder in (root/'cases').glob('*'):
+paths.extend(p for p in root.glob('retries/*/launch_parameters.json') if p.is_file())
+for folder in list((root/'cases').glob('*'))+list(root.glob('retries/*/cases/*')):
     if folder.is_dir():
         paths.extend(p for p in folder.iterdir() if p.is_file() and
                      (p.suffix in ('.json','.sse')))

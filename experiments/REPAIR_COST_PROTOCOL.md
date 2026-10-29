@@ -39,6 +39,30 @@ ORFS main count is `run_orfs` wrapper starts. Also report actual spawned
 top-level `make` invocations, split into build/check and clean; recursive make is
 excluded. Require complete paired start/end journals before accepting costs.
 
+## Invocation recovery
+
+Two layers, both conservative about cost:
+
+1. **Inside a model call** (`agent/r2g_agent/llm/retry.py`, both adapters): reconnect
+   only when the request provably produced no tokens -- the connection never opened,
+   or the endpoint answered 429/500/502/503/504/529 before any stream data -- up to
+   `R2G_LLM_RETRIES` (default 4) with exponential backoff honouring `Retry-After`.
+   Each reconnect is recorded on that call's usage event as `transport_retries`;
+   it is not an extra model call and adds no tokens. A stream that has started,
+   or an ambiguous read timeout/reset, is never retried: its usage stays unknown.
+2. **Across attempts** (`measure_agent_repair_cost.py --invocation-retries N`): an
+   attempt that closes voided by a transport error or incomplete provider usage
+   gets a fresh complete attempt (new session, freshly verified original inputs)
+   under `retries/r<k>/` with its own launch receipt. The voided attempt stays on
+   disk and in `attempts.csv`. An ambiguous initial submission (no session
+   receipt) is never resent automatically, since it may have created a job.
+
+The ledger counts `transport_retries` per platform beside model calls, so runs
+with different orchestration models can be compared on invocation reliability
+as well as tokens and ORFS calls. Before this, five relay `HTTP 502 upstream
+unavailable` answers voided three successful 2026-10-28 attempts (C03351,
+C03391, C03966) that had to be re-run by hand.
+
 ## Tools
 
 1. `measure_agent_repair_cost.py` submits and records fresh measured API attempts.

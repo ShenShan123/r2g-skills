@@ -161,7 +161,10 @@ def assess(folder, case, source):
                 'strategies': strategies, 'provider_usage': usage['totals'],
                 'dispatch_usage': s.get('dispatch_usage', {}).get('totals'),
                 'explanation_usage': s.get('explanation_usage', {}).get('totals'),
-                'model_calls': usage['model_calls'], 'orfs_make_kind_counts': s.get('orfs_make_kind_counts'),
+                'model_calls': usage['model_calls'],
+                # pre-stream reconnects inside these calls (agent llm/retry.py); not extra calls
+                'transport_retries': sum(len(c.get('transport_retries') or []) for c in usage.get('calls') or []),
+                'orfs_make_kind_counts': s.get('orfs_make_kind_counts'),
                 'dataset_verify': verify, 'confirming_run': confirm,
                 'evidence_sha256': {n: sha(folder / n) for n in
                                     ('summary.json', 'input_receipt.json', 'orfs_audit.json',
@@ -180,7 +183,8 @@ def render(config_path):
             population[c['id']] = c
     attempts, eligible = [], {}
     for source in config['sources']:
-        for folder in sorted((Path(source['path']) / 'cases').glob('*')):
+        root = Path(source['path'])
+        for folder in sorted(root.glob('cases/*')) + sorted(root.glob('retries/*/cases/*')):
             case = population.get(folder.name)
             if case is None:
                 continue  # calibration controls are outside the fixed population
@@ -192,7 +196,10 @@ def render(config_path):
                 for cid, values in eligible.items()}
     prior = read(out / 'accepted_attempts.json', {})
     for cid, old in prior.items():
-        if selected.get(cid) != old:
+        new = selected.get(cid)
+        # Every field an accepted row already carried must be unchanged; a newly
+        # derived field (e.g. transport_retries) may be added without review.
+        if new is None or any(new.get(k) != value for k, value in old.items()):
             raise ValueError('Accepted attempt changed or lost evidence; review required: ' + cid)
     json_write(out / 'accepted_attempts.json', selected)
     for row in attempts:
@@ -209,6 +216,7 @@ def render(config_path):
         direct = [a for a in success if not a['repair_observed']]
         def aggregate(values):
             return {'cases': len(values), 'model_calls': sum(a['model_calls'] for a in values),
+                    'transport_retries': sum(a.get('transport_retries', 0) for a in values),
                     'orfs_wrapper_calls': sum(a['orfs_wrapper_calls'] for a in values),
                     'orfs_make_launches': sum(a['orfs_make_launches'] for a in values),
                     'provider_usage': {k: sum(a['provider_usage'][k] for a in values)

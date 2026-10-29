@@ -414,6 +414,52 @@ def run_case(case, args):
         return state
 
 
+def invocation_failure(folder):
+    """Why a CLOSED attempt is void as a measurement because of the model invocation.
+
+    Only transport-level evidence counts: a recorded chat/transport error or a
+    model call without complete provider usage. An ambiguous initial POST (no
+    session receipt) is excluded -- resending it could duplicate a job."""
+    state = load(folder / "state.json", {})
+    summary = load(folder / "summary.json", {})
+    if state.get("status") != "complete" or not summary:
+        return None
+    errors = list(state.get("chat_errors") or [])
+    errors += [state[k] for k in ("initial_transport_error", "explanation_transport_error") if state.get(k)]
+    calls = (summary.get("usage") or {}).get("calls") or []
+    incomplete = [c.get("call_id") for c in calls
+                  if not (c.get("usage_reported") and c.get("stream_complete"))]
+    if errors or incomplete:
+        return {"errors": errors, "incomplete_calls": incomplete}
+    return None
+
+
+def run_case_with_recovery(case, args):
+    """run_case, then up to --invocation-retries fresh attempts for transport-voided ones.
+
+    Each retry is a separate cohort folder retries/r<k>/ with its own copy of the
+    launch receipt, fresh session and freshly verified original inputs; the voided
+    attempt stays on disk and in the ledger as an excluded attempt."""
+    result = run_case(case, args)
+    output = args.output
+    for k in range(1, max(0, args.invocation_retries) + 1):
+        why = invocation_failure(output / "cases" / case["id"])
+        if why is None or args.dry_run or case.get("reuse_case_directory"):
+            break
+        retry_root = args.output / "retries" / ("r%d" % k)
+        retry_root.mkdir(parents=True, exist_ok=True)
+        launch = load(args.output / "launch_parameters.json")
+        if launch and not (retry_root / "launch_parameters.json").exists():
+            save(retry_root / "launch_parameters.json",
+                 {**launch, "invocation_retry_of": str(output), "retry_index": k})
+        save(retry_root / "cases" / case["id"] / "retry_reason.json",
+             {"previous_attempt": str(output / "cases" / case["id"]), "reason": why, "at": now()})
+        progress(case["id"], "fresh attempt r%d after invocation failure: %s" % (k, why))
+        result = run_case(case, argparse.Namespace(**{**vars(args), "output": retry_root}))
+        output = retry_root
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_OUTPUT / "case_candidates.json")
@@ -428,6 +474,9 @@ def main():
     parser.add_argument("--poll-seconds", type=float, default=10)
     parser.add_argument("--job-timeout", type=float, default=28800)
     parser.add_argument("--chat-timeout", type=float, default=600)
+    parser.add_argument("--invocation-retries", type=int, default=0,
+                        help="Fresh complete attempts (new session, original inputs) under "
+                             "retries/r<k>/ when an attempt closes voided by a model-transport failure")
     args = parser.parse_args()
     if args.workers < 1 or (args.limit is not None and args.limit < 1):
         parser.error("workers and limit must be positive")
@@ -454,7 +503,7 @@ def main():
          "scope": "current Agent source-to-signoff replay, not historical frozen-config replay"})
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = [pool.submit(run_case, case, args) for case in candidates]
+        futures = [pool.submit(run_case_with_recovery, case, args) for case in candidates]
         for future in concurrent.futures.as_completed(futures):
             results.append(future.result())
             save(args.output / ("dry_run_summary.json" if args.dry_run else "measurement_summary.json"),

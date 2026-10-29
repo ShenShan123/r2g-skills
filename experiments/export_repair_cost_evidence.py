@@ -32,9 +32,14 @@ def fingerprint(path):
         return None
 
 
+def case_folders(source):
+    """Measured attempts of a cohort: cases/* plus runner invocation retries."""
+    return sorted((source / 'cases').glob('*')) + sorted(source.glob('retries/*/cases/*'))
+
+
 def export(source):
     count = 0
-    for folder in sorted((source / 'cases').glob('*')):
+    for folder in case_folders(source):
         summary = read(folder / 'summary.json', {})
         if summary.get('status') != 'complete':
             continue

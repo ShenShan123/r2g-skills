@@ -5,6 +5,7 @@ import json
 
 import httpx
 
+from . import retry
 from .usage import usage_event
 
 
@@ -50,9 +51,10 @@ class AnthropicAdapter:
         blocks: dict[int, dict] = {}
         stop = "end_turn"
         usage, response_id, complete, closing = {}, None, False, False
+        retries: list = []
         try:
-            with httpx.stream("POST", self.mc.base_url + "/v1/messages", headers=headers, json=body,
-                              timeout=httpx.Timeout(180, connect=20)) as r:
+            with retry.stream(lambda: httpx.stream("POST", self.mc.base_url + "/v1/messages", headers=headers, json=body,
+                                                  timeout=httpx.Timeout(180, connect=20)), retries) as r:
                 if r.status_code >= 400:
                     yield {"type": "error", "message": "HTTP %d: %s" % (r.status_code, r.read().decode(errors="replace")[:500])}
                     return
@@ -99,7 +101,7 @@ class AnthropicAdapter:
             return
         finally:
             if not closing:
-                yield usage_event(self.mc, usage, response_id, complete)
+                yield usage_event(self.mc, usage, response_id, complete, retries)
         for i in sorted(blocks):
             b = blocks[i]
             if b["type"] == "tool_use":
