@@ -94,3 +94,37 @@ One attempt per design and arm. An attempt voided by an invocation failure
 attempts are kept under `voided/` and reported. A second incomplete attempt is
 graded as it stands, with its usage reported as incomplete. Harness defects found during the run are
 fixed, recorded, and the affected designs re-run from scratch.
+
+## Memory: independent designs first, a memory arm second
+
+R2G is itself a memory: its recipes and knowledge store are past repairs. And
+all 455 failures in this comparison are **dev-split** designs
+(`experiments/splits/`), the split those recipes were developed on (with
+Claude meta-repair), so on this population R2G answers from its own training
+set. A bare arm that forgets everything between designs therefore measures
+"R2G's tools and memory vs neither", not "R2G vs a capable agent".
+
+Two bare arms answer the two questions separately:
+
+1. **Bare, independent** (running now). Each design starts from nothing. The
+   zero-shot floor; designs are exchangeable, so they run in parallel and the
+   pass rate has an ordinary binomial interval.
+2. **Bare + self-memory** (after arm 1). The same harness plus one tool,
+   `search_notes(query)`, over notes from the arm's own earlier designs on the
+   same platform. Rules:
+   - A note is written after each design closes, by one extra model call that
+     sees its transcript. Its header is written by the harness, not the model:
+     platform, the harness verdict, final DRC/LVS counts, and the `config.mk` /
+     hook diff. The model cannot record a success it did not get (the same
+     firewall as journal vs knowledge in R2G). The note call is charged to the
+     arm.
+   - Waves: designs in a fixed seeded order, waves of 64; a wave reads only the
+     notes of earlier waves, and runs in parallel inside. Order and wave size
+     are fixed before the run.
+   - Reported: pass rate and cost per wave (the learning curve), and paired
+     against arm 1 on the same designs.
+
+The comparison that is out of sample for everyone needs **held-out** failures:
+R2G frozen, the memory arm with its notes frozen after dev, and arm 1, on the
+held-out designs' frozen-spec baseline failures. That is the headline result;
+the dev-split numbers are reported as in-sample for R2G.
