@@ -47,6 +47,7 @@ PEAK_CNY = {"uncached": 2.0, "cached": 0.04, "output": 8.0}
 COMPACT_AT_CHARS = 120_000
 KEEP_RECENT = 4
 MAX_TOOL_RESULT_CHARS = 12000          # same clip as the R2G agent loop
+INVOCATION_WAIT = 1800                 # seconds of backoff before an outage ends the attempt
 MAX_NUDGES = 3                         # consecutive truncated/empty replies tolerated
 
 SYSTEM = """你是一名数字后端工程师，使用 OpenROAD-flow-scripts（ORFS）把一个 RTL 设计做到签核干净。
@@ -219,7 +220,9 @@ def clip(obj) -> str:
     return s if len(s) <= MAX_TOOL_RESULT_CHARS else s[:MAX_TOOL_RESULT_CHARS] + "...(truncated)"
 
 
-def run_loop(adapter, tools: BareTools, task: str, caps: dict, transcript: list, calls: list) -> str:
+def run_loop(adapter, tools: BareTools, task: str, caps: dict, transcript: list, calls: list,
+             failed: list | None = None) -> str:
+    failed = [] if failed is None else failed
     messages = [{"role": "user", "content": task}]
     t0 = time.monotonic()
     nudges = 0
@@ -244,11 +247,23 @@ def run_loop(adapter, tools: BareTools, task: str, caps: dict, transcript: list,
                 err = ev["message"]
             elif ev["type"] == "done":
                 stop_reason = ev.get("stop_reason")
+        if err:
+            # An invocation failure (relay/provider down, stream cut) is not the
+            # model's decision: re-send the same request with backoff, for up to
+            # INVOCATION_WAIT seconds in all. Failed invocations are kept apart
+            # from the model calls and reported (2026-10-29 relay outage ended 38
+            # attempts on their first timeout).
+            failed.append({**(usage or {"usage_reported": False, "stream_complete": False}),
+                           "error": err, "partial_output": bool(text or tool_calls), "at": time.time()})
+            transcript.append({"model_error": err})
+            waited = sum(f.get("backoff", 0) for f in failed[:-1])
+            if waited >= INVOCATION_WAIT:
+                return "model_error"
+            failed[-1]["backoff"] = min(30 * 2 ** (len(failed) - 1), 300, INVOCATION_WAIT - waited)
+            time.sleep(failed[-1]["backoff"])
+            continue
         calls.append({**(usage or {"usage_reported": False, "stream_complete": False}),
                       "call_index": len(calls) + 1, "at": time.time()})
-        if err:
-            transcript.append({"model_error": err})
-            return "model_error"
         messages.append({"role": "assistant", "content": text,
                          "tool_calls": [{"id": c["id"], "name": c["name"], "arguments": c["arguments"]}
                                         for c in tool_calls]})
@@ -426,9 +441,9 @@ def main():
     os.environ.setdefault("R2G_LOCAL_RELAY_AUTH", "local-relay-only-not-a-provider-key")
     adapter = OpenAICompatAdapter(mc.resolved(), os.environ["R2G_LOCAL_RELAY_AUTH"])
     task = TASK.format(top=case["top"], platform=platform, project=project, **caps)
-    transcript, calls = [], []
+    transcript, calls, failed = [], [], []
     started = time.time()
-    stop = run_loop(adapter, tools, task, caps, transcript, calls)
+    stop = run_loop(adapter, tools, task, caps, transcript, calls, failed)
     agent_wall = time.time() - started
     agent_counts = dict(tools.counts)
     agent_eda = tools.eda_seconds
@@ -444,13 +459,18 @@ def main():
         tools.run_signoff()
         harness_signoff = True
     v = verdict(tools, project, receipt, platform_dir, deck_hash)
-    complete_usage = bool(calls) and all(c.get("usage_reported") and c.get("stream_complete") for c in calls)
+    # a failed invocation that had started answering may have been billed with no
+    # counters: the attempt's usage is then incomplete (voided by the launcher)
+    complete_usage = (bool(calls) and all(c.get("usage_reported") and c.get("stream_complete") for c in calls)
+                      and not any(f["partial_output"] and not f.get("usage_reported") for f in failed))
     usage_totals = {k: (sum(c.get(k) or 0 for c in calls) if complete_usage else None) for k in COUNTERS}
     audit = audit_counts(journal, job)
     result = {"case_id": case["id"], "platform": platform, "arm": "bare", "model": a.model, "job": job,
               "max_tokens": a.max_tokens,
               "stop_reason": stop, **v, "caps": caps, "model_calls": len(calls),
               "usage_complete": complete_usage, "provider_usage": usage_totals,
+              "failed_invocations": len(failed),
+              "failed_invocations_with_partial_output": sum(1 for f in failed if f["partial_output"]),
               "transport_retries": sum(len(c.get("transport_retries") or []) for c in calls),
               "cost_cny_peak": round(sum(call_cost(c) for c in calls), 5),
               "compactions": sum(1 for e in transcript if "harness_compaction" in e),
@@ -458,7 +478,8 @@ def main():
               "agent_eda_seconds": round(agent_eda, 1), "harness_signoff": harness_signoff,
               "orfs_audit": audit, "writes": tools.writes, "finish": tools.finished,
               "prepare": receipt, "runtime": str(a.repo)}
-    (out / "usage.json").write_text(json.dumps({"calls": calls}, indent=1, ensure_ascii=False))
+    (out / "usage.json").write_text(json.dumps({"calls": calls, "failed_invocations": failed},
+                                               indent=1, ensure_ascii=False))
     (out / "transcript.json").write_text(json.dumps(transcript, indent=1, ensure_ascii=False, default=str))
     (out / "result.json").write_text(json.dumps(result, indent=1, ensure_ascii=False))
     print(json.dumps({k: result[k] for k in ("case_id", "outcome", "stop_reason", "model_calls")}))

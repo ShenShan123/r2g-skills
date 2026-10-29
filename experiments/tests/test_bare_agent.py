@@ -254,3 +254,28 @@ def test_launcher_gives_an_invocation_voided_attempt_one_fresh_retry(tmp_path, m
     cid, status = lb.run_one({"id": "n_C3", "platform": "nangate45"}, a)
     assert status.endswith("attempt 2") and len(runs) == 2
     assert (a.root / "cases/n_C3/result.json").is_file()
+
+
+def test_an_invocation_outage_is_waited_out_not_taken_as_the_end(tmp_path, monkeypatch):
+    t, proj, orfs = _tools(tmp_path)
+    monkeypatch.setattr(rb.time, "sleep", lambda s: None)
+
+    class Outage(FakeAdapter):
+        def stream(self, messages, specs, system):
+            self.n += 1
+            if self.n <= 2:
+                yield {"type": "error", "message": "连接模型失败：timed out"}
+                return
+            yield from FakeAdapter([[("finish", {"summary": "ok"})]]).stream(messages, specs, system)
+    calls, failed, transcript = [], [], []
+    stop = rb.run_loop(Outage([]), t, "task", dict(rb.DEFAULT_CAPS), transcript, calls, failed)
+    assert stop == "finished" and len(calls) == 1 and len(failed) == 2
+    assert [f["backoff"] for f in failed] == [30, 60] and not any(f["partial_output"] for f in failed)
+
+    class Down(FakeAdapter):
+        def stream(self, messages, specs, system):
+            yield {"type": "error", "message": "down"}
+    t2, _, _ = _tools(tmp_path / "b")
+    failed = []
+    assert rb.run_loop(Down([]), t2, "task", dict(rb.DEFAULT_CAPS), [], [], failed) == "model_error"
+    assert sum(f.get("backoff", 0) for f in failed) == rb.INVOCATION_WAIT

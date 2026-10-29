@@ -98,7 +98,16 @@ retries; agent wall time and EDA time. Tables: `COMPARISON_TABLES.md`.
 One attempt per design and arm. An attempt voided by an invocation failure
 (transport error, incomplete provider usage) gets one fresh attempt; voided
 attempts are kept under `voided/` and reported. A second incomplete attempt is
-graded as it stands, with its usage reported as incomplete. Harness defects found during the run are
+graded as it stands, with its usage reported as incomplete.
+
+Inside an attempt, a failed model invocation (relay or provider down, stream
+cut) is re-sent with backoff (30 s doubling to 5 min, 30 min in all) instead of
+ending the attempt; failed invocations are kept apart from the model calls and
+reported. Added in v2.2 after the 2026-10-29 05:20-05:35 relay outage (a pooled
+connection leak in the relay, fixed the same day) ended 38 attempts on their
+first timeout, five of them already dual-clean. Those 38 designs are a harness
+defect: their attempts are kept under `harness_defect/` and the designs re-run
+from scratch on v2.2. Harness defects found during the run are
 fixed, recorded, and the affected designs re-run from scratch.
 
 ## Memory: independent designs first, a memory arm second

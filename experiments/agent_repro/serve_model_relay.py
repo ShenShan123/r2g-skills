@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.background import BackgroundTask
 
 
 MAX_REQUEST_BYTES = 8 * 1024 * 1024
@@ -41,8 +42,16 @@ def create_app(base_url: str, model: str, api_key: str, *, transport=None) -> Fa
         yield
         await client.aclose()
 
+    # 2026-10-29 outage: after ~30 h and ~56 concurrent agents every request hung.
+    # A stream whose client went away before its generator ran never released its
+    # pooled connection; at the default 100 the pool was full of leaked slots and
+    # each request waited out the pool timeout. No connection cap (the provider
+    # limits rate, not us), a short pool wait, and the upstream response is closed
+    # by a background task as well as by the generator.
     client = httpx.AsyncClient(transport=transport, follow_redirects=False,
-                              timeout=httpx.Timeout(240, connect=20))
+                              timeout=httpx.Timeout(240, connect=20, pool=30),
+                              limits=httpx.Limits(max_connections=None, max_keepalive_connections=32,
+                                                  keepalive_expiry=30))
     app = FastAPI(title="R2G fixed model relay", docs_url=None, redoc_url=None,
                   openapi_url=None, lifespan=lifespan)
 
@@ -100,7 +109,8 @@ def create_app(base_url: str, model: str, api_key: str, *, transport=None) -> Fa
 
         media_type = "text/event-stream" if body.get("stream") else "application/json"
         return StreamingResponse(stream(), media_type=media_type,
-                                 headers={"Cache-Control": "no-store"})
+                                 headers={"Cache-Control": "no-store"},
+                                 background=BackgroundTask(response.aclose))
 
     return app
 
