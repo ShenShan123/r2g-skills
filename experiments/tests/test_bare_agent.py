@@ -1,5 +1,6 @@
 """Bare-agent harness: starting state, sandbox and budgets, without a model or EDA."""
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -313,3 +314,35 @@ def test_launcher_container_mode_mounts_a_per_design_workspace(tmp_path, monkeyp
     assert cmd[:3] == ["podman", "run", "--rm"] and "img:1" in cmd and cmd[cmd.index("img:1") + 1] == "python3"
     assert "%s:/orfs/flow/results:Z" % (tmp_path / "ws/n_C1/results") in cmd and "/x:/x:ro,Z" in cmd
     assert not (tmp_path / "ws/n_C1").exists()          # workspace removed after the design
+
+
+YOSYS = "/opt/OpenROAD/oss-cad-suite/bin/yosys"
+
+
+@pytest.mark.skipif(not Path(YOSYS).is_file(), reason="needs a yosys")
+def test_equiv_review_proves_a_location_fix_and_refutes_a_logic_change(tmp_path):
+    import subprocess
+    import equiv_review as er
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "sub.v").write_text("module sub(input clk, input d, output reg q); always @(posedge clk) q <= d; endmodule\n")
+    (src / "top.v").write_text('`include "sub.v"\nmodule top(input clk, input a, output y); sub u(.clk(clk), .d(a), .q(y)); endmodule\n')
+    gold = {"top": "top", "files": [str(src / "sub.v"), str(src / "top.v")], "incdirs": [str(src)], "defines": []}
+    fixed = tmp_path / "fixed"
+    fixed.mkdir()
+    (fixed / "top.v").write_text("module top(input clk, input a, output y); sub u(.clk(clk), .d(a), .q(y)); endmodule\n")
+    gate_ok = {**gold, "files": [str(src / "sub.v"), str(fixed / "top.v")]}
+    (fixed / "bad.v").write_text("module top(input clk, input a, output y); sub u(.clk(clk), .d(~a), .q(y)); endmodule\n")
+    gate_bad = {**gold, "files": [str(src / "sub.v"), str(fixed / "bad.v")]}
+
+    def status(gate):
+        ys = tmp_path / "e.ys"
+        ys.write_text(er.script(gold, gate))
+        p = subprocess.run([YOSYS, "-q", "-l", str(tmp_path / "l"), "-s", str(ys)], capture_output=True, text=True)
+        log = (tmp_path / "l").read_text()
+        m = re.search(r"Of those cells (\d+) are proven and (\d+) are unproven", log)
+        return p.returncode, (int(m.group(1)), int(m.group(2))) if m else None
+    rc, (proven, unproven) = status(gate_ok)
+    assert rc == 0 and proven > 0 and unproven == 0          # duplicate definition read once, then proven
+    rc, (proven, unproven) = status(gate_bad)
+    assert unproven > 0                                        # an inverted input is caught
