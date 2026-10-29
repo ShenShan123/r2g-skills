@@ -57,6 +57,9 @@ class BareTools:
         else:
             roots = [self.project, self.orfs / "flow" / "scripts", self.orfs / "flow" / "platforms" / self.platform,
                      self.orfs / "flow" / "Makefile", self.orfs / "flow" / "util", self.orfs / "docs"]
+        # roots resolved like the path: an ORFS root whose flow/ entries are
+        # symlinks (203's shadow root on /data, 2026-10-29) must stay readable
+        roots = [r.resolve() for r in roots]
         if not any(p == r or r in p.parents for r in roots):
             raise ToolError("path outside the allowed %s roots: %s" % ("write" if write else "read", path))
         return p

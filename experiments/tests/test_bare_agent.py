@@ -279,3 +279,16 @@ def test_an_invocation_outage_is_waited_out_not_taken_as_the_end(tmp_path, monke
     failed = []
     assert rb.run_loop(Down([]), t2, "task", dict(rb.DEFAULT_CAPS), [], [], failed) == "model_error"
     assert sum(f.get("backoff", 0) for f in failed) == rb.INVOCATION_WAIT
+
+
+def test_sandbox_follows_a_symlinked_orfs_layout(tmp_path):
+    t, proj, orfs = _tools(tmp_path)
+    shadow = tmp_path / "shadow"
+    (shadow / "flow").mkdir(parents=True)
+    for e in ("scripts", "platforms"):
+        (shadow / "flow" / e).symlink_to(orfs / "flow" / e)
+    (shadow / "flow" / "results").mkdir()
+    t2 = bt.BareTools(proj, "nangate45", tmp_path / "repo", shadow, {})
+    assert t2.read_file(str(shadow / "flow/platforms/nangate45/config.mk"))["text"] == "x"
+    with pytest.raises(bt.ToolError):
+        t2.write_file(str(shadow / "flow/platforms/nangate45/config.mk"), "y")
