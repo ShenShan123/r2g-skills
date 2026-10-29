@@ -1,0 +1,308 @@
+#!/usr/bin/env python3
+"""One design through the bare-agent arm: same model, same EDA tools, no R2G orchestration.
+
+Starting state is the historical frozen-spec baseline the R2G campaign began
+from: the original RTL (hash-checked against the population manifest) plus the
+baseline config.mk and constraint.sdc, file paths remapped into the project.
+The model then works through bare_tools.py until it calls finish, stops
+calling tools, or a budget runs out. The harness, not the model, decides the
+outcome: full-deck DRC clean and LVS clean bound to one archived layout,
+platform decks and SDC unchanged; any RTL edit routes the result to a
+semantics review instead of an automatic pass.
+
+Writes <out>/result.json, usage.json (per model call, provider counters),
+transcript.json and the ORFS audit journal, with the same counters the R2G
+measurement uses.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import sys
+import time
+import uuid
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+from bare_tools import SPECS, BareTools, ToolError  # noqa: E402
+
+COUNTERS = ("input_tokens", "output_tokens", "total_tokens", "cache_read_input_tokens",
+            "uncached_input_tokens", "cache_creation_input_tokens", "reasoning_tokens")
+DEFAULT_CAPS = {"model_calls": 60, "total_tokens": 2_000_000, "run_flow": 10, "run_signoff": 16,
+                "wall_seconds": 24 * 3600}
+MAX_TOOL_RESULT_CHARS = 12000          # same clip as the R2G agent loop
+
+SYSTEM = """你是一名数字后端工程师，使用 OpenROAD-flow-scripts（ORFS）把一个 RTL 设计做到签核干净。
+你只能通过提供的工具操作：读文件、在工程的 constraints/、rtl/、hooks/ 下写文件、从某一阶段运行 ORFS 流程、运行签核（全套 DRC + LVS，平台官方规则）、读日志、结束任务。
+ORFS 的行为由工程 constraints/config.mk 里的变量控制；ORFS 的脚本和平台配置可以在 flow/scripts、flow/platforms/<平台> 下读到，需要时自行查阅。
+每次运行流程和签核都很耗时（几分钟到几小时），请先读日志和报告弄清原因再改。"""
+
+TASK = """设计：顶层模块 {top}，平台 {platform}。
+工程目录：{project}
+- rtl/：原始 RTL
+- constraints/config.mk、constraints/constraint.sdc：基线配置（与历史基线完全相同的起点）
+
+目标：最终版图全套 DRC 干净且 LVS 一致。
+必须遵守：
+- 保持原设计功能：不得删除或简化逻辑、缩小存储器、把输出接常量、替换为空模块；只允许不改变行为的源码修正（如文件清单、include/路径问题）。
+- 不得修改时钟周期和 constraint.sdc，不得修改 PDK、平台文件或签核规则（工具也不允许）。
+- 可以修改 config.mk 中的 ORFS 变量（面积/利用率/布局布线选项等）、添加由 config.mk 引用的 Tcl hook。
+预算：最多 {run_flow} 次 run_flow、{run_signoff} 次 run_signoff、{model_calls} 次模型调用。
+先运行流程和签核了解现状；完成或判断无法修复时调用 finish 说明结果。"""
+
+
+def sha(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def tree_hash(root: Path) -> str:
+    h = hashlib.sha256()
+    for p in sorted(x for x in root.rglob("*") if x.is_file()):
+        h.update(str(p.relative_to(root)).encode())
+        h.update(sha(p).encode())
+    return h.hexdigest()
+
+
+def remap(paths: str, rtl: Path) -> tuple[list[str], list[str]]:
+    """Map baseline absolute paths onto the project's rtl/ copy by longest existing suffix."""
+    mapped, missing = [], []
+    for raw in paths.split():
+        parts = Path(raw).parts
+        hit = next((rtl.joinpath(*parts[i:]) for i in range(1, len(parts))
+                    if rtl.joinpath(*parts[i:]).exists()), None)
+        (mapped if hit else missing).append(str(hit) if hit else raw)
+    return mapped, missing
+
+
+def prepare(case: dict, baseline: Path, project: Path) -> dict:
+    """Original inputs + the baseline config/SDC, remapped; returns the receipt."""
+    if project.exists():
+        raise SystemExit("project exists; refusing to overwrite: %s" % project)
+    rtl = project / "rtl"
+    src = Path(case["input_root"])
+    for f in src.rglob("*"):
+        if f.is_file() and f.name != "design.json" and ".git" not in f.parts:
+            d = rtl / f.relative_to(src)
+            d.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(f, d)
+    for rel, expected in case.get("source_sha256", {}).items():
+        if sha(rtl / rel) != expected:
+            raise SystemExit("input differs from frozen manifest: %s" % rel)
+    cons = project / "constraints"
+    cons.mkdir(parents=True)
+    shutil.copyfile(baseline / "constraint.sdc", cons / "constraint.sdc")
+    out, unmapped = [], []
+    for line in (baseline / "config.mk").read_text().splitlines():
+        m = re.match(r"\s*export\s+(VERILOG_FILES|VERILOG_INCLUDE_DIRS|SDC_FILE)\s*=\s*(.*)$", line)
+        if m and m.group(1) == "SDC_FILE":
+            line = "export SDC_FILE = %s" % (cons / "constraint.sdc")
+        elif m:
+            mapped, missing = remap(m.group(2), rtl)
+            unmapped += missing
+            line = "export %s = %s" % (m.group(1), " ".join(mapped + missing))
+        out.append(line)
+    (cons / "config.mk").write_text("\n".join(out) + "\n")
+    (project / "hooks").mkdir()
+    return {"input_root": str(src), "baseline": str(baseline), "unmapped_baseline_paths": unmapped,
+            "rtl_sha256": {str(p.relative_to(rtl)): sha(p) for p in rtl.rglob("*") if p.is_file()},
+            "sdc_sha256": sha(cons / "constraint.sdc"),
+            "config_sha256": sha(cons / "config.mk")}
+
+
+def audit_env(job: str, design: str, project: Path, journal: Path, repo: Path) -> dict:
+    """Same context the R2G pipeline gives its stage commands (pipeline._sh)."""
+    audit_bin = str(repo / "r2g-skills/signoff-loop/scripts/flow/orfs_audit_bin")
+    return {"R2G_ORFS_AUDIT_FILE": str(journal),
+            "R2G_ORFS_REAL_MAKE": shutil.which("make") or "/usr/bin/make",
+            "PATH": audit_bin + os.pathsep + os.environ.get("PATH", os.defpath),
+            "R2G_ORFS_AUDIT_PYTHON": sys.executable, "R2G_ORFS_AUDIT_JOB": job,
+            "R2G_ORFS_AUDIT_DESIGN": design, "R2G_ORFS_AUDIT_PROJECT": str(project)}
+
+
+def audit_counts(journal: Path, job: str) -> dict:
+    ev = []
+    if journal.is_file():
+        for line in journal.read_text().splitlines():
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if (e.get("job_id") or e.get("job")) == job:
+                ev.append(e)
+    starts = {e["invocation_id"]: e for e in ev if e.get("event") == "make_start"
+              and e.get("invocation_id") and int(e.get("make_level") or 0) == 0}
+    ends = {e["invocation_id"] for e in ev if e.get("event") == "make_end" and e.get("invocation_id")}
+    wrappers = {e["wrapper_id"] for e in ev if e.get("event") == "wrapper_start" and e.get("wrapper_id")}
+    wends = {e["wrapper_id"] for e in ev if e.get("event") == "wrapper_end" and e.get("wrapper_id")}
+    return {"orfs_wrapper_calls": len(wrappers), "orfs_make_launches": len(starts),
+            "make_kind_counts": {k: sum(s.get("kind") == k for s in starts.values()) for k in ("clean", "build_or_check")},
+            "gaps": {"make_without_end": len(set(starts) - ends), "wrapper_without_end": len(wrappers - wends)}}
+
+
+def clip(obj) -> str:
+    s = json.dumps(obj, ensure_ascii=False, default=str)
+    return s if len(s) <= MAX_TOOL_RESULT_CHARS else s[:MAX_TOOL_RESULT_CHARS] + "...(truncated)"
+
+
+def run_loop(adapter, tools: BareTools, task: str, caps: dict, transcript: list, calls: list) -> str:
+    messages = [{"role": "user", "content": task}]
+    t0 = time.monotonic()
+    while True:
+        if len(calls) >= caps["model_calls"]:
+            return "cap_model_calls"
+        if sum(c.get("total_tokens") or 0 for c in calls) >= caps["total_tokens"]:
+            return "cap_tokens"
+        if time.monotonic() - t0 >= caps["wall_seconds"]:
+            return "cap_wall"
+        text, tool_calls, usage, err = "", [], None, None
+        for ev in adapter.stream(messages, SPECS, SYSTEM):
+            if ev["type"] == "text":
+                text += ev["delta"]
+            elif ev["type"] == "tool_call":
+                tool_calls.append(ev)
+            elif ev["type"] == "usage":
+                usage = ev
+            elif ev["type"] == "error":
+                err = ev["message"]
+        calls.append({**(usage or {"usage_reported": False, "stream_complete": False}),
+                      "call_index": len(calls) + 1, "at": time.time()})
+        if err:
+            transcript.append({"model_error": err})
+            return "model_error"
+        messages.append({"role": "assistant", "content": text,
+                         "tool_calls": [{"id": c["id"], "name": c["name"], "arguments": c["arguments"]}
+                                        for c in tool_calls]})
+        transcript.append({"assistant": text, "tool_calls": [{"name": c["name"], "arguments": c["arguments"]}
+                                                              for c in tool_calls]})
+        if not tool_calls:
+            return "model_stopped"
+        for c in tool_calls:
+            name, args = c["name"], c["arguments"] if isinstance(c["arguments"], dict) else {}
+            t_start = time.time()
+            try:
+                if name in ("run_flow", "run_signoff") and tools.counts[name] >= caps[name]:
+                    result = {"error": "budget exhausted for %s" % name}
+                elif name in {s["name"] for s in SPECS}:
+                    result = getattr(tools, name)(**args)
+                else:
+                    result = {"error": "unknown tool %s" % name}
+            except ToolError as e:
+                result = {"error": str(e)}
+            except TypeError as e:
+                result = {"error": "bad arguments: %s" % e}
+            transcript.append({"tool": name, "arguments": args, "seconds": round(time.time() - t_start, 1),
+                               "result": result})
+            messages.append({"role": "tool", "tool_call_id": c["id"], "name": name, "content": clip(result)})
+        if tools.finished:
+            return "finished"
+
+
+def verdict(tools: BareTools, project: Path, receipt: dict, platform_dir: Path, deck_hash: str) -> dict:
+    s = tools.signoff_summary()
+    drc = json.loads((project / "reports/drc.json").read_text()) if (project / "reports/drc.json").is_file() else {}
+    lvs = json.loads((project / "reports/lvs.json").read_text()) if (project / "reports/lvs.json").is_file() else {}
+    run = tools._latest_run()
+    gds = None
+    if run:
+        for c in (run / "results/6_final.gds", run / "final/6_final.gds"):
+            if c.is_file():
+                gds = sha(c)
+                break
+    bound = bool(gds and drc.get("gds_sha256") == gds and lvs.get("gds_sha256") == gds
+                 and drc.get("run_tag") == lvs.get("run_tag") == (run.name if run else None))
+    dual = (drc.get("status") == "clean" and drc.get("total_violations") == 0
+            and drc.get("drc_mode") == "full" and lvs.get("status") == "clean")
+    rtl_changed = sorted(rel for rel, h in receipt["rtl_sha256"].items()
+                         if not (project / "rtl" / rel).is_file() or sha(project / "rtl" / rel) != h)
+    rtl_added = sorted(str(p.relative_to(project / "rtl")) for p in (project / "rtl").rglob("*")
+                       if p.is_file() and str(p.relative_to(project / "rtl")) not in receipt["rtl_sha256"])
+    sdc_ok = sha(project / "constraints/constraint.sdc") == receipt["sdc_sha256"]
+    deck_ok = tree_hash(platform_dir) == deck_hash
+    if dual and bound and sdc_ok and deck_ok:
+        outcome = "pending_semantic_review" if (rtl_changed or rtl_added) else "dual_clean"
+    else:
+        outcome = "not_dual_clean"
+    return {"outcome": outcome, "signoff": s, "bound_to_layout": bound, "run": run.name if run else None,
+            "gds_sha256": gds, "sdc_unchanged": sdc_ok, "platform_unchanged": deck_ok,
+            "rtl_changed": rtl_changed, "rtl_added": rtl_added}
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--case", type=Path, required=True, help="candidate JSON (population manifest entry)")
+    ap.add_argument("--baseline", type=Path, required=True, help="dir with the baseline config.mk + constraint.sdc")
+    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--repo", type=Path, required=True, help="frozen runtime source root")
+    ap.add_argument("--base-url", required=True)
+    ap.add_argument("--model", default="deepseek-flash")
+    ap.add_argument("--caps", default="", help="JSON overrides of the budget caps")
+    a = ap.parse_args()
+    case = json.loads(a.case.read_text())
+    caps = {**DEFAULT_CAPS, **(json.loads(a.caps) if a.caps else {})}
+    out = a.out.resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    if (out / "result.json").exists():
+        print("already done:", out)
+        return 0
+    sys.path.insert(0, str(a.repo / "agent"))
+    from r2g_agent.config import ModelConfig
+    from r2g_agent.llm.openai_compat import OpenAICompatAdapter
+
+    platform = case["platform"]
+    name = case["id"] + "_bare"
+    project = out / name
+    receipt = prepare(case, a.baseline, project)
+    orfs = Path(os.environ.get("ORFS_ROOT", "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts"))
+    platform_dir = orfs / "flow/platforms" / platform
+    deck_hash = tree_hash(platform_dir)
+    job = "bare-" + case["id"] + "-" + uuid.uuid4().hex[:6]
+    journal = out / "orfs_audit.jsonl"
+    tools = BareTools(project, platform, a.repo, orfs, audit_env(job, name, project, journal, a.repo))
+    mc = ModelConfig(provider="deepseek", model=a.model, base_url=a.base_url,
+                     api_key_env="R2G_LOCAL_RELAY_AUTH", thinking=True, max_tokens=4096, temperature=0.2)
+    os.environ.setdefault("R2G_LOCAL_RELAY_AUTH", "local-relay-only-not-a-provider-key")
+    adapter = OpenAICompatAdapter(mc.resolved(), os.environ["R2G_LOCAL_RELAY_AUTH"])
+    task = TASK.format(top=case["top"], platform=platform, project=project, **caps)
+    transcript, calls = [], []
+    started = time.time()
+    stop = run_loop(adapter, tools, task, caps, transcript, calls)
+    agent_wall = time.time() - started
+    agent_counts = dict(tools.counts)
+    agent_eda = tools.eda_seconds
+    # Independent verification: grade the final layout unless the model's own
+    # last signoff already graded it (then its reports are reused, not re-run).
+    harness_signoff = False
+    run = tools._latest_run()
+    drc = project / "reports/drc.json"
+    graded = drc.is_file() and run and json.loads(drc.read_text()).get("run_tag") == run.name
+    if run and not graded and (run / "results/6_final.gds").is_file():
+        # journaled under its own job id: verification is apparatus, not agent cost
+        tools.audit_env = {**tools.audit_env, "R2G_ORFS_AUDIT_JOB": job + "-verify"}
+        tools.run_signoff()
+        harness_signoff = True
+    v = verdict(tools, project, receipt, platform_dir, deck_hash)
+    complete_usage = bool(calls) and all(c.get("usage_reported") and c.get("stream_complete") for c in calls)
+    usage_totals = {k: (sum(c.get(k) or 0 for c in calls) if complete_usage else None) for k in COUNTERS}
+    audit = audit_counts(journal, job)
+    result = {"case_id": case["id"], "platform": platform, "arm": "bare", "model": a.model, "job": job,
+              "stop_reason": stop, **v, "caps": caps, "model_calls": len(calls),
+              "usage_complete": complete_usage, "provider_usage": usage_totals,
+              "transport_retries": sum(len(c.get("transport_retries") or []) for c in calls),
+              "tool_counts": agent_counts, "agent_wall_seconds": round(agent_wall, 1),
+              "agent_eda_seconds": round(agent_eda, 1), "harness_signoff": harness_signoff,
+              "orfs_audit": audit, "writes": tools.writes, "finish": tools.finished,
+              "prepare": receipt, "runtime": str(a.repo)}
+    (out / "usage.json").write_text(json.dumps({"calls": calls}, indent=1, ensure_ascii=False))
+    (out / "transcript.json").write_text(json.dumps(transcript, indent=1, ensure_ascii=False, default=str))
+    (out / "result.json").write_text(json.dumps(result, indent=1, ensure_ascii=False))
+    print(json.dumps({k: result[k] for k in ("case_id", "outcome", "stop_reason", "model_calls")}))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

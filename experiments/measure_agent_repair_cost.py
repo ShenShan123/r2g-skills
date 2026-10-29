@@ -140,9 +140,11 @@ def prepare_input(case, output):
     return target
 
 
-def initial_prompt(case, source):
+def initial_prompt(case, source, output="graph"):
+    goal = ("使用系统正常流程（output=signoff，只做签核，不生成数据集），遇到问题尝试修复，"
+            if output == "signoff" else "使用系统正常流程生成 graph 数据集，遇到问题尝试修复，")
     return (f"请处理这个原始 RTL 设计：平台 {case['platform']}，目录 {source}，"
-            f"顶层模块 {case['top']}。使用系统正常流程生成 graph 数据集，遇到问题尝试修复，"
+            f"顶层模块 {case['top']}。" + goal +
             "目标是实际 DRC 干净且 LVS 一致。必须保持原设计功能，不得删逻辑、缩小存储器、"
             "常量化输出、替换为空模块或放宽签核条件。使用该平台默认实验参数。"
             "直接启动这个设计一次，返回任务 ID 即可，后台完成后我会再请求结果。")
@@ -301,7 +303,7 @@ def run_case(case, args):
         return load(folder / "summary.json")
     try:
         source = prepare_input(case, args.output)
-        prompt = initial_prompt(case, source)
+        prompt = initial_prompt(case, source, getattr(args, "output_mode", "graph"))
         save(folder / "request.json", {"message": prompt})
         if args.dry_run:
             return {"case_id": case["id"], "status": "dry_run", "request": str(folder / "request.json")}
@@ -474,6 +476,8 @@ def main():
     parser.add_argument("--poll-seconds", type=float, default=10)
     parser.add_argument("--job-timeout", type=float, default=28800)
     parser.add_argument("--chat-timeout", type=float, default=600)
+    parser.add_argument("--output-mode", choices=["graph", "signoff"], default="graph",
+                        help="signoff: ask the Agent to stop at DRC/LVS clean (R2G vs bare-agent comparison)")
     parser.add_argument("--invocation-retries", type=int, default=0,
                         help="Fresh complete attempts (new session, original inputs) under "
                              "retries/r<k>/ when an attempt closes voided by a model-transport failure")
