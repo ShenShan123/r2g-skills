@@ -50,7 +50,11 @@ def _money(usage, prices):
 
 
 def effective_orfs(attempt: dict) -> dict:
-    """ORFS work that contributed to the accepted result, from the case receipts.
+    """Diagnostic view: ORFS work that contributed to the accepted result.
+
+    Not the official cost. The protocol counts every repair round inside the
+    accepted attempt; what it excludes is whole attempts voided by script-layer
+    defects before they were fixed (the ledger keeps the post-fix attempt).
 
     Excluded as redundant (a run that picks the working strategy first would not
     pay for it): (1) a signoff repair round whose verdict is not `cleared`, with
@@ -177,7 +181,10 @@ def main():
     ap.add_argument("--prices", type=Path,
                     help="JSON {label: {input, cached_input, output}} in currency per 1M tokens")
     ap.add_argument("--effective", action="store_true",
-                    help="also count only contributing ORFS work (needs local case receipts)")
+                    help="DIAGNOSTIC ONLY, not the official count: also show ORFS work excluding "
+                         "rounds that did not clear. Official cost counts every round of the "
+                         "accepted attempt (trying a second strategy is normal overhead); only "
+                         "attempts voided by runtime/script defects are excluded, by the ledger.")
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
     prices = json.loads(a.prices.read_text()) if a.prices else None
