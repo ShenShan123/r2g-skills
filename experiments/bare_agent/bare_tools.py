@@ -130,6 +130,10 @@ class BareTools:
         """Logs of the latest flow run (flow.log, logs/<stage>.log) or signoff (drc/, lvs/)."""
         run = self._latest_run()
         cands = []
+        if "/" in name:
+            # a path rather than a bare log name: read it inside the sandbox
+            cands.append(self._resolve(name))
+            name = Path(name).name
         if run:
             cands += [run / name, run / "logs" / name]
             cands += list((run / "logs").rglob(name)) if (run / "logs").is_dir() else []

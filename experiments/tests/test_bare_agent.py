@@ -26,6 +26,7 @@ def _case(tmp_path):
         "export DIE_AREA  = 0 0 50 50\n")
     (base / "constraint.sdc").write_text("create_clock -period 3.0 [get_ports a]\n")
     case = {"id": "nangate45_C1", "platform": "nangate45", "top": "top", "input_root": str(src),
+            "source_files": ["src/rtl/top.v"], "include_dirs": ["src/rtl"],
             "source_sha256": {"src/rtl/top.v": rb.sha(src / "src/rtl/top.v")}}
     return case, base
 
@@ -42,6 +43,10 @@ def test_prepare_remaps_the_baseline_onto_the_project(tmp_path):
     assert "export VERILOG_INCLUDE_DIRS = %s %s" % (proj / "rtl", proj / "rtl/src/rtl") in cfg
     # a baseline path absent from the original inputs is kept and reported, not invented
     assert r["unmapped_baseline_paths"] == ["/proj/x/sources/R1__a__b/gone.v"]
+    # the same neutral design description the R2G arm gets
+    dj = json.loads((proj / "rtl/design.json").read_text())
+    assert dj == {"top": "top", "files": ["src/rtl/top.v"], "include_dirs": ["src/rtl"], "defines": []}
+    assert rb.remap("/work/_src/d0/defs.vh", proj / "rtl") == ([str(proj / "rtl/src/rtl/defs.vh")], [])
     with pytest.raises(SystemExit):
         rb.prepare(case, base, proj)                     # never overwrites an attempt
 
@@ -127,3 +132,40 @@ def test_a_truncated_reply_is_continued_not_taken_as_a_stop(tmp_path):
     stop = rb.run_loop(TruncatingAdapter(), t, "task", dict(rb.DEFAULT_CAPS), transcript, calls)
     assert stop == "finished" and len(calls) == 2
     assert any("harness_nudge" in e for e in transcript)
+
+
+def test_read_log_accepts_a_path_and_tool_errors_do_not_end_the_attempt(tmp_path):
+    t, proj, orfs = _tools(tmp_path)
+    (proj / "agent_logs").mkdir(exist_ok=True)
+    (proj / "agent_logs" / "flow.log").write_text("a\nERROR x\n")
+    # smoke test: the model passed an absolute path and rglob raised NotImplementedError
+    assert "ERROR x" in t.read_log(str(proj / "agent_logs" / "flow.log"))["text"]
+    transcript = []
+    stop = rb.run_loop(FakeAdapter([[("read_log", {"name": "/etc/passwd"})], [("finish", {"summary": "x"})]]),
+                       t, "task", dict(rb.DEFAULT_CAPS), transcript, [])
+    assert stop == "finished" and "error" in transcript[1]["result"]
+
+
+def test_janitor_keeps_the_graded_layout_and_reports(tmp_path):
+    import janitor
+    case = tmp_path / "cases" / "c1"
+    proj = case / "c1_bare"
+    for run in ("RUN_A", "RUN_B"):
+        r = proj / "backend" / run
+        (r / "results").mkdir(parents=True)
+        (r / "objects").mkdir()
+        for n in ("6_final.gds", "6_final.def", "5_route.odb", "6_final.spef"):
+            (r / "results" / n).write_text("x" * 100)
+        (r / "objects" / "lib.lyt").write_text("x")
+        (r / "flow.log").write_text("log")
+    (proj / "reports").mkdir()
+    (proj / "reports" / "drc.json").write_text("{}")
+    # open case: nothing is touched
+    assert janitor.prune.__name__ and list(janitor.closed_projects(tmp_path, "bare")) == []
+    (case / "result.json").write_text(json.dumps({"run": "RUN_B"}))
+    for p, graded in janitor.closed_projects(tmp_path, "bare"):
+        janitor.prune(p, graded, dry=False)
+    left = sorted(str(f.relative_to(proj)) for f in proj.rglob("*") if f.is_file())
+    assert left == ["backend/RUN_A/flow.log", "backend/RUN_B/flow.log",
+                    "backend/RUN_B/results/6_final.def", "backend/RUN_B/results/6_final.gds",
+                    "reports/drc.json"]

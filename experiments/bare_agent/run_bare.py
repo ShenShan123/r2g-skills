@@ -45,7 +45,7 @@ ORFS 的行为由工程 constraints/config.mk 里的变量控制；ORFS 的脚�
 
 TASK = """设计：顶层模块 {top}，平台 {platform}。
 工程目录：{project}
-- rtl/：原始 RTL
+- rtl/：原始 RTL；rtl/design.json 给出顶层、源文件清单和 include 目录（相对 rtl/）
 - constraints/config.mk、constraints/constraint.sdc：基线配置（与历史基线完全相同的起点）
 
 目标：最终版图全套 DRC 干净且 LVS 一致。
@@ -94,6 +94,11 @@ def remap(paths: str, rtl: Path, root: str | None = None) -> tuple[list[str], li
             parts = Path(raw).parts
             hit = next((rtl.joinpath(*parts[i:]) for i in range(1, len(parts))
                         if rtl.joinpath(*parts[i:]).exists()), None)
+        if hit is None and Path(raw).suffix:
+            # baseline sources staged under a container path (/work/_src/d0/x.v):
+            # the unique file of that name in the project, if there is exactly one
+            same = [q for q in rtl.rglob(Path(raw).name) if q.is_file()]
+            hit = same[0] if len(same) == 1 else None
         (mapped if hit else missing).append(str(hit) if hit else raw)
     return mapped, missing
 
@@ -112,6 +117,12 @@ def prepare(case: dict, baseline: Path, project: Path) -> dict:
     for rel, expected in case.get("source_sha256", {}).items():
         if sha(rtl / rel) != expected:
             raise SystemExit("input differs from frozen manifest: %s" % rel)
+    # The same neutral design description the R2G arm receives (top, sources,
+    # include dirs) -- never the historical category or recipe.
+    (rtl / "design.json").write_text(json.dumps(
+        {"top": case["top"], "files": case.get("source_files", []),
+         "include_dirs": case.get("include_dirs", []), "defines": case.get("defines") or []},
+        indent=2, ensure_ascii=False) + "\n")
     cons = project / "constraints"
     cons.mkdir(parents=True)
     shutil.copyfile(baseline / "constraint.sdc", cons / "constraint.sdc")
@@ -231,6 +242,9 @@ def run_loop(adapter, tools: BareTools, task: str, caps: dict, transcript: list,
                 result = {"error": str(e)}
             except TypeError as e:
                 result = {"error": "bad arguments: %s" % e}
+            except Exception as e:                      # noqa: BLE001
+                # a harness defect must not end the attempt; the model sees the error
+                result = {"error": "tool failed: %s: %s" % (type(e).__name__, e)}
             transcript.append({"tool": name, "arguments": args, "seconds": round(time.time() - t_start, 1),
                                "result": result})
             messages.append({"role": "tool", "tool_call_id": c["id"], "name": name, "content": clip(result)})
