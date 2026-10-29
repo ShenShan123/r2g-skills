@@ -44,7 +44,29 @@ def live_runner(out: Path):
     return None
 
 
-def cleanup_workspace(case):
+def container_cmd(cmd, case, a):
+    """Run the runner in the ORFS image (216: host glibc too old for the tools).
+
+    The design's ORFS workspace (results/logs/objects/reports/designs) is a
+    per-design host directory mounted over the image's flow/; work root,
+    runtime, inputs and signoff tools are mounted at their host paths, so every
+    path in the case and the transcript reads the same as on the other hosts."""
+    ws = a.container_ws / case["id"]
+    mounts = []
+    for sub in ("results", "logs", "objects", "reports", "designs"):
+        (ws / sub).mkdir(parents=True, exist_ok=True)
+        mounts += ["-v", "%s:%s/flow/%s:Z" % (ws / sub, a.container_orfs, sub)]
+    for m in a.container_mount:
+        mounts += ["-v", m]
+    return (["podman", "run", "--rm", "--network", "host", "--name", "bare_" + case["id"],
+             "--env-file", str(a.container_env_file), "-w", str(a.repo)] + mounts
+            + [a.container_image, "python3"] + cmd[1:])
+
+
+def cleanup_workspace(case, a=None):
+    if a is not None and a.container_image:
+        shutil.rmtree(a.container_ws / case["id"], ignore_errors=True)
+        return
     variant = case["id"] + "_bare"
     flow = Path(os.environ["ORFS_ROOT"]) / "flow"
     for sub in ("results", "logs", "objects", "reports"):
@@ -78,6 +100,8 @@ def run_one(case, a):
                "--base-url", a.base_url, "--model", a.model, "--max-tokens", str(a.max_tokens)]
         if a.caps:
             cmd += ["--caps", a.caps]
+        if a.container_image:
+            cmd = container_cmd(cmd, case, a)
         t0 = time.time()
         with (out / "runner.log").open("ab") as log:
             rc = subprocess.call(cmd, stdout=log, stderr=subprocess.STDOUT, cwd=a.repo)
@@ -85,13 +109,13 @@ def run_one(case, a):
         if attempt == 1 and res.is_file() and not json.loads(res.read_text()).get("usage_complete"):
             # voided by the invocation (a stream ended without provider usage), not
             # by the model: kept outside the cohort, one fresh attempt (PROTOCOL.md)
-            cleanup_workspace(case)
+            cleanup_workspace(case, a)
             dest = a.root / "voided" / ("%s_%d" % (case["id"], int(time.time())))
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(out), str(dest))
             continue
         break
-    cleanup_workspace(case)
+    cleanup_workspace(case, a)
     return case["id"], "rc=%s %.0fs attempt %d" % (rc, time.time() - t0, attempt)
 
 
@@ -106,6 +130,11 @@ def main():
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--caps", default="")
     ap.add_argument("--max-tokens", type=int, default=32768)
+    ap.add_argument("--container-image", default="", help="run each runner in this ORFS image (podman)")
+    ap.add_argument("--container-orfs", default="/r2g_toolchain/OpenROAD-flow-scripts")
+    ap.add_argument("--container-ws", type=Path, help="host dir for per-design ORFS workspaces")
+    ap.add_argument("--container-env-file", type=Path, help="KEY=VALUE env for the container")
+    ap.add_argument("--container-mount", action="append", default=[], help="podman -v spec (repeatable)")
     ap.add_argument("--max-load", type=float, default=0.0,
                     help="start a new design only while loadavg/cpus is below this (0 = no gate)")
     a = ap.parse_args()

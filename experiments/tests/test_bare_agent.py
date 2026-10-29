@@ -242,7 +242,7 @@ def test_launcher_gives_an_invocation_voided_attempt_one_fresh_retry(tmp_path, m
         return 0
     monkeypatch.setattr(lb.subprocess, "call", fake_call)
     a = type("A", (), dict(root=tmp_path / "root", baselines=tmp_path, repo=tmp_path, base_url="u",
-                           model="m", max_tokens=32768, caps="", max_load=0))
+                           model="m", max_tokens=32768, caps="", max_load=0, container_image=""))
     cid, status = lb.run_one({"id": "n_C1", "platform": "nangate45"}, a)
     assert status.endswith("attempt 2") and len(runs) == 2
     assert json.loads((a.root / "cases/n_C1/result.json").read_text())["usage_complete"]
@@ -292,3 +292,24 @@ def test_sandbox_follows_a_symlinked_orfs_layout(tmp_path):
     assert t2.read_file(str(shadow / "flow/platforms/nangate45/config.mk"))["text"] == "x"
     with pytest.raises(bt.ToolError):
         t2.write_file(str(shadow / "flow/platforms/nangate45/config.mk"), "y")
+
+
+def test_launcher_container_mode_mounts_a_per_design_workspace(tmp_path, monkeypatch):
+    import launch_bare as lb
+    seen = []
+
+    def fake_call(cmd, **kw):
+        seen.append(cmd)
+        out = Path(cmd[cmd.index("--out") + 1])
+        (out / "result.json").write_text('{"usage_complete": true}')
+        return 0
+    monkeypatch.setattr(lb.subprocess, "call", fake_call)
+    a = type("A", (), dict(root=tmp_path / "root", baselines=tmp_path, repo=tmp_path / "rt", base_url="u",
+                           model="m", max_tokens=32768, caps="", max_load=0, container_image="img:1",
+                           container_orfs="/orfs", container_ws=tmp_path / "ws",
+                           container_env_file=tmp_path / "e.env", container_mount=["/x:/x:ro,Z"]))
+    lb.run_one({"id": "n_C1", "platform": "nangate45"}, a)
+    cmd = seen[0]
+    assert cmd[:3] == ["podman", "run", "--rm"] and "img:1" in cmd and cmd[cmd.index("img:1") + 1] == "python3"
+    assert "%s:/orfs/flow/results:Z" % (tmp_path / "ws/n_C1/results") in cmd and "/x:/x:ro,Z" in cmd
+    assert not (tmp_path / "ws/n_C1").exists()          # workspace removed after the design
