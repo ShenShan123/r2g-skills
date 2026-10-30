@@ -43,6 +43,11 @@ timeout (85 DRC, 45 flow stage, 9 LVS; 107 N45, 32 SKY130;
 They stay in the 1,249 denominator as failures; the comparison of repair rate
 and cost is over the remaining non-timeout failures, for R2G and bare alike.
 Running bare attempts on them were stopped and kept under `excluded_timeout/`.
+Baseline **memory exhaustion** is treated the same way (8 designs: the four
+FPGA-fabric tiles C01031/C01769/C03200/C03320 on both platforms; GF180's
+equivalents are unfixable too), and every EDA step of the bare arm runs under a
+64 GB memory bound (cgroup scope; podman --memory on 216) after one orphaned
+floorplan held 172 GB on 203. 147 designs are out of scope in all.
 (Stopping them by session on 203 and 208 also stopped non-timeout runners that
 shared a launcher's session; those were filed under `interrupted/` and re-run
 from scratch, as the attempt rule below prescribes.)
