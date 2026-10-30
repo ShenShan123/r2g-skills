@@ -36,6 +36,17 @@ RTL is in the corpus (every baseline source path is missing), so there is nothin
 to repair (`cohort_exclusions.json`). Cohort: N45 294 (148 pool + 146 outside),
 SKY130 128.
 
+**Baseline timeouts are out of scope for both arms** (user decision 2026-10-29,
+the same rule as for GF180): 139 designs whose frozen baseline failed by a
+timeout (85 DRC, 45 flow stage, 9 LVS; 107 N45, 32 SKY130;
+`timeout_exclusions.json`) are reported as unfixable for every configuration.
+They stay in the 1,249 denominator as failures; the comparison of repair rate
+and cost is over the remaining non-timeout failures, for R2G and bare alike.
+Running bare attempts on them were stopped and kept under `excluded_timeout/`.
+(Stopping them by session on 203 and 208 also stopped non-timeout runners that
+shared a launcher's session; those were filed under `interrupted/` and re-run
+from scratch, as the attempt rule below prescribes.)
+
 ## Starting state of the bare arm
 
 The original RTL (hash-checked against the population manifest) plus the
