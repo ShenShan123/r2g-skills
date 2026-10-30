@@ -19,7 +19,21 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 
+START_LOCK = __import__("threading").Lock()
+
+
 def wait_for_load(a):
+    """Admission gate, one design at a time: every waiting worker used to read
+    the same momentary dip in the load average and start together (216,
+    2026-10-29: 19 starts at once after load fell below the gate). A start is
+    followed by --start-spacing seconds before the next check, so the load
+    average can register it."""
+    with START_LOCK:
+        _wait_for_load(a)
+        time.sleep(getattr(a, "start_spacing", 0))
+
+
+def _wait_for_load(a):
     """Start a design only while the machine has headroom (shared hosts: other
     users' jobs come and go). Contention would turn stage timeouts and the wall
     budget into failures that say nothing about the arm being measured."""
@@ -148,6 +162,8 @@ def main():
     ap.add_argument("--container-ws", type=Path, help="host dir for per-design ORFS workspaces")
     ap.add_argument("--container-env-file", type=Path, help="KEY=VALUE env for the container")
     ap.add_argument("--container-mount", action="append", default=[], help="podman -v spec (repeatable)")
+    ap.add_argument("--start-spacing", type=float, default=90.0,
+                    help="seconds between design starts (load average catches up)")
     ap.add_argument("--min-mem-gb", type=float, default=0.0,
                     help="start a new design only while MemAvailable is at least this (0 = no gate)")
     ap.add_argument("--max-load", type=float, default=0.0,
