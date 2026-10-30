@@ -202,6 +202,14 @@ class BareTools:
         e.update(env)
         e["R2G_ORFS_AUDIT_STAGE"] = stage
         e["R2G_ORFS_AUDIT_EXECUTION"] = uuid.uuid4().hex
+        # Per-design memory bound (2026-10-30: an FPGA-fabric floorplan held 172 GB
+        # on 203 and swapped the host). R2G_BARE_MEM_MAX (e.g. "64G") runs the EDA
+        # step in a transient cgroup scope where systemd-run --user exists; inside
+        # the 216 container the launcher's podman --memory bounds it instead.
+        mem = os.environ.get("R2G_BARE_MEM_MAX")
+        if mem and shutil.which("systemd-run"):
+            cmd = ["systemd-run", "--user", "--scope", "-q", "-p", "MemoryMax=%s" % mem,
+                   "-p", "MemorySwapMax=0"] + cmd
         log = self.project / "agent_logs" / ("%s.log" % stage)
         log.parent.mkdir(exist_ok=True)
         t0 = time.monotonic()

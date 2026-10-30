@@ -85,15 +85,32 @@ def container_cmd(cmd, case, a):
         mounts += ["-v", "%s:%s/flow/%s:Z" % (ws / sub, a.container_orfs, sub)]
     for m in a.container_mount:
         mounts += ["-v", m]
-    return (["podman", "run", "--rm", "--network", "host", "--name", "bare_" + case["id"],
+    mem = ["--memory", a.container_memory, "--memory-swap", a.container_memory] if getattr(a, "container_memory", "") else []
+    return (["podman", "run", "--rm", "--network", "host", "--name", "bare_" + case["id"]] + mem + [
              "--env-file", str(a.container_env_file), "-w", str(a.repo)] + mounts
             + [a.container_image, "python3"] + cmd[1:])
+
+
+def kill_leftovers(case):
+    """A runner that dies (or is killed) leaves its EDA steps running: they run in
+    their own sessions. Reap every process naming this design's variant (203,
+    2026-10-30: an orphaned floorplan held 172 GB for 22 h)."""
+    tag = (case["id"] + "_bare").encode()
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit() or int(proc.name) == os.getpid():
+            continue
+        try:
+            if tag in (proc / "cmdline").read_bytes():
+                os.kill(int(proc.name), 9)
+        except (OSError, ProcessLookupError):
+            continue
 
 
 def cleanup_workspace(case, a=None):
     if a is not None and a.container_image:
         shutil.rmtree(a.container_ws / case["id"], ignore_errors=True)
         return
+    kill_leftovers(case)
     variant = case["id"] + "_bare"
     flow = Path(os.environ["ORFS_ROOT"]) / "flow"
     for sub in ("results", "logs", "objects", "reports"):
@@ -162,6 +179,7 @@ def main():
     ap.add_argument("--container-ws", type=Path, help="host dir for per-design ORFS workspaces")
     ap.add_argument("--container-env-file", type=Path, help="KEY=VALUE env for the container")
     ap.add_argument("--container-mount", action="append", default=[], help="podman -v spec (repeatable)")
+    ap.add_argument("--container-memory", default="", help="podman --memory for each design, e.g. 64g")
     ap.add_argument("--start-spacing", type=float, default=90.0,
                     help="seconds between design starts (load average catches up)")
     ap.add_argument("--min-mem-gb", type=float, default=0.0,
