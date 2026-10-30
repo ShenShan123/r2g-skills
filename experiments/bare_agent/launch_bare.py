@@ -24,8 +24,21 @@ def wait_for_load(a):
     users' jobs come and go). Contention would turn stage timeouts and the wall
     budget into failures that say nothing about the arm being measured."""
     cpus = os.cpu_count() or 1
-    while a.max_load and os.getloadavg()[0] > a.max_load * cpus:
+    while ((a.max_load and os.getloadavg()[0] > a.max_load * cpus)
+           or (getattr(a, "min_mem_gb", 0) and mem_available_gb() < a.min_mem_gb)):
         time.sleep(60)
+
+
+def mem_available_gb() -> float:
+    """MemAvailable from /proc/meminfo (203, 2026-10-29: swap full and new
+    runners died at start with ENOMEM while load looked fine)."""
+    try:
+        for line in open("/proc/meminfo"):
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) / 1048576
+    except OSError:
+        pass
+    return float("inf")
 
 
 def live_runner(out: Path):
@@ -135,6 +148,8 @@ def main():
     ap.add_argument("--container-ws", type=Path, help="host dir for per-design ORFS workspaces")
     ap.add_argument("--container-env-file", type=Path, help="KEY=VALUE env for the container")
     ap.add_argument("--container-mount", action="append", default=[], help="podman -v spec (repeatable)")
+    ap.add_argument("--min-mem-gb", type=float, default=0.0,
+                    help="start a new design only while MemAvailable is at least this (0 = no gate)")
     ap.add_argument("--max-load", type=float, default=0.0,
                     help="start a new design only while loadavg/cpus is below this (0 = no gate)")
     a = ap.parse_args()
