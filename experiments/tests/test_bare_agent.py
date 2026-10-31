@@ -401,3 +401,21 @@ def test_hybrid_classifies_r2g_stops_from_the_fix_log(tmp_path):
     (case / "summary.json").write_text(json.dumps({"designs": [{"project": str(p), "stage": "signoff",
                                                                 "signoff": {"dual_clean": False}}]}))
     assert hybrid.r2g_outcome(case)["outcome"] == "recipe_failed"
+
+
+def test_verdict_binds_by_gds_digest_when_gf180_drc_has_no_run_tag(tmp_path):
+    t, proj, orfs = _tools(tmp_path)
+    run = proj / "backend" / "RUN_9"
+    (run / "results").mkdir(parents=True)
+    (run / "results/6_final.gds").write_text("layout")
+    g = rb.sha(run / "results/6_final.gds")
+    (proj / "reports").mkdir(exist_ok=True)
+    (proj / "reports/lvs.json").write_text(json.dumps({"status": "clean", "gds_sha256": g, "run_tag": "RUN_9"}))
+    receipt = {"rtl_sha256": {}, "sdc_sha256": rb.sha(proj / "constraints/constraint.sdc"), "input_root": str(proj / "rtl")}
+    pdir = orfs / "flow/platforms/nangate45"
+    base = {"status": "clean", "total_violations": 0, "drc_mode": "full", "gds_sha256": g}
+    for tag, ok in ((None, True), ("RUN_9", True), ("RUN_8", False)):
+        (proj / "reports/drc.json").write_text(json.dumps({**base, "run_tag": tag}))
+        assert rb.verdict(t, proj, receipt, pdir, rb.tree_hash(pdir))["bound_to_layout"] is ok
+    (proj / "reports/drc.json").write_text(json.dumps({**base, "run_tag": None, "gds_sha256": "other"}))
+    assert rb.verdict(t, proj, receipt, pdir, rb.tree_hash(pdir))["bound_to_layout"] is False   # digest still required

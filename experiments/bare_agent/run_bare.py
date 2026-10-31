@@ -443,8 +443,12 @@ def verdict(tools: BareTools, project: Path, receipt: dict, platform_dir: Path, 
             if c.is_file():
                 gds = sha(c)
                 break
+    # Both reports must have graded THIS layout (GDS digest). GF180's DRC report
+    # carries no run tag (run_drc.sh hands GF180 straight to gf180_drc.py), so a
+    # missing DRC tag is accepted when its digest matches; LVS's tag must match.
+    tag = run.name if run else None
     bound = bool(gds and drc.get("gds_sha256") == gds and lvs.get("gds_sha256") == gds
-                 and drc.get("run_tag") == lvs.get("run_tag") == (run.name if run else None))
+                 and lvs.get("run_tag") == tag and drc.get("run_tag") in (tag, None))
     dual = (drc.get("status") == "clean" and drc.get("total_violations") == 0
             and drc.get("drc_mode") == "full" and lvs.get("status") == "clean")
     rtl_changed = sorted(rel for rel, h in receipt["rtl_sha256"].items()
@@ -463,7 +467,30 @@ def verdict(tools: BareTools, project: Path, receipt: dict, platform_dir: Path, 
             "rtl_changed": rtl_changed, "rtl_added": rtl_added, "semantic_review": review}
 
 
+def regrade(out: Path, repo: Path) -> dict:
+    """Re-run verdict() on a finished attempt (a grading-rule fix, never a new
+    attempt): same reports, same layout, same receipt. The previous verdict is
+    kept under regraded_from for the audit trail."""
+    res = json.loads((out / "result.json").read_text())
+    project = out / (res["case_id"] + "_bare")
+    orfs = Path(os.environ.get("ORFS_ROOT", "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts"))
+    platform_dir = orfs / "flow/platforms" / res["platform"]
+    tools = BareTools(project, res["platform"], repo, orfs, {})
+    deck = tree_hash(platform_dir) if res.get("platform_unchanged") else "changed"
+    v = verdict(tools, project, res["prepare"], platform_dir, deck)
+    prev = {k: res.get(k) for k in ("outcome", "bound_to_layout")}
+    if v["outcome"] != res["outcome"]:
+        res.update(v)
+        res.setdefault("regraded_from", []).append({**prev, "at": time.time(), "rule": "gf180 DRC run_tag"})
+        (out / "result.json").write_text(json.dumps(res, indent=1, ensure_ascii=False))
+    return {"case_id": res["case_id"], "before": prev["outcome"], "after": res["outcome"]}
+
+
 def main():
+    if "--regrade" in sys.argv:
+        i = sys.argv.index("--regrade")
+        print(json.dumps(regrade(Path(sys.argv[i + 1]).resolve(), Path(sys.argv[i + 2]).resolve())))
+        return 0
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--case", type=Path, required=True, help="candidate JSON (population manifest entry)")
     ap.add_argument("--baseline", type=Path, required=True, help="dir with the baseline config.mk + constraint.sdc")
