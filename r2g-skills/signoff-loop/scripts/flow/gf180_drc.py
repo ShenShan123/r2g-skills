@@ -134,6 +134,13 @@ def main():
             if rc: raise ValueError('Fast DRC has no successful verdict')
             count=report_items(report)
         except (ValueError, OSError, ET.ParseError):
+            if os.environ.get('R2G_GF180_DRC_NO_FALLBACK'):
+                # Experiment parity (2026-10-31): the frozen GF180 baseline was graded
+                # by this fast deck alone (the official per-table runs were stopped),
+                # so a comparison arm must not upgrade a fast-deck timeout into hours
+                # of official checking. A timeout stays a timeout.
+                record['exit_code']=rc
+                raise ValueError('Fast DRC has no verdict; official fallback disabled (R2G_GF180_DRC_NO_FALLBACK)')
             # The PDK runner drives its own per-table processes. Validate EVERY
             # expected table because its top-level return code alone is weak.
             official=attempt/'official';official.mkdir();bin_dir=attempt/'bin';bin_dir.mkdir()

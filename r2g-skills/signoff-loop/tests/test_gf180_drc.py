@@ -41,3 +41,20 @@ def test_altered_rule_set_is_rejected(tmp_path):
         (tmp_path / name).write_text('Executing rule\n' * 700)
     with pytest.raises(ValueError, match='differs from the reviewed baseline'):
         drc.reviewed_rules(tmp_path)
+
+
+def test_no_fallback_switch_keeps_a_fast_timeout_a_timeout(tmp_path, monkeypatch):
+    """R2G_GF180_DRC_NO_FALLBACK: the baseline was graded by the fast deck alone."""
+    gds = tmp_path / 'top.gds'; gds.write_bytes(b'gds')
+    (tmp_path / 'proj').mkdir()
+    calls = []
+    monkeypatch.setattr(drc, 'assemble', lambda rule_dir, dest: (dest.mkdir(parents=True), (dest / 'main.drc').write_text('x'), {})[2])
+    monkeypatch.setattr(drc.subprocess, 'check_output', lambda *a, **k: 'KLayout 0.30.7')
+    monkeypatch.setattr(drc, 'run', lambda cmd, cwd, log, timeout, env=None: (calls.append(str(log)), 124)[1])
+    monkeypatch.setenv('R2G_GF180_DRC_NO_FALLBACK', '1')
+    monkeypatch.setattr('sys.argv', ['gf180_drc.py', '--project', str(tmp_path / 'proj'), '--gds', str(gds),
+                                     '--pdk', str(tmp_path), '--klayout', 'klayout', '--top', 'top'])
+    assert drc.main() == 1
+    rec = json.loads((tmp_path / 'proj/drc/drc_result.json').read_text())
+    assert rec['status'] == 'timeout' and 'fallback disabled' in rec['reason']
+    assert len(calls) == 1 and calls[0].endswith('fast.log')          # the official runner never started
