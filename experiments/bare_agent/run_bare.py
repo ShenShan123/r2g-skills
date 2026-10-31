@@ -159,6 +159,67 @@ def prepare(case: dict, baseline: Path, project: Path) -> dict:
             "config_sha256": sha(cons / "config.mk")}
 
 
+TASK_FALLBACK = """设计：顶层模块 {top}，平台 {platform}。
+工程目录：{project}
+这个工程是 R2G 自动修复流程的最终状态。R2G 没能把它做到签核干净（{reason}）。
+- rtl/、constraints/、hooks/ 是 R2G 修复后的状态；r2g_context/ 里有 R2G 的诊断（diagnosis*.json）、修复日志（fix_log.jsonl）和它最后一次的签核报告（drc.json、lvs.json）。
+R2G 诊断摘要：
+{summary}
+
+目标：最终版图全套 DRC 干净且 LVS 一致。
+必须遵守：
+- 保持原设计功能：不得删除或简化逻辑、缩小存储器、把输出接常量、替换为空模块；只允许不改变行为的源码修正。
+- 不得修改时钟周期和 constraint.sdc，不得修改 PDK、平台文件或签核规则（工具也不允许）。
+- 可以修改 config.mk 中的 ORFS 变量、添加由 config.mk 引用的 Tcl hook。
+预算：最多 {run_flow} 次 run_flow、{run_signoff} 次 run_signoff、{model_calls} 次模型调用。较早的工具输出会被压缩成摘要，需要时请重新读取。
+先读 r2g_context/ 弄清 R2G 做过什么、为什么没成功，再决定修复。上一次的 ORFS 工作区已清除，第一次 run_flow 必须从 synth 开始。完成或判断无法修复时调用 finish 说明结果。"""
+
+FALLBACK_SKIP = {"backend", "reports", "agent_logs", "drc", "lvs", "rcx", "dataset", "features",
+                 "labels", "logs", "objects", "results"}
+
+
+def prepare_from_project(case: dict, src: Path, project: Path, context: Path | None) -> dict:
+    """Start the fallback from R2G's final project (LLM + R2G arm).
+
+    The project is copied without its layouts and reports (the harness grades
+    only what the model produces); absolute paths that named R2G's project are
+    rewritten to this one; R2G's last reports, fix log and diagnosis go to
+    r2g_context/ for the model to read. The receipt hashes R2G's final RTL and
+    SDC, so the SDC must stay as R2G left it and RTL edits are reviewed against
+    R2G's RTL (r2g_rtl_snapshot/); the equivalence proof still compares with the
+    original design."""
+    if project.exists():
+        raise SystemExit("project exists; refusing to overwrite: %s" % project)
+    src = src.resolve()
+    shutil.copytree(src, project, ignore=lambda d, names: [n for n in names if Path(d) == src and n in FALLBACK_SKIP])
+    old, new = str(src), str(project)
+    for f in project.rglob("*"):
+        if f.is_file() and f.suffix in (".mk", ".tcl", ".sdc", ".cfg", ".json", ".v", ".sv", ".vh", ".svh"):
+            t = f.read_text(errors="replace")
+            if old in t:
+                f.write_text(t.replace(old, new))
+    (project / "reports").mkdir(exist_ok=True)
+    (project / "hooks").mkdir(exist_ok=True)
+    ctx = project / "r2g_context"
+    ctx.mkdir(exist_ok=True)
+    for name in ("drc.json", "lvs.json", "fix_log.jsonl", "route.json"):
+        if (src / "reports" / name).is_file():
+            shutil.copyfile(src / "reports" / name, ctx / name)
+    if (src / "agent_logs" / "repair.log").is_file():
+        shutil.copyfile(src / "agent_logs" / "repair.log", ctx / "repair.log")
+    if context and context.is_dir():
+        for f in context.iterdir():
+            if f.is_file():
+                shutil.copyfile(f, ctx / f.name)
+    snap = project.parent / "r2g_rtl_snapshot"
+    shutil.copytree(project / "rtl", snap)
+    rtl = project / "rtl"
+    return {"input_root": str(snap), "from_project": old,
+            "rtl_sha256": {str(p.relative_to(rtl)): sha(p) for p in rtl.rglob("*") if p.is_file()},
+            "sdc_sha256": sha(project / "constraints/constraint.sdc"),
+            "config_sha256": sha(project / "constraints/config.mk"), "unmapped_baseline_paths": []}
+
+
 def audit_env(job: str, design: str, project: Path, journal: Path, repo: Path) -> dict:
     """Same context the R2G pipeline gives its stage commands (pipeline._sh)."""
     audit_bin = str(repo / "r2g-skills/signoff-loop/scripts/flow/orfs_audit_bin")
@@ -414,6 +475,9 @@ def main():
     # 4096 was used up by thinking alone on hard steps (empty replies, then
     # model_stopped): pilot v2. Both arms use the same value.
     ap.add_argument("--max-tokens", type=int, default=32768)
+    ap.add_argument("--from-project", type=Path, help="LLM+R2G fallback: start from R2G's final project")
+    ap.add_argument("--context", type=Path, help="dir of R2G diagnosis files for r2g_context/")
+    ap.add_argument("--reason", default="", help="why R2G stopped (no_recipe / recipe_failed: ...)")
     a = ap.parse_args()
     case = json.loads(a.case.read_text())
     caps = {**DEFAULT_CAPS, **(json.loads(a.caps) if a.caps else {})}
@@ -429,7 +493,10 @@ def main():
     platform = case["platform"]
     name = case["id"] + "_bare"
     project = out / name
-    receipt = prepare(case, a.baseline, project)
+    if a.from_project:
+        receipt = prepare_from_project(case, a.from_project, project, a.context)
+    else:
+        receipt = prepare(case, a.baseline, project)
     orfs = Path(os.environ.get("ORFS_ROOT", "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts"))
     platform_dir = orfs / "flow/platforms" / platform
     deck_hash = tree_hash(platform_dir)
@@ -440,7 +507,15 @@ def main():
                      api_key_env="R2G_LOCAL_RELAY_AUTH", thinking=True, max_tokens=a.max_tokens, temperature=0.2)
     os.environ.setdefault("R2G_LOCAL_RELAY_AUTH", "local-relay-only-not-a-provider-key")
     adapter = OpenAICompatAdapter(mc.resolved(), os.environ["R2G_LOCAL_RELAY_AUTH"])
-    task = TASK.format(top=case["top"], platform=platform, project=project, **caps)
+    if a.from_project:
+        summary = ""
+        for f in sorted((project / "r2g_context").glob("diagnosis*.json")):
+            summary += f.name + ": " + f.read_text(errors="replace")[:3000] + "\n"
+        task = TASK_FALLBACK.format(top=case["top"], platform=platform, project=project, reason=a.reason or "see r2g_context",
+                                    summary=summary or "(see r2g_context/)", **caps)
+        tools.force_synth_first = True
+    else:
+        task = TASK.format(top=case["top"], platform=platform, project=project, **caps)
     transcript, calls, failed = [], [], []
     started = time.time()
     stop = run_loop(adapter, tools, task, caps, transcript, calls, failed)
@@ -465,7 +540,8 @@ def main():
                       and not any(f["partial_output"] and not f.get("usage_reported") for f in failed))
     usage_totals = {k: (sum(c.get(k) or 0 for c in calls) if complete_usage else None) for k in COUNTERS}
     audit = audit_counts(journal, job)
-    result = {"case_id": case["id"], "platform": platform, "arm": "bare", "model": a.model, "job": job,
+    result = {"case_id": case["id"], "platform": platform, "arm": "llm_after_r2g" if a.from_project else "bare",
+              "model": a.model, "job": job, "r2g_stop_reason": a.reason or None,
               "max_tokens": a.max_tokens,
               "stop_reason": stop, **v, "caps": caps, "model_calls": len(calls),
               "usage_complete": complete_usage, "provider_usage": usage_totals,

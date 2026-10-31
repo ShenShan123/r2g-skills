@@ -94,6 +94,10 @@ class BareTools:
     def run_flow(self, from_stage: str = "synth") -> dict:
         if from_stage not in STAGES:
             raise ToolError("from_stage must be one of %s" % ", ".join(STAGES))
+        if getattr(self, "force_synth_first", False) and self.counts["run_flow"] == 0 and from_stage != "synth":
+            # fallback from R2G's project: its live ORFS workspace is gone, so a
+            # resume has nothing to resume from (run_orfs.sh would refuse it)
+            from_stage = "synth"
         self.counts["run_flow"] += 1
         env = {"NUM_CORES": str(self.cores), "OMP_NUM_THREADS": str(self.cores),
                "ORFS_TIMEOUT": str(self.stage_timeout)}

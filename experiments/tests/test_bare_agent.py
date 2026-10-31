@@ -347,3 +347,57 @@ def test_equiv_review_proves_a_location_fix_and_refutes_a_logic_change(tmp_path)
     assert rc == 0 and proven > 0 and unproven == 0          # duplicate definition read once, then proven
     rc, (proven, unproven) = status(gate_bad)
     assert unproven > 0                                        # an inverted input is caught
+
+
+def test_fallback_starts_from_r2g_project_with_its_context(tmp_path):
+    case, base = _case(tmp_path)
+    r2g = tmp_path / "ws" / "top__job1"
+    (r2g / "rtl/src/rtl").mkdir(parents=True)
+    (r2g / "rtl/src/rtl/top.v").write_text("module top(input a, output y); assign y = a; endmodule\n")
+    (r2g / "constraints").mkdir()
+    (r2g / "constraints/constraint.sdc").write_text("create_clock -period 3.0 [get_ports a]\n")
+    (r2g / "constraints/config.mk").write_text(
+        "export VERILOG_FILES = %s/rtl/src/rtl/top.v\nexport SDC_FILE = %s/constraints/constraint.sdc\n" % (r2g, r2g))
+    (r2g / "backend/RUN_1/results").mkdir(parents=True)
+    (r2g / "backend/RUN_1/results/6_final.gds").write_text("x" * 100)
+    (r2g / "reports").mkdir()
+    (r2g / "reports/drc.json").write_text('{"status": "violations"}')
+    (r2g / "reports/fix_log.jsonl").write_text('{"strategy": "none", "verdict": "stop_residual"}\n')
+    ctx = tmp_path / "ctx"
+    ctx.mkdir()
+    (ctx / "diagnosis_drc.json").write_text('{"status": "residual"}')
+    proj = tmp_path / "out" / "nangate45_C1_bare"
+    r = rb.prepare_from_project(case, r2g, proj, ctx)
+    cfg = (proj / "constraints/config.mk").read_text()
+    assert str(proj) in cfg and str(r2g) not in cfg                      # paths now name this project
+    assert not (proj / "backend").exists() and not list((proj / "reports").iterdir())   # graded fresh
+    assert sorted(p.name for p in (proj / "r2g_context").iterdir()) == ["diagnosis_drc.json", "drc.json", "fix_log.jsonl"]
+    assert r["sdc_sha256"] == rb.sha(proj / "constraints/constraint.sdc") and r["from_project"] == str(r2g)
+    assert rb.semantic_review(proj, r) == {"cleared": [], "pending": []}   # untouched R2G RTL is not an edit
+    t = bt.BareTools(proj, "nangate45", tmp_path / "repo", tmp_path / "orfs", {})
+    t.force_synth_first = True
+    seen = []
+    t._sh = lambda stage, cmd, env, timeout: seen.append(env.get("FROM_STAGE")) or 0
+    t._latest_run = lambda: None
+    t.run_flow("route")
+    t.run_flow("route")
+    assert seen == [None, "route"]                                       # first run forced to synth
+
+
+def test_hybrid_classifies_r2g_stops_from_the_fix_log(tmp_path):
+    import hybrid
+    p = tmp_path / "proj"
+    (p / "reports").mkdir(parents=True)
+    assert hybrid.classify(p) == "no_recipe"                         # synth/flow failure, no rows
+    (p / "reports/fix_log.jsonl").write_text('{"strategy": "none", "verdict": "stop_residual"}\n')
+    assert hybrid.classify(p) == "no_recipe"
+    (p / "reports/fix_log.jsonl").write_text('{"strategy": "dont_use_violating_master", "verdict": "recipe_no_effect"}\n'
+                                             '{"strategy": "none", "verdict": "stop_residual"}\n')
+    assert hybrid.classify(p) == "recipe_failed"
+    case = tmp_path / "cases" / "n_C1"
+    case.mkdir(parents=True)
+    (case / "summary.json").write_text(json.dumps({"designs": [{"project": str(p), "signoff": {"dual_clean": True}}]}))
+    assert hybrid.r2g_outcome(case)["outcome"] == "r2g_pass"
+    (case / "summary.json").write_text(json.dumps({"designs": [{"project": str(p), "stage": "signoff",
+                                                                "signoff": {"dual_clean": False}}]}))
+    assert hybrid.r2g_outcome(case)["outcome"] == "recipe_failed"

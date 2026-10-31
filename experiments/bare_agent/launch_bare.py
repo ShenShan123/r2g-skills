@@ -144,6 +144,11 @@ def run_one(case, a):
                "--base-url", a.base_url, "--model", a.model, "--max-tokens", str(a.max_tokens)]
         if a.caps:
             cmd += ["--caps", a.caps]
+        if case.get("from_project"):
+            # LLM + R2G arm: fallback from R2G's final project (hybrid.py queue)
+            cmd += ["--from-project", case["from_project"], "--reason", case.get("reason", "")]
+            if case.get("context"):
+                cmd += ["--context", case["context"]]
         if a.container_image:
             cmd = container_cmd(cmd, case, a)
         t0 = time.time()
