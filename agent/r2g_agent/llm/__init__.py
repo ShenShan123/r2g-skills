@@ -23,6 +23,7 @@ from __future__ import annotations
 from ..config import ModelConfig, api_key
 from .anthropic import AnthropicAdapter
 from .openai_compat import OpenAICompatAdapter
+from .openai_responses import OpenAIResponsesAdapter
 
 
 def make_adapter(mc: ModelConfig):
@@ -34,4 +35,6 @@ def make_adapter(mc: ModelConfig):
     key = api_key(mc)
     if r.protocol == "anthropic":
         return AnthropicAdapter(r, key)
+    if r.protocol == "openai-responses":
+        return OpenAIResponsesAdapter(r, key)
     return OpenAICompatAdapter(r, key)

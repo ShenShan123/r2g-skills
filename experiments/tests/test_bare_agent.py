@@ -243,7 +243,7 @@ def test_launcher_gives_an_invocation_voided_attempt_one_fresh_retry(tmp_path, m
         return 0
     monkeypatch.setattr(lb.subprocess, "call", fake_call)
     a = type("A", (), dict(root=tmp_path / "root", baselines=tmp_path, repo=tmp_path, base_url="u",
-                           model="m", max_tokens=32768, caps="", max_load=0, container_image="", start_spacing=0))
+                           model="m", max_tokens=32768, caps="", protocol="openai", reasoning_effort=None, max_load=0, container_image="", start_spacing=0))
     cid, status = lb.run_one({"id": "n_C1", "platform": "nangate45"}, a)
     assert status.endswith("attempt 2") and len(runs) == 2
     assert json.loads((a.root / "cases/n_C1/result.json").read_text())["usage_complete"]
@@ -306,7 +306,7 @@ def test_launcher_container_mode_mounts_a_per_design_workspace(tmp_path, monkeyp
         return 0
     monkeypatch.setattr(lb.subprocess, "call", fake_call)
     a = type("A", (), dict(root=tmp_path / "root", baselines=tmp_path, repo=tmp_path / "rt", base_url="u",
-                           model="m", max_tokens=32768, caps="", max_load=0, container_image="img:1",
+                           model="m", max_tokens=32768, caps="", protocol="openai", reasoning_effort=None, max_load=0, container_image="img:1",
                            container_orfs="/orfs", container_ws=tmp_path / "ws",
                            container_env_file=tmp_path / "e.env", container_mount=["/x:/x:ro,Z"],
                            start_spacing=0))

@@ -144,6 +144,10 @@ def run_one(case, a):
                "--base-url", a.base_url, "--model", a.model, "--max-tokens", str(a.max_tokens)]
         if a.caps:
             cmd += ["--caps", a.caps]
+        if a.protocol != "openai":
+            cmd += ["--protocol", a.protocol]
+        if a.reasoning_effort:
+            cmd += ["--reasoning-effort", a.reasoning_effort]
         if case.get("from_project"):
             # LLM + R2G arm: fallback from R2G's final project (hybrid.py queue)
             cmd += ["--from-project", case["from_project"], "--reason", case.get("reason", "")]
@@ -178,6 +182,8 @@ def main():
     ap.add_argument("--model", default="deepseek-flash")
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--caps", default="")
+    ap.add_argument("--protocol", default="openai", choices=["openai", "openai-responses"])
+    ap.add_argument("--reasoning-effort", default=None)
     ap.add_argument("--max-tokens", type=int, default=32768)
     ap.add_argument("--container-image", default="", help="run each runner in this ORFS image (podman)")
     ap.add_argument("--container-orfs", default="/r2g_toolchain/OpenROAD-flow-scripts")
@@ -196,7 +202,7 @@ def main():
     (a.root / "cases").mkdir(parents=True, exist_ok=True)
     cases = json.loads(a.cases.read_text())
     (a.root / "launch.json").write_text(json.dumps({"started": time.time(), "workers": a.workers,
-        "model": a.model, "max_tokens": a.max_tokens, "repo": str(a.repo), "base_url": a.base_url, "caps": a.caps,
+        "model": a.model, "protocol": a.protocol, "reasoning_effort": a.reasoning_effort, "max_tokens": a.max_tokens, "repo": str(a.repo), "base_url": a.base_url, "caps": a.caps,
         "cases": [c["id"] for c in cases]}, indent=1))
     with concurrent.futures.ThreadPoolExecutor(max_workers=a.workers) as pool:
         for cid, status in pool.map(lambda c: run_one(c, a), cases):

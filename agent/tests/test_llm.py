@@ -85,3 +85,44 @@ def test_thinking_switch_per_provider():
     assert thinking_params(ModelConfig(provider="deepseek")) == {"thinking": {"type": "enabled"}}
     assert thinking_params(ModelConfig(provider="qwen", thinking=False)) == {"enable_thinking": False}
     assert thinking_params(ModelConfig(provider="kimi", thinking=False)) == {}   # no known switch: untouched
+
+
+def test_responses_stream_replays_reasoning_and_counts_cache(monkeypatch):
+    from r2g_agent.llm.openai_responses import OpenAIResponsesAdapter
+    rsn = {"type": "reasoning", "id": "rs1", "encrypted_content": "opaque", "summary": []}
+    usage = {"input_tokens": 1000, "output_tokens": 50, "input_tokens_details": {"cached_tokens": 800,
+             "cache_write_tokens": 150}, "output_tokens_details": {"reasoning_tokens": 30}}
+    lines = ['data: {"type":"response.created","response":{"id":"resp1"}}',
+             'data: ' + json.dumps({"type": "response.output_item.done", "item": rsn}),
+             'data: {"type":"response.output_text.delta","delta":"ok"}',
+             'data: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"c9","name":"f","arguments":"{\\"a\\":2}"}}',
+             'data: ' + json.dumps({"type": "response.completed", "response": {"id": "resp1", "usage": usage}})]
+    monkeypatch.setattr(httpx, "stream", _fake_stream(lines))
+    mc = ModelConfig(provider="openai", model="gpt-6.1-sol", protocol="openai-responses").resolved()
+    ad = OpenAIResponsesAdapter(mc, "k", "medium")
+    evs = list(ad.stream([{"role": "user", "content": "q"}], [{"name": "f", "description": "d", "parameters": {}}], "sys"))
+    sent = _fake_stream.last["json"]
+    assert sent["store"] is False and "temperature" not in sent and sent["instructions"] == "sys"
+    assert sent["reasoning"] == {"effort": "medium"} and sent["tools"][0]["name"] == "f"
+    assert _fake_stream.last["headers"]["Authorization"] == "Bearer k"
+    u = next(e for e in evs if e["type"] == "usage")
+    assert (u["input_tokens"], u["cache_read_input_tokens"], u["cache_creation_input_tokens"],
+            u["uncached_input_tokens"], u["reasoning_tokens"]) == (1000, 800, 150, 50, 30)
+    assert next(e for e in evs if e["type"] == "tool_call") == {"type": "tool_call", "id": "c9", "name": "f", "arguments": {"a": 2}}
+    assert evs[-1]["stop_reason"] == "tool_calls"
+    # the next turn replays the encrypted reasoning right before the call it produced
+    hist = [{"role": "user", "content": "q"},
+            {"role": "assistant", "content": "ok", "tool_calls": [{"id": "c9", "name": "f", "arguments": {"a": 2}}]},
+            {"role": "tool", "tool_call_id": "c9", "name": "f", "content": "r"}]
+    w = ad.to_wire(hist)
+    assert [x.get("type") or x["role"] for x in w] == ["user", "reasoning", "assistant", "function_call", "function_call_output"]
+    assert w[1] == rsn and w[4] == {"type": "function_call_output", "call_id": "c9", "output": "r"}
+
+
+def test_responses_interrupted_stream_is_an_error(monkeypatch):
+    from r2g_agent.llm.openai_responses import OpenAIResponsesAdapter
+    monkeypatch.setattr(httpx, "stream", _fake_stream(['data: {"error":{"message":"upstream stream interrupted"}}']))
+    mc = ModelConfig(provider="openai", model="gpt-6.1-sol", protocol="openai-responses").resolved()
+    evs = list(OpenAIResponsesAdapter(mc, "k").stream([{"role": "user", "content": "q"}], []))
+    assert any(e["type"] == "error" for e in evs)
+    assert next(e for e in evs if e["type"] == "usage")["stream_complete"] is False

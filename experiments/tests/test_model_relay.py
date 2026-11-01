@@ -14,10 +14,10 @@ spec.loader.exec_module(relay)
 
 
 class RelayTests(unittest.TestCase):
-    def request(self, handler, body=None, path="/v1/chat/completions", method="POST"):
+    def request(self, handler, body=None, path="/v1/chat/completions", method="POST", protocol="openai"):
         async def run():
             app = relay.create_app("https://fixed.example/v1", "fixed-model", "upstream-secret",
-                                   transport=httpx.MockTransport(handler))
+                                   transport=httpx.MockTransport(handler), protocol=protocol)
             async with app.router.lifespan_context(app):
                 async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
                                              base_url="http://relay") as client:
@@ -50,6 +50,24 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(self.request(never, {}, "/v1/elsewhere").status_code, 404)
         self.assertEqual(self.request(never, {"model": "fixed-model", "messages": []},
                          "/v1/chat/completions?url=https://evil").status_code, 400)
+
+    def test_responses_route_forces_store_off_and_keeps_its_own_whitelist(self):
+        def upstream(request):
+            self.assertEqual(str(request.url), "https://fixed.example/v1/responses")
+            self.assertEqual(request.headers["authorization"], "Bearer upstream-secret")
+            self.assertIs(json.loads(request.content)["store"], False)
+            return httpx.Response(200, content=b'data: {"type":"response.completed"}\n\n')
+        ok = self.request(upstream, {"model": "fixed-model", "input": [], "store": True, "stream": True},
+                          "/v1/responses", protocol="openai-responses")
+        self.assertEqual(ok.status_code, 200)
+        def never(_request):
+            self.fail("Rejected request contacted upstream")
+        for body in ({"model": "fixed-model", "input": [], "previous_response_id": "resp_x"},
+                     {"model": "fixed-model", "messages": []}, {"model": "other", "input": []}):
+            self.assertEqual(self.request(never, body, "/v1/responses", protocol="openai-responses").status_code, 400)
+        # one protocol per relay: the chat route does not exist on a Responses relay
+        self.assertEqual(self.request(never, {"model": "fixed-model", "messages": []},
+                                      protocol="openai-responses").status_code, 404)
 
     def test_errors_and_redirects_never_echo_provider_credentials(self):
         for status in (302, 401, 500):

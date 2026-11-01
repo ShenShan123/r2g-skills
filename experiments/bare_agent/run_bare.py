@@ -502,6 +502,9 @@ def main():
     # 4096 was used up by thinking alone on hard steps (empty replies, then
     # model_stopped): pilot v2. Both arms use the same value.
     ap.add_argument("--max-tokens", type=int, default=32768)
+    ap.add_argument("--protocol", default="openai", choices=["openai", "openai-responses"],
+                    help="openai = Chat Completions (DeepSeek); openai-responses = GPT-6 tool calling")
+    ap.add_argument("--reasoning-effort", default=None, help="Responses only; omitted = model default")
     ap.add_argument("--from-project", type=Path, help="LLM+R2G fallback: start from R2G's final project")
     ap.add_argument("--context", type=Path, help="dir of R2G diagnosis files for r2g_context/")
     ap.add_argument("--reason", default="", help="why R2G stopped (no_recipe / recipe_failed: ...)")
@@ -516,6 +519,7 @@ def main():
     sys.path.insert(0, str(a.repo / "agent"))
     from r2g_agent.config import ModelConfig
     from r2g_agent.llm.openai_compat import OpenAICompatAdapter
+    from r2g_agent.llm.openai_responses import OpenAIResponsesAdapter
 
     platform = case["platform"]
     name = case["id"] + "_bare"
@@ -530,10 +534,14 @@ def main():
     job = "bare-" + case["id"] + "-" + uuid.uuid4().hex[:6]
     journal = out / "orfs_audit.jsonl"
     tools = BareTools(project, platform, a.repo, orfs, audit_env(job, name, project, journal, a.repo))
-    mc = ModelConfig(provider="deepseek", model=a.model, base_url=a.base_url,
-                     api_key_env="R2G_LOCAL_RELAY_AUTH", thinking=True, max_tokens=a.max_tokens, temperature=0.2)
+    mc = ModelConfig(provider="deepseek" if a.protocol == "openai" else "openai", model=a.model,
+                     base_url=a.base_url, protocol=a.protocol, api_key_env="R2G_LOCAL_RELAY_AUTH",
+                     thinking=True, max_tokens=a.max_tokens, temperature=0.2)
     os.environ.setdefault("R2G_LOCAL_RELAY_AUTH", "local-relay-only-not-a-provider-key")
-    adapter = OpenAICompatAdapter(mc.resolved(), os.environ["R2G_LOCAL_RELAY_AUTH"])
+    if a.protocol == "openai-responses":
+        adapter = OpenAIResponsesAdapter(mc.resolved(), os.environ["R2G_LOCAL_RELAY_AUTH"], a.reasoning_effort)
+    else:
+        adapter = OpenAICompatAdapter(mc.resolved(), os.environ["R2G_LOCAL_RELAY_AUTH"])
     if a.from_project:
         summary = ""
         for f in sorted((project / "r2g_context").glob("diagnosis*.json")):
@@ -568,7 +576,8 @@ def main():
     usage_totals = {k: (sum(c.get(k) or 0 for c in calls) if complete_usage else None) for k in COUNTERS}
     audit = audit_counts(journal, job)
     result = {"case_id": case["id"], "platform": platform, "arm": "llm_after_r2g" if a.from_project else "bare",
-              "model": a.model, "job": job, "r2g_stop_reason": a.reason or None,
+              "model": a.model, "protocol": a.protocol, "reasoning_effort": a.reasoning_effort,
+              "job": job, "r2g_stop_reason": a.reason or None,
               "max_tokens": a.max_tokens,
               "stop_reason": stop, **v, "caps": caps, "model_calls": len(calls),
               "usage_complete": complete_usage, "provider_usage": usage_totals,

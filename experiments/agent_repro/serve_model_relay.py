@@ -26,16 +26,26 @@ ALLOWED_FIELDS = {
     "seed", "response_format", "logprobs", "top_logprobs", "thinking",
     "enable_thinking", "reasoning_effort", "n",
 }
+# OpenAI Responses (GPT-6 tool calling); store is forced off below, so a
+# worker can neither persist nor fetch conversations by id
+RESPONSES_FIELDS = {
+    "model", "input", "instructions", "stream", "store", "include", "tools", "tool_choice",
+    "parallel_tool_calls", "max_output_tokens", "reasoning", "text", "truncation",
+}
+ROUTES = {"openai": ("/chat/completions", ALLOWED_FIELDS, "messages"),
+          "openai-responses": ("/responses", RESPONSES_FIELDS, "input")}
 
 
-def create_app(base_url: str, model: str, api_key: str, *, transport=None) -> FastAPI:
+def create_app(base_url: str, model: str, api_key: str, *, transport=None,
+               protocol: str = "openai") -> FastAPI:
     parsed = urlsplit(base_url)
     if (parsed.scheme != "https" or not parsed.hostname or parsed.username
             or parsed.password or parsed.query or parsed.fragment):
         raise ValueError("Relay requires a fixed HTTPS upstream without URL credentials")
     if not model or not api_key:
         raise ValueError("Configured model and upstream credential are required")
-    endpoint = base_url.rstrip("/") + "/chat/completions"
+    path, allowed, listed = ROUTES[protocol]
+    endpoint = base_url.rstrip("/") + path
 
     @asynccontextmanager
     async def lifespan(_app):
@@ -60,7 +70,7 @@ def create_app(base_url: str, model: str, api_key: str, *, transport=None) -> Fa
         return {"status": "ok", "model": model, "upstream_fixed": True,
                 "credentials_forwarded_to_worker": False}
 
-    @app.post("/v1/chat/completions")
+    @app.post("/v1" + path)
     async def complete(request: Request):
         raw = bytearray()
         async for chunk in request.stream():
@@ -71,12 +81,14 @@ def create_app(base_url: str, model: str, api_key: str, *, transport=None) -> Fa
             body = json.loads(raw)
         except (ValueError, UnicodeDecodeError):
             return JSONResponse({"error": "invalid JSON"}, status_code=400)
-        if not isinstance(body, dict) or set(body) - ALLOWED_FIELDS:
+        if not isinstance(body, dict) or set(body) - allowed:
             return JSONResponse({"error": "unsupported request fields"}, status_code=400)
         if body.get("model") != model:
             return JSONResponse({"error": "model is fixed by relay"}, status_code=400)
-        if not isinstance(body.get("messages"), list):
-            return JSONResponse({"error": "messages must be a list"}, status_code=400)
+        if not isinstance(body.get(listed), list):
+            return JSONResponse({"error": "%s must be a list" % listed}, status_code=400)
+        if protocol == "openai-responses":
+            body["store"] = False
         if request.url.query:
             return JSONResponse({"error": "query parameters are not supported"}, status_code=400)
         # Never forward client headers (Authorization, Host, forwarding headers,
@@ -123,12 +135,12 @@ def main():
     from r2g_agent import config
     import uvicorn
     model = config.load().model.resolved()
-    if model.protocol != "openai" or model.model != args.expected_model:
+    if model.protocol not in ROUTES or model.model != args.expected_model:
         raise SystemExit("Configured protocol/model does not match the approved relay")
     key = config.api_key(model)
     if not key:
         raise SystemExit("Configured upstream credential is unavailable")
-    app = create_app(model.base_url, model.model, key)
+    app = create_app(model.base_url, model.model, key, protocol=model.protocol)
     # Explicit IPv4 loopback only; no host CLI override, access/body/header logs.
     uvicorn.run(app, host="127.0.0.1", port=args.port, access_log=False,
                 log_level="critical")

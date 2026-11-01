@@ -13,6 +13,15 @@ def normalize_usage(raw: dict, protocol: str) -> dict:
         input_tokens = (uncached + (cached or 0) + (created or 0)) if uncached is not None else None
         output_tokens = count(raw.get("output_tokens"))
         reasoning = None
+    elif protocol == "openai-responses":
+        # input_tokens is the total; cached reads and cache writes are parts of it
+        input_tokens = count(raw.get("input_tokens"))
+        output_tokens = count(raw.get("output_tokens"))
+        details = raw.get("input_tokens_details") or {}
+        cached = count(details.get("cached_tokens"))
+        created = count(details.get("cache_write_tokens"))
+        uncached = (input_tokens - (cached or 0) - (created or 0)) if input_tokens is not None and cached is not None else None
+        reasoning = count((raw.get("output_tokens_details") or {}).get("reasoning_tokens"))
     else:
         input_tokens = count(raw.get("prompt_tokens"))
         output_tokens = count(raw.get("completion_tokens"))
