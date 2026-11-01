@@ -4516,6 +4516,26 @@ in one run) and `::test_J4_all_benign_dangles_read_as_flat` (the explicitly-clea
 *Generalizable rule: a check whose own message says "you figure out which" is unfinished — either it can
 name the lead from data it already holds, or it should not be a check.*
 
+### Sub-variant: a netgen LVS mismatch is filed under a TIMING symptom (2026-11-01)
+
+**Symptom.** `ab-drain` reports `unvalidatable (insufficient subjects)` for an LVS
+recipe although the store holds several current runs with exactly its LVS class.
+Found on GF180 `lvs_port_feedthrough_buffer`: 5 runs with `lvs_mismatch_class =
+top_pin_mismatch`, all keyed `symptom_id = 64a358c75ba4b86b` (`{"check":"timing",
+"class":"clean"}`) instead of `a0d6b4c6ae5c8c4c`.
+
+**Cause.** `ingest_run._write_run_violations` chose the LVS symptom only when
+`lvs.status == "fail"`. The netgen path writes `"mismatch"` for the same verdict,
+so every netgen LVS failure fell through to the timing tier. In the shipped store
+49 runs (`lvs_status='mismatch'`) were filed this way: invisible to every LVS
+recipe's A/B planning and to symptom-keyed learning.
+
+**Fix.** `LVS_FAILING = {"fail", "mismatch"}` keys the per-run symptom
+(`tests/test_ingest_lvs_mismatch_symptom.py`). Re-ingest a project to re-key it
+(`INSERT OR REPLACE`). Separately, `plan_trial` only runs projects registered as
+`normal` entries in the current ledger (`engineer_loop.py add`), by design: a
+store path is evidence, not permission to execute.
+
 ## Dataset-Extraction Silent-Value Defects (features/labels; found by the 2026-07-05 RTL2Graph audit)
 
 A new failure class: the flow completes green, the CSVs materialize, and the VALUES are
