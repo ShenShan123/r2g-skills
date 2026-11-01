@@ -470,6 +470,9 @@ def _ingest_fix_events(conn: sqlite3.Connection, project: Path,
     return n
 
 
+LVS_FAILING = frozenset({"fail", "mismatch"})
+
+
 def _write_run_violations(conn: sqlite3.Connection, run_id: str,
                           design_family: str, platform: str,
                           drc: dict[str, Any], lvs: dict[str, Any],
@@ -483,7 +486,11 @@ def _write_run_violations(conn: sqlite3.Connection, run_id: str,
     # visible to ab_runner.plan_trial Tier 1 (without it a route abort fell through
     # to a bogus 'timing' symptom). Family is NOT part of the symptom. Falls back
     # to timing tier for a signoff-reached run. (2026-06-17 route-relief wiring.)
-    if lvs.get("status") == "fail":
+    # LVS writes "fail" (KLayout path) or "mismatch" (netgen path) for the same
+    # verdict; keying only on "fail" filed every netgen mismatch under a timing
+    # symptom, so its LVS recipe could never find A/B subjects (2026-11-01: 49
+    # shipped runs, GF180 lvs_port_feedthrough_buffer "insufficient subjects").
+    if lvs.get("status") in LVS_FAILING:
         check, vclass, report = "lvs", lvs.get("mismatch_class"), lvs
     elif drc.get("status") == "fail":
         cats = drc.get("categories") or {}
