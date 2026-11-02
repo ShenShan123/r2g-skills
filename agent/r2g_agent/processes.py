@@ -30,6 +30,33 @@ def _departed(path: Path, start: str | None = None) -> bool:
         return False
 
 
+def _user_manager_pam_helper(path: Path) -> bool:
+    """Prove that an unreadable '(sd-pam)' is the user manager's PAM helper.
+
+    systemd forks '(sd-pam)' from the per-user 'systemd --user' manager, whose
+    parent is pid 1; its environment is non-dumpable. A stage cannot be an
+    ancestor of a direct child of that manager. 2026-11-01 (203): a user manager
+    restarted mid-campaign, and every later stage cleanup stayed unconfirmed,
+    leaving dead jobs 'running' forever.
+    """
+    try:
+        if (path / 'comm').read_text().strip() != '(sd-pam)':
+            return False
+        parent = int((path / 'stat').read_text().rsplit(')', 1)[1].split()[1])
+        entry = Path('/proc') / str(parent)
+        if (entry / 'comm').read_text().strip() != 'systemd':
+            return False
+        if int((entry / 'stat').read_text().rsplit(')', 1)[1].split()[1]) != 1:
+            return False
+        status = (entry / 'status').read_text().splitlines()
+        uids = next(line.split()[1:] for line in status if line.startswith('Uid:'))
+        if any(int(uid) != os.getuid() for uid in uids):
+            return False
+        return b'--user' in (entry / 'cmdline').read_bytes().split(b'\0')[1:]
+    except (OSError, ValueError, IndexError, StopIteration):
+        return False
+
+
 def _privileged_login_branch(path: Path, not_before: str) -> bool:
     """Prove that an unreadable sshd belongs to a separate root-owned login.
 
@@ -140,7 +167,8 @@ def execution_members(execution_id: str, not_before: str) -> list[int]:
         except (OSError, ValueError, IndexError) as e:
             if _departed(path, identity):
                 continue
-            if isinstance(e, PermissionError) and _privileged_login_branch(path, not_before):
+            if isinstance(e, PermissionError) and (_privileged_login_branch(path, not_before)
+                                                   or _user_manager_pam_helper(path)):
                 continue
             raise ProcessInspectionError('cannot enumerate execution children: pid=' + path.name) from e
     return members

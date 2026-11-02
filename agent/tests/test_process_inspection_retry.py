@@ -80,3 +80,38 @@ def test_protected_login_needs_root_owned_daemon_ancestry(monkeypatch, privilege
     else:
         with pytest.raises(processes.ProcessInspectionError):
             processes.execution_members('stage', '200')
+
+
+@pytest.mark.parametrize('manager_parent,manager_args,expect_skip', [
+    (1, b'/lib/systemd/systemd\0--user\0', True),       # the real user manager's helper
+    (555, b'/lib/systemd/systemd\0--user\0', False),    # manager not a child of pid 1
+    (1, b'/lib/systemd/systemd\0--system\0', False),    # not a user manager
+])
+def test_user_manager_pam_helper_is_not_a_stage_descendant(monkeypatch, manager_parent, manager_args, expect_skip):
+    """2026-11-01 (203): a restarted 'systemd --user' left an unreadable '(sd-pam)' that kept
+    every later stage cleanup unconfirmed. Only the manager's own helper is exempt."""
+    from types import SimpleNamespace
+    procs = {800: ('(sd-pam)', 801, 300), 801: ('systemd', manager_parent, 299)}
+    def read(path, *args, **kwargs):
+        pid = int(path.parent.name)
+        comm, parent, start = procs[pid]
+        if path.name == 'comm': return comm + '\n'
+        if path.name == 'status': return 'Uid:\t' + '\t'.join(['1017'] * 4) + '\n'
+        if path.name == 'stat':
+            fields = ['S', str(parent), str(pid)] + ['0'] * 16 + [str(start)]
+            return '%d (%s) %s' % (pid, comm, ' '.join(fields))
+        raise AssertionError(str(path))
+    def read_bytes(path, *args):
+        if path.name == 'cmdline' and int(path.parent.name) == 801:
+            return manager_args
+        raise PermissionError('non-dumpable')
+    monkeypatch.setattr(processes.os, 'getuid', lambda: 1017)
+    monkeypatch.setattr(Path, 'iterdir', lambda p: iter([Path('/proc/800')]))
+    monkeypatch.setattr(Path, 'stat', lambda *a: SimpleNamespace(st_uid=1017))
+    monkeypatch.setattr(Path, 'read_text', read)
+    monkeypatch.setattr(Path, 'read_bytes', read_bytes)
+    if expect_skip:
+        assert processes.execution_members('stage', '200') == []
+    else:
+        with pytest.raises(processes.ProcessInspectionError):
+            processes.execution_members('stage', '200')
