@@ -419,3 +419,16 @@ def test_verdict_binds_by_gds_digest_when_gf180_drc_has_no_run_tag(tmp_path):
         assert rb.verdict(t, proj, receipt, pdir, rb.tree_hash(pdir))["bound_to_layout"] is ok
     (proj / "reports/drc.json").write_text(json.dumps({**base, "run_tag": None, "gds_sha256": "other"}))
     assert rb.verdict(t, proj, receipt, pdir, rb.tree_hash(pdir))["bound_to_layout"] is False   # digest still required
+
+
+def test_container_name_prefix_separates_arms_on_one_host(tmp_path):
+    import launch_bare
+    case = {"id": "gf180_C00006", "platform": "gf180"}
+    base = dict(container_ws=tmp_path, container_orfs="/orfs", container_mount=[], container_memory="",
+                container_env_file=tmp_path / "e", repo=tmp_path, container_image="img:1")
+    names = []
+    for extra in ({}, {"container_name_prefix": "bare_gpt_"}):
+        a = type("A", (), {**base, **extra})
+        cmd = launch_bare.container_cmd(["python3", "run_bare.py"], case, a)
+        names.append(cmd[cmd.index("--name") + 1])
+    assert names == ["bare_gf180_C00006", "bare_gpt_gf180_C00006"]

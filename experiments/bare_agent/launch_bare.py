@@ -86,7 +86,10 @@ def container_cmd(cmd, case, a):
     for m in a.container_mount:
         mounts += ["-v", m]
     mem = ["--memory", a.container_memory, "--memory-swap", a.container_memory] if getattr(a, "container_memory", "") else []
-    return (["podman", "run", "--rm", "--network", "host", "--name", "bare_" + case["id"]] + mem + [
+    # the prefix keeps two arms on one host from colliding on a design's container
+    # name (a second `podman run` of the same name fails and voids that attempt)
+    name = getattr(a, "container_name_prefix", "bare_") + case["id"]
+    return (["podman", "run", "--rm", "--network", "host", "--name", name] + mem + [
              "--env-file", str(a.container_env_file), "-w", str(a.repo)] + mounts
             + [a.container_image, "python3"] + cmd[1:])
 
@@ -191,6 +194,8 @@ def main():
     ap.add_argument("--container-env-file", type=Path, help="KEY=VALUE env for the container")
     ap.add_argument("--container-mount", action="append", default=[], help="podman -v spec (repeatable)")
     ap.add_argument("--container-memory", default="", help="podman --memory for each design, e.g. 64g")
+    ap.add_argument("--container-name-prefix", default="bare_",
+                    help="container name prefix; distinct per arm sharing a host (e.g. bare_gpt_)")
     ap.add_argument("--start-spacing", type=float, default=90.0,
                     help="seconds between design starts (load average catches up)")
     ap.add_argument("--min-mem-gb", type=float, default=0.0,
