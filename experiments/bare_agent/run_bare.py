@@ -150,7 +150,26 @@ def prepare(case: dict, baseline: Path, project: Path) -> dict:
             mapped, missing = remap(m.group(2), rtl, root)
             unmapped += missing
             line = "export %s = %s" % (m.group(1), " ".join(mapped + missing))
+        else:
+            # Any other variable naming a file the baseline staged beside its config.mk
+            # (/work/<file>: gf180's pdn_override.cfg and tapcell_override.tcl) is the
+            # frozen platform setup every arm gets; carry the file with the config.
+            # Copying only config.mk + SDC silently dropped both overrides here
+            # (2026-11-04), the same loss as commit 2384b1c1 in the baseline driver.
+            v = re.match(r"(\s*export\s+\w+\s*\??=\s*)/work/(\S+)\s*$", line)
+            if v:
+                if not (baseline / v.group(2)).is_file():
+                    raise SystemExit("baseline config names /work/%s, which %s does not provide"
+                                     % (v.group(2), baseline))
+                shutil.copyfile(baseline / v.group(2), cons / v.group(2))
+                line = v.group(1) + str(cons / v.group(2))
         out.append(line)
+    # sources keep their recorded unmapped_baseline_paths behaviour; any OTHER variable
+    # still naming a container path would silently fall back to a platform default
+    stale = [l for l in out if "/work/" in l and not l.lstrip().startswith("#")
+             and not re.match(r"\s*export\s+(VERILOG_FILES|VERILOG_INCLUDE_DIRS)\b", l)]
+    if stale:
+        raise SystemExit("config.mk still names container paths: %s" % stale)
     (cons / "config.mk").write_text("\n".join(out) + "\n")
     (project / "hooks").mkdir()
     return {"input_root": str(src), "baseline": str(baseline), "unmapped_baseline_paths": unmapped,

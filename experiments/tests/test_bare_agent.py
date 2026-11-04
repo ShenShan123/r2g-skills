@@ -53,6 +53,32 @@ def test_prepare_remaps_the_baseline_onto_the_project(tmp_path):
         rb.prepare(case, base, proj)                     # never overwrites an attempt
 
 
+def test_prepare_carries_the_baselines_staged_platform_overrides(tmp_path):
+    # gf180's frozen setup: PDN and tapcell overrides staged beside config.mk at /work.
+    # Copying only config.mk + SDC dropped both, so every bare gf180 run fell back to
+    # the stock PDN (V2.1/V3.1) and tap distance (DF.13/14_MV) -- 2026-11-04.
+    case, base = _case(tmp_path)
+    cfg = (base / "config.mk").read_text()
+    (base / "config.mk").write_text(cfg + "export PDN_TCL = /work/pdn_override.cfg\n"
+                                    "export TAPCELL_TCL = /work/tapcell_override.tcl\n")
+    (base / "pdn_override.cfg").write_text("define_pdn_grid -name {block}\n")
+    (base / "tapcell_override.tcl").write_text("tapcell -distance 30\n")
+    proj = tmp_path / "out" / "gf180_C1_bare"
+    rb.prepare(case, base, proj)
+    out = (proj / "constraints/config.mk").read_text()
+    assert "export PDN_TCL = %s" % (proj / "constraints/pdn_override.cfg") in out
+    assert "export TAPCELL_TCL = %s" % (proj / "constraints/tapcell_override.tcl") in out
+    assert (proj / "constraints/tapcell_override.tcl").read_text() == "tapcell -distance 30\n"
+    assert "/work/" not in out
+
+
+def test_prepare_refuses_a_staged_file_the_baseline_does_not_provide(tmp_path):
+    case, base = _case(tmp_path)
+    (base / "config.mk").write_text((base / "config.mk").read_text() + "export PDN_TCL = /work/pdn_override.cfg\n")
+    with pytest.raises(SystemExit, match="pdn_override.cfg"):
+        rb.prepare(case, base, tmp_path / "out" / "gf180_C1_bare")
+
+
 def _tools(tmp_path):
     case, base = _case(tmp_path)
     proj = tmp_path / "out" / "nangate45_C1_bare"
