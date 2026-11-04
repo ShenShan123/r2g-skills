@@ -39,8 +39,20 @@ def _wait_for_load(a):
     budget into failures that say nothing about the arm being measured."""
     cpus = os.cpu_count() or 1
     while ((a.max_load and os.getloadavg()[0] > a.max_load * cpus)
-           or (getattr(a, "min_mem_gb", 0) and mem_available_gb() < a.min_mem_gb)):
+           or (getattr(a, "min_mem_gb", 0) and mem_available_gb() < a.min_mem_gb)
+           or (getattr(a, "min_disk_gb", 0) and disk_free_gb(a.root) < a.min_disk_gb)):
         time.sleep(60)
+
+
+def disk_free_gb(path) -> float:
+    """Free space on the work root's filesystem (203, 2026-11-04: /data reached 2 GB
+    while big designs ran; three attempts hit ENOSPC mid-flow and had to be voided).
+    Admission only -- a running design is never touched."""
+    try:
+        st = os.statvfs(path)
+        return st.f_bavail * st.f_frsize / 1e9
+    except OSError:
+        return float("inf")
 
 
 def mem_available_gb() -> float:
@@ -200,6 +212,8 @@ def main():
                     help="seconds between design starts (load average catches up)")
     ap.add_argument("--min-mem-gb", type=float, default=0.0,
                     help="start a new design only while MemAvailable is at least this (0 = no gate)")
+    ap.add_argument("--min-disk-gb", type=float, default=0.0,
+                    help="start a new design only while the root's filesystem has this much free (0 = no gate)")
     ap.add_argument("--max-load", type=float, default=0.0,
                     help="start a new design only while loadavg/cpus is below this (0 = no gate)")
     a = ap.parse_args()
