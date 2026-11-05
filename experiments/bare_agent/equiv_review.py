@@ -91,21 +91,32 @@ def design_sources(rtl: Path) -> dict:
             "defines": ["-D" + x if not x.startswith("-D") else x for x in (d.get("defines") or [])]}
 
 
-def q(path: str) -> str:
-    """A Yosys argument: quoted so a path with spaces stays one argument."""
-    return '"%s"' % path
+def nospace(cfg: dict, tmp: Path) -> dict:
+    """Yosys cannot take a path with a space as a file or -I argument (quoting fails on
+    0.51 and 0.64 alike), so each such file/dir is given a space-free symlink in tmp."""
+    links = tmp / "sp"
+    def fix(p, n):
+        if " " not in p:
+            return p
+        links.mkdir(exist_ok=True)
+        ln = links / ("p%d%s" % (n, Path(p).suffix if Path(p).is_file() else ""))
+        if not ln.exists():
+            ln.symlink_to(p)
+        return str(ln)
+    k = iter(range(10**6))
+    return {**cfg, "files": [fix(f, next(k)) for f in cfg["files"]], "incdirs": [fix(d, next(k)) for d in cfg["incdirs"]]}
 
 
 def read_cmds(cfg: dict, reader: str) -> str:
     if reader == "slang":
         # SystemVerilog the built-in reader cannot parse (the reason some
         # baselines failed); slang reads all files as one compilation unit
-        opts = " ".join(["-I " + q(d) for d in cfg["incdirs"]] + ["-D " + d[2:] for d in cfg["defines"]])
-        return "read_slang %s %s" % (opts, " ".join(q(f) for f in cfg["files"]))
+        opts = " ".join(["-I " + d for d in cfg["incdirs"]] + ["-D " + d[2:] for d in cfg["defines"]])
+        return "read_slang %s %s" % (opts, " ".join(cfg["files"]))
     # -overwrite: a module defined twice (the `include-plus-file-list bug some
     # agents fixed) is read once instead of aborting the original's parse
-    opts = " ".join(["-sv", "-overwrite"] + [q("-I" + d) for d in cfg["incdirs"]] + cfg["defines"])
-    return "\n".join("read_verilog %s %s" % (opts, q(f)) for f in cfg["files"])
+    opts = " ".join(["-sv", "-overwrite"] + ["-I" + d for d in cfg["incdirs"]] + cfg["defines"])
+    return "\n".join("read_verilog %s %s" % (opts, f) for f in cfg["files"])
 
 
 def script(gold: dict, gate: dict, reader: str = "verilog") -> str:
@@ -132,6 +143,7 @@ def review(case_dir: Path, baselines: Path, yosys: str, timeout: int) -> dict:
             # the baseline config cannot carry such names (its remap splits them too)
             gold = {**design_sources(orig / "rtl"), "top": gold["top"] or design_sources(orig / "rtl")["top"]}
         gate = read_config(proj / "constraints/config.mk")
+        gold, gate = nospace(gold, Path(tmp)), nospace(gate, Path(tmp))
         if gold["top"] != gate["top"]:
             return {**out, "verdict": "not_proven", "reason": "top changed %s -> %s" % (gold["top"], gate["top"])}
         ys = Path(tmp) / "equiv.ys"
