@@ -189,6 +189,9 @@ def main():
                 row = review(res.parent, a.baselines, a.yosys, a.timeout)
             except Exception as e:                      # noqa: BLE001
                 row = {"case_id": res.parent.name, "verdict": "not_proven", "reason": "%s: %s" % (type(e).__name__, e)}
+            # one review may span several arms' roots: a verdict must name its attempt
+            r = json.loads(res.read_text())
+            row.update(root=str(root), arm=r.get("arm"), model=r.get("model"))
             rows.append(row)
             print(json.dumps(row), flush=True)
     a.out.write_text(json.dumps({"method": __doc__.split("\n\n")[1], "rows": rows}, indent=1))
