@@ -458,3 +458,21 @@ def test_container_name_prefix_separates_arms_on_one_host(tmp_path):
         cmd = launch_bare.container_cmd(["python3", "run_bare.py"], case, a)
         names.append(cmd[cmd.index("--name") + 1])
     assert names == ["bare_gf180_C00006", "bare_gpt_gf180_C00006"]
+
+
+def test_cgroup_headroom_takes_the_tightest_limited_ancestor(tmp_path):
+    """203: the user slice is capped at 200 GB on a host with far more RAM, so the
+    launcher's memory gate must see the cgroup's headroom, not only MemAvailable."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("launch_bare", Path(__file__).resolve().parents[1] / "bare_agent" / "launch_bare.py")
+    lb = importlib.util.module_from_spec(spec); spec.loader.exec_module(lb)
+    G = 2**30
+    root = tmp_path / "cg"; user = root / "user.slice" / "user-1.slice"; scope = user / "session-1.scope"
+    scope.mkdir(parents=True)
+    (root / "user.slice" / "memory.max").write_text("max\n"); (root / "user.slice" / "memory.current").write_text(str(500 * G))
+    (user / "memory.max").write_text(str(200 * G)); (user / "memory.current").write_text(str(174 * G))
+    (scope / "memory.max").write_text("max\n"); (scope / "memory.current").write_text(str(10 * G))
+    pc = tmp_path / "cgroup"; pc.write_text("0::/user.slice/user-1.slice/session-1.scope\n")
+    assert abs(lb.cgroup_headroom_gb(str(pc), str(root)) - 26) < 1e-9
+    pc.write_text("12:memory:/foo\n")  # cgroup v1: no limit known
+    assert lb.cgroup_headroom_gb(str(pc), str(root)) == float("inf")

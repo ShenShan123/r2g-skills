@@ -57,14 +57,39 @@ def disk_free_gb(path) -> float:
 
 def mem_available_gb() -> float:
     """MemAvailable from /proc/meminfo (203, 2026-10-29: swap full and new
-    runners died at start with ENOMEM while load looked fine)."""
+    runners died at start with ENOMEM while load looked fine), capped by the
+    headroom of every memory-limited cgroup this process sits in: on 203 the
+    user slice is limited to 200 GB on a host with far more RAM, so MemAvailable
+    alone admitted designs into a cgroup already at 174 GB (2026-11-05)."""
+    avail = float("inf")
     try:
         for line in open("/proc/meminfo"):
             if line.startswith("MemAvailable:"):
-                return int(line.split()[1]) / 1048576
+                avail = int(line.split()[1]) / 1048576
+                break
     except OSError:
         pass
-    return float("inf")
+    return min(avail, cgroup_headroom_gb())
+
+
+def cgroup_headroom_gb(proc_cgroup="/proc/self/cgroup", root="/sys/fs/cgroup") -> float:
+    """Smallest memory.max - memory.current over this process's cgroup v2 path
+    and its ancestors (inf when unlimited or not cgroup v2)."""
+    try:
+        rel = next(l.split("::", 1)[1].strip() for l in open(proc_cgroup) if l.startswith("0::"))
+    except (OSError, StopIteration):
+        return float("inf")
+    best, d = float("inf"), Path(root + rel)
+    while True:
+        try:
+            mx = (d / "memory.max").read_text().strip()
+            if mx != "max":
+                best = min(best, (int(mx) - int((d / "memory.current").read_text())) / 2**30)
+        except (OSError, ValueError):
+            pass
+        if d == Path(root) or d.parent == d:
+            return best
+        d = d.parent
 
 
 def live_runner(out: Path):
