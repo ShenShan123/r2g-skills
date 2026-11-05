@@ -35,12 +35,24 @@ KEYS = ("DESIGN_NAME", "VERILOG_FILES", "VERILOG_INCLUDE_DIRS", "VERILOG_DEFINES
 def read_config(path: Path) -> dict:
     """The few make variables the front end needs (last assignment wins; `+=` appends)."""
     text = re.sub(r"\\\n", " ", path.read_text(errors="replace"))
-    out = {}
+    out, allv = {}, {}
+
+    def expand(v):
+        # a model may define its own make variables (C03980: $(PATCHED)/x.sv)
+        for _ in range(5):
+            v2 = re.sub(r"\$[({](\w+)[)}]", lambda m: allv.get(m.group(1), m.group(0)), v)
+            if v2 == v:
+                break
+            v = v2
+        return v
     for line in text.splitlines():
-        m = re.match(r"\s*(?:export\s+|override\s+export\s+)?(\w+)\s*([:?+]?=)\s*(.*)$", line)
-        if not m or m.group(1) not in KEYS:
+        m = re.match(r"\s*(?:export\s+|override\s+export\s+|override\s+)?(\w+)\s*([:?+]?=)\s*(.*)$", line)
+        if not m:
             continue
-        val = m.group(3).split("#", 1)[0].strip()
+        val = expand(m.group(3).split("#", 1)[0].strip())
+        allv[m.group(1)] = (allv.get(m.group(1), "") + " " + val).strip() if m.group(2) == "+=" else val
+        if m.group(1) not in KEYS:
+            continue
         out[m.group(1)] = (out.get(m.group(1), "") + " " + val).strip() if m.group(2) == "+=" else val
     files = []
     for tok in out.get("VERILOG_FILES", "").split():
@@ -92,8 +104,10 @@ def review(case_dir: Path, baselines: Path, yosys: str, timeout: int) -> dict:
             ys.write_text(script(gold, gate, reader))
             pre = ["-m", "slang"] if reader == "slang" else []
             try:
+                # from the original source root: a relative $readmem path in the
+                # original resolves the way it does in its repository
                 p = subprocess.run([yosys, *pre, "-q", "-l", str(Path(tmp) / "y.log"), "-s", str(ys)],
-                                   capture_output=True, text=True, timeout=timeout)
+                                   capture_output=True, text=True, timeout=timeout, cwd=orig / "rtl")
                 log = (Path(tmp) / "y.log").read_text(errors="replace") if (Path(tmp) / "y.log").is_file() else ""
             except subprocess.TimeoutExpired:
                 return {**out, "verdict": "not_proven", "reason": "timeout %ds" % timeout}
