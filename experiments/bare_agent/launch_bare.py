@@ -72,8 +72,22 @@ def mem_available_gb() -> float:
     return min(avail, cgroup_headroom_gb())
 
 
+def _working_set(d: Path) -> int:
+    """memory.current minus inactive_file: page cache the kernel reclaims before
+    it would OOM. memory.current alone counted ~70 GB of cold cache as used and
+    held every 203 start for 40 min at 20 GB 'headroom' (2026-11-05 08:45)."""
+    cur = int((d / "memory.current").read_text())
+    try:
+        for line in (d / "memory.stat").read_text().splitlines():
+            if line.startswith("inactive_file "):
+                return max(cur - int(line.split()[1]), 0)
+    except OSError:
+        pass
+    return cur
+
+
 def cgroup_headroom_gb(proc_cgroup="/proc/self/cgroup", root="/sys/fs/cgroup") -> float:
-    """Smallest memory.max - memory.current over this process's cgroup v2 path
+    """Smallest memory.max - working set over this process's cgroup v2 path
     and its ancestors (inf when unlimited or not cgroup v2)."""
     try:
         rel = next(l.split("::", 1)[1].strip() for l in open(proc_cgroup) if l.startswith("0::"))
@@ -84,7 +98,7 @@ def cgroup_headroom_gb(proc_cgroup="/proc/self/cgroup", root="/sys/fs/cgroup") -
         try:
             mx = (d / "memory.max").read_text().strip()
             if mx != "max":
-                best = min(best, (int(mx) - int((d / "memory.current").read_text())) / 2**30)
+                best = min(best, (int(mx) - _working_set(d)) / 2**30)
         except (OSError, ValueError):
             pass
         if d == Path(root) or d.parent == d:

@@ -474,6 +474,9 @@ def test_cgroup_headroom_takes_the_tightest_limited_ancestor(tmp_path):
     (scope / "memory.max").write_text("max\n"); (scope / "memory.current").write_text(str(10 * G))
     pc = tmp_path / "cgroup"; pc.write_text("0::/user.slice/user-1.slice/session-1.scope\n")
     assert abs(lb.cgroup_headroom_gb(str(pc), str(root)) - 26) < 1e-9
+    # cold page cache is reclaimable: it does not count against the headroom
+    (user / "memory.stat").write_text("anon %d\ninactive_file %d\nactive_file %d\n" % (104 * G, 70 * G, 4 * G))
+    assert abs(lb.cgroup_headroom_gb(str(pc), str(root)) - 96) < 1e-9
     pc.write_text("12:memory:/foo\n")  # cgroup v1: no limit known
     assert lb.cgroup_headroom_gb(str(pc), str(root)) == float("inf")
 
