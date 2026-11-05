@@ -476,3 +476,43 @@ def test_cgroup_headroom_takes_the_tightest_limited_ancestor(tmp_path):
     assert abs(lb.cgroup_headroom_gb(str(pc), str(root)) - 26) < 1e-9
     pc.write_text("12:memory:/foo\n")  # cgroup v1: no limit known
     assert lb.cgroup_headroom_gb(str(pc), str(root)) == float("inf")
+
+
+def _load_launch_bare():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("launch_bare_t", Path(__file__).resolve().parents[1] / "bare_agent" / "launch_bare.py")
+    lb = importlib.util.module_from_spec(spec); spec.loader.exec_module(lb)
+    return lb
+
+
+def test_kill_leftovers_spares_another_arms_process(tmp_path, monkeypatch):
+    """Two arms on one host name a design's variant identically; the reaper must
+    only kill processes under its own ORFS_ROOT (203, 2026-11-05)."""
+    import subprocess, time
+    lb = _load_launch_bare()
+    tag = "gf180_CTEST9_bare"
+    script = "import time; time.sleep(60)  # " + tag
+    other = subprocess.Popen([sys.executable, "-c", script], env={"ORFS_ROOT": "/other/orfs", "PATH": "/usr/bin:/bin"})
+    mine = subprocess.Popen([sys.executable, "-c", script], env={"ORFS_ROOT": "/mine/orfs", "PATH": "/usr/bin:/bin"})
+    try:
+        time.sleep(0.3)
+        monkeypatch.setenv("ORFS_ROOT", "/mine/orfs")
+        lb.kill_leftovers({"id": "gf180_CTEST9"})
+        assert mine.wait(timeout=10) == -9
+        assert other.poll() is None
+    finally:
+        other.kill(); mine.kill()
+
+
+def test_other_arm_runner_sees_the_same_design_in_another_root(tmp_path):
+    import subprocess, time
+    lb = _load_launch_bare()
+    a, b = tmp_path / "armA" / "cases" / "x_CT1", tmp_path / "armB" / "cases" / "x_CT1"
+    p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)", "run_bare.py", "--case", str(a / "case.json")])
+    try:
+        time.sleep(0.3)
+        assert lb.other_arm_runner({"id": "x_CT1"}, b) == p.pid
+        assert lb.other_arm_runner({"id": "x_CT1"}, a) is None
+        assert lb.other_arm_runner({"id": "x_CT2"}, b) is None
+    finally:
+        p.kill()

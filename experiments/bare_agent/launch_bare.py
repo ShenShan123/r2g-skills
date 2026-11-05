@@ -131,19 +131,55 @@ def container_cmd(cmd, case, a):
             + [a.container_image, "python3"] + cmd[1:])
 
 
+def _same_orfs_root(proc: Path) -> bool:
+    """True when the process runs under this launcher's ORFS_ROOT (or none is set).
+    Every arm names a design's variant <id>_bare, so two arms on one host share the
+    tag; each EDA step inherits its arm's ORFS_ROOT, which tells them apart."""
+    mine = os.environ.get("ORFS_ROOT", "")
+    if not mine:
+        return True
+    try:
+        env = b"\0" + (proc / "environ").read_bytes() + b"\0"
+    except OSError:
+        return False
+    return (b"\0ORFS_ROOT=" + mine.encode() + b"\0") in env
+
+
 def kill_leftovers(case):
     """A runner that dies (or is killed) leaves its EDA steps running: they run in
     their own sessions. Reap every process naming this design's variant (203,
-    2026-10-30: an orphaned floorplan held 172 GB for 22 h)."""
+    2026-10-30: an orphaned floorplan held 172 GB for 22 h) -- but only this
+    arm's: another arm running the same design on the host has the same tag
+    (203, 2026-11-05)."""
     tag = (case["id"] + "_bare").encode()
     for proc in Path("/proc").iterdir():
         if not proc.name.isdigit() or int(proc.name) == os.getpid():
             continue
         try:
-            if tag in (proc / "cmdline").read_bytes():
+            if tag in (proc / "cmdline").read_bytes() and _same_orfs_root(proc):
                 os.kill(int(proc.name), 9)
         except (OSError, ProcessLookupError):
             continue
+
+
+def other_arm_runner(case, out: Path):
+    """PID of a run_bare.py working on the same design for ANOTHER arm on this
+    host, else None. Arms sharing an ORFS root would share the design's
+    FLOW_VARIANT workspace (CLAUDE.md hard rule: never two runs of one
+    DESIGN_NAME + FLOW_VARIANT at once; 203, 2026-11-05: nangate45_C00651 ran in
+    two arms for 2.6 h), so a start waits until the other attempt is done."""
+    needle = ("/cases/%s/case.json" % case["id"]).encode()
+    mine = str(out / "case.json").encode()
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            cmd = (proc / "cmdline").read_bytes()
+        except OSError:
+            continue
+        if b"run_bare.py" in cmd and needle in cmd and mine not in cmd:
+            return int(proc.name)
+    return None
 
 
 def cleanup_workspace(case, a=None):
@@ -175,6 +211,11 @@ def run_one(case, a):
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(out), str(dest))
     for attempt in (1, 2):
+        other = other_arm_runner(case, out)
+        if other:
+            print(time.strftime("%F %T"), case["id"], "waits for another arm's attempt (pid %d)" % other, flush=True)
+        while other_arm_runner(case, out):
+            time.sleep(60)
         wait_for_load(a)
         out.mkdir(parents=True, exist_ok=True)
         (out / "case.json").write_text(json.dumps(case, indent=1, ensure_ascii=False))
