@@ -55,24 +55,57 @@ def read_config(path: Path) -> dict:
             continue
         out[m.group(1)] = (out.get(m.group(1), "") + " " + val).strip() if m.group(2) == "+=" else val
     files = []
-    for tok in out.get("VERILOG_FILES", "").split():
+    for tok in paths(out.get("VERILOG_FILES", "")):
         w = re.fullmatch(r"\$\(wildcard\s+(.+)\)", tok)
         files += sorted(glob.glob(w.group(1))) if w else [tok]
     return {"top": out.get("DESIGN_NAME", ""), "files": files,
-            "incdirs": out.get("VERILOG_INCLUDE_DIRS", "").split(),
+            "incdirs": paths(out.get("VERILOG_INCLUDE_DIRS", "")),
             "defines": [d for d in out.get("VERILOG_DEFINES", "").split() if d.startswith("-D")]}
+
+
+def paths(value: str) -> list:
+    """Whitespace-separated make paths, rejoined where a file or directory name itself
+    contains spaces (`src/RSIC-V core/Extend.v` split into two tokens made the original
+    fail to parse and every such review read not_proven, 2026-11-04). `\\ ` is honoured;
+    otherwise the longest run of adjacent tokens that names an existing path wins."""
+    toks = [t.replace("\0", " ") for t in value.replace("\\ ", "\0").split()]
+    out, i = [], 0
+    while i < len(toks):
+        if "$(" in toks[i] or Path(toks[i]).exists():
+            out.append(toks[i]); i += 1; continue
+        for j in range(min(len(toks), i + 8), i + 1, -1):
+            cand = " ".join(toks[i:j])
+            if Path(cand).exists():
+                out.append(cand); i = j; break
+        else:
+            out.append(toks[i]); i += 1
+    return out
+
+
+def design_sources(rtl: Path) -> dict:
+    """The original's neutral description (rtl/design.json: top, files, include dirs,
+    defines) -- the authoritative source list when its config cannot name a file."""
+    d = json.loads((rtl / "design.json").read_text())
+    return {"top": d.get("top", ""), "files": [str(rtl / f) for f in d.get("files", [])],
+            "incdirs": [str(rtl / x) for x in d.get("include_dirs", [])],
+            "defines": ["-D" + x if not x.startswith("-D") else x for x in (d.get("defines") or [])]}
+
+
+def q(path: str) -> str:
+    """A Yosys argument: quoted so a path with spaces stays one argument."""
+    return '"%s"' % path
 
 
 def read_cmds(cfg: dict, reader: str) -> str:
     if reader == "slang":
         # SystemVerilog the built-in reader cannot parse (the reason some
         # baselines failed); slang reads all files as one compilation unit
-        opts = " ".join(["-I " + d for d in cfg["incdirs"]] + ["-D " + d[2:] for d in cfg["defines"]])
-        return "read_slang %s %s" % (opts, " ".join(cfg["files"]))
+        opts = " ".join(["-I " + q(d) for d in cfg["incdirs"]] + ["-D " + d[2:] for d in cfg["defines"]])
+        return "read_slang %s %s" % (opts, " ".join(q(f) for f in cfg["files"]))
     # -overwrite: a module defined twice (the `include-plus-file-list bug some
     # agents fixed) is read once instead of aborting the original's parse
-    opts = " ".join(["-sv", "-overwrite"] + ["-I" + d for d in cfg["incdirs"]] + cfg["defines"])
-    return "\n".join("read_verilog %s %s" % (opts, f) for f in cfg["files"])
+    opts = " ".join(["-sv", "-overwrite"] + [q("-I" + d) for d in cfg["incdirs"]] + cfg["defines"])
+    return "\n".join("read_verilog %s %s" % (opts, q(f)) for f in cfg["files"])
 
 
 def script(gold: dict, gate: dict, reader: str = "verilog") -> str:
@@ -95,6 +128,9 @@ def review(case_dir: Path, baselines: Path, yosys: str, timeout: int) -> dict:
         orig = Path(tmp) / (r["case_id"] + "_orig")
         run_bare.prepare(case, baselines / case["id"], orig)
         gold = read_config(orig / "constraints/config.mk")
+        if not gold["files"] or any(not Path(f).exists() for f in gold["files"]):
+            # the baseline config cannot carry such names (its remap splits them too)
+            gold = {**design_sources(orig / "rtl"), "top": gold["top"] or design_sources(orig / "rtl")["top"]}
         gate = read_config(proj / "constraints/config.mk")
         if gold["top"] != gate["top"]:
             return {**out, "verdict": "not_proven", "reason": "top changed %s -> %s" % (gold["top"], gate["top"])}
