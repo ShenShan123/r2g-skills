@@ -34,6 +34,31 @@ RT = Runtime()
 CURRENT_SESSION = ContextVar('r2g_session', default=None)
 REGISTRY: dict[str, dict] = {}
 
+# Replay (measuring another model's orchestration of finished R2G jobs without re-running EDA):
+# R2G_REPLAY_MAP names a JSON {design name: {"job_id", "platform", "output"}} of recorded jobs in this
+# server's store. start_job then attaches the design's recorded job instead of submitting a pipeline
+# (the pipeline makes no model calls, so every model call of a run is in the chats), and job_status
+# answers with the job as it looked when submitted until the measurement runner first polls it over
+# HTTP -- the moment a real run moves from the submission chat to the explanation chat.
+# R2G_REPLAY_LOG records every attach, argument divergence and early peek. Off when unset.
+_REPLAY: dict | None = None
+REPLAY_PENDING: set = set()
+
+
+def replay_map() -> dict:
+    global _REPLAY
+    if _REPLAY is None:
+        p = os.environ.get("R2G_REPLAY_MAP")
+        _REPLAY = json.loads(Path(p).read_text()) if p else {}
+    return _REPLAY
+
+
+def replay_log(rec: dict) -> None:
+    p = os.environ.get("R2G_REPLAY_LOG")
+    if p:
+        with open(p, "a") as f:
+            f.write(json.dumps({**rec, "session": CURRENT_SESSION.get()}) + "\n")
+
 
 def tool(description: str, parameters: dict):
     def deco(fn):
@@ -50,6 +75,8 @@ def specs() -> list[dict]:
 def call(name: str, arguments: dict) -> dict:
     if name not in REGISTRY:
         return {"error": "unknown tool %s" % name}
+    if REPLAY_PENDING and name != "job_status" and (arguments or {}).get("job_id") in REPLAY_PENDING:
+        replay_log({"event": "early_peek", "tool": name, "job_id": arguments["job_id"]})
     try:
         return REGISTRY[name]["fn"](**(arguments or {}))
     except TypeError as e:
@@ -110,6 +137,19 @@ def start_job(designs: list, platform: str = "nangate45", output: str = "graph",
             return {"error": "each design needs 'example' or 'path'"}
     if not sources:
         return {"error": "no designs given"}
+    if replay_map():
+        recs = [replay_map().get(s["name"]) for s in sources]
+        if len(sources) != 1 or not recs[0]:
+            replay_log({"event": "no_recorded_job", "designs": [s["name"] for s in sources]})
+            return {"error": "replay: no recorded job for %s" % [s["name"] for s in sources]}
+        rec = recs[0]
+        div = {k: [v, rec.get(k)] for k, v in (("platform", platform), ("output", output)) if rec.get(k) not in (None, v)}
+        if params:
+            div["params"] = [params, None]
+        replay_log({"event": "attach", "design": sources[0]["name"], "job_id": rec["job_id"], "divergence": div})
+        REPLAY_PENDING.add(rec["job_id"])
+        return {"job_id": rec["job_id"], "designs": [s["name"] for s in sources],
+                "note": "running in background; use job_status to follow progress"}
     try:
         jid = RT.pipeline.submit(sources, platform=platform, title=title, output=output, params=params,
                                  session_id=CURRENT_SESSION.get())
@@ -179,6 +219,12 @@ def job_status(job_id: str) -> dict:
     j = RT.store.job(job_id)
     if not j:
         return {"error": "no such job"}
+    if job_id in REPLAY_PENDING:
+        # replay: the job as it looked right after submission (a real run sees it just starting)
+        return {"job_id": job_id, "status": "running", "title": j["title"], "result": None,
+                "designs": [{"name": d["name"], "status": "running", "stage": STAGE_LABEL.get("prepare", "prepare"),
+                             "sizing": None, "signoff": None, "failed_stage": None, "reason": None}
+                            for d in j["designs"]]}
     if len(j["designs"]) > 30:
         return _batch_summary(j)
     designs = []

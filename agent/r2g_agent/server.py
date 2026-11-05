@@ -234,6 +234,8 @@ def job(jid: str):
     j = tools.RT.store.job(jid)
     if not j:
         raise HTTPException(404, "no such job")
+    # replay: the measurement runner's first poll ends the submission phase (see tools.REPLAY_PENDING)
+    tools.REPLAY_PENDING.discard(jid)
     return j
 
 
