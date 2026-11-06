@@ -49,6 +49,14 @@ KEEP_RECENT = 4
 MAX_TOOL_RESULT_CHARS = 12000          # same clip as the R2G agent loop
 INVOCATION_WAIT = 1800                 # seconds of backoff before an outage ends the attempt
 MAX_NUDGES = 3                         # consecutive truncated/empty replies tolerated
+# Option A memory rule (2026-11-06, user): an attempt in which any EDA step exceeds the per-design bound
+# (64 GB, enforced by the host watchdog, which writes this marker into the attempt directory and kills the
+# step) ENDS there as memory_bound -- not fixed, cost counted up to that point; the model does not retry.
+MEMORY_MARKER = "MEMORY_BOUND.json"
+
+
+def memory_bound(tools) -> bool:
+    return (tools.project.parent / MEMORY_MARKER).is_file()
 
 SYSTEM = """你是一名数字后端工程师，使用 OpenROAD-flow-scripts（ORFS）把一个 RTL 设计做到签核干净。
 你只能通过提供的工具操作：读文件、在工程的 constraints/、rtl/、hooks/ 下写文件、从某一阶段运行 ORFS 流程、运行签核（全套 DRC + LVS，平台官方规则）、读日志、结束任务。
@@ -307,6 +315,8 @@ def run_loop(adapter, tools: BareTools, task: str, caps: dict, transcript: list,
     t0 = time.monotonic()
     nudges = 0
     while True:
+        if memory_bound(tools):
+            return "memory_bound"
         if len(calls) >= caps["model_calls"]:
             return "cap_model_calls"
         if sum(call_cost(c) for c in calls) >= caps["cost_cny"]:
@@ -382,6 +392,9 @@ def run_loop(adapter, tools: BareTools, task: str, caps: dict, transcript: list,
             transcript.append({"tool": name, "arguments": args, "seconds": round(time.time() - t_start, 1),
                                "result": result})
             messages.append({"role": "tool", "tool_call_id": c["id"], "name": name, "content": clip(result)})
+            if memory_bound(tools):
+                transcript.append({"harness_memory_bound": json.loads((tools.project.parent / MEMORY_MARKER).read_text() or "{}")})
+                return "memory_bound"
         if tools.finished:
             return "finished"
 
@@ -582,12 +595,16 @@ def main():
     run = tools._latest_run()
     drc = project / "reports/drc.json"
     graded = drc.is_file() and run and json.loads(drc.read_text()).get("run_tag") == run.name
-    if run and not graded and (run / "results/6_final.gds").is_file():
+    if stop != "memory_bound" and run and not graded and (run / "results/6_final.gds").is_file():
         # journaled under its own job id: verification is apparatus, not agent cost
         tools.audit_env = {**tools.audit_env, "R2G_ORFS_AUDIT_JOB": job + "-verify"}
         tools.run_signoff()
         harness_signoff = True
     v = verdict(tools, project, receipt, platform_dir, deck_hash)
+    if stop == "memory_bound":
+        # not fixed by rule, whatever the reports say: the attempt was stopped at the bound
+        v["outcome"] = "memory_bound"
+        v["memory_bound"] = json.loads((out / MEMORY_MARKER).read_text() or "{}")
     # a failed invocation that had started answering may have been billed with no
     # counters: the attempt's usage is then incomplete (voided by the launcher)
     complete_usage = (bool(calls) and all(c.get("usage_reported") and c.get("stream_complete") for c in calls)

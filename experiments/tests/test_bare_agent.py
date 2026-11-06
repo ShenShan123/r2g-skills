@@ -566,3 +566,32 @@ def test_eda_steps_never_use_a_systemd_scope_by_default(monkeypatch, tmp_path):
     monkeypatch.setenv("R2G_BARE_SYSTEMD_SCOPE", "1")
     bt.BareTools._sh(obj, "flow", ["echo", "x"], {}, 10)
     assert seen[-1][0] == "systemd-run"
+
+
+def test_memory_bound_marker_ends_the_attempt(tmp_path):
+    """Option A (2026-11-06): once the watchdog marks the attempt, the loop stops before the next model call."""
+    import importlib.util, types
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bare_agent"))
+    import run_bare as rb
+    proj = tmp_path / "case" / "x_bare"; proj.mkdir(parents=True)
+    tools = types.SimpleNamespace(project=proj, counts={}, finished=None)
+    class A:
+        def stream(self, *a, **k):
+            raise AssertionError("no model call after the bound")
+    (proj.parent / rb.MEMORY_MARKER).write_text("{}")
+    assert rb.run_loop(A(), tools, "task", {"model_calls": 5, "cost_cny": 1e9, "wall_seconds": 100}, [], [], []) == "memory_bound"
+
+
+def test_watchdog_finds_the_attempt_from_the_step_environment(tmp_path):
+    import importlib.util, subprocess, time
+    spec = importlib.util.spec_from_file_location("mbw", Path(__file__).resolve().parents[1] / "bare_agent" / "mem_bound_watchdog.py")
+    w = importlib.util.module_from_spec(spec); spec.loader.exec_module(w)
+    att = tmp_path / "cases" / "x_C1"; att.mkdir(parents=True)
+    p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"],
+                         env={"R2G_ORFS_AUDIT_FILE": str(att / "orfs_audit.jsonl"), "PATH": "/usr/bin:/bin"})
+    try:
+        time.sleep(0.3)
+        assert w.attempt_dir(p.pid) == att
+        assert any(pid == p.pid for pid, _, _ in w.scan(0))   # limit 0: every process of ours is "over"
+    finally:
+        p.kill()
