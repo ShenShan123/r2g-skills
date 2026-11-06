@@ -207,11 +207,18 @@ class BareTools:
         e["R2G_ORFS_AUDIT_STAGE"] = stage
         e["R2G_ORFS_AUDIT_EXECUTION"] = uuid.uuid4().hex
         # Per-design memory bound (2026-10-30: an FPGA-fabric floorplan held 172 GB
-        # on 203 and swapped the host). R2G_BARE_MEM_MAX (e.g. "64G") runs the EDA
-        # step in a transient cgroup scope where systemd-run --user exists; inside
-        # the 216 container the launcher's podman --memory bounds it instead.
+        # on 203 and swapped the host). DISABLED BY DEFAULT since 2026-11-06: a
+        # transient `systemd-run --user --scope` per EDA step is created by the
+        # user's own systemd manager, which sits inside the memory-capped user
+        # slice; whenever that slice stalled (203, 2026-11-05 21:40-23:45 and
+        # 2026-11-06 00:40-01:08) every new step failed in seconds with "Failed to
+        # request invocation ID for scope" and the host became unresponsive. The
+        # 64 GB bound is now the host watchdog's (mem_watchdog.sh, RSS+swap, as for
+        # the R2G arms); inside the 216 container podman --memory bounds it. The
+        # scope survives only as an explicit opt-in (R2G_BARE_SYSTEMD_SCOPE=1).
         mem = os.environ.get("R2G_BARE_MEM_MAX")
-        if mem and shutil.which("systemd-run"):
+        if (mem and os.environ.get("R2G_BARE_SYSTEMD_SCOPE") == "1"
+                and shutil.which("systemd-run")):
             cmd = ["systemd-run", "--user", "--scope", "-q", "-p", "MemoryMax=%s" % mem,
                    "-p", "MemorySwapMax=0"] + cmd
         log = self.project / "agent_logs" / ("%s.log" % stage)

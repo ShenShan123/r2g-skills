@@ -542,3 +542,27 @@ def test_wait_for_turn_rechecks_the_other_arm_after_the_gate(monkeypatch, tmp_pa
     monkeypatch.setattr(lb.time, "sleep", lambda s: None)
     lb.wait_for_turn({"id": "x"}, tmp_path, None, poll=0)
     assert seen["gate"] == 2 and state["other"] is None
+
+
+def test_eda_steps_never_use_a_systemd_scope_by_default(monkeypatch, tmp_path):
+    """2026-11-06: per-step systemd-run --user scopes stalled 203 twice; even with
+    R2G_BARE_MEM_MAX set, a step runs unwrapped unless R2G_BARE_SYSTEMD_SCOPE=1."""
+    import importlib.util, subprocess, types
+    spec = importlib.util.spec_from_file_location("bare_tools_t", Path(__file__).resolve().parents[1] / "bare_agent" / "bare_tools.py")
+    bt = importlib.util.module_from_spec(spec); spec.loader.exec_module(bt)
+    seen = []
+    class P:
+        pid = 1
+        def __init__(self, cmd, **kw): seen.append(cmd)
+        def wait(self, timeout=None): return 0
+    monkeypatch.setattr(bt.subprocess, "Popen", P)
+    monkeypatch.setattr(bt.shutil, "which", lambda n: "/usr/bin/" + n)
+    monkeypatch.setenv("R2G_BARE_MEM_MAX", "64G")
+    monkeypatch.delenv("R2G_BARE_SYSTEMD_SCOPE", raising=False)
+    obj = types.SimpleNamespace(audit_env={}, project=tmp_path, repo=tmp_path, eda_seconds=0.0)
+    (tmp_path / "agent_logs").mkdir()
+    bt.BareTools._sh(obj, "flow", ["echo", "x"], {}, 10)
+    assert seen[-1][0] == "echo"
+    monkeypatch.setenv("R2G_BARE_SYSTEMD_SCOPE", "1")
+    bt.BareTools._sh(obj, "flow", ["echo", "x"], {}, 10)
+    assert seen[-1][0] == "systemd-run"
