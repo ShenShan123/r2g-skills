@@ -595,3 +595,22 @@ def test_watchdog_finds_the_attempt_from_the_step_environment(tmp_path):
         assert any(pid == p.pid for pid, _, _ in w.scan(0))   # limit 0: every process of ours is "over"
     finally:
         p.kill()
+
+
+def test_slice_guard_stops_the_youngest_attempt(tmp_path, monkeypatch):
+    import importlib.util, os, subprocess, time
+    spec = importlib.util.spec_from_file_location("mbw2", Path(__file__).resolve().parents[1] / "bare_agent" / "mem_bound_watchdog.py")
+    w = importlib.util.module_from_spec(spec); spec.loader.exec_module(w)
+    old, new = tmp_path / "cases" / "a_C1", tmp_path / "cases" / "a_C2"
+    procs = []
+    for i, d in enumerate((old, new)):
+        d.mkdir(parents=True); (d / "case.json").write_text("{}"); os.utime(d / "case.json", (1000 + i, 1000 + i))
+        procs.append(subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"],
+                                      env={"R2G_ORFS_AUDIT_FILE": str(d / "orfs_audit.jsonl"), "PATH": "/usr/bin:/bin"}))
+    try:
+        time.sleep(0.3)
+        w.stop_youngest(tmp_path / "log", 250.0, 240.0, 0.1, False)
+        assert (new / "INFRA_INTERRUPTED.json").exists() and not (old / "INFRA_INTERRUPTED.json").exists()
+        procs[1].wait(timeout=5); assert procs[0].poll() is None
+    finally:
+        for p in procs: p.kill()
