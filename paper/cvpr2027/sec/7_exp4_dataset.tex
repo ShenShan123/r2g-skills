@@ -1,0 +1,30 @@
+\section{Experiment 4: Dataset Validation and Learning}
+\label{sec:exp4}
+
+\paragraph{Dataset.}
+\PH{dataset description: number of signed-off designs per kit, views (five graph views, image views,
+four-stage causal graphs), label set (congestion, wire length, timing, IR drop, parasitics)}
+
+\paragraph{Validation.}
+Every sample is admitted only if its layout passed signoff, and a separate verifier recomputes every
+label from the raw layout, cell libraries and checker reports with code independent of the
+extractor, covering graph topology, feature statistics and label--report agreement.
+\PH{number of checks; pass rates; defects found and fixed}
+
+\paragraph{Learning baselines.}
+\PH{CNN congestion prediction from image views and GNN prediction from graph views: models, splits
+(by design, held out), metrics (\eg $R^2$ per design and pooled), results}
+
+\begin{table}[t]
+  \centering\small
+  \begin{tabular}{@{}llcc@{}}
+    \toprule
+    Task & Model & Metric & Value \\
+    \midrule
+    Congestion (image) & CNN & $R^2$ & \tbd \\
+    \PH{task} (graph)  & GNN & \PH{metric} & \tbd \\
+    \bottomrule
+  \end{tabular}
+  \caption{Experiment 4: learning baselines. \PH{datasets to be provided}}
+  \label{tab:exp4}
+\end{table}

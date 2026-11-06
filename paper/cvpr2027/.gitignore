@@ -1,0 +1,6 @@
+build/
+*.aux
+*.log
+*.bbl
+*.blg
+*.out

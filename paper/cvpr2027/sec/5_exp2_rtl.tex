@@ -1,0 +1,31 @@
+\section{Experiment 2: Acquiring RTL}
+\label{sec:exp2}
+
+\paragraph{Task and arms.}
+Under the same task specification, tools and budget, find open-source RTL designs with clear
+provenance, a complete compile closure and successful synthesis. \emph{LLM-only}: each model uses
+general search, git, terminal and EDA tools but no \R code, knowledge or recipes.
+\emph{\R pipeline}: the frozen acquisition pipeline runs with fixed seed queries; its discovery,
+screening and closure inference are deterministic and use no model tokens, while search calls, git
+traffic, wall time and compute are recorded. \PH{final budget and batch sizes}
+
+\paragraph{Evaluation.}
+An independent scorer, shared by both arms, re-derives each submitted candidate from its source:
+provenance and licence, compile closure (all included files and macros resolved), synthesis-only
+qualification on a fixed process kit, duplicate removal against a frozen seen-design list, and
+structural diversity. \PH{exact metric definitions}
+
+\begin{table}[t]
+  \centering\small
+  \setlength{\tabcolsep}{3pt}\footnotesize
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    Arm & Submitted & Closure ok & Synth ok & Unique \\
+    \midrule
+    LLM only & \tbd & \tbd & \tbd & \tbd \\
+    \R pipeline & \tbd & \tbd & \tbd & \tbd \\
+    \bottomrule
+  \end{tabular}
+  \caption{Experiment 2: RTL acquisition yield. \PH{results pending}}
+  \label{tab:exp2}
+\end{table}

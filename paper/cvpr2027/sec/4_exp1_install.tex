@@ -1,0 +1,47 @@
+\section{Experiment 1: Installing the Toolchain}
+\label{sec:exp1}
+
+\paragraph{Task.}
+Starting from a clean, isolated Linux environment (a fresh container with only a base operating
+system, no pre-installed EDA tools, process kits, caches or credentials, and an ordinary non-root
+user), the agent must install every component on a fixed checklist (\cref{tab:exp1}) by following
+the installation instructions published by each project.
+
+\paragraph{Arms.}
+\PH{final arm list} (a) \emph{LLM only}: the agent receives the checklist and the upstream
+installation documentation of each component. (b) \emph{LLM + \R}: the agent may additionally invoke
+the eda-install skill. Both arms use the same models, shell tool, network access and budget.
+
+\paragraph{Verification and metrics.}
+Each checklist item has an independent check that runs after the agent finishes (\eg the tool
+reports its version and runs a smoke test; the process kit contains its technology and cell
+libraries). An item is ticked only if its check passes. The toolchain counts as \emph{complete} if
+every item passes \emph{and} an end-to-end smoke design completes the full flow with clean signoff on
+each process kit. We report items verified, completion, model calls, total input/output tokens,
+wall time and cost.
+
+\begin{table}[t]
+  \centering\small
+  \setlength{\tabcolsep}{3pt}\footnotesize
+  \begin{tabular}{@{}llcc@{}}
+    \toprule
+    Component & Role & LLM & LLM+Skills \\
+    \midrule
+    OpenROAD/OpenSTA & P\&R, timing & \tbd & \tbd \\
+    Yosys & synthesis & \tbd & \tbd \\
+    ORFS & flow, platforms & \tbd & \tbd \\
+    KLayout & DRC, GDS & \tbd & \tbd \\
+    Magic, Netgen & extraction, LVS & \tbd & \tbd \\
+    Icarus, Verilator & simulation & \tbd & \tbd \\
+    sky130A / gf180 PDKs & process kits & \tbd & \tbd \\
+    PyTorch + PyG & learning & \tbd & \tbd \\
+    \midrule
+    Smoke flow & all kits & \tbd & \tbd \\
+    Tokens (M) / calls & & \tbd & \tbd \\
+    Wall time (h) & & \tbd & \tbd \\
+    \bottomrule
+  \end{tabular}
+  \caption{Experiment 1: checklist items verified (\cmark/\xmark) and installation cost.
+  \PH{results pending; final checklist}}
+  \label{tab:exp1}
+\end{table}
