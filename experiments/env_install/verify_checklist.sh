@@ -6,8 +6,8 @@ source r2g-skills/signoff-loop/scripts/flow/_env.sh >/dev/null 2>&1
 ok(){ "$@" >/dev/null 2>&1 && echo true || echo false; }
 item(){ printf '"%s": {"ok": %s, "evidence": %s},' "$1" "$2" "$(printf '%s' "$3" | head -c 160 | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))')"; }
 printf '{'
-v=$("$OPENROAD_EXE" -version 2>&1 | head -1); item openroad "$( [ -n "$OPENROAD_EXE" ] && ok "$OPENROAD_EXE" -version )" "$v"
-v=$("$YOSYS_EXE" -V 2>&1 | head -1); item yosys "$( [ -n "$YOSYS_EXE" ] && ok "$YOSYS_EXE" -V )" "$v"
+v=$("$OPENROAD_EXE" -version 2>&1 | head -1); item openroad "$( [ -n "$OPENROAD_EXE" ] && ok "$OPENROAD_EXE" -version || echo false )" "$v"
+v=$("$YOSYS_EXE" -V 2>&1 | head -1); item yosys "$( [ -n "$YOSYS_EXE" ] && ok "$YOSYS_EXE" -V || echo false )" "$v"
 v=$("${KLAYOUT_CMD:-klayout}" -v 2>&1 | head -1); item klayout "$(ok "${KLAYOUT_CMD:-klayout}" -v)" "$v"
 v=$("${MAGIC_EXE:-magic}" --version 2>&1 | head -1); item magic "$(ok "${MAGIC_EXE:-magic}" --version)" "$v"
 v=$(echo quit | "${NETGEN_EXE:-netgen}" -batch 2>&1 | head -2 | tr '\n' ' '); item netgen "$( [ -x "$(command -v "${NETGEN_EXE:-netgen}")" ] && echo true || echo false )" "$v"
@@ -20,4 +20,5 @@ for p in nangate45 sky130hd gf180; do
   out=$(R2G_STRICT_PLATFORMS=$p bash r2g-skills/signoff-loop/scripts/flow/check_env.sh 2>&1); rc=$?
   item "strict_ready_$p" "$( [ $rc = 0 ] && echo true || echo false )" "$(echo "$out" | grep -E 'MISS|STRICT|READY' | head -3 | tr '\n' ' ')"
 done
-printf '"_installed_kib": %s, "_home_kib": %s}\n' "$(du -sk ~/toolchain 2>/dev/null | cut -f1 || echo 0)" "$(du -sk ~ 2>/dev/null | cut -f1)"
+ik=$(du -sk ~/toolchain 2>/dev/null | cut -f1); hk=$(du -sk ~ 2>/dev/null | cut -f1)
+printf '"_installed_kib": %s, "_home_kib": %s}\n' "${ik:-0}" "${hk:-0}"
