@@ -208,6 +208,23 @@ def cleanup_workspace(case, a=None):
             shutil.rmtree(d, ignore_errors=True)
 
 
+def wait_for_turn(case, out: Path, a, poll=60):
+    """Block until no other arm works on this design AND the admission gate passes,
+    re-checking the other arm after the gate: a wait there can outlast the check
+    before it (203, 2026-11-05 16:33: nangate45_C02802 started in GPT-only and the
+    GPT fallback within a minute; the design's workspace lock then refused 4 of the
+    GPT-only attempt's 5 flows)."""
+    while True:
+        other = other_arm_runner(case, out)
+        if other:
+            print(time.strftime("%F %T"), case["id"], "waits for another arm's attempt (pid %d)" % other, flush=True)
+        while other_arm_runner(case, out):
+            time.sleep(poll)
+        wait_for_load(a)
+        if not other_arm_runner(case, out):
+            return
+
+
 def run_one(case, a):
     out = a.root / "cases" / case["id"]
     if (out / "result.json").exists():
@@ -225,12 +242,7 @@ def run_one(case, a):
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(out), str(dest))
     for attempt in (1, 2):
-        other = other_arm_runner(case, out)
-        if other:
-            print(time.strftime("%F %T"), case["id"], "waits for another arm's attempt (pid %d)" % other, flush=True)
-        while other_arm_runner(case, out):
-            time.sleep(60)
-        wait_for_load(a)
+        wait_for_turn(case, out, a)
         out.mkdir(parents=True, exist_ok=True)
         (out / "case.json").write_text(json.dumps(case, indent=1, ensure_ascii=False))
         baseline = a.baselines / case["id"]

@@ -519,3 +519,26 @@ def test_other_arm_runner_sees_the_same_design_in_another_root(tmp_path):
         assert lb.other_arm_runner({"id": "x_CT2"}, b) is None
     finally:
         p.kill()
+
+
+def test_wait_for_turn_rechecks_the_other_arm_after_the_gate(monkeypatch, tmp_path):
+    """The other-arm check must hold after the admission gate too: another arm can
+    start the design while this one waits on memory (203, 2026-11-05)."""
+    lb = _load_launch_bare()
+    seen = {"gate": 0}
+    state = {"other": None}
+    def gate(a):
+        seen["gate"] += 1
+        if seen["gate"] == 1:
+            state["other"] = 4242          # another arm starts while we wait at the gate
+    calls = {"n": 0}
+    def other(case, out):
+        calls["n"] += 1
+        if state["other"] and calls["n"] > 3:
+            state["other"] = None          # ... and finishes a little later
+        return state["other"]
+    monkeypatch.setattr(lb, "wait_for_load", gate)
+    monkeypatch.setattr(lb, "other_arm_runner", other)
+    monkeypatch.setattr(lb.time, "sleep", lambda s: None)
+    lb.wait_for_turn({"id": "x"}, tmp_path, None, poll=0)
+    assert seen["gate"] == 2 and state["other"] is None
