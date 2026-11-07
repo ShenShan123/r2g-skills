@@ -35,6 +35,19 @@ bash r2g-skills/eda-install/bootstrap.sh               # install missing tiers +
 
 `bash r2g-skills/bootstrap.sh` is a shim to the same script.
 
+**The complete R2G toolchain** (signoff on every platform AND graph datasets) needs every tier, including
+`platform_rules` (installed only when named) and `graph` (the torch venv `def-graph` uses). Name them all:
+
+```bash
+bash r2g-skills/eda-install/bootstrap.sh --yes --prefix "$BIG_VOLUME" \
+  --tiers core,frontend,klayout,sky130,pdk,platform_rules,graph \
+  --strict-platforms nangate45,sky130hd,gf180
+```
+
+Pass a shorter `--tiers` list only when you deliberately want part of the toolchain: an agent that named tiers
+to get `platform_rules` and left out `graph` produced an install without the graph-learning environment
+(Experiment 1, 2026-11-06).
+
 ## What it does — detect → plan → install → pin → verify
 
 1. **Detect** (`scripts/setup/detect_env.sh`) — a clean `KEY=VALUE` snapshot of the machine: OS +
