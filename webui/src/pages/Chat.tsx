@@ -5,6 +5,7 @@ import { Send, Paperclip, X, ChevronDown, ChevronRight, Plus, MessageSquare, Ext
 import { api, chatStream } from "../lib/api";
 import { Md, Logo } from "../components/ui";
 import DeleteResource from "../components/DeleteResource";
+import { t, tb } from "../lib/i18n";
 
 type Part =
   | { kind: "text"; text: string }
@@ -80,13 +81,13 @@ export default function Chat() {
   async function attach(list: File[]) {
     setAttErr("");
     const keep = list.filter((f) => SEND.test(f.name));
-    if (!keep.some((f) => /\.(s?v|s?vh)$/i.test(f.name))) { setAttErr("这个文件夹里没有 .v / .sv 文件"); return; }
+    if (!keep.some((f) => /\.(s?v|s?vh)$/i.test(f.name))) { setAttErr(t("这个文件夹里没有 .v / .sv 文件")); return; }
     setAttBusy(true);
     try {
       const up = await api.upload(keep);
       const rel = ((keep[0] as any).webkitRelativePath || keep[0].name) as string;
       setAtt({ path: up.path, name: rel.split("/")[0], files: up.files.length });
-    } catch (e: any) { setAttErr(e.message); } finally { setAttBusy(false); }
+    } catch (e: any) { setAttErr(tb(e.message)); } finally { setAttBusy(false); }
   }
 
   async function send(typed: string) {
@@ -112,16 +113,16 @@ export default function Chat() {
         else if (e.type === "tool_result") upd((a) => {
           a.parts = a.parts.map((p) => (p.kind === "tool" && p.id === e.id ? { ...p, result: e.result } : p));
         });
-        else if (e.type === "error") upd((a) => { a.error = e.message; });
+        else if (e.type === "error") upd((a) => { a.error = tb(e.message); });
       });
-    } catch (err: any) { upd((a) => { a.error = err.message; }); }
+    } catch (err: any) { upd((a) => { a.error = tb(err.message); }); }
     setBusy(false); loadSessions();
   }
 
   const history = (
     <>
       <div className="p-3"><button className="btn-ghost w-full justify-center" onClick={() => { setSid(null); setMsgs([]); setHist(false); }}>
-        <Plus size={15} /> 新对话</button></div>
+        <Plus size={15} /> {t("新对话")}</button></div>
       <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
         {sessions.filter((s) => s.title).map((s) => (
           <div key={s.id} className="flex items-center rounded-lg hover:bg-panel2/60">
@@ -146,19 +147,19 @@ export default function Chat() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-2 border-b border-line px-3 py-2 lg:hidden">
-          <button className="btn-ghost px-3 py-1.5" onClick={() => setHist(true)}><History size={15} /> 历史</button>
-          <button className="btn-ghost px-3 py-1.5" onClick={() => { setSid(null); setMsgs([]); }}><Plus size={15} /> 新对话</button>
+          <button className="btn-ghost px-3 py-1.5" onClick={() => setHist(true)}><History size={15} /> {t("历史")}</button>
+          <button className="btn-ghost px-3 py-1.5" onClick={() => { setSid(null); setMsgs([]); }}><Plus size={15} /> {t("新对话")}</button>
         </div>
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
             {msgs.length === 0 && (
               <div className="mt-8 text-center md:mt-14">
                 <div className="flex justify-center"><Logo size={44} /></div>
-                <h1 className="mt-4 text-xl font-bold md:text-2xl">有什么可以帮你？</h1>
-                <p className="mt-2 text-sm text-muted">我可以帮你找设计、提交任务、看进度、解释失败原因。<br className="hidden md:block" />
-                  通过与否由签核工具判定，不是我说了算。</p>
+                <h1 className="mt-4 text-xl font-bold md:text-2xl">{t("有什么可以帮你？")}</h1>
+                <p className="mt-2 text-sm text-muted">{t("我可以帮你找设计、提交任务、看进度、解释失败原因。")}<br className="hidden md:block" />
+                  {t("通过与否由签核工具判定，不是我说了算。")}</p>
                 <div className="mx-auto mt-6 grid max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
-                  {SUGGEST.map((s) => (
+                  {SUGGEST.map((s) => t(s)).map((s) => (
                     <button key={s} onClick={() => send(s)} className="card px-4 py-3 text-left text-sm hover:border-accent/60">{s}</button>))}
                 </div>
               </div>)}
@@ -175,11 +176,11 @@ export default function Chat() {
                       : p.kind === "thinking" ? <Thinking key={k} text={p.text} live={busy && i === msgs.length - 1 && k === m.parts.length - 1} />
                       : <ToolStep key={k} p={p} />)}
                     {busy && i === msgs.length - 1 && !m.error && m.parts.length === 0 && (
-                      <div className="flex items-center gap-2 text-sm text-muted"><Loader2 size={14} className="animate-spin" /> 正在思考…</div>)}
+                      <div className="flex items-center gap-2 text-sm text-muted"><Loader2 size={14} className="animate-spin" /> {t("正在思考…")}</div>)}
                     {m.error && (
                       <div className="flex items-start gap-2 rounded-xl bg-bad/10 px-3 py-2 text-sm text-bad">
                         <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                        <div>{m.error}<div className="mt-1 text-xs text-muted">请到 <Link to="/settings" className="underline">设置</Link> 检查模型与密钥。</div></div>
+                        <div>{m.error}<div className="mt-1 text-xs text-muted">{t("请到 ")}<Link to="/settings" className="underline">{t("设置")}</Link>{t(" 检查模型与密钥。")}</div></div>
                       </div>)}
                   </div>
                 </div>))}
@@ -190,22 +191,22 @@ export default function Chat() {
         <div className="border-t border-line bg-panel/60 px-3 py-3 md:px-6 md:py-4">
           {(att || attErr || attBusy) && (
             <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-sm">
-              {attBusy && <span className="flex items-center gap-1.5 text-muted"><Loader2 size={13} className="animate-spin" /> 上传中…</span>}
-              {att && <span className="chip bg-accent/10 text-accent"><Paperclip size={12} />{att.name} · {att.files} 个文件
-                <button type="button" className="ml-1" aria-label="移除附件" onClick={() => setAtt(null)}><X size={12} /></button></span>}
+              {attBusy && <span className="flex items-center gap-1.5 text-muted"><Loader2 size={13} className="animate-spin" /> {t("上传中…")}</span>}
+              {att && <span className="chip bg-accent/10 text-accent"><Paperclip size={12} />{att.name}{t(" · {n} 个文件", { n: att.files })}
+                <button type="button" className="ml-1" aria-label={t("移除附件")} onClick={() => setAtt(null)}><X size={12} /></button></span>}
               {attErr && <span className="text-bad">{attErr}</span>}
             </div>)}
           <form className="mx-auto flex max-w-3xl items-end gap-2" onSubmit={(e) => { e.preventDefault(); send(input); }}>
-            <label className="btn-ghost h-[44px] shrink-0 cursor-pointer px-3" title="上传一个 RTL 文件夹，agent 可以直接拿它提交任务">
-              <Paperclip size={17} /><span className="hidden sm:inline">上传 RTL</span>
+            <label className="btn-ghost h-[44px] shrink-0 cursor-pointer px-3" title={t("上传一个 RTL 文件夹，agent 可以直接拿它提交任务")}>
+              <Paperclip size={17} /><span className="hidden sm:inline">{t("上传 RTL")}</span>
               <input ref={dirInput} type="file" multiple className="hidden"
                 onChange={(e) => { attach(Array.from(e.target.files || [])); e.target.value = ""; }} />
             </label>
             <textarea ref={box} value={input} onChange={(e) => setInput(e.target.value)} rows={input.split("\n").length > 1 ? 3 : 1}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
-              placeholder={att ? "说说要对这个设计做什么，例如：跑一遍生成图数据集" : "输入问题，Enter 发送"}
+              placeholder={att ? t("说说要对这个设计做什么，例如：跑一遍生成图数据集") : t("输入问题，Enter 发送")}
               className="input min-h-[44px] resize-none py-2.5 text-[15px]" />
-            <button className="btn-primary h-[44px] shrink-0 px-4" aria-label="发送" disabled={busy || (!input.trim() && !att)}><Send size={17} /></button>
+            <button className="btn-primary h-[44px] shrink-0 px-4" aria-label={t("发送")} disabled={busy || (!input.trim() && !att)}><Send size={17} /></button>
           </form>
         </div>
       </div>
@@ -217,7 +218,7 @@ function UserBubble({ text }: { text: string }) {
   const m = text.match(/^\[附件\] 已上传 RTL 文件夹 (.+?)（(\d+) 个文件），路径：\S+\n?([\s\S]*)$/);
   return (
     <div className="max-w-[85%] space-y-1.5 rounded-2xl rounded-br-md bg-accent/15 px-4 py-2.5 text-[15px]">
-      {m && <div className="chip bg-panel/70 text-muted"><Paperclip size={12} />{m[1]} · {m[2]} 个文件</div>}
+      {m && <div className="chip bg-panel/70 text-muted"><Paperclip size={12} />{m[1]}{t(" · {n} 个文件", { n: m[2] })}</div>}
       <div className="whitespace-pre-wrap">{m ? m[3] : text}</div>
     </div>);
 }
@@ -228,7 +229,7 @@ function Thinking({ text, live }: { text: string; live: boolean }) {
     <div className="rounded-xl border border-line/70 bg-panel2/40">
       <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-muted">
         {live ? <Loader2 size={13} className="animate-spin" /> : <Brain size={13} />}
-        {live ? "正在思考…" : `思考过程（${text.length} 字）`}
+        {live ? t("正在思考…") : t("思考过程（{n} 字）", { n: text.length })}
         <span className="ml-auto">{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
       </button>
       {open && <div className="whitespace-pre-wrap border-t border-line/70 px-3 py-2 text-xs leading-5 text-muted">{text}</div>}
@@ -244,13 +245,13 @@ function ToolStep({ p }: { p: Extract<Part, { kind: "tool" }> }) {
     <div className="text-sm">
       <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left text-muted hover:text-fg">
         {!done ? <Loader2 size={14} className="animate-spin text-run" /> : err ? <XCircle size={14} className="text-bad" /> : <CheckCircle2 size={14} className="text-ok" />}
-        <span>{TOOL_LABEL[p.name] ?? p.name}{err ? "（出错）" : ""}</span>
-        {jobId && <Link to={`/jobs/${jobId}`} onClick={(e) => e.stopPropagation()} className="chip bg-accent/15 text-accent">打开任务 <ExternalLink size={11} /></Link>}
+        <span>{TOOL_LABEL[p.name] ? t(TOOL_LABEL[p.name]) : p.name}{err ? t("（出错）") : ""}</span>
+        {jobId && <Link to={`/jobs/${jobId}`} onClick={(e) => e.stopPropagation()} className="chip bg-accent/15 text-accent">{t("打开任务")} <ExternalLink size={11} /></Link>}
         <span className="ml-auto text-faint">{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
       </button>
       {open && (
         <pre className="mt-1 max-h-72 overflow-auto rounded-xl bg-panel2 px-3 py-2 font-mono text-[11.5px] leading-5 text-muted">
-          {"参数 " + JSON.stringify(p.args, null, 2) + (done ? "\n\n结果 " + JSON.stringify(p.result, null, 2) : "")}</pre>)}
+          {t("参数 ") + JSON.stringify(p.args, null, 2) + (done ? "\n\n" + t("结果 ") + JSON.stringify(p.result, null, 2) : "")}</pre>)}
     </div>
   );
 }

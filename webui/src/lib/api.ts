@@ -1,4 +1,5 @@
 // Thin client for the r2g agent API. All verdicts shown in the UI come from here.
+import { getLang } from "./i18n";
 export type Stage = { id: string; label: string };
 export type Platform = "nangate45" | "sky130hd" | "gf180";
 export const PLATFORM_LABEL: Record<string, string> = { nangate45: "Nangate45 · 45 nm", sky130hd: "SKY130 HD · 130 nm", gf180: "GF180 MCU · 180 nm" };
@@ -115,8 +116,8 @@ export async function chatStream(message: string, sessionId: string | null, on: 
 }
 
 export const fmtTime = (ts: number) =>
-  new Date(ts * 1000).toLocaleString("zh-CN", { hour12: false, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  new Date(ts * 1000).toLocaleString(getLang() === "en" ? "en-US" : "zh-CN", { hour12: false, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 /** Chat link that pre-fills a question for the agent (the user still presses send). */
 export const askAgent = (q: string) => `/chat?q=${encodeURIComponent(q)}`;
 export const fmtClock = (ts: number) =>
-  new Date(ts * 1000).toLocaleTimeString("zh-CN", { hour12: false });
+  new Date(ts * 1000).toLocaleTimeString(getLang() === "en" ? "en-US" : "zh-CN", { hour12: false });

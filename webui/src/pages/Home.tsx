@@ -5,6 +5,7 @@ import { api, fmtTime, Job, Output, Scan, Platform, PLATFORM_LABEL } from "../li
 import OutputPicker from "../components/OutputPicker";
 import ParamsPicker, { cleanParams, Params } from "../components/ParamsPicker";
 import { StatusBadge } from "../components/ui";
+import { t, tb } from "../lib/i18n";
 
 const HDL = /\.(s?v|s?vh)$/i;
 // HDL plus the data files $readmem reads; nothing else in the folder is sent
@@ -53,23 +54,23 @@ export default function Home() {
       }
       const r = await api.createJob(designs, "", output, cleanParams(params), platform);
       nav(`/jobs/${r.job_id}`);
-    } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+    } catch (e: any) { setErr(tb(e.message)); } finally { setBusy(false); }
   }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-10">
-      <h1 className="text-2xl font-bold tracking-tight md:text-3xl">把 RTL 变成签核过的数据集</h1>
+      <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{t("把 RTL 变成签核过的数据集")}</h1>
       <p className="mt-2 text-[15px] text-muted">
-        综合、布局布线、DRC/LVS 签核、失败自动修复、生成数据集并逐项校验，全部自动完成。
+        {t("综合、布局布线、DRC/LVS 签核、失败自动修复、生成数据集并逐项校验，全部自动完成。")}
       </p>
 
       <div className="card mt-6 divide-y divide-line">
         {/* 1 */}
-        <Step n={1} title="选择设计" done>
+        <Step n={1} title={t("选择设计")} done>
           <div className="mb-3 inline-flex rounded-xl bg-panel2 p-1 text-sm">
             {([["single", "一个设计"], ["batch", "批量（很多个设计）"]] as const).map(([k, l]) => (
               <button key={k} type="button" onClick={() => setMode(k)}
-                className={`rounded-lg px-3 py-1.5 ${mode === k ? "bg-panel font-medium text-fg shadow-card" : "text-muted"}`}>{l}</button>))}
+                className={`rounded-lg px-3 py-1.5 ${mode === k ? "bg-panel font-medium text-fg shadow-card" : "text-muted"}`}>{t(l)}</button>))}
           </div>
           {mode === "batch" ? <BatchPick scan={scan} setScan={setScan} /> : (<>
           <label className={`flex cursor-pointer items-center gap-3 rounded-xl border border-dashed px-4 py-4 transition
@@ -78,16 +79,16 @@ export default function Home() {
             <div className="min-w-0 flex-1">
               {hdl.length ? (
                 <>
-                  <div className="font-medium">{folder || "已选择文件夹"}</div>
-                  <div className="truncate text-xs text-muted">{hdl.length} 个 Verilog 文件 · 点击可重新选择</div>
+                  <div className="font-medium">{folder || t("已选择文件夹")}</div>
+                  <div className="truncate text-xs text-muted">{t("{n} 个 Verilog 文件 · 点击可重新选择", { n: hdl.length })}</div>
                 </>) : (
                 <>
-                  <div className="font-medium">上传 RTL 文件夹</div>
-                  <div className="text-xs text-muted">包含 .v / .sv 的文件夹；只会上传源码和 $readmem 数据文件</div>
+                  <div className="font-medium">{t("上传 RTL 文件夹")}</div>
+                  <div className="text-xs text-muted">{t("包含 .v / .sv 的文件夹；只会上传源码和 $readmem 数据文件")}</div>
                 </>)}
             </div>
             {hdl.length > 0 && (
-              <button type="button" className="rounded-lg p-1.5 text-muted hover:bg-panel2" aria-label="清除"
+              <button type="button" className="rounded-lg p-1.5 text-muted hover:bg-panel2" aria-label={t("清除")}
                 onClick={(e) => { e.preventDefault(); setFiles([]); setTop(""); }}><X size={16} /></button>)}
             <input ref={dirInput} type="file" multiple className="hidden"
               onChange={(e) => { setFiles(Array.from(e.target.files || [])); e.target.value = ""; }} />
@@ -98,9 +99,9 @@ export default function Home() {
                 {hdl.slice(0, 6).map((f) => <span key={f.name} className="chip bg-panel2 text-muted"><FileCode2 size={12} />{f.name}</span>)}
                 {hdl.length > 6 && <span className="chip bg-panel2 text-muted">+{hdl.length - 6}</span>}
               </div>
-              <input className="input" placeholder="顶层模块名（可不填，自动识别）" value={top} onChange={(e) => setTop(e.target.value)} />
+              <input className="input" placeholder={t("顶层模块名（可不填，自动识别）")} value={top} onChange={(e) => setTop(e.target.value)} />
             </div>)}
-          <div className="mt-4 text-sm text-muted">没有现成的 RTL？先用示例试试：</div>
+          <div className="mt-4 text-sm text-muted">{t("没有现成的 RTL？先用示例试试：")}</div>
           <div className="mt-2 flex flex-wrap gap-2">
             {examples.map((e) => (
               <button key={e.name} type="button" onClick={() => toggle(e.name)}
@@ -111,8 +112,8 @@ export default function Home() {
         </Step>
 
         {/* 2 */}
-        <Step n={2} title="选择工艺平台" done>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="group" aria-label="工艺平台">
+        <Step n={2} title={t("选择工艺平台")} done>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="group" aria-label={t("工艺平台")}>
             {Object.entries(PLATFORM_LABEL).map(([id, label]) => (
               <button key={id} type="button" disabled={busy} aria-pressed={platform === id}
                 onClick={() => { if (platform !== id) { setPlatform(id as Platform); setParams(null); } }}
@@ -128,23 +129,23 @@ export default function Home() {
         </Step>
 
         {/* 3 */}
-        <Step n={3} title="选择数据集类型" done>
+        <Step n={3} title={t("选择数据集类型")} done>
           <OutputPicker value={output} onChange={setOutput} />
         </Step>
 
         {/* 4 */}
-        <Step n={4} title="流程参数" done>
+        <Step n={4} title={t("流程参数")} done>
           <ParamsPicker key={platform} platform={platform} value={params} onChange={setParams} />
         </Step>
 
         {/* 5 */}
-        <Step n={5} title="开始" done={false}>
+        <Step n={5} title={t("开始")} done={false}>
           <button className="btn-primary w-full justify-center py-3 text-base" onClick={start} disabled={busy || count === 0}>
             {busy ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
-            {busy ? "提交中…" : count ? `开始处理 ${count} 个设计${cleanParams(params) ? "（自定义参数）" : ""}` : "先在第 1 步选择设计"}
+            {busy ? t("提交中…") : count ? t("开始处理 {n} 个设计", { n: count }) + (cleanParams(params) ? t("（自定义参数）") : "") : t("先在第 1 步选择设计")}
           </button>
           <p className="mt-2 text-center text-xs text-muted">
-            {mode === "batch" ? "设计会按「设置」里的并发上限排队运行；服务重启后会自动接着跑。" : "小设计约 3–5 分钟；提交后会打开进度页，可以随时离开再回来看。"}</p>
+            {mode === "batch" ? t("设计会按「设置」里的并发上限排队运行；服务重启后会自动接着跑。") : t("小设计约 3–5 分钟；提交后会打开进度页，可以随时离开再回来看。")}</p>
           {err && <p className="mt-2 text-center text-sm text-bad">{err}</p>}
         </Step>
       </div>
@@ -152,8 +153,8 @@ export default function Home() {
       <Link to="/chat" className="card mt-4 flex items-center gap-3 px-5 py-4 hover:border-accent/60">
         <MessagesSquare size={20} className="text-accent" />
         <div className="flex-1">
-          <div className="font-medium">不确定怎么做？问 agent</div>
-          <div className="text-xs text-muted">让它帮你在 GitHub 上找设计、提交任务、解释失败原因</div>
+          <div className="font-medium">{t("不确定怎么做？问 agent")}</div>
+          <div className="text-xs text-muted">{t("让它帮你在 GitHub 上找设计、提交任务、解释失败原因")}</div>
         </div>
         <ChevronRight size={18} className="text-faint" />
       </Link>
@@ -161,15 +162,15 @@ export default function Home() {
       {jobs.length > 0 && (
         <section className="mt-8">
           <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-medium text-muted">最近的任务</div>
-            <Link to="/jobs" className="text-sm text-accent hover:underline">全部</Link>
+            <div className="text-sm font-medium text-muted">{t("最近的任务")}</div>
+            <Link to="/jobs" className="text-sm text-accent hover:underline">{t("全部")}</Link>
           </div>
           <div className="card divide-y divide-line">
             {jobs.map((j) => (
               <Link key={j.id} to={`/jobs/${j.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-panel2/60">
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{j.title}</div>
-                  <div className="text-xs text-muted">{fmtTime(j.created)} · {PLATFORM_LABEL[j.spec?.platform] ?? j.spec?.platform} · {j.counts?.passed ?? 0}/{Object.values(j.counts ?? {}).reduce((a, b) => a + b, 0)} 通过</div>
+                  <div className="truncate font-medium">{tb(j.title)}</div>
+                  <div className="text-xs text-muted">{fmtTime(j.created)} · {PLATFORM_LABEL[j.spec?.platform] ?? j.spec?.platform} · {t("{n}/{total} 通过", { n: j.counts?.passed ?? 0, total: Object.values(j.counts ?? {}).reduce((a, b) => a + b, 0) })}</div>
                 </div>
                 <StatusBadge status={j.status} />
               </Link>))}
@@ -202,52 +203,52 @@ function BatchPick({ scan, setScan }: { scan: Scan | null; setScan: (s: Scan | n
 
   async function doScan(p: string) {
     setBusy("scan"); setErr(""); setScan(null);
-    try { setScan(await api.scan(p)); } catch (e: any) { setErr(e.message); } finally { setBusy(""); }
+    try { setScan(await api.scan(p)); } catch (e: any) { setErr(tb(e.message)); } finally { setBusy(""); }
   }
   async function upload(list: File[]) {
     const keep = list.filter((f) => SEND.test(f.name));
-    if (!keep.length) { setErr("这个文件夹里没有 Verilog 文件"); return; }
+    if (!keep.length) { setErr(t("这个文件夹里没有 Verilog 文件")); return; }
     setBusy("upload"); setErr(""); setScan(null);
     try {
       const up = await api.upload(keep);
       const folder = (((keep[0] as any).webkitRelativePath || "") as string).split("/")[0];
       await doScan(folder ? `${up.path}/${folder}` : up.path);
-    } catch (e: any) { setErr(e.message); setBusy(""); }
+    } catch (e: any) { setErr(tb(e.message)); setBusy(""); }
   }
   const ok = scan?.designs.filter((d) => !d.problem) ?? [];
   const bad = scan?.designs.filter((d) => d.problem) ?? [];
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted">准备一个文件夹，里面<b className="text-fg">每个子文件夹是一个设计</b>。可以上传，也可以直接填服务器上的路径（文件已经在服务器上时更快）。</p>
+      <p className="text-sm text-muted">{t("准备一个文件夹，里面")}<b className="text-fg">{t("每个子文件夹是一个设计")}</b>{t("。可以上传，也可以直接填服务器上的路径（文件已经在服务器上时更快）。")}</p>
       <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-line px-4 py-3 hover:border-accent hover:bg-panel2/60">
         {busy === "upload" ? <Loader2 size={20} className="animate-spin text-accent" /> : <FolderTree size={20} className="text-muted" />}
-        <div className="flex-1"><div className="font-medium">{busy === "upload" ? "上传中…" : "上传装着多个设计的文件夹"}</div>
-          <div className="text-xs text-muted">只会上传源码和 $readmem 数据文件</div></div>
+        <div className="flex-1"><div className="font-medium">{busy === "upload" ? t("上传中…") : t("上传装着多个设计的文件夹")}</div>
+          <div className="text-xs text-muted">{t("只会上传源码和 $readmem 数据文件")}</div></div>
         <input ref={dir} type="file" multiple className="hidden" onChange={(e) => { upload(Array.from(e.target.files || [])); e.target.value = ""; }} />
       </label>
       <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (path.trim()) doScan(path.trim()); }}>
-        <input className="input font-mono" placeholder="或填服务器上的目录，例如 /data/rtl_corpus" value={path} onChange={(e) => setPath(e.target.value)} />
+        <input className="input font-mono" placeholder={t("或填服务器上的目录，例如 /data/rtl_corpus")} value={path} onChange={(e) => setPath(e.target.value)} />
         <button className="btn-ghost shrink-0" disabled={!path.trim() || !!busy}>
-          {busy === "scan" ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} 扫描</button>
+          {busy === "scan" ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} {t("扫描")}</button>
       </form>
       {err && <p className="text-sm text-bad">{err}</p>}
       {scan && (
         <div className="rounded-xl bg-panel2 p-4 text-sm">
-          <div className="font-medium">识别到 {scan.total} 个设计：<span className="text-ok">{scan.ok} 个将运行</span>
-            {scan.skipped > 0 && <span className="text-warn">，{scan.skipped} 个将跳过</span>}</div>
+          <div className="font-medium">{t("识别到 {n} 个设计：", { n: scan.total })}<span className="text-ok">{t("{n} 个将运行", { n: scan.ok })}</span>
+            {scan.skipped > 0 && <span className="text-warn">{t("，{n} 个将跳过", { n: scan.skipped })}</span>}</div>
           <div className="mt-1 truncate font-mono text-xs text-faint">{scan.root}</div>
           {ok.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {ok.slice(0, 10).map((d) => <span key={d.name} className="chip bg-panel text-muted"><span className="font-mono">{d.name}</span>{d.top !== d.name && <span className="text-faint">· 顶层 {d.top}</span>}</span>)}
+              {ok.slice(0, 10).map((d) => <span key={d.name} className="chip bg-panel text-muted"><span className="font-mono">{d.name}</span>{d.top !== d.name && <span className="text-faint">{t("· 顶层 {top}", { top: d.top })}</span>}</span>)}
               {ok.length > 10 && <span className="chip bg-panel text-muted">+{ok.length - 10}</span>}
             </div>)}
           {bad.length > 0 && (
             <div className="mt-3">
               <button type="button" className="flex items-center gap-1.5 text-xs text-warn" onClick={() => setShowSkip(!showSkip)}>
-                <AlertTriangle size={13} /> {showSkip ? "收起" : "查看"}跳过的设计和原因</button>
+                <AlertTriangle size={13} /> {showSkip ? t("收起跳过的设计和原因") : t("查看跳过的设计和原因")}</button>
               {showSkip && (
                 <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-xs">
-                  {bad.map((d) => <li key={d.name}><span className="font-mono">{d.name}</span>：<span className="text-muted">{d.problem}</span></li>)}
+                  {bad.map((d) => <li key={d.name}><span className="font-mono">{d.name}</span>{t("：")}<span className="text-muted">{tb(d.problem)}</span></li>)}
                 </ul>)}
             </div>)}
         </div>)}

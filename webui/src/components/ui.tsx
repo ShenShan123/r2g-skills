@@ -2,6 +2,7 @@ import { CheckCircle2, CircleDashed, Loader2, XCircle, Ban, Minus } from "lucide
 import { useId } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { t } from "../lib/i18n";
 
 export const STATUS: Record<string, { label: string; cls: string; Icon: any }> = {
   passed: { label: "通过", cls: "bg-ok/15 text-ok", Icon: CheckCircle2 },
@@ -20,7 +21,7 @@ export function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`chip whitespace-nowrap ${s.cls}`}>
       <s.Icon size={13} className={["running", "finalizing", "cancelling"].includes(status) ? "animate-spin" : ""} />
-      {s.label}
+      {t(s.label)}
     </span>
   );
 }
@@ -80,12 +81,12 @@ export function StepTrack({ stage, status, repaired, selected, onSelect }: { sta
     todo: "bg-panel2 text-faint border border-line", skip: "bg-panel2 text-faint border border-line",
   };
   return (
-    <ol className="flex items-start" aria-label="整体流程进度">
+    <ol className="flex items-start" aria-label={t("整体流程进度")}>
       {STEPS.map((s, i) => (
         <li key={s.label} aria-current={st[i] === "now" ? "step" : undefined} className="flex min-w-0 flex-1 flex-col items-center">
           <div className="flex w-full items-center">
             <div className={`h-0.5 flex-1 ${i === 0 ? "invisible" : st[i] === "todo" ? "bg-line" : "bg-ok/60"}`} />
-            <button type="button" disabled={!onSelect} onClick={() => onSelect?.(i)} aria-label={`查看${s.label}阶段图`}
+            <button type="button" disabled={!onSelect} onClick={() => onSelect?.(i)} aria-label={t("查看{step}阶段图", { step: t(s.label) })}
               className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${dot[st[i]]} ${selected && s.stages.includes(selected) ? "ring-2 ring-accent ring-offset-2 ring-offset-panel" : ""}`}>
               {st[i] === "done" ? <CheckCircle2 size={14} /> : st[i] === "fail" ? <XCircle size={14} /> :
                st[i] === "skip" ? <Minus size={12} /> : i + 1}
@@ -93,7 +94,7 @@ export function StepTrack({ stage, status, repaired, selected, onSelect }: { sta
             <div className={`h-0.5 flex-1 ${i === STEPS.length - 1 ? "invisible" : st[i + 1] === "todo" ? "bg-line" : "bg-ok/60"}`} />
           </div>
           <span className={`mt-1.5 truncate text-[11px] ${st[i] === "now" ? "font-medium text-run" : st[i] === "fail" ? "font-medium text-bad" : "text-muted"}`}>
-            {s.label}{st[i] === "skip" ? "（无需）" : ""}
+            {t(s.label)}{st[i] === "skip" ? t("（无需）") : ""}
           </span>
         </li>))}
     </ol>

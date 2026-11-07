@@ -70,9 +70,19 @@ def source(project, stage, run=None, route_only=False):
     return None
 
 
+BG = '#0b1220'
+# Routing layers in stack order (Nangate45 metalN, SKY130 li1/metN, GF180 MetalN): one hue each,
+# so a routed view shows which layers carry the wiring. Unknown layers fall back to slate.
+LAYER_COLORS = ('#38bdf8', '#34d399', '#fbbf24', '#f472b6', '#a78bfa', '#fb7185', '#2dd4bf', '#facc15', '#c084fc', '#94a3b8')
+PHYSICAL_ONLY = re.compile(r'(?i)fill|tap|decap|endcap|welltie')
+TAP = re.compile(r'(?i)tap|welltie')
+ANTENNA = re.compile(r'(?i)antenna|diode')
+CLOCK = re.compile(r'(?i)clkbuf|clkinv|ckbuf|ckinv|clk_?buf|^cts|clkload')
+
+
 def svg(body, width=800, height=500):
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}">'
-            '<rect width="100%" height="100%" fill="#0b1220"/>' + body + '</svg>').encode()
+            f'<rect width="100%" height="100%" fill="{BG}"/>' + body + '</svg>').encode()
 
 
 def render_synth(text):
@@ -87,16 +97,32 @@ def render_synth(text):
             counts[m[1]] = int(m[2])
     if not counts:
         raise ValueError('综合报告中没有可识别的单元统计')
-    rows = sorted(counts.items(), key=lambda x: -x[1])[:10]
-    body = '<text x="30" y="36" fill="#cbd5e1" font-size="18">Cell types · synthesis report</text>'
+    rows = sorted(counts.items(), key=lambda x: -x[1])[:12]
+    total = sum(counts.values())
+    font = 'font-family="Inter,system-ui,sans-serif"'
+    body = ('<defs><linearGradient id="bar" x1="0" x2="1"><stop offset="0" stop-color="#22d3ee"/>'
+            '<stop offset="1" stop-color="#818cf8"/></linearGradient></defs>'
+            f'<text x="56" y="92" fill="#e2e8f0" {font} font-size="30" font-weight="600">Cell types</text>'
+            f'<text x="56" y="128" fill="#94a3b8" {font} font-size="19">{total:,} cells · {len(counts)} types after synthesis</text>')
     for i, (label, n) in enumerate(rows):
-        y = 72 + 39 * i
-        body += f'<text x="30" y="{y+17}" fill="#cbd5e1" font-size="12">{html.escape(label[:36])}</text>'
-        w = 430 * n / rows[0][1]
-        body += f'<rect x="280" y="{y}" width="{w}" height="23" rx="4" fill="#22d3ee"/>'
-        body += f'<text x="{min(750,290+w)}" y="{y+17}" fill="#cbd5e1" font-size="13">{n}</text>'
-    body += '<text x="30" y="480" fill="#94a3b8" font-size="12">Top cell types by count · no placement coordinates at synthesis</text>'
-    return svg(body), {'cell_types': len(counts), 'shown_types': len(rows)}
+        y = 172 + 47 * i
+        w = max(4.0, 470 * n / rows[0][1])
+        body += (f'<text x="56" y="{y+12}" fill="#cbd5e1" font-family="ui-monospace,Menlo,monospace" font-size="16">{html.escape(label[:24])}</text>'
+                 f'<text x="712" y="{y+12}" fill="#e2e8f0" {font} font-size="16" text-anchor="end">{n:,}</text>'
+                 f'<rect x="56" y="{y+20}" width="656" height="10" rx="5" fill="#16213a"/>'
+                 f'<rect x="56" y="{y+20}" width="{w*656/470:.1f}" height="10" rx="5" fill="url(#bar)"/>')
+    return svg(body, 768, 768), {'cell_types': len(counts), 'shown_types': len(rows)}
+
+
+def _ramp(t):
+    """Placement density colour: deep teal -> cyan -> warm yellow."""
+    stops = ((0.0, (14, 70, 92)), (0.55, (34, 211, 238)), (1.0, (253, 224, 71)))
+    t = min(1.0, max(0.0, t))
+    for (a, ca), (b, cb) in zip(stops, stops[1:]):
+        if t <= b:
+            f = (t - a) / (b - a)
+            return '#%02x%02x%02x' % tuple(round(u + (v - u) * f) for u, v in zip(ca, cb))
+    return '#fde047'
 
 
 def render_def(text):
@@ -106,45 +132,127 @@ def render_def(text):
     x0, y0, x1, y1 = map(int, area.groups())
     if x1 <= x0 or y1 <= y0:
         raise ValueError('DEF die 边界无效')
-    scale = 440 / max(x1-x0, y1-y0)
-    ox, oy = (800-(x1-x0)*scale)/2, (500-(y1-y0)*scale)/2
+    # The canvas follows the die's own aspect ratio: no letterboxing, the die fills the view.
+    inner, pad = 720, 24
+    scale = inner / max(x1-x0, y1-y0)
+    dw, dh = (x1-x0)*scale, (y1-y0)*scale
+    width, height = dw + 2*pad, dh + 2*pad
     def point(x, y):
-        return ox+(float(x)-x0)*scale, 500-oy-(float(y)-y0)*scale
-    body = f'<rect x="{ox}" y="{oy}" width="{(x1-x0)*scale}" height="{(y1-y0)*scale}" fill="#111e30" stroke="#64748b"/>'
-    for row in re.finditer(r'(?m)^ROW\s+\S+\s+\S+\s+(-?\d+)\s+(-?\d+)\s+\S+\s+DO\s+(\d+)\s+BY\s+\d+\s+STEP\s+(\d+)', text):
-        x, y, count, step = map(int, row.groups())
-        a, b = point(x, y); c, _ = point(x+(count-1)*step, y)
-        body += f'<path d="M{a:.2f},{b:.2f}L{c:.2f},{b:.2f}" stroke="#334155" stroke-width="0.5"/>'
+        return pad+(float(x)-x0)*scale, pad+dh-(float(y)-y0)*scale
+    body = f'<rect x="{pad}" y="{pad}" width="{dw:.2f}" height="{dh:.2f}" fill="#0f1a2c" stroke="#475569" stroke-width="1.2"/>'
+    rows = list(re.finditer(r'(?m)^ROW\s+\S+\s+\S+\s+(-?\d+)\s+(-?\d+)\s+\S+\s+DO\s+(\d+)\s+BY\s+\d+\s+STEP\s+(\d+)', text))
+    if rows:
+        path = ''
+        for row in rows[::max(1, math.ceil(len(rows)/160))]:
+            x, y, count, step = map(int, row.groups())
+            a, b = point(x, y); c, _ = point(x+(count-1)*step, y)
+            path += f'M{a:.2f},{b:.2f}L{c:.2f},{b:.2f}'
+        body += f'<path d="{path}" stroke="#1e2b42" stroke-width="0.6"/>'
+    # Power grid (SPECIALNETS stripes): drawn faintly under everything, it is what a floorplan adds.
+    special = re.search(r'(?ms)^SPECIALNETS\s+\d+\s*;(.*?)^END SPECIALNETS', text)
+    straps = 0
+    if special:
+        grid_path = {}
+        for m in re.finditer(r'(?:ROUTED|NEW)\s+(\S+)\s+(\d+)(?:\s+\+\s+SHAPE\s+\S+)?\s*\(\s*(-?\d+)\s+(-?\d+)(?:\s+\d+)?\s*\)\s*\(\s*(-?\d+|\*)\s+(-?\d+|\*)(?:\s+\d+)?\s*\)', special[1]):
+            layer, w, ax, ay, bx_, by_ = m.groups()
+            ex, ey = (ax if bx_ == '*' else bx_), (ay if by_ == '*' else by_)
+            (a, b), (c, d) = point(ax, ay), point(ex, ey)
+            sw = max(0.7, min(6.0, int(w)*scale))
+            grid_path.setdefault(round(sw, 1), []).append(f'M{a:.1f},{b:.1f}L{c:.1f},{d:.1f}')
+            straps += 1
+        for sw, parts in grid_path.items():
+            body += f'<path d="{"".join(parts)}" stroke="#3f5f8c" stroke-width="{sw}" opacity="0.8"/>'
     components = re.search(r'(?ms)^COMPONENTS\s+\d+\s*;(.*?)^END COMPONENTS', text)
-    positions = re.findall(r'\+\s+(?:PLACED|FIXED|COVER)\s*\(\s*(-?\d+)\s+(-?\d+)\s*\)', components[1] if components else '')
-    stride = max(1, math.ceil(len(positions)/6000))
-    for x, y in positions[::stride]:
-        px, py = point(x, y)
-        body += f'<circle cx="{px:.2f}" cy="{py:.2f}" r="1.2" fill="#22d3ee"/>'
+    positions, logic, clock, antenna, taps = [], [], [], [], []
+    for chunk in (components[1].split(';') if components else []):
+        pos = re.search(r'\+\s+(?:PLACED|FIXED|COVER)\s*\(\s*(-?\d+)\s+(-?\d+)\s*\)', chunk)
+        if not pos:
+            continue
+        xy = (int(pos[1]), int(pos[2])); positions.append(xy)
+        head = re.match(r'\s*-\s+(\S+)\s+(\S+)', chunk)
+        name, master = (head[1], head[2]) if head else ('', '')
+        if PHYSICAL_ONLY.search(master):
+            if TAP.search(master):
+                taps.append(xy)
+            continue
+        if ANTENNA.search(master):
+            antenna.append(xy)
+        elif CLOCK.search(master) or CLOCK.search(name):
+            clock.append(xy)
+        logic.append(xy)
+    if taps:
+        stride_t = max(1, math.ceil(len(taps)/4000))
+        marks = ''.join(f'M{px:.1f},{py:.1f}h0.01' for px, py in (point(x, y) for x, y in taps[::stride_t]))
+        body += f'<path d="{marks}" stroke="#475569" stroke-width="1.4" stroke-linecap="round" opacity="0.6"/>'
+    routed = re.search(r'(?ms)^NETS\s+\d+\s*;.*?\+\s+ROUTED', text) is not None
+    # Density of logic cells (fill and tap cells excluded) as a soft heat layer under the cells.
+    if logic:
+        bins = 64
+        bx, by = max(1, round(bins*dw/max(dw, dh))), max(1, round(bins*dh/max(dw, dh)))
+        grid = {}
+        for x, y in logic:
+            i = min(bx-1, int((x-x0)/(x1-x0)*bx)); j = min(by-1, int((y-y0)/(y1-y0)*by))
+            grid[(i, j)] = grid.get((i, j), 0) + 1
+        top = sorted(grid.values())[int(0.97*(len(grid)-1))] or 1
+        cw, ch = dw/bx, dh/by
+        heat = ''.join(f'<rect x="{pad+i*cw:.2f}" y="{pad+dh-(j+1)*ch:.2f}" width="{cw+0.3:.2f}" height="{ch+0.3:.2f}" '
+                       f'fill="{_ramp(n/top)}" opacity="{0.25+0.55*min(1, n/top):.2f}"/>' for (i, j), n in grid.items())
+        blur = max(cw, ch) * 0.9
+        body += (f'<defs><filter id="soft" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="{blur:.1f}"/></filter>'
+                 f'<clipPath id="die"><rect x="{pad}" y="{pad}" width="{dw:.2f}" height="{dh:.2f}"/></clipPath></defs>'
+                 f'<g clip-path="url(#die)"><g filter="url(#soft)" opacity="{0.45 if routed else 0.9}">{heat}</g></g>')
+    stride = max(1, math.ceil(len(logic)/6000))
+    dots = ''.join(f'M{px:.1f},{py:.1f}h0.01' for px, py in (point(x, y) for x, y in logic[::stride]))
+    if dots:
+        body += f'<path d="{dots}" stroke="#a5f3fc" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>'
     nets = re.search(r'(?ms)^NETS\s+\d+\s*;(.*?)^END NETS', text)
-    segments = []
+    segments, by_layer, clock_segments, layer_order = [], {}, [], []
     if nets:
-        for route in re.split(r'\+\s+(?:ROUTED|FIXED|COVER)\s+|\bNEW\s+', nets[1])[1:]:
-            route = route.split(';', 1)[0]
-            last = None
-            for a, b in re.findall(r'\(\s*(-?\d+|\*)\s+(-?\d+|\*)(?:\s+\d+)?\s*\)', route):
-                if '*' in (a, b) and last is None:
-                    continue
-                xy = (last[0] if a == '*' else int(a), last[1] if b == '*' else int(b))
-                if last:
-                    segments.append((*point(*last), *point(*xy)))
-                last = xy
+        for net in nets[1].split(';'):
+            is_clock = re.search(r'\+\s+USE\s+CLOCK', net) is not None
+            for route in re.split(r'\+\s+(?:ROUTED|FIXED|COVER)\s+|\bNEW\s+', net)[1:]:
+                layer = route.split(None, 1)[0] if route.strip() else '?'
+                if layer not in by_layer:
+                    by_layer[layer] = []; layer_order.append(layer)
+                last = None
+                for a, b in re.findall(r'\(\s*(-?\d+|\*)\s+(-?\d+|\*)(?:\s+\d+)?\s*\)', route):
+                    if '*' in (a, b) and last is None:
+                        continue
+                    xy = (last[0] if a == '*' else int(a), last[1] if b == '*' else int(b))
+                    if last:
+                        seg = (*point(*last), *point(*xy))
+                        segments.append(seg); (clock_segments if is_clock else by_layer[layer]).append(seg)
+                    last = xy
     stride = max(1, math.ceil(len(segments)/12000))
-    lines = ''.join(f'M{a:.2f},{b:.2f}L{c:.2f},{d:.2f}' for a,b,c,d in segments[::stride])
-    body += f'<path d="{lines}" fill="none" stroke="#a78bfa" stroke-width="0.65" opacity="0.65"/>'
+    def stack_index(layer):
+        m = re.search(r'(\d+)$', layer)
+        return int(m[1]) if m else (0 if layer.lower().startswith('li') else 99)
+    used = {}
+    for layer in sorted(layer_order, key=stack_index):
+        segs = by_layer[layer][::stride]
+        if not segs:
+            continue
+        colour = LAYER_COLORS[min(len(used), len(LAYER_COLORS)-1)]
+        used[layer] = {'segments': len(by_layer[layer]), 'color': colour}
+        lines = ''.join(f'M{a:.1f},{b:.1f}L{c:.1f},{d:.1f}' for a, b, c, d in segs)
+        body += f'<path d="{lines}" fill="none" stroke="{colour}" stroke-width="0.8" stroke-linecap="round" opacity="0.7"/>'
+    if clock_segments:
+        lines = ''.join(f'M{a:.1f},{b:.1f}L{c:.1f},{d:.1f}' for a, b, c, d in clock_segments)
+        body += f'<path d="{lines}" fill="none" stroke="#fb923c" stroke-width="1.3" stroke-linecap="round" opacity="0.95"/>'
+    for pts, colour, r in ((clock, '#fb923c', 2.6), (antenna, '#f0abfc', 2.4)):
+        if pts:
+            marks = ''.join(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="{r}"/>' for px, py in (point(x, y) for x, y in pts))
+            body += f'<g fill="{colour}" stroke="{BG}" stroke-width="0.6">{marks}</g>'
     pins = re.search(r'(?ms)^PINS\s+\d+\s*;(.*?)^END PINS', text)
     if pins:
-        for x, y in re.findall(r'\+\s+(?:PLACED|FIXED)\s*\(\s*(-?\d+)\s+(-?\d+)\s*\)', pins[1]):
-            px, py = point(x, y)
-            body += f'<rect x="{px-1.5:.2f}" y="{py-1.5:.2f}" width="3" height="3" fill="#fbbf24"/>'
-    body += '<text x="16" y="486" fill="#94a3b8" font-size="12">Cyan: placed cell origins · violet: signal route centerlines</text>'
-    return svg(body), {'placed_cells': len(positions), 'route_segments': len(segments),
-                       'sampled': len(positions)>6000 or len(segments)>12000}
+        marks = ''.join(f'<rect x="{px-1.4:.1f}" y="{py-1.4:.1f}" width="2.8" height="2.8" rx="0.6"/>'
+                        for px, py in (point(x, y) for x, y in re.findall(r'\+\s+(?:PLACED|FIXED)\s*\(\s*(-?\d+)\s+(-?\d+)\s*\)', pins[1])))
+        body += f'<g fill="#fbbf24" opacity="0.85">{marks}</g>'
+    return svg(body, round(width, 2), round(height, 2)), {
+        'placed_cells': len(positions), 'route_segments': len(segments),
+        'sampled': len(logic) > 6000 or len(segments) > 12000,
+        'logic_cells': len(logic), 'clock_cells': len(clock), 'antenna_cells': len(antenna),
+        'clock_segments': len(clock_segments), 'tap_cells': len(taps), 'power_straps': straps, 'layers': used}
 
 
 def odb_text(path):

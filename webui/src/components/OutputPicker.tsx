@@ -1,5 +1,6 @@
 import { Network, Grid3x3 } from "lucide-react";
 import { Output } from "../lib/api";
+import { t } from "../lib/i18n";
 
 const OPTS: { id: Output; title: string; text: string; Icon: any }[] = [
   { id: "graph", title: "图数据集", text: "给 GNN 用：电路转成图，节点和边上带拥塞、线长、时序、IR drop 等标签", Icon: Network },
@@ -13,10 +14,10 @@ export default function OutputPicker({ value, onChange }: { value: Output; onCha
         <button key={id} type="button" onClick={() => onChange(id)} aria-pressed={value === id}
           className={`rounded-xl border px-4 py-3 text-left transition ${value === id ? "border-accent bg-accent/10" : "border-line hover:bg-panel2"}`}>
           <div className="flex items-center gap-2 font-medium">
-            <Icon size={16} className={value === id ? "text-accent" : "text-muted"} />{title}
+            <Icon size={16} className={value === id ? "text-accent" : "text-muted"} />{t(title)}
             <span className={`ml-auto h-4 w-4 rounded-full border-2 ${value === id ? "border-accent bg-accent shadow-[inset_0_0_0_2px_rgb(var(--panel))]" : "border-line"}`} />
           </div>
-          <div className="mt-1 text-xs leading-5 text-muted">{text}</div>
+          <div className="mt-1 text-xs leading-5 text-muted">{t(text)}</div>
         </button>))}
     </div>
   );

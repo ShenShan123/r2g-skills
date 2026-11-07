@@ -33,12 +33,50 @@ def project(tmp_path):
 def test_def_geometry_and_synthesis_are_real_evidence():
     data, metrics = v.render_def(DEF)
     ET.fromstring(data)
-    assert metrics == {'placed_cells': 2, 'route_segments': 2, 'sampled': False}
-    assert b'M224.00,382.00L400.00,382.00' in data
-    assert b'M400.00,382.00L400.00,294.00' in data
+    assert {k: metrics[k] for k in ('placed_cells', 'route_segments', 'sampled')} == {'placed_cells': 2, 'route_segments': 2, 'sampled': False}
+    assert metrics['logic_cells'] == 2 and metrics['clock_cells'] == 0 and metrics['antenna_cells'] == 0
+    assert set(metrics['layers']) == {'metal1', 'metal2'} and all(l['segments'] == 1 for l in metrics['layers'].values())
+    # die-fitted canvas: 720 px for the 10 um die plus a 24 px margin -> 0.072 px/dbu, y flipped
+    assert b'viewBox="0 0 768.0 768.0"' in data
+    assert b'M96.0,600.0L384.0,600.0' in data      # metal1 (1000,2000)->(5000,2000)
+    assert b'M384.0,600.0L384.0,456.0' in data     # metal2 (5000,2000)->(5000,4000)
     data, metrics = v.render_synth('    2  4.0  2  4.0   INV_X1\n')
     assert b'INV_X1' in data and metrics['cell_types'] == 1
     ET.fromstring(data)
+
+
+DEF_RICH = '''VERSION 5.8 ;
+UNITS DISTANCE MICRONS 1000 ;
+DIEAREA ( 0 0 ) ( 20000 10000 ) ;
+COMPONENTS 5 ;
+- u1 NAND2_X1 + PLACED ( 1000 2000 ) N ;
+- clkbuf_0_clk CLKBUF_X3 + PLACED ( 3000 2000 ) N ;
+- ANTENNA_1 ANTENNA_X1 + PLACED ( 5000 2000 ) N ;
+- TAP_1 TAPCELL_X1 + FIXED ( 7000 2000 ) N ;
+- FILLER_1 FILLCELL_X4 + PLACED ( 9000 2000 ) N ;
+END COMPONENTS
+SPECIALNETS 1 ;
+- VDD ( * VDD ) + USE POWER
+  + ROUTED metal4 960 + SHAPE STRIPE ( 4000 0 ) ( * 10000 )
+  NEW metal4 960 + SHAPE STRIPE ( 12000 0 ) ( * 10000 ) ;
+END SPECIALNETS
+NETS 2 ;
+- clk ( clkbuf_0_clk Z ) ( u1 A ) + ROUTED metal3 ( 3000 2000 ) ( 1000 * ) + USE CLOCK ;
+- n1 ( u1 ZN ) ( ANTENNA_1 A ) + ROUTED metal2 ( 1000 2000 ) ( * 6000 ) ;
+END NETS
+END DESIGN
+'''
+
+
+def test_def_view_separates_physical_only_clock_and_antenna_cells():
+    data, m = v.render_def(DEF_RICH)
+    ET.fromstring(data)
+    # fill and tap cells are physical-only: counted as placed, kept out of the logic density
+    assert m['placed_cells'] == 5 and m['logic_cells'] == 3 and m['tap_cells'] == 1
+    assert m['clock_cells'] == 1 and m['antenna_cells'] == 1
+    assert m['power_straps'] == 2 and m['route_segments'] == 2 and m['clock_segments'] == 1
+    assert set(m['layers']) == {'metal2'}          # the clock net is drawn as the clock tree, not as a layer
+    assert b'viewBox="0 0 768.0 408.0"' in data      # the canvas keeps the 2:1 die aspect
 
 
 def test_pre_repair_snapshot_survives_rerun_and_slimming(tmp_path):
