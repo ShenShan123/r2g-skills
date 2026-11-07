@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+USER="${USER:-$(id -un 2>/dev/null || echo user)}"; export USER   # may be unset in fresh containers (2026-11-06)
 # Shared helpers for the eda-install tier installers (install_<tier>.sh).
 #
 # Sourced, NOT executed. Centralizes the conda/litex-hub machinery so a channel

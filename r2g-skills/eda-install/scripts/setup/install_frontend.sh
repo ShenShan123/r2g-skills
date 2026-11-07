@@ -29,6 +29,15 @@ if [[ "$DRY" != 1 ]]; then
     ln -sf "$base/envs/$CONDA_ENV/bin/$tool" "$runtime/$tool"
   done
   ln -sf "$base/envs/$CONDA_ENV/bin/gawk" "$runtime/awk"
+  # ORFS flow/scripts/defaults.py imports yaml; a bare system python3 lacks it (Experiment 1, 2026-11-06).
+  # A small venv provides it; a wrapper (not a symlink: a symlinked venv python loses its site-packages)
+  # exposes it as runtime-bin/python3, only when the system python3 cannot import yaml.
+  if ! python3 -c 'import yaml' >/dev/null 2>&1; then
+    ov="$bigv/pyenvs/orfs-python"
+    [[ -x "$ov/bin/python3" ]] || python3 -m venv "$ov" || die 'cannot create the ORFS python venv (python3 -m venv)'
+    "$ov/bin/python3" -c 'import yaml' >/dev/null 2>&1 || "$ov/bin/pip" install -q pyyaml || die 'PyYAML install failed'
+    printf '#!/bin/sh\nexec %q "$@"\n' "$ov/bin/python3" > "$runtime/python3" && chmod +x "$runtime/python3"
+  fi
   printf 'export R2G_RUNTIME_BIN=%q\nexport PATH="$R2G_RUNTIME_BIN:$PATH"\n' "$runtime" > "$bigv/.r2g-install/runtime.env"
 fi
 bash "$HERE/install_slang.sh" "$@" || die 'Slang frontend installation failed'

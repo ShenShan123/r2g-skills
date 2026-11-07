@@ -101,13 +101,26 @@ else
 
   # 2) ORFS flow/ at the commit this build was validated with (shallow, no
   #    submodules: the tools/ sources are not used, the binaries are above)
-  if [[ ! -d "$_orfs/.git" ]]; then
-    run git init -q "$_orfs" && run git -C "$_orfs" remote add origin "$ORFS_URL"
-  fi
-  if [[ "$(git -C "$_orfs" rev-parse HEAD 2>/dev/null)" != "$commit" ]]; then
+  # A shallow git fetch can hang or be throttled (GitHub smart-HTTP from a container, Experiment 1,
+  # 2026-11-06): bound it, then fall back to GitHub's source tarball of the SAME pinned commit. The
+  # marker records the commit for a tree without .git, so a rerun does not fetch again.
+  if [[ "$(cat "$_orfs/.r2g_orfs_commit" 2>/dev/null)" != "$commit" && "$(git -C "$_orfs" rev-parse HEAD 2>/dev/null)" != "$commit" ]]; then
     log "fetching ORFS at the validated commit ${commit:0:10} (shallow)"
-    run git -C "$_orfs" fetch -q --depth 1 origin "$commit" || die "ORFS fetch failed"
-    run git -C "$_orfs" checkout -q -f FETCH_HEAD || die "ORFS checkout failed"
+    if [[ ! -d "$_orfs/.git" ]]; then
+      run git init -q "$_orfs" && run git -C "$_orfs" remote add origin "$ORFS_URL"
+    fi
+    if run timeout "${R2G_GIT_FETCH_TIMEOUT:-900}" git -C "$_orfs" fetch -q --depth 1 origin "$commit" \
+         && run git -C "$_orfs" checkout -q -f FETCH_HEAD; then
+      echo "$commit" > "$_orfs/.r2g_orfs_commit"
+    else
+      slug=$(echo "$ORFS_URL" | sed -E 's#^(https?://|git@)github.com[:/]##; s#\.git$##')
+      tgz="https://codeload.github.com/$slug/tar.gz/$commit"
+      log "git fetch failed or timed out; fetching the same commit as a source tarball: $tgz"
+      [[ "$DRY" == "1" ]] || { rm -rf "$_orfs/.git" && mkdir -p "$_orfs" \
+        && curl -fsSL --retry 3 "$tgz" | tar -xz --strip-components=1 -C "$_orfs" \
+        && [[ -f "$_orfs/flow/Makefile" ]] && echo "$commit" > "$_orfs/.r2g_orfs_commit"; } \
+        || die "ORFS fetch failed (git and tarball): $tgz"
+    fi
   fi
   log "ORFS ${commit:0:10} at $_orfs; openroad/yosys from the bundle $dest"
 fi

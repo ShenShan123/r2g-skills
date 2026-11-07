@@ -17,6 +17,8 @@
 # so downstream parsing is total. All diagnostics go to stderr. This script never
 # exits non-zero for a missing tool: absence is data, not an error.
 set -uo pipefail
+# A fresh container / cron job may start without USER (Experiment 1, 2026-11-06): set -u aborted here.
+USER="${USER:-$(id -un 2>/dev/null || echo user)}"; export USER
 
 _SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _FLOW_DIR="$(cd "$_SETUP_DIR/../flow" && pwd)"
