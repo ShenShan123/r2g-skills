@@ -6,8 +6,10 @@ from pathlib import Path
 
 import pytest
 
-spec = importlib.util.spec_from_file_location(
-    "repair_population", Path(__file__).resolve().parents[2] / "experiments/summarize_repair_population.py")
+_SRC = Path(__file__).resolve().parents[2] / "experiments/summarize_repair_population.py"
+if not _SRC.is_file():  # experiments/ is a local-only tree, not part of the published R2G
+    pytest.skip("experiments/ not in this checkout", allow_module_level=True)
+spec = importlib.util.spec_from_file_location("repair_population", _SRC)
 summary = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(summary)
 

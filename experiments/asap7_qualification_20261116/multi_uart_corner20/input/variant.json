@@ -1,8 +1,0 @@
-{
-  "source": "multi_uart",
-  "changed": [
-    "die/core +2.16um",
-    "M1 20nm corner spacing represented in tech LEF"
-  ],
-  "no_drc_rule_change": true
-}

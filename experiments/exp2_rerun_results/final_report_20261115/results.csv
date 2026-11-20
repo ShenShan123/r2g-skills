@@ -1,5 +1,0 @@
-method_id,qualified,small,medium,large,unique_repositories,effective_repositories,comparison_runtime_seconds,recorded_runtime_seconds,timestamp_wall_seconds,total_tokens,model_calls,search_requests,clone_count,self_synth_attempts,evaluation_elapsed_seconds,cost_usd_verified,input_tokens_including_cache,cached_input_tokens_recorded_or_recovered,cache_evidence_status,output_tokens_including_reasoning,output_tokens_excluding_reasoning,reasoning_tokens
-native-codex,200,70,90,40,90,70.92198581560284,9424.0,9423.751,9424.0,85584704,459,77,123,383,7888.0,,85419566,85049728,per_call_ledger,165138,50641,114497
-native-dsh,200,70,90,40,86,68.4931506849315,17922.0,16106.781,17922.0,92768319,598,227,197,235,5471.0,,92308576,91606400,recovered_cache_lower_bound,459743,459743,0
-r2g-expander-gpt,200,70,90,40,136,102.56410256410257,17144.0,17143.836,17144.0,12142,5,52,1130,1510,6108.0,,10045,0,planner_recorded_usage,2097,1384,713
-r2g-expander-deepseek,200,70,90,40,132,102.04081632653062,24448.553,24941.348,24941.347771,47316,9,76,1241,1617,6791.0,,24816,4736,planner_recorded_usage,22500,2022,20478

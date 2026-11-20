@@ -1,6 +1,0 @@
-{
-  "design_name": "multi_uart_strict",
-  "top_module": "uart",
-  "platform": "asap7",
-  "experimental": true
-}

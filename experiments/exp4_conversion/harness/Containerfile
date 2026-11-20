@@ -1,8 +1,0 @@
-# Exp 4 (conversion) image: the ORFS image R2G runs in, plus the Python of def-graph's
-# graph venv. Build context = <W>/build, which holds `py/` (a conda-forge Python 3.13 env with
-# pip-installed torch==2.13.0+cpu, torch_geometric==2.8.0, pandas==3.0.3, numpy==2.5.1; see
-# build_image.sh). No R2G code is added.
-FROM localhost/r2g-orfs:26Q3
-COPY py /opt/py
-ENV PATH=/opt/py/bin:/r2g_toolchain/OpenROAD-flow-scripts/tools/install/OpenROAD/bin:/r2g_toolchain/OpenROAD-flow-scripts/tools/install/yosys/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-RUN python3 -c "import torch, torch_geometric, pandas, numpy, sys; print(sys.version.split()[0], torch.__version__, torch_geometric.__version__, pandas.__version__, numpy.__version__)"

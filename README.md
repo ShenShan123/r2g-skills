@@ -445,9 +445,8 @@ Details: [`signoff-loop/knowledge/README.md`](r2g-skills/signoff-loop/knowledge/
 - **SKY130.** Netgen LVS is the production path; antenna-diode designs and port-to-port feedthroughs are
   handled automatically or with a stage hook.
 - **Platforms without LVS rules.** LVS reports `skipped` rather than failing.
-- **ASAP7** is not supported by the default flow (`run_orfs.sh` refuses it): no open deck can reach a clean
-  verdict. A separate qualification with the official Calibre decks is documented in
-  [`experiments/asap7_qualification_20261116/`](experiments/asap7_qualification_20261116/REPORT.md).
+- **ASAP7** is not supported in this version (`run_orfs.sh` refuses it): no open deck can reach a clean
+  verdict. Set `R2G_ALLOW_UNSUPPORTED_PLATFORM=1` to experiment anyway; results are not signoff quality.
 
 ## Validation
 
@@ -478,7 +477,6 @@ r2g-skills/
 │   ├── signoff-loop/     #   RTL → GDS, signoff, the repair loop and knowledge store
 │   └── def-graph/        #   graph and image datasets from signed-off layouts
 ├── tools/                # batch orchestration and the independent dataset verifier
-├── experiments/          # experiment runners, protocols and evidence for the paper
 ├── docs/                 # agent design notes and screenshots
 └── tests/                # repository-level tests
 ```

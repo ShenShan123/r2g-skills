@@ -1,7 +1,0 @@
-{
-  "design_name": "gcd_strict_via",
-  "status": "initialized",
-  "top_module": "gcd",
-  "platform": "asap7",
-  "experimental": true
-}

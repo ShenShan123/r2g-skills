@@ -1,8 +1,0 @@
-{
-  "valid": true,
-  "errors": [],
-  "warnings": [],
-  "design_name": "picorv32_demo",
-  "platform": "asap7",
-  "num_verilog_files": 2
-}

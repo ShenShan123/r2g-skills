@@ -344,3 +344,12 @@ paper_figures_review_20261111/
 paper/*.zip
 .vscode/
 experiments/exp4_harness/evidence/*/deployment/
+
+# 2026-11-20 (user): the published repository carries only what R2G needs to run -- the skills and their
+# knowledge base, the agent, the web app, tools and the installer. Experiment runners, evidence and paper
+# material stay local (still on disk, used by the running campaigns).
+experiments/
+paper/
+docs/Experiment_1_RTL_Acquisition_Protocol_Draft.md
+/EXPERIMENT_*.md
+/Selected_Results.md

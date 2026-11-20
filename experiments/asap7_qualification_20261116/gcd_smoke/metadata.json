@@ -1,7 +1,0 @@
-{
-  "design_name": "gcd_smoke",
-  "status": "initialized",
-  "top_module": "gcd",
-  "platform": "asap7",
-  "experimental": true
-}

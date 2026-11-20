@@ -1,8 +1,0 @@
-{
-  "selection_rule": "lower median original cell count among Nangate45 medium test designs; chosen before image conversion results",
-  "design": "C00899__display__vga-simulation__nangate45__p2",
-  "platform": "nangate45",
-  "cells": 1921,
-  "repeat": 1,
-  "shared_color_scale": true
-}

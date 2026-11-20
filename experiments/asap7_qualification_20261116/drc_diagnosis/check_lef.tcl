@@ -1,2 +1,0 @@
-read_lef /home/yangao/r2g-skills/experiments/asap7_qualification_20261116/drc_diagnosis/asap7_tech_v1_m1_spacing_candidate.lef
-exit

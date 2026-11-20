@@ -1,9 +1,0 @@
-design: uart
-platform: asap7
-purpose: fourth-platform multi-design qualification
-clock_port: clk
-clock_period_ps: 1000
-reset: synchronous active-high rst
-implementation: unmodified ORFS UART, DATA_WIDTH=8
-configuration: 16-bit runtime prescale input; default RVT FF library
-validation: transmit bit decoding, independent receive frames, backpressure, framing and overrun detection

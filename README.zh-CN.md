@@ -430,8 +430,8 @@ flowchart TD
 
 - **SKY130**：以 Netgen LVS 为正式路径；天线二极管设计与端口直通由流程自动处理或通过阶段钩子处理。
 - **没有 LVS 规则的平台**：LVS 报告 `skipped`，不算失败。
-- **ASAP7**：默认流程不支持（`run_orfs.sh` 会拒绝），因为没有开源规则能得到干净结论。使用官方 Calibre
-  规则的独立验证记录在 [`experiments/asap7_qualification_20261116/`](experiments/asap7_qualification_20261116/REPORT.md)。
+- **ASAP7**：当前版本不支持（`run_orfs.sh` 会拒绝），因为没有开源规则能得到干净结论。如仍想试验可设置
+  `R2G_ALLOW_UNSUPPORTED_PLATFORM=1`，结果不具备签核质量。
 
 ## 验证情况
 
@@ -461,7 +461,6 @@ r2g-skills/
 │   ├── signoff-loop/     #   RTL → GDS、签核、修复循环与经验库
 │   └── def-graph/        #   从签核版图构建图与图像数据集
 ├── tools/                # 批量编排与独立数据集校验器
-├── experiments/          # 论文实验的运行器、协议与证据
 ├── docs/                 # agent 设计说明与截图
 └── tests/                # 仓库级测试
 ```

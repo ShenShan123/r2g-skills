@@ -1,5 +1,0 @@
-design: picorv32_demo
-platform: asap7
-clock_port: clk
-clock_period_ps: 1000
-implementation: Existing PicoRV32, unmodified default parameters, native memory interface

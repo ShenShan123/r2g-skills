@@ -5,8 +5,10 @@ import sqlite3
 import pytest
 
 
-spec = importlib.util.spec_from_file_location(
-    'idle_upgrade', Path(__file__).resolve().parents[2] / 'experiments/agent_repro/upgrade_ui_when_idle.py')
+_SRC = Path(__file__).resolve().parents[2] / 'experiments/agent_repro/upgrade_ui_when_idle.py'
+if not _SRC.is_file():  # experiments/ is a local-only tree, not part of the published R2G
+    pytest.skip("experiments/ not in this checkout", allow_module_level=True)
+spec = importlib.util.spec_from_file_location('idle_upgrade', _SRC)
 upgrade = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(upgrade)
 

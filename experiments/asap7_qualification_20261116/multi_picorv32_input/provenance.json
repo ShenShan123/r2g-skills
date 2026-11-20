@@ -1,8 +1,0 @@
-{
-  "original_gds": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/results/6_final.gds",
-  "original_sha256": "0816429160be381b9ecc26902155cf7d9110bf38a9d33700ddb29fc7b5d2c1e4",
-  "geometry_scale": 1,
-  "top_level_pin_labels_copied": 108,
-  "drc_top_name": "TOPCELL",
-  "lvs_top_name": "picorv32_demo"
-}
