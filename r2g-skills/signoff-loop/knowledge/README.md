@@ -482,6 +482,27 @@ The knowledge store also feeds the loose-first **Fmax search** (`scripts/reports
     owns it); H2 parity is untouched (no failure_event exists for the upgraded runs because
     nothing failed). Tests: `tests/test_effective_stages.py`.
 
+## Learned recipes from LLM fallbacks (`learned_recipes.py`, 2026-11-08)
+
+When R2G stops on a design (no live strategy, or every strategy failed) and an LLM fallback then reaches a
+harness-verified dual-clean layout from R2G's final project, the DIFFERENCE between the two projects can become
+a recipe keyed by R2G's own stop symptom (`symptom.from_fix_log_row`; synth stops by `frontend_class`).
+
+- **Distill** (`distill`): only `dual_clean`, no RTL edit, no SDC / platform / top / source-set change; path
+  plumbing factored out by content; read-only probe hooks and `$(VAR)` aliases dropped.
+- **Gate** (`assess`): reasonable (known ORFS / R2G variable, nothing that switches off a repair or check, at most
+  `MAX_EDITS`) and generalizable (no die/core coordinates, no hook code naming the design or hard-coding a path —
+  comments are ignored). A failing fix is not stored.
+- **Validate** (`retrieve(min_units=ADMIT_UNITS)`): a stored candidate is OFFERED only once the identical
+  (content-addressed) fix was verified on `ADMIT_UNITS` (=2) independent split units; reuse outcomes recorded by
+  `fix_signoff.sh` (`record_use`) add evidence, and a recipe whose reuse failures outnumber successes is withdrawn.
+- **Reuse** (`diagnose_signoff_fix._inject_learned_recipes`): appended as an authorized candidate attempt ONLY when
+  R2G has no live strategy left for the symptom, i.e. exactly where the run would escalate to the LLM; it passes
+  the repair-action policy like any strategy. `R2G_LEARNED_RECIPES=0` disables it.
+- Tables `learned_recipes` + `learned_recipe_evidence` are created on first write, never in the read-only shipped
+  store (which therefore offers nothing). Not yet wired: the synth front end (`agent/r2g_agent/pipeline.py`).
+- Evidence: `experiments/exp3_recipe_reuse/` (simulation over the Exp3 fallback attempts).
+
 ## Sharing the store across users
 
 `knowledge.sqlite` (git-tracked) ships the skill pre-trained, but a binary blob does not

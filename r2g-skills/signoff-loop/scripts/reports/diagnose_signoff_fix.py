@@ -1095,6 +1095,35 @@ def _live_auto_strategy(plan: dict, rank_first: str | None = None) -> dict | Non
     return None
 
 
+def _inject_learned_recipes(plan: dict, proj, *, platform: str, sid: str | None, exclude=()) -> dict:
+    """Learned-recipe reuse (knowledge/learned_recipes.py, 2026-11-08): when R2G has NO live
+    strategy left for this symptom -- the point where a run would stop and escalate to the LLM
+    fallback -- offer the recipes earlier fallbacks distilled for the same (symptom, platform) as
+    authorized candidate attempts, appended after every built-in strategy. The repair-action policy
+    is applied to them like to any strategy. R2G_LEARNED_RECIPES=0 disables; a store without the
+    table (the shipped one) offers nothing. Never raises: reuse is an optimisation, not a gate."""
+    if os.environ.get("R2G_LEARNED_RECIPES", "1") == "0" or not sid:
+        return plan
+    try:
+        import knowledge_db
+        import learned_recipes
+        policy, perr = _load_repair_action_policy()
+        def _policy_failure(st):
+            if perr:
+                return perr
+            return _strategy_policy_failure(st, policy) if policy is not None else None
+        conn = knowledge_db.connect()
+        try:
+            learned_recipes.inject(plan, proj, platform=platform, sid=sid, conn=conn,
+                                   exclude=exclude, live_pick=_live_auto_strategy,
+                                   policy_failure=_policy_failure)
+        finally:
+            conn.close()
+    except Exception as exc:  # noqa: BLE001
+        plan.setdefault("warnings", []).append(f"learned recipes unavailable: {type(exc).__name__}: {exc}")
+    return plan
+
+
 def _find_flow_dir() -> str | None:
     """Delegate to flow/platform_capability.find_flow_dir -- one ORFS resolver for
     the whole skill (explicit > $FLOW_DIR > $ORFS_ROOT/flow > common roots).
@@ -2367,6 +2396,7 @@ def main(argv=None) -> int:
         "platform": plat,
     }
     _prioritize_geometric_pin_strategy(plan)
+    _inject_learned_recipes(plan, proj, platform=plat, sid=_sid, exclude=exclude)
 
     if args.rank_first:
         head = [s for s in plan["strategies"] if s["id"] == args.rank_first]

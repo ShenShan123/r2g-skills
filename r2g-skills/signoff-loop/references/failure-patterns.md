@@ -6073,6 +6073,175 @@ an explicit operator decision, not a drive-by fix.
 that can fire silently is a guard you no longer have. Prefer a loud, self-announcing skip that names its
 remedy — and re-check that the remedy still works.*
 
+### 63. Four-stage route labels masked on every legally pin-swapped net (R2G2.0 lineage; 2026-11-07)
+
+- **Symptom:** in the four-stage (R2G2.0) dataset, `net_wirelength_Cg.csv` has
+  `wirelength_valid=0` / `ground_cap_valid=0` with `route_lineage_valid=0` on nets whose routing is
+  perfectly well defined. On six pilot500 nangate45 dev designs, 1,384 synthesis nets were masked
+  although an independent lineage (experiments/exp4_validation/v1_4stage_check.py) resolved them;
+  C00702 (wallace): 467 of 3,805 nets.
+- **Root cause:** `02.build_base_to_stage_lineage` anchored every synthesis endpoint by the literal
+  `(inst, pin)`. The resizer / `swap_pins` exchanges the nets of logically equivalent inputs
+  (C03005 `_338_` NOR2_X2: synthesis `A1=_054_, A2=_057_`, `2_floorplan.def`
+  `( _338_ A2 )` on `_054_`, `( _338_ A1 )` on `_057_`). Each swapped endpoint then landed on the
+  other net's physical net, and both nets were declared "ambiguous". The masking was honest
+  (`valid=0`), so no wrong value shipped, but a silent ~4–12 % label loss per design.
+- **Fix (R2G2_UPSTREAM.md D15):** `legal_pin_permutation_remap` accepts a permutation only if
+  (a) the instance keeps the same multiset of input nets by name, and (b) every Liberty output
+  function of the stage master is invariant under it (exhaustive truth table). The remap is then
+  used for the anchor lookup. 02, 03 and 05 pass the Liberty cells (`lineage_liberty_cells`).
+- **Verified:** dev designs 1,384 → 7 masked-but-resolvable nets. All 37,474 valid WL labels (and their ground-cap twins)
+  equal the independent Σ-over-pieces truth. Tests: `test_r2g2_lineage_pin_permutation.py`
+  (the old behaviour is kept when no Liberty is passed; a non-symmetric swap is refused).
+
+### 64. Four-stage builder aborted on every purely combinational design (validator; 2026-11-07)
+
+- **Symptom:** `run_stage_dataset.sh` exits 1 at `validate`:
+  `floorplan已配置Timing源但没有有效Pin标签`. Hit on pilot500 C02241 (multi_kernel_conv) and C00702
+  (wallace). Both have a virtual clock and no registers.
+- **Root cause:** pin timing labels are endpoint slacks. A design whose endpoints are all output
+  ports has valid `io_pin` labels and, correctly, none on internal pins. The vendored validator
+  demanded at least one valid internal-pin label regardless.
+- **Fix (D16):** `timing_label_presence_error` requires at least one valid timing label overall,
+  and a valid pin label only when some pin is an internal timing endpoint (`is_timing_endpoint`
+  input feature). The guard still fires on a sequential design whose pin labels failed to join.
+
+### 65. Verifier false-red on every `R2G_GRAPH_KIND=both` build; stale pin-position doc (2026-11-07)
+
+- **Symptom:** `tools/verify_graph_dataset.py` FAILs `hetero manifest graph_kind == hetero — both`
+  on a documented build mode.
+- **Fix:** accept `{hetero, both}`. In 'both' mode, also verify that the shipped
+  `{v}_graph_homo.pt` equals the homo re-view of the hetero file. Nodes are compared exactly;
+  edges as a multiset, because `hetero_to_homo` regroups edge order by design. This makes the
+  previously unverified homo files checked.
+- **Docs:** graph-dataset.md still said "pin positions approximate to the owning instance origin"
+  (stale since 2026-07-14) and called `hetero_to_homo` an "exact inverse" (not in edge order);
+  both corrected.
+
+### 66. RC labels dropped on every net whose name contains a literal '/' (SPEF de-escape; 2026-11-07)
+
+- **Symptom:** b–f `y5` ground cap (and its coupling / equivalent-resistance edges) is NaN for
+  nets such as yosys `AddRoundKey$func$/home/.../gift_core.v:193$1080.ark.u[0]`. Pilot500 C00180:
+  59 of 4,886 nets. `verify_graph_dataset.py` also flagged it ("SPEF de-escape join rate on
+  escape-sensitive nets 56.9 %").
+- **Root cause:** the name is a single identifier containing literal slashes. `write_def` writes
+  `AddRoundKey$func$\/home\/...ark.u\[0\]` (escaping '/' as well as '[' ']'), and
+  `write_spef` writes `AddRoundKey\$func\$\/home\/...`. `techlib.spef._deesc` removed every
+  backslash except before '[' ']'. That turned `\/` into '/', and the name no longer joined the
+  DEF-side feature CSVs (which keep `\/`). The old unit test even asserted `a\/b -> a/b`.
+- **Fix (shared techlib, once):** `_ESC_NONBRACKET` now also keeps `\/`. The hierarchy divider is
+  unescaped in both formats, so it is unaffected. Tests: `test_spef.py::test_deesc_matches_def_convention`
+  (corrected expectation) and `::test_literal_slash_net_joins_def_name`.
+- 3 of 500 pilot500 designs carry such names (C00058, C00180, C00350; 274 nets).
+- **The verifier's independent SPEF oracle had the SAME rule** (`tools/verify_graph_dataset.py
+  _spef_deesc`). After the extractor fix it went red on C00180 (`b coupling edge count` 45,598 vs
+  43,690, join rate 56.9 %) because its own truth now dropped the nets. Fixed to the same
+  convention, with `test_verify_graph_dataset_helpers.py::test_verifier_spef_deesc_keeps_literal_slash`.
+  An oracle that copies a spec copies the spec's mistakes, so re-derive the convention from the
+  tools' actual output (here, `write_def`).
+
+### 67. `input [0:0] x;` named `x` in the four-stage canonical graph (Yosys JSON; 2026-11-07)
+
+- **Symptom:** pilot500 C02816. The four-stage build aborts at labels:
+  `OpenSTA报告与基础图实体版本不一致 ... path_ratio=0.9167, required>=0.9500`. The canonical port
+  `i_register_ready` also has NaN position on every stage.
+- **Root cause:** Yosys JSON stores a one-bit vector with offset 0 exactly like a scalar, so
+  `01.yosys_signal_names` named it `i_register_ready`. OpenROAD/OpenSTA, reading the same netlist,
+  call it `i_register_ready[0]`, so the port joined no DEF PIN and no STA point, and the 24 timing
+  paths starting at it were rejected.
+- **Fix (R2G2_UPSTREAM.md D17):** `single_bit_vector_names` reads the `[k:k]` declarations of the
+  TOP module from the netlist text, and `yosys_signal_names` indexes those names.
+  Test: `tests/test_r2g2_single_bit_vector.py`. (Our own exp4 ground-truth parser had the same bug,
+  amendment A4.)
+
+### 68. Image pins ON a GCell line binned one GCell low (float-um floor; 2026-11-07)
+
+- **Symptom:** in the Exp 4 conversion study, two independently written LLM image converters scored
+  IDENTICALLY low on `pin_density` / `pin_rudy` (0.982, 5/43 designs) against def-graph and the
+  ground-truth checker, while matching every other channel. Identical misses from two models point at
+  the reference, not the models. pilot500 C00198 GCell (4,17): LLMs 8 pins, def-graph 9.
+- **Root cause:** `build_images.Grid.index` (and `splat`'s index bounds) converted DBU to um and
+  floored in floating point. `_1797_/ZN` sits at x = 28500 dbu on a 5700-dbu grid, exactly ON GCell
+  line 5; `14.25 // 2.85 == 4.0` in IEEE float, so the pin landed in GCell 4. def-graph's own
+  `verify_images.py` could not see it: it checked only the pin-density TOTAL, and the IR-drop/axis
+  checks used the same float floor. The Exp 4 ground-truth checker (`v1_images_dg.cell`) had the same
+  float floor too -- builder and checker agreed on the wrong answer.
+- **Fix:** `Grid.bin` converts back to DBU, snaps to 1e-6 DBU and floor-divides by the integer step
+  (half-open cells: a point on a line belongs to the cell above). `verify_images.py` uses its own
+  DBU binning and gains per-GCell `pin_density.array` / `pin_rudy.array` checks (a pin moved to the
+  neighbouring GCell keeps the total unchanged). Exp 4 checker: amendment A9.
+- **Tests:** `test_image_dataset.py::test_gcell_line_point_bins_in_dbu_not_float_um` and the
+  `pin_density.array` negative control (np.roll keeps the total, moves the pins); both fail on the
+  old code.
+- **Lesson:** an "independent" checker that re-derives a value with the same arithmetic idiom as the
+  builder is not independent for that idiom. Compare against an implementation written from the
+  spec's integer definition -- here, two LLMs written from the spec found it.
+
+### 69. One failed label extractor aborted the whole label stage on a fresh project (`run_soft` under `set -e`; 2026-11-07)
+
+- **Symptom:** def-graph on the gf180 baseline re-runs (Exp 4 v2): `run_labels.sh` exited 1
+  right after `irdrop: FAILED`. There were no RC labels, no `labels_stats.json` and no
+  provenance stamp, and `run_graphs.sh` then failed. nangate45 never showed it, because there
+  PDNSim succeeds.
+- **Root cause:** `run_soft` promises to "never abort the orchestrator". Its failure branch
+  ends on `[[ -f "$t.stale" ]] && echo …`, which returns status 1 whenever there was nothing
+  to quarantine, i.e. on every first-ever run. The function returned 1, and the script's
+  `set -euo pipefail` killed the stage. The existing quarantine tests drove `run_soft`
+  without `-e`, so they could not see it.
+- **Trigger here:** PDNSim aborts with `PSM-0021 Resistance map contains invalid values`
+  (vias have zero resistance) on BOTH sky130hd and gf180 in this reference-DEF build; nangate45
+  succeeds. This is an open IR-drop defect: the via RC is never set before
+  `analyze_power_grid`. IR drop is out of scope for the study and is not
+  fixed. The label stage must survive it.
+- **Fix:** `run_soft` ends with an explicit `return 0`.
+- **Test:** `test_label_stage_quarantine.py::test_failed_extractor_does_not_abort_the_set_e_orchestrator`
+  runs the real function under `set -euo pipefail`, with and without a prior CSV. The
+  first-ever case fails on the old code.
+
+### 70. `verify_images.py` ignored POLYGON pin shapes: false-red on every gf180 image build (2026-11-07)
+
+- **Symptom:** gf180 image builds failed def-graph's own verifier with 13/17 checks:
+  `pin_density.array` (369 GCells), `pin_rudy.array`, `rudy.integral` and `pin_rudy.total`.
+  The builder matched the independent Exp 4 v2 image truth on every channel.
+- **Root cause:** `verify_images.read_lef` read only `RECT` pin shapes. The gf180 9t cell
+  LEF has 2,135 `POLYGON`s, so a polygon-only pin fell back to the instance origin and a
+  mixed pin to the RECT-only mean. The builder (`techlib.lef.macro_pin_geometry`) uses
+  OpenDB's getAvgXY boxes and was right. `tools/verify_graph_dataset.py` already handled
+  POLYGON; the image verifier had been written before gf180 was exercised.
+- **Fix:** `verify_images._polygon_boxes` is its own band sweep (even-odd crossing,
+  vertically identical spans merged); polygon boxes now count like RECTs.
+- **Test:** `test_image_dataset.py::test_verifier_reads_polygon_pin_shapes_like_the_builder`.
+  It fails on the old code.
+
+### 71. Four-stage validator aborted a design whose registers STA never timed (D16 too strict; R2G2 D18; 2026-11-07)
+
+- **Symptom:** pilot500 C03894 RAM_IO (nangate45) aborted at
+  `checks/validate_four_stage.py`: `floorplan已配置Timing源但内部时序端点没有有效Pin标签`.
+- **Root cause:** D16 (#64) still demanded a valid internal-pin label whenever a pin carries
+  `is_timing_endpoint`. That feature is structural (a register D pin). This FABulous tile's
+  clock is not among the SDC's clock candidates. The virtual clock times only the 201
+  port-to-port paths, and all 372 D-pin slacks are INF, so zero pin labels is the truth.
+- **Fix:** R2G2 delta D18, `report_has_internal_endpoint`. The internal-pin demand is waived
+  only when the configured `paths_max/min.rpt` were read and list no non-port `Endpoint:`.
+  An unreadable report keeps the strict rule.
+- **Tests:** `test_r2g2_lineage_pin_permutation.py` (D18 block). Both tests fail on the old
+  code.
+
+### 72. `verify_graph_dataset.py` crashed on a quarantined label CSV: zero checks ran (2026-11-07)
+
+- **Symptom:** on every sky130hd/gf180 build of Exp 4 v2, `--batch` reported the case as
+  `0/1` with `VERIFIER ERROR FileNotFoundError … labels/ir_drop.csv`. No topology, feature,
+  label or RC check ran at all.
+- **Root cause:** #52 made a failed extractor leave its CSV ABSENT, and taught the graph
+  builder to degrade that to an all-NaN slot plus `label_health: missing`. The verifier's
+  `expected_label_series` still did a bare `pd.read_csv`, and any absent label CSV (here
+  IR drop, see #69) aborted the whole case.
+- **Fix:** a missing CSV gives an empty frame, so the expectation is all-NaN, and the y-slot
+  non-NaN-count check then compares it against the graph. The manifest's
+  `ok_with_label_gaps` still fails the `manifest.status` checks, so the gap stays visible.
+- **Test:** `test_verify_graph_dataset_helpers.py::test_expected_label_series_tolerates_a_quarantined_label_csv`.
+  It fails on the old code.
+
 ## Strict-Gate Pilot Failures (round-2 pilot 2026-07-21 — failure-patterns #53)
 
 The second fixed-protocol pilot (`docs/superpowers/plans/pilot_report.md` + `pilot_analysis.md`,

@@ -428,7 +428,20 @@ o=dict(check=check,iter=int(it),strategy=strategy,
        cumulative_config=json.dumps(cum,sort_keys=True),
        config_delta=config_delta, env_flags=json.dumps(env_flags,sort_keys=True),
        predicates=preds, global_regressions=global_regs, ts=ts)
-open(logp,"a").write(json.dumps(o)+"\n")' \
+open(logp,"a").write(json.dumps(o)+"\n")
+# Learned-recipe reuse evidence (knowledge/learned_recipes.py): a learned recipe that CLEARED the
+# check is a reuse success; one that applied without effect / did not improve / regressed is a reuse
+# failure (it stops being offered once failures outnumber successes). Never fails the fix loop.
+if str(strategy).startswith("learned:") and verdict in ("cleared","recipe_no_effect","no_improvement","regression","apply_failed","lifecycle_blocked"):
+    try:
+        sys.path.insert(0, os.environ.get("R2G_KNOWLEDGE_DIR",""))
+        import knowledge_db, learned_recipes
+        _c=knowledge_db.connect()
+        learned_recipes.record_use(_c, str(strategy)[len("learned:"):], os.path.basename(proj.rstrip("/")), None,
+                                   verdict=="cleared", {"check":check,"iter":int(it),"verdict":verdict,"fix_session_id":sid,"ts":ts})
+        _c.close()
+    except Exception as _e:
+        sys.stderr.write("learned recipe evidence not recorded: %s\n" % _e)' \
     "$1" "$2" "$3" "$4" "$5" "$6" "${7:-}" "$PROJECT_DIR" "$FIX_SESSION_ID" "$LOG" \
     "${8:-}" "${9:-}" "$(date +%FT%T%:z)" "${10:-}" "${11:-}"
 }
