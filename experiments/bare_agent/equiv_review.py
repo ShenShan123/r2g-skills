@@ -134,6 +134,8 @@ def review(case_dir: Path, baselines: Path, yosys: str, timeout: int) -> dict:
     r = json.loads((case_dir / "result.json").read_text())
     case = json.loads((case_dir / "case.json").read_text())
     proj = case_dir / (r["case_id"] + "_bare")
+    if not proj.is_dir():                       # native-harness attempts (experiments/native_harness) name it _native
+        proj = case_dir / (r["case_id"] + "_native")
     out = {"case_id": r["case_id"], "pending": r.get("semantic_review", {}).get("pending")}
     with tempfile.TemporaryDirectory() as tmp:
         orig = Path(tmp) / (r["case_id"] + "_orig")
@@ -179,11 +181,15 @@ def main():
     ap.add_argument("--yosys", required=True)
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--shard", default="0/1", help="i/n: review every n-th pending case, starting at i (parallel runs)")
     a = ap.parse_args()
+    si, sn = (int(x) for x in a.shard.split("/"))
     rows = []
     for root in a.root:
-        for res in sorted(root.glob("cases/*/result.json")):
-            if json.loads(res.read_text()).get("outcome") != "pending_semantic_review":
+        pending = [res for res in sorted(root.glob("cases/*/result.json"))
+                   if json.loads(res.read_text()).get("outcome") == "pending_semantic_review"]
+        for res in pending[si::sn]:
+            if False:
                 continue
             try:
                 row = review(res.parent, a.baselines, a.yosys, a.timeout)

@@ -40,8 +40,43 @@ def _wait_for_load(a):
     cpus = os.cpu_count() or 1
     while ((a.max_load and os.getloadavg()[0] > a.max_load * cpus)
            or (getattr(a, "min_mem_gb", 0) and mem_available_gb() < a.min_mem_gb)
-           or (getattr(a, "min_disk_gb", 0) and disk_free_gb(a.root) < a.min_disk_gb)):
+           or (getattr(a, "min_disk_gb", 0) and disk_free_gb(a.root) < a.min_disk_gb)
+           or not relay_ok(getattr(a, "base_url", ""))):
         time.sleep(60)
+
+
+def relay_ok(base_url) -> bool:
+    """Admission only: the model relay answers /health. 203, 2026-11-19 16:31 - 11-20 01:11: the host lost
+    its route to the relay for 8.7 h and the launcher kept starting designs that ended on `model_error`
+    within seconds (162 attempts). A running attempt is never touched; it rides out a short outage itself."""
+    if not base_url.startswith("http://127.0.0.1"):
+        return True
+    import urllib.request
+    url = base_url.rstrip("/").rsplit("/v1", 1)[0] + "/health"
+    try:
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(url, timeout=10) as r:
+            return r.status == 200 and b'"ok"' in r.read()
+    except Exception:
+        return False
+
+
+TRANSPORT_ERRORS = ("Connection refused", "Connection reset", "Errno 104", "ConnectError", "ConnectTimeout", "Errno 111", "Errno 113",
+                    "No route", "timed out", "RemoteProtocolError", "ReadError", "ReadTimeout")
+
+
+def relay_failure(out: Path) -> bool:
+    """The attempt ended on `model_error` and every failed invocation was a transport failure (the relay or
+    the route to it was down): an infrastructure event, not the model's result -- kept outside the cohort
+    like the 2026-10-29 relay outage (harness_defect/README.json). Provider-side refusals still count."""
+    try:
+        r = json.loads((out / "result.json").read_text())
+        if r.get("stop_reason") != "model_error":
+            return False
+        failed = json.loads((out / "usage.json").read_text()).get("failed_invocations") or []
+    except (OSError, ValueError):
+        return False
+    return bool(failed) and all(any(t in str(f.get("error", "")) for t in TRANSPORT_ERRORS) for f in failed)
 
 
 def disk_free_gb(path) -> float:
@@ -266,6 +301,16 @@ def run_one(case, a):
         with (out / "runner.log").open("ab") as log:
             rc = subprocess.call(cmd, stdout=log, stderr=subprocess.STDOUT, cwd=a.repo)
         res = out / "result.json"
+        if res.is_file() and relay_failure(out):
+            # the relay was unreachable: not an attempt at all. Set aside and start again once the relay
+            # answers (the admission gate waits for it); this does not use up the one voided retry.
+            cleanup_workspace(case, a)
+            dest = a.root / "relay_failed" / ("%s_%d" % (case["id"], int(time.time())))
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(out), str(dest))
+            if len(list(dest.parent.glob(case["id"] + "_*"))) >= 5:
+                return case["id"], "relay_failed 5 times, left for the operator"
+            return run_one(case, a)
         if attempt == 1 and res.is_file() and not json.loads(res.read_text()).get("usage_complete"):
             # voided by the invocation (a stream ended without provider usage), not
             # by the model: kept outside the cohort, one fresh attempt (PROTOCOL.md)

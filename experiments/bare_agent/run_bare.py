@@ -164,7 +164,8 @@ def prepare(case: dict, baseline: Path, project: Path) -> dict:
             # frozen platform setup every arm gets; carry the file with the config.
             # Copying only config.mk + SDC silently dropped both overrides here
             # (2026-11-04), the same loss as commit 2384b1c1 in the baseline driver.
-            v = re.match(r"(\s*export\s+\w+\s*\??=\s*)/work/(\S+)\s*$", line)
+            # (an ASAP7 apparatus line keeps its `override`: the platform config assigns TECH_LEF unconditionally)
+            v = re.match(r"(\s*(?:override\s+)?export\s+\w+\s*\??=\s*)/work/(\S+)\s*$", line)
             if v:
                 if not (baseline / v.group(2)).is_file():
                     raise SystemExit("baseline config names /work/%s, which %s does not provide"
@@ -507,7 +508,11 @@ def regrade(out: Path, repo: Path) -> dict:
     project = out / (res["case_id"] + "_bare")
     orfs = Path(os.environ.get("ORFS_ROOT", "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts"))
     platform_dir = orfs / "flow/platforms" / res["platform"]
-    tools = BareTools(project, res["platform"], repo, orfs, {})
+    if res["platform"] == "asap7":
+        from bare_tools_asap7 import BareToolsASAP7
+        tools = BareToolsASAP7(project, res["platform"], repo, orfs, {})
+    else:
+        tools = BareTools(project, res["platform"], repo, orfs, {})
     deck = tree_hash(platform_dir) if res.get("platform_unchanged") else "changed"
     v = verdict(tools, project, res["prepare"], platform_dir, deck)
     prev = {k: res.get(k) for k in ("outcome", "bound_to_layout")}
@@ -565,7 +570,12 @@ def main():
     deck_hash = tree_hash(platform_dir)
     job = "bare-" + case["id"] + "-" + uuid.uuid4().hex[:6]
     journal = out / "orfs_audit.jsonl"
-    tools = BareTools(project, platform, a.repo, orfs, audit_env(job, name, project, journal, a.repo))
+    if platform == "asap7":
+        # Calibre-only platform (memlab216): same tools, ASAP7 flow/signoff backend (bare_tools_asap7.py)
+        from bare_tools_asap7 import BareToolsASAP7
+        tools = BareToolsASAP7(project, platform, a.repo, orfs, audit_env(job, name, project, journal, a.repo))
+    else:
+        tools = BareTools(project, platform, a.repo, orfs, audit_env(job, name, project, journal, a.repo))
     mc = ModelConfig(provider="deepseek" if a.protocol == "openai" else "openai", model=a.model,
                      base_url=a.base_url, protocol=a.protocol, api_key_env="R2G_LOCAL_RELAY_AUTH",
                      thinking=True, max_tokens=a.max_tokens, temperature=0.2)
