@@ -14,16 +14,35 @@ class AnthropicAdapter:
 
     def __init__(self, mc, key: str | None):
         self.mc, self.key = mc, key
+        # Signed thinking must be replayed unchanged, in its original position
+        # among text/tool blocks. Keep protocol blocks private to this adapter;
+        # the shared conversation format remains provider independent.
+        self._assistant_blocks: dict[str, list[dict]] = {}
 
     @staticmethod
-    def to_wire(messages: list[dict]) -> list[dict]:
+    def _turn_key(calls: list[dict], text: str) -> str:
+        return ("call:" + calls[0]["id"]) if calls else ("text:" + text)
+
+    @staticmethod
+    def to_wire(messages: list[dict], assistant_blocks: dict[str, list[dict]] | None = None) -> list[dict]:
         out: list[dict] = []
         for m in messages:
             if m["role"] == "assistant":
+                calls = m.get("tool_calls") or []
+                original = (assistant_blocks or {}).get(AnthropicAdapter._turn_key(calls, m.get("content") or ""))
+                # A changed/compacted turn must not silently restore stale text or
+                # tool arguments. Replay only an unchanged assistant turn.
+                if original is not None:
+                    original_text = "".join(b.get("text", "") for b in original if b["type"] == "text")
+                    original_calls = [{"id": b["id"], "name": b["name"], "arguments": b["input"]}
+                                      for b in original if b["type"] == "tool_use"]
+                    if original_text == (m.get("content") or "") and original_calls == calls:
+                        out.append({"role": "assistant", "content": original})
+                        continue
                 blocks = []
                 if m.get("content"):
                     blocks.append({"type": "text", "text": m["content"]})
-                for t in m.get("tool_calls") or []:
+                for t in calls:
                     blocks.append({"type": "tool_use", "id": t["id"], "name": t["name"], "input": t["arguments"]})
                 out.append({"role": "assistant", "content": blocks or [{"type": "text", "text": ""}]})
             elif m["role"] == "tool":
@@ -40,7 +59,7 @@ class AnthropicAdapter:
 
     def stream(self, messages: list[dict], tools: list[dict], system: str = ""):
         body = {"model": self.mc.model, "max_tokens": self.mc.max_tokens, "temperature": self.mc.temperature,
-                "messages": self.to_wire(messages), "stream": True}
+                "messages": self.to_wire(messages, self._assistant_blocks), "stream": True}
         if system:
             body["system"] = system
         if tools:
@@ -74,14 +93,22 @@ class AnthropicAdapter:
                         complete = True
                     elif t == "content_block_start":
                         cb = ev["content_block"]
-                        blocks[ev["index"]] = {"type": cb["type"], "id": cb.get("id"), "name": cb.get("name"),
-                                               "json": ""}
+                        blocks[ev["index"]] = {**cb, "_json": ""}
+                        if cb["type"] == "text" and cb.get("text"):
+                            yield {"type": "text", "delta": cb["text"]}
                     elif t == "content_block_delta":
                         d = ev["delta"]
+                        block = blocks[ev["index"]]
                         if d.get("type") == "text_delta":
+                            block["text"] = block.get("text", "") + d["text"]
                             yield {"type": "text", "delta": d["text"]}
                         elif d.get("type") == "input_json_delta":
-                            blocks[ev["index"]]["json"] += d.get("partial_json", "")
+                            block["_json"] += d.get("partial_json", "")
+                        elif d.get("type") == "thinking_delta":
+                            block["thinking"] = block.get("thinking", "") + d.get("thinking", "")
+                            yield {"type": "thinking", "delta": d.get("thinking", "")}
+                        elif d.get("type") == "signature_delta":
+                            block["signature"] = block.get("signature", "") + d.get("signature", "")
                     elif t == "message_delta":
                         usage.update(ev.get("usage") or {})
                         stop = (ev.get("delta") or {}).get("stop_reason") or stop
@@ -102,12 +129,21 @@ class AnthropicAdapter:
         finally:
             if not closing:
                 yield usage_event(self.mc, usage, response_id, complete, retries)
+        original, calls = [], []
         for i in sorted(blocks):
             b = blocks[i]
+            wire = {k: v for k, v in b.items() if k != "_json"}
             if b["type"] == "tool_use":
                 try:
-                    args = json.loads(b["json"]) if b["json"].strip() else {}
+                    args = json.loads(b["_json"]) if b["_json"].strip() else b.get("input") or {}
                 except ValueError:
-                    args = {"_unparsed": b["json"]}
-                yield {"type": "tool_call", "id": b["id"], "name": b["name"], "arguments": args}
+                    args = {"_unparsed": b["_json"]}
+                wire["input"] = args
+                calls.append({"id": b["id"], "name": b["name"], "arguments": args})
+            original.append(wire)
+        if any(b["type"] in ("thinking", "redacted_thinking") for b in original):
+            text = "".join(b.get("text", "") for b in original if b["type"] == "text")
+            self._assistant_blocks[self._turn_key(calls, text)] = original
+        for call in calls:
+            yield {"type": "tool_call", **call}
         yield {"type": "done", "stop_reason": stop}

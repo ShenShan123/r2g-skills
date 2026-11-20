@@ -6,6 +6,8 @@
 // A string found in neither falls through unchanged. `{n:design}` = "1 design"/"2 designs".
 
 export const EN: Record<string, string> = {
+  "布局规划": "Floorplan", "单元放置": "Placement", "天线二极管修复": "Antenna diode repair",
+  "建立时间裕量（纳秒）": "setup WNS (ns)", "数据清单校验通过": "manifest ok",
   // separators and punctuation
   "：": ": ", "；": "; ", "、": ", ",
 

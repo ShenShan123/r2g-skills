@@ -333,7 +333,7 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
                   <Stat label={t("IO 引脚")} value={s?.pins} /><Stat label={t("die 边长")} value={s ? `${s.die_side_um} µm` : null}
                     sub={s ? tb(({ area: "由面积决定", pins: "由引脚数决定", pdn_floor: "由电源网格下限决定" } as Record<string, string>)[s.binding as string]) : ""} />
                   <Stat label={t("时钟周期")} value={s ? `${s.period_ns} ns` : null} sub={t("按单元数分档")} />
-                  <Stat label={t("建立时间裕量")} value={fmt(sum?.timing?.setup_wns)} sub="setup WNS (ns)" />
+                  <Stat label={t("建立时间裕量")} value={fmt(sum?.timing?.setup_wns)} sub={t("建立时间裕量（纳秒）")} />
                 </div>
               </section>
               <section>
@@ -350,7 +350,7 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
                   <Stat label="DRC" value={<Verdict v={rep?.drc?.status} />} sub={rep?.drc ? t("{n} 处违例", { n: rep.drc.total_violations ?? 0 }) : ""} />
                   <Stat label="LVS" value={<Verdict v={rep?.lvs?.status} />} sub={rep?.lvs?.mismatch_count != null ? t("{n} 处不匹配", { n: rep.lvs.mismatch_count }) : ""} />
                   <Stat label={t("数据集校验")} value={rep?.verify ? `${rep.verify.passed}/${rep.verify.total}` : "—"}
-                    sub={rep?.graph_dataset?.status ? `manifest ${rep.graph_dataset.status}` : ""} />
+                    sub={rep?.graph_dataset?.status === "ok" ? t("数据清单校验通过") : rep?.graph_dataset?.status ?? ""} />
                 </div>
               </section>
               {Array.isArray(d.detail?.repair) && d.detail.repair.length > 0 && (
@@ -369,7 +369,7 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
                       return <div key={i} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-xl bg-panel2 px-3 py-2 text-sm">
                         {r.check && <span className="rounded-md bg-panel px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted ring-1 ring-line">{r.check}</span>}
                         {r.iter != null && <span className="text-xs text-faint">{t("第 {n} 轮", { n: r.iter })}</span>}
-                        {strategy && strategy !== "none" && <span className="min-w-0 truncate font-mono text-[13px] text-accent2">{strategy}</span>}
+                        {strategy && strategy !== "none" && <span title={strategy} className="min-w-0 truncate font-mono text-[13px] text-accent2">{strategy === "antenna_diode_repair" ? t("天线二极管修复") : strategy}</span>}
                         {r.before != null && <span className="ml-auto font-mono text-[13px] tabular-nums text-muted">{r.before}<span className="mx-1 text-faint">→</span><span className={clean ? "font-semibold text-ok" : "text-fg"}>{r.after}</span></span>}
                         {verdict && <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${vClass} ${r.before == null ? "ml-auto" : ""}`}>{t(vText)}</span>}
                       </div>;

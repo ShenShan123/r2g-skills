@@ -13,7 +13,7 @@ type View = { stage: string; label: string; available: boolean; caption: string;
     antenna_cells?: number; route_segments?: number; power_straps?: number; clock_segments?: number;
     layers?: Record<string, { segments: number; color: string }> } };
 const STAGES = ["synth", "floorplan", "placement", "cts", "route", "final"];
-const LABELS = ["综合", "Floorplan", "Placement", "CTS", "Route", "最终版图"];
+const LABELS = ["综合", "布局规划", "单元放置", "时钟树", "详细布线", "最终版图"];
 
 const fmt = (n?: number) => new Intl.NumberFormat("en-US", (n ?? 0) >= 10000 ? { notation: "compact", maximumFractionDigits: 1 } : {}).format(n ?? 0);
 
@@ -56,6 +56,7 @@ function EnlargedView({ view, url, name, index, total, onPrevious, onNext, onClo
   view: View; url: string; name: string; index: number; total: number;
   onPrevious?: () => void; onNext?: () => void; onClose: () => void;
 }) {
+  const viewLabel = t(LABELS[STAGES.indexOf(view.stage)] ?? view.label);
   const dialog = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const id = useId();
@@ -100,13 +101,13 @@ function EnlargedView({ view, url, name, index, total, onPrevious, onNext, onClo
     <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby={`${id}-title`} aria-describedby={`${id}-caption`}
       className="max-h-[calc(100dvh-2rem)] w-full max-w-6xl overflow-y-auto rounded-2xl border border-line bg-panel shadow-xl">
       <div className="flex items-center gap-3 border-b border-line px-4 py-3">
-        <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h2 id={`${id}-title`} className="font-semibold">{tb(view.label)}</h2><span className="shrink-0 text-xs text-faint" aria-live="polite">{index + 1} / {total}</span></div><p className="truncate text-xs text-muted">{name}</p></div>
+        <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h2 id={`${id}-title`} className="font-semibold">{viewLabel}</h2><span className="shrink-0 text-xs text-faint" aria-live="polite">{index + 1} / {total}</span></div><p className="truncate text-xs text-muted">{name}</p></div>
         <a className="btn-ghost px-2 py-1.5 text-xs" href={url} target="_blank" rel="noreferrer" aria-label={t("打开原图")}><ExternalLink size={15} /><span className="hidden sm:inline">{t("原图")}</span></a>
         <button ref={closeButton} type="button" aria-label={t("关闭版图大图")} className="rounded-lg p-2 text-muted hover:bg-panel2" onClick={onClose}><X size={18} /></button>
       </div>
       <div className="relative flex min-h-48 items-center justify-center bg-[#0b1220]">
         {imageError ? <p role="alert" className="p-6 text-sm text-muted">{t("版图暂时无法加载，请关闭后重试。")}</p>
-          : <img key={url} src={url} alt={t("{name} {label}放大图", { name, label: tb(view.label) })} onError={() => setImageError(true)} className="max-h-[70dvh] w-full object-contain" />}
+          : <img key={url} src={url} alt={t("{name} {label}放大图", { name, label: viewLabel })} onError={() => setImageError(true)} className="max-h-[70dvh] w-full object-contain" />}
         <button type="button" aria-label={t("上一张版图")} title={t("上一张（←）")} disabled={!onPrevious} onClick={onPrevious}
           className="absolute left-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-panel/90 text-fg shadow-sm transition hover:bg-panel focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default disabled:opacity-30 sm:left-4"><ChevronLeft size={22} /></button>
         <button type="button" aria-label={t("下一张版图")} title={t("下一张（→）")} disabled={!onNext} onClick={onNext}
