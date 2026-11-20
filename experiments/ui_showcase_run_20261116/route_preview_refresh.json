@@ -1,0 +1,50 @@
+{
+  "run": "RUN_2026-11-15_22-48-14_245065_1e75",
+  "source": "backend/RUN_2026-11-15_22-48-14_245065_1e75/results/5_route.odb",
+  "source_sha256": "048de232a19cbc3ca8c15971268b57b4126e96f03cbd39dfca3242a5853d223e",
+  "old_image": "reports/stage_previews/c70dff45d09d4de0b897a631e2ab2de6ddce8b118da9821032c9a760cbda0f1e.svg",
+  "new_image": "reports/stage_previews/44972bd0b723c2d066d26ad5214cf59a64b163b9995c9ebcc8c99184a4825b9e.svg",
+  "metrics": {
+    "placed_cells": 19592,
+    "route_segments": 55488,
+    "sampled": true,
+    "logic_cells": 8999,
+    "clock_cells": 378,
+    "antenna_cells": 4,
+    "clock_segments": 3906,
+    "tap_cells": 308,
+    "power_straps": 143,
+    "layers": {
+      "metal2": {
+        "segments": 32751,
+        "color": "#38bdf8"
+      },
+      "metal3": {
+        "segments": 17231,
+        "color": "#34d399"
+      },
+      "metal4": {
+        "segments": 1196,
+        "color": "#fbbf24"
+      },
+      "metal5": {
+        "segments": 294,
+        "color": "#f472b6"
+      },
+      "metal6": {
+        "segments": 106,
+        "color": "#a78bfa"
+      },
+      "metal7": {
+        "segments": 3,
+        "color": "#fb7185"
+      },
+      "metal8": {
+        "segments": 1,
+        "color": "#2dd4bf"
+      }
+    }
+  },
+  "geometry_modified": false,
+  "verdict_modified": false
+}

@@ -1,0 +1,264 @@
+{
+ "seed": 20261107,
+ "source": "memlab203:/data/r2g_n45_pilot500/select_cells.tsv",
+ "source_sha256": "307d8aeff5bf5f0e1181b9e7d1ca9f06fcd8aa8c0042e4cd0a23c6ba8e33cebc",
+ "strata_sizes": {
+  "small": 42,
+  "medium": 431,
+  "large": 27
+ },
+ "v1": {
+  "small": [
+   {
+    "design": "C03387__vga1__ego1-vga__nangate45__p2",
+    "cells": 707
+   },
+   {
+    "design": "C02369__Uart8__verilog-uart__nangate45__p2",
+    "cells": 504
+   },
+   {
+    "design": "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2",
+    "cells": 230
+   },
+   {
+    "design": "C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2",
+    "cells": 452
+   },
+   {
+    "design": "C01026__proc__fpga-busicdc-2025__nangate45__p2",
+    "cells": 482
+   }
+  ],
+  "medium": [
+   {
+    "design": "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+    "cells": 1303
+   },
+   {
+    "design": "C02570__muldiv__koti__nangate45__p2",
+    "cells": 3470
+   },
+   {
+    "design": "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+    "cells": 1130
+   },
+   {
+    "design": "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2",
+    "cells": 2321
+   },
+   {
+    "design": "C00627__fpu_sp_mul__fpu__nangate45__p2",
+    "cells": 4790
+   },
+   {
+    "design": "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2",
+    "cells": 3227
+   },
+   {
+    "design": "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2",
+    "cells": 1283
+   },
+   {
+    "design": "C02306__cordic__cordic-rtl-implementation__nangate45__p2",
+    "cells": 2334
+   },
+   {
+    "design": "C00180__gift_core__gift__nangate45__p2",
+    "cells": 3638
+   },
+   {
+    "design": "C00424__CRC32_D56__ethernetmac__nangate45__p2",
+    "cells": 2404
+   },
+   {
+    "design": "C00622__fpu_sp_add__fpu__nangate45__p2",
+    "cells": 3517
+   },
+   {
+    "design": "C01472__rxuart__qc-tee__nangate45__p2",
+    "cells": 1857
+   },
+   {
+    "design": "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2",
+    "cells": 1489
+   }
+  ],
+  "large": [
+   {
+    "design": "C01484__multiplier_32_bit__comp__nangate45__p2",
+    "cells": 12084
+   },
+   {
+    "design": "C03761__cordic__cordic-core__nangate45__p2",
+    "cells": 12400
+   },
+   {
+    "design": "C00867__user_proj_example__acor_dct32__nangate45__p2",
+    "cells": 17449
+   },
+   {
+    "design": "C01563__ppu__panog2_nes__nangate45__p2",
+    "cells": 21047
+   },
+   {
+    "design": "C03527__tt_um_koti__koti__nangate45__p2",
+    "cells": 33291
+   },
+   {
+    "design": "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2",
+    "cells": 23525
+   },
+   {
+    "design": "C01329__controller__fft_hardware_accelerator__nangate45__p2",
+    "cells": 13610
+   },
+   {
+    "design": "C03932__edge_fpu_fmac__edge-rv__nangate45__p2",
+    "cells": 13915
+   },
+   {
+    "design": "C03232__opl2__arcade-tecmo_mister__nangate45__p2",
+    "cells": 25773
+   },
+   {
+    "design": "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2",
+    "cells": 12275
+   },
+   {
+    "design": "C00023__qoi_compress__qoiimg__nangate45__p2",
+    "cells": 11217
+   },
+   {
+    "design": "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2",
+    "cells": 10133
+   },
+   {
+    "design": "C03011__snake__verilog-snake-game-on-fpga__nangate45__p2",
+    "cells": 10314
+   },
+   {
+    "design": "C03268__core__riscv-tlv-core__nangate45__p2",
+    "cells": 10675
+   },
+   {
+    "design": "C01423__jt12__neogeo_mister__nangate45__p2",
+    "cells": 16117
+   },
+   {
+    "design": "C02031__top__fpga-pid-controller-using-verilog__nangate45__p2",
+    "cells": 12090
+   },
+   {
+    "design": "C01851__top__numericalwordle__nangate45__p2",
+    "cells": 17166
+   },
+   {
+    "design": "C00748__prince__prince__nangate45__p2",
+    "cells": 11169
+   },
+   {
+    "design": "C02544__lumi_rx_ready__umi__nangate45__p2",
+    "cells": 10496
+   },
+   {
+    "design": "C02321__divider_unsigned__risc-v_pipelined_superscalar_processor__nangate45__p2",
+    "cells": 10650
+   },
+   {
+    "design": "C00749__chacha__chacha__nangate45__p2",
+    "cells": 22427
+   },
+   {
+    "design": "C01568__div_pipelined__soc__nangate45__p2",
+    "cells": 30605
+   },
+   {
+    "design": "C01134__gba_cpu__gbatang__nangate45__p2",
+    "cells": 25539
+   },
+   {
+    "design": "C02742__asp_top__abstractx__nangate45__p2",
+    "cells": 19462
+   },
+   {
+    "design": "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2",
+    "cells": 12837
+   }
+  ]
+ },
+ "v1_all": [
+  "C03387__vga1__ego1-vga__nangate45__p2",
+  "C02369__Uart8__verilog-uart__nangate45__p2",
+  "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2",
+  "C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2",
+  "C01026__proc__fpga-busicdc-2025__nangate45__p2",
+  "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+  "C02570__muldiv__koti__nangate45__p2",
+  "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+  "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2",
+  "C00627__fpu_sp_mul__fpu__nangate45__p2",
+  "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2",
+  "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2",
+  "C02306__cordic__cordic-rtl-implementation__nangate45__p2",
+  "C00180__gift_core__gift__nangate45__p2",
+  "C00424__CRC32_D56__ethernetmac__nangate45__p2",
+  "C00622__fpu_sp_add__fpu__nangate45__p2",
+  "C01472__rxuart__qc-tee__nangate45__p2",
+  "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2",
+  "C01484__multiplier_32_bit__comp__nangate45__p2",
+  "C03761__cordic__cordic-core__nangate45__p2",
+  "C00867__user_proj_example__acor_dct32__nangate45__p2",
+  "C01563__ppu__panog2_nes__nangate45__p2",
+  "C03527__tt_um_koti__koti__nangate45__p2",
+  "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2",
+  "C01329__controller__fft_hardware_accelerator__nangate45__p2",
+  "C03932__edge_fpu_fmac__edge-rv__nangate45__p2",
+  "C03232__opl2__arcade-tecmo_mister__nangate45__p2",
+  "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2",
+  "C00023__qoi_compress__qoiimg__nangate45__p2",
+  "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2",
+  "C03011__snake__verilog-snake-game-on-fpga__nangate45__p2",
+  "C03268__core__riscv-tlv-core__nangate45__p2",
+  "C01423__jt12__neogeo_mister__nangate45__p2",
+  "C02031__top__fpga-pid-controller-using-verilog__nangate45__p2",
+  "C01851__top__numericalwordle__nangate45__p2",
+  "C00748__prince__prince__nangate45__p2",
+  "C02544__lumi_rx_ready__umi__nangate45__p2",
+  "C02321__divider_unsigned__risc-v_pipelined_superscalar_processor__nangate45__p2",
+  "C00749__chacha__chacha__nangate45__p2",
+  "C01568__div_pipelined__soc__nangate45__p2",
+  "C01134__gba_cpu__gbatang__nangate45__p2",
+  "C02742__asp_top__abstractx__nangate45__p2",
+  "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2"
+ ],
+ "pilot": [
+  "C03387__vga1__ego1-vga__nangate45__p2",
+  "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+  "C01484__multiplier_32_bit__comp__nangate45__p2"
+ ],
+ "v2": [
+  "C03387__vga1__ego1-vga__nangate45__p2",
+  "C02369__Uart8__verilog-uart__nangate45__p2",
+  "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+  "C02570__muldiv__koti__nangate45__p2",
+  "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+  "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2",
+  "C00627__fpu_sp_mul__fpu__nangate45__p2",
+  "C01484__multiplier_32_bit__comp__nangate45__p2",
+  "C03761__cordic__cordic-core__nangate45__p2",
+  "C00867__user_proj_example__acor_dct32__nangate45__p2"
+ ],
+ "v3": [
+  "C03387__vga1__ego1-vga__nangate45__p2",
+  "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+  "C01484__multiplier_32_bit__comp__nangate45__p2"
+ ],
+ "v4": [
+  "C02369__Uart8__verilog-uart__nangate45__p2",
+  "C02570__muldiv__koti__nangate45__p2",
+  "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+  "C03761__cordic__cordic-core__nangate45__p2",
+  "C00867__user_proj_example__acor_dct32__nangate45__p2"
+ ]
+}

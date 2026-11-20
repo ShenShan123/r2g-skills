@@ -1,0 +1,75 @@
+% SUPERSEDED DRAFT: protocol under reconsideration; do not insert into paper.
+% Draft replacement for Section 4.4.1 only. Do not publish with pending entries.
+% The existing CNN table* (tab:cnn) currently lies inside the old 4.4.1 source
+% span. Preserve that float verbatim when replacing the surrounding validation
+% text; it belongs to Section 4.4.2 and is not part of this replacement.
+% Native values: experiments/{exp4_harness,exp4_image_harness}/results/summary.json.
+% R2G values: populate only from the completed exp4_workflow_20261116 campaign.
+% Keep the method, image learning, graph learning, and supplementary text intact.
+
+\subsubsection{Dataset Validation: Reusable Workflows versus LLM-written Converters}
+\label{sec:exp4-validation}
+We compare two ways to construct datasets from completed physical designs. With their native harnesses,
+DeepSeek and GPT independently develop and check reusable conversion scripts. With \R, the same models invoke
+the installed generation and physical-validation tools and deliver a launch wrapper. Each submitted converter
+or wrapper is frozen before evaluation and runs without further model calls or per-design repair.
+
+\textbf{Setup.} Image and graph conversion are separate experiments, each with 18 development designs and
+60 test designs: 6 and 20 per technology, respectively, across Nangate45, SKY130HD, and GF180 and different sizes.
+Development and test design families are disjoint. Models receive the same output definitions and format checker,
+with a development budget of 200 model requests and four hours. Each run uses eight CPU cores and 32\,GiB of memory.
+
+\textbf{Evaluation.} Images contain five placement feature maps and routed congestion maps. Graphs contain all
+five B--F views in homogeneous and heterogeneous form, evaluated on final-layout inputs. IR drop is outside this
+experiment's input scope. An independent evaluator derives reference values from the physical artifacts;
+a design passes only when every required topology, feature, and label check passes. We report complete designs
+and resources in \cref{tab:conv-image,tab:conv-graph}. Cost includes model development and production, including
+the workflow's validation; prior \R tool engineering, independent scoring, and queue time are excluded.
+
+\begin{table}[!htbp]
+  \caption{\textbf{Image dataset production.} Pass counts complete designs out of 60. Tokens are in millions;
+  time is total development plus production in minutes.}
+  \label{tab:conv-image}
+  \centering\footnotesize
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrr@{}}
+    \toprule
+    Model / harness & Pass $\uparrow$ & Tokens $\downarrow$ & Time $\downarrow$ \\
+    \midrule
+    DeepSeek / native & 60 & 13.84 & 19.7 \\
+    DeepSeek / \R & \textit{pending} & \textit{pending} & \textit{pending} \\
+    GPT / native & 60 & 1.36 & 8.9 \\
+    GPT / \R & \textit{pending} & \textit{pending} & \textit{pending} \\
+    \bottomrule
+  \end{tabular*}
+\end{table}
+
+\begin{table}[!htbp]
+  \caption{\textbf{Graph dataset production.} A pass requires every B--F view in both representations to be correct.
+  Units match \cref{tab:conv-image}.}
+  \label{tab:conv-graph}
+  \centering\footnotesize
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrr@{}}
+    \toprule
+    Model / harness & Pass $\uparrow$ & Tokens $\downarrow$ & Time $\downarrow$ \\
+    \midrule
+    DeepSeek / native & 0 & 32.50 & 68.1 \\
+    DeepSeek / \R & \textit{pending} & \textit{pending} & \textit{pending} \\
+    GPT / native & 60 & 4.14 & 24.0 \\
+    GPT / \R & \textit{pending} & \textit{pending} & \textit{pending} \\
+    \bottomrule
+  \end{tabular*}
+\end{table}
+
+Native rows retain the mean of three independent development runs; revised \R rows report one run on the same
+fixed benchmark. The native image converters and GPT graph converters pass all 60 designs. DeepSeek's native
+graph converters achieve 91.0\% label accuracy on average but pass no complete design, motivating complete-design
+correctness as the primary metric.
+
+% Add at most one results sentence after the four new R2G outcomes are final.
+% State measured resource differences only; do not infer an accuracy gain where
+% both methods pass 60/60, or estimate cross-run R2G variability from one run.
+% An optional supplementary validator audit of the two native Graph s1 outputs
+% (120 designs total) needs actual verdicts before any sensitivity/specificity
+% numbers are added. No audit result is asserted in this draft.

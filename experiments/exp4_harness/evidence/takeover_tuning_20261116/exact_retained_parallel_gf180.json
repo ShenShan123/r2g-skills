@@ -1,0 +1,76 @@
+{
+  "created_at": "2026-11-15T18:19:06.164738+00:00",
+  "baseline": "/home/yangao/exp4_r2g_tune/runs/orig/C03397__a_axi_write_broadcastor_1_to_4__tapa__gf180__p10/project/dataset",
+  "candidate": "/home/yangao/exp4_r2g_tune/par_8/project/dataset",
+  "comparator_sha256": "4ef0520f751c479a6011c4250338767c6d96c12b3bbf182bb43a1a9ab27515b5",
+  "comparison": "same type/dtype/shape; exact values; same-position NaNs equal; no dtype coercion",
+  "designs": [
+    {
+      "passed": true,
+      "files": [
+        {
+          "file": "b_graph.pt",
+          "fields": 137864,
+          "passed": true,
+          "differences": []
+        },
+        {
+          "file": "b_graph_homo.pt",
+          "fields": 137800,
+          "passed": true,
+          "differences": []
+        },
+        {
+          "file": "c_graph.pt",
+          "fields": 53723,
+          "passed": true,
+          "differences": []
+        },
+        {
+          "file": "c_graph_homo.pt",
+          "fields": 53673,
+          "passed": true,
+          "differences": []
+        },
+        {
+          "file": "d_graph.pt",
+          "fields": 111176,
+          "passed": true,
+          "differences": []
+        },
+        {
+          "file": "d_graph_homo.pt",
+          "fields": 111097,
+          "passed": true,
+          "differences": []
+        },
+        {
+          "file": "e_graph.pt",
+          "fields": 84554,
+          "passed": true,
+          "differences": []
+        },
+        {
+          "file": "e_graph_homo.pt",
+          "fields": 84492,
+          "passed": true,
+          "differences": []
+        },
+        {
+          "file": "f_graph.pt",
+          "fields": 26979,
+          "passed": true,
+          "differences": []
+        },
+        {
+          "file": "f_graph_homo.pt",
+          "fields": 26950,
+          "passed": true,
+          "differences": []
+        }
+      ],
+      "design": "dataset"
+    }
+  ],
+  "passed": true
+}

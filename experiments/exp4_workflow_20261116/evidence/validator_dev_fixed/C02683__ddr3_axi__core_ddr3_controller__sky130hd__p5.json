@@ -1,0 +1,1454 @@
+{
+ "design": "ddr3_axi",
+ "results": [
+  {
+   "check": "manifest.status ok (IR drop out of scope)",
+   "ok": true,
+   "detail": "ok_with_label_gaps"
+  },
+  {
+   "check": "manifest.label_health all ok (IR drop out of scope)",
+   "ok": true,
+   "detail": "{'cell_congestion.csv': 'ok', 'timing_features.csv': 'ok', 'wirelength.csv': 'ok'}"
+  },
+  {
+   "check": "b node counts",
+   "ok": true,
+   "detail": "got [10383, 10605, 281, 33537] want [10383, 10605, 281, 33537]"
+  },
+  {
+   "check": "b edge count",
+   "ok": true,
+   "detail": "got 134710 want 134710"
+  },
+  {
+   "check": "b x1 uniform graph_id",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "b x1 == manifest.graph_id",
+   "ok": true,
+   "detail": "tensor x1=5840386.0 manifest graph_id=5840386"
+  },
+  {
+   "check": "b y0 == node_type",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "b node_name block order",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "b.y1[gate] non-NaN count",
+   "ok": true,
+   "detail": "expected 10383 got 10383"
+  },
+  {
+   "check": "b.y1[gate] sampled values",
+   "ok": true,
+   "detail": "0/10 mismatched"
+  },
+  {
+   "check": "b.y2[gate] non-NaN count",
+   "ok": true,
+   "detail": "expected 0 got 0"
+  },
+  {
+   "check": "b.y4[net] non-NaN count",
+   "ok": true,
+   "detail": "expected 10605 got 10605"
+  },
+  {
+   "check": "b.y4[net] sampled values",
+   "ok": true,
+   "detail": "0/10 mismatched"
+  },
+  {
+   "check": "b.y3[pin] non-NaN count",
+   "ok": true,
+   "detail": "expected 33537 got 33537"
+  },
+  {
+   "check": "b.y3[pin] sampled values",
+   "ok": true,
+   "detail": "0/10 mismatched"
+  },
+  {
+   "check": "c node counts",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "c edge count",
+   "ok": true,
+   "detail": "got 67636 want 67636"
+  },
+  {
+   "check": "c edge_attr == folded pin features",
+   "ok": true,
+   "detail": "0/400 mismatched"
+  },
+  {
+   "check": "c.y1[gate] non-NaN count",
+   "ok": true,
+   "detail": "expected 10383 got 10383"
+  },
+  {
+   "check": "c.y1[gate] sampled values",
+   "ok": true,
+   "detail": "0/10 mismatched"
+  },
+  {
+   "check": "c.y2[gate] non-NaN count",
+   "ok": true,
+   "detail": "expected 0 got 0"
+  },
+  {
+   "check": "c.y4[net] non-NaN count",
+   "ok": true,
+   "detail": "expected 10605 got 10605"
+  },
+  {
+   "check": "c.y4[net] sampled values",
+   "ok": true,
+   "detail": "0/10 mismatched"
+  },
+  {
+   "check": "d node counts",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "d edge count (clique formula)",
+   "ok": true,
+   "detail": "got 553554 want 553554"
+  },
+  {
+   "check": "d.y1[gate] non-NaN count",
+   "ok": true,
+   "detail": "expected 10383 got 10383"
+  },
+  {
+   "check": "d.y1[gate] sampled values",
+   "ok": true,
+   "detail": "0/10 mismatched"
+  },
+  {
+   "check": "d.y2[gate] non-NaN count",
+   "ok": true,
+   "detail": "expected 0 got 0"
+  },
+  {
+   "check": "d.y3[pin] non-NaN count",
+   "ok": true,
+   "detail": "expected 33537 got 33537"
+  },
+  {
+   "check": "d.y3[pin] sampled values",
+   "ok": true,
+   "detail": "0/10 mismatched"
+  },
+  {
+   "check": "e node counts",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "e edge count (clique formula)",
+   "ok": true,
+   "detail": "got 568584 want 568584"
+  },
+  {
+   "check": "e.y3[pin] non-NaN count",
+   "ok": true,
+   "detail": "expected 33537 got 33537"
+  },
+  {
+   "check": "e.y3[pin] sampled values",
+   "ok": true,
+   "detail": "0/10 mismatched"
+  },
+  {
+   "check": "f node counts",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "f edge count (clique formula)",
+   "ok": true,
+   "detail": "got 486480 want 486480"
+  },
+  {
+   "check": "f edge_attr == connecting net features",
+   "ok": true,
+   "detail": "0/262 mismatched"
+  },
+  {
+   "check": "f.y1[gate] non-NaN count",
+   "ok": true,
+   "detail": "expected 10383 got 10383"
+  },
+  {
+   "check": "f.y1[gate] sampled values",
+   "ok": true,
+   "detail": "0/10 mismatched"
+  },
+  {
+   "check": "f.y2[gate] non-NaN count",
+   "ok": true,
+   "detail": "expected 0 got 0"
+  },
+  {
+   "check": "graph_kind consistent across views (all hetero or all homo)",
+   "ok": true,
+   "detail": "hetero-per-view={'b': True, 'c': True, 'd': True, 'e': True, 'f': True}"
+  },
+  {
+   "check": "manifest[b] nodes/edges match tensors",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "manifest[c] nodes/edges match tensors",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "manifest[d] nodes/edges match tensors",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "manifest[e] nodes/edges match tensors",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "manifest[f] nodes/edges match tensors",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.b edges symmetric (undirected both ways)",
+   "ok": true,
+   "detail": "0 asym"
+  },
+  {
+   "check": "top.b no self-loops",
+   "ok": true,
+   "detail": "0 loops"
+  },
+  {
+   "check": "top.b node_name block-positional order",
+   "ok": true,
+   "detail": "len got 54806 exp 54806 first_diff@None"
+  },
+  {
+   "check": "top.b node_name unique within each type block",
+   "ok": true,
+   "detail": "dups []"
+  },
+  {
+   "check": "top.c edges symmetric (undirected both ways)",
+   "ok": true,
+   "detail": "0 asym"
+  },
+  {
+   "check": "top.c no self-loops",
+   "ok": true,
+   "detail": "0 loops"
+  },
+  {
+   "check": "top.c node_name block-positional order",
+   "ok": true,
+   "detail": "len got 21269 exp 21269 first_diff@None"
+  },
+  {
+   "check": "top.c node_name unique within each type block",
+   "ok": true,
+   "detail": "dups []"
+  },
+  {
+   "check": "top.d edges symmetric (undirected both ways)",
+   "ok": true,
+   "detail": "0 asym"
+  },
+  {
+   "check": "top.d no self-loops",
+   "ok": true,
+   "detail": "0 loops"
+  },
+  {
+   "check": "top.d node_name block-positional order",
+   "ok": true,
+   "detail": "len got 44201 exp 44201 first_diff@None"
+  },
+  {
+   "check": "top.d node_name unique within each type block",
+   "ok": true,
+   "detail": "dups []"
+  },
+  {
+   "check": "top.e edges symmetric (undirected both ways)",
+   "ok": true,
+   "detail": "0 asym"
+  },
+  {
+   "check": "top.e no self-loops",
+   "ok": true,
+   "detail": "0 loops"
+  },
+  {
+   "check": "top.e node_name block-positional order",
+   "ok": true,
+   "detail": "len got 33818 exp 33818 first_diff@None"
+  },
+  {
+   "check": "top.e node_name unique within each type block",
+   "ok": true,
+   "detail": "dups []"
+  },
+  {
+   "check": "top.f edges symmetric (undirected both ways)",
+   "ok": true,
+   "detail": "0 asym"
+  },
+  {
+   "check": "top.f no self-loops",
+   "ok": true,
+   "detail": "0 loops"
+  },
+  {
+   "check": "top.f node_name block-positional order",
+   "ok": true,
+   "detail": "len got 10664 exp 10664 first_diff@None"
+  },
+  {
+   "check": "top.f node_name unique within each type block",
+   "ok": true,
+   "detail": "dups []"
+  },
+  {
+   "check": "top.c hetero edge stores aligned (index/attr/type/y/y_raw rows equal)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.c hetero relations symmetric ((a,rel,b)==(b,rel,a) count)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.c hetero edge_y width==5 & ground-cap col all-NaN",
+   "ok": true,
+   "detail": "width_bad=0 gcap_bad=0"
+  },
+  {
+   "check": "top.d hetero edge stores aligned (index/attr/type/y/y_raw rows equal)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.d hetero relations symmetric ((a,rel,b)==(b,rel,a) count)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.d hetero edge_y width==5 & ground-cap col all-NaN",
+   "ok": true,
+   "detail": "width_bad=0 gcap_bad=0"
+  },
+  {
+   "check": "top.e hetero edge stores aligned (index/attr/type/y/y_raw rows equal)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.e hetero relations symmetric ((a,rel,b)==(b,rel,a) count)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.e hetero edge_y width==5 & ground-cap col all-NaN",
+   "ok": true,
+   "detail": "width_bad=0 gcap_bad=0"
+  },
+  {
+   "check": "top.f hetero edge stores aligned (index/attr/type/y/y_raw rows equal)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.f hetero relations symmetric ((a,rel,b)==(b,rel,a) count)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.f hetero edge_y width==5 & ground-cap col all-NaN",
+   "ok": true,
+   "detail": "width_bad=0 gcap_bad=0"
+  },
+  {
+   "check": "top.b hetero rc stores aligned + symmetric",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.c hetero rc stores aligned + symmetric",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.d hetero rc stores aligned + symmetric",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.e hetero rc stores aligned + symmetric",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.f hetero rc stores aligned + symmetric",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "top.d net-edge edge_attr == connecting net features",
+   "ok": true,
+   "detail": "0/400 mismatched"
+  },
+  {
+   "check": "top.d gate_pin-edge edge_attr == zeros",
+   "ok": true,
+   "detail": "0/49 nonzero"
+  },
+  {
+   "check": "top.e gate-edge edge_attr == owning gate features",
+   "ok": true,
+   "detail": "0/231 mismatched"
+  },
+  {
+   "check": "top.e net-edge edge_attr == connecting net features",
+   "ok": true,
+   "detail": "0/400 mismatched"
+  },
+  {
+   "check": "hetero manifest graph_kind in {hetero, both}",
+   "ok": true,
+   "detail": "both"
+  },
+  {
+   "check": "hetero.b node types == view blocks",
+   "ok": true,
+   "detail": "got ['gate', 'net', 'iopin', 'pin'] want ['gate', 'net', 'iopin', 'pin']"
+  },
+  {
+   "check": "hetero.b gate node count",
+   "ok": true,
+   "detail": "got 10383 want 10383"
+  },
+  {
+   "check": "hetero.b gate x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(10383, 9)"
+  },
+  {
+   "check": "hetero.b gate y width==5",
+   "ok": true,
+   "detail": "(10383, 5)"
+  },
+  {
+   "check": "hetero.b gate y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.b net node count",
+   "ok": true,
+   "detail": "got 10605 want 10605"
+  },
+  {
+   "check": "hetero.b net x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(10605, 9)"
+  },
+  {
+   "check": "hetero.b net y width==5",
+   "ok": true,
+   "detail": "(10605, 5)"
+  },
+  {
+   "check": "hetero.b net y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.b iopin node count",
+   "ok": true,
+   "detail": "got 281 want 281"
+  },
+  {
+   "check": "hetero.b iopin x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(281, 9)"
+  },
+  {
+   "check": "hetero.b iopin y width==5",
+   "ok": true,
+   "detail": "(281, 5)"
+  },
+  {
+   "check": "hetero.b iopin y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.b pin node count",
+   "ok": true,
+   "detail": "got 33537 want 33537"
+  },
+  {
+   "check": "hetero.b pin x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(33537, 9)"
+  },
+  {
+   "check": "hetero.b pin y width==5",
+   "ok": true,
+   "detail": "(33537, 5)"
+  },
+  {
+   "check": "hetero.b pin y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.b edge relations reference present node types",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "hetero.b manifest node_types match tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.b manifest edge_types match tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.c node types == view blocks",
+   "ok": true,
+   "detail": "got ['gate', 'net', 'iopin'] want ['gate', 'net', 'iopin']"
+  },
+  {
+   "check": "hetero.c gate node count",
+   "ok": true,
+   "detail": "got 10383 want 10383"
+  },
+  {
+   "check": "hetero.c gate x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(10383, 9)"
+  },
+  {
+   "check": "hetero.c gate y width==5",
+   "ok": true,
+   "detail": "(10383, 5)"
+  },
+  {
+   "check": "hetero.c gate y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.c net node count",
+   "ok": true,
+   "detail": "got 10605 want 10605"
+  },
+  {
+   "check": "hetero.c net x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(10605, 9)"
+  },
+  {
+   "check": "hetero.c net y width==5",
+   "ok": true,
+   "detail": "(10605, 5)"
+  },
+  {
+   "check": "hetero.c net y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.c iopin node count",
+   "ok": true,
+   "detail": "got 281 want 281"
+  },
+  {
+   "check": "hetero.c iopin x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(281, 9)"
+  },
+  {
+   "check": "hetero.c iopin y width==5",
+   "ok": true,
+   "detail": "(281, 5)"
+  },
+  {
+   "check": "hetero.c iopin y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.c edge relations reference present node types",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "hetero.c manifest node_types match tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.c manifest edge_types match tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.d node types == view blocks",
+   "ok": true,
+   "detail": "got ['gate', 'iopin', 'pin'] want ['gate', 'iopin', 'pin']"
+  },
+  {
+   "check": "hetero.d gate node count",
+   "ok": true,
+   "detail": "got 10383 want 10383"
+  },
+  {
+   "check": "hetero.d gate x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(10383, 9)"
+  },
+  {
+   "check": "hetero.d gate y width==5",
+   "ok": true,
+   "detail": "(10383, 5)"
+  },
+  {
+   "check": "hetero.d gate y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.d iopin node count",
+   "ok": true,
+   "detail": "got 281 want 281"
+  },
+  {
+   "check": "hetero.d iopin x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(281, 9)"
+  },
+  {
+   "check": "hetero.d iopin y width==5",
+   "ok": true,
+   "detail": "(281, 5)"
+  },
+  {
+   "check": "hetero.d iopin y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.d pin node count",
+   "ok": true,
+   "detail": "got 33537 want 33537"
+  },
+  {
+   "check": "hetero.d pin x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(33537, 9)"
+  },
+  {
+   "check": "hetero.d pin y width==5",
+   "ok": true,
+   "detail": "(33537, 5)"
+  },
+  {
+   "check": "hetero.d pin y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.d edge relations reference present node types",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "hetero.d manifest node_types match tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.d manifest edge_types match tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.e node types == view blocks",
+   "ok": true,
+   "detail": "got ['iopin', 'pin'] want ['iopin', 'pin']"
+  },
+  {
+   "check": "hetero.e iopin node count",
+   "ok": true,
+   "detail": "got 281 want 281"
+  },
+  {
+   "check": "hetero.e iopin x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(281, 9)"
+  },
+  {
+   "check": "hetero.e iopin y width==5",
+   "ok": true,
+   "detail": "(281, 5)"
+  },
+  {
+   "check": "hetero.e iopin y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.e pin node count",
+   "ok": true,
+   "detail": "got 33537 want 33537"
+  },
+  {
+   "check": "hetero.e pin x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(33537, 9)"
+  },
+  {
+   "check": "hetero.e pin y width==5",
+   "ok": true,
+   "detail": "(33537, 5)"
+  },
+  {
+   "check": "hetero.e pin y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.e edge relations reference present node types",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "hetero.e manifest node_types match tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.e manifest edge_types match tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.f node types == view blocks",
+   "ok": true,
+   "detail": "got ['gate', 'iopin'] want ['gate', 'iopin']"
+  },
+  {
+   "check": "hetero.f gate node count",
+   "ok": true,
+   "detail": "got 10383 want 10383"
+  },
+  {
+   "check": "hetero.f gate x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(10383, 9)"
+  },
+  {
+   "check": "hetero.f gate y width==5",
+   "ok": true,
+   "detail": "(10383, 5)"
+  },
+  {
+   "check": "hetero.f gate y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.f iopin node count",
+   "ok": true,
+   "detail": "got 281 want 281"
+  },
+  {
+   "check": "hetero.f iopin x width==9 (graph_id+8 feats)",
+   "ok": true,
+   "detail": "(281, 9)"
+  },
+  {
+   "check": "hetero.f iopin y width==5",
+   "ok": true,
+   "detail": "(281, 5)"
+  },
+  {
+   "check": "hetero.f iopin y_raw width==5",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.f edge relations reference present node types",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "hetero.f manifest node_types match tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "hetero.f manifest edge_types match tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "both-mode b_graph_homo.pt == homo re-view of b_graph.pt (edge multiset)",
+   "ok": true,
+   "detail": "differs: []"
+  },
+  {
+   "check": "both-mode c_graph_homo.pt == homo re-view of c_graph.pt (edge multiset)",
+   "ok": true,
+   "detail": "differs: []"
+  },
+  {
+   "check": "both-mode d_graph_homo.pt == homo re-view of d_graph.pt (edge multiset)",
+   "ok": true,
+   "detail": "differs: []"
+  },
+  {
+   "check": "both-mode e_graph_homo.pt == homo re-view of e_graph.pt (edge multiset)",
+   "ok": true,
+   "detail": "differs: []"
+  },
+  {
+   "check": "both-mode f_graph_homo.pt == homo re-view of f_graph.pt (edge multiset)",
+   "ok": true,
+   "detail": "differs: []"
+  },
+  {
+   "check": "feat.net nodes all signal (net_type_id==0)",
+   "ok": true,
+   "detail": "nonzero=0"
+  },
+  {
+   "check": "feat.gate orientation_id in [0,7]",
+   "ok": true,
+   "detail": "oob=0"
+  },
+  {
+   "check": "feat.gate placement_status_id in {0,1} (final DEF placed/fixed)",
+   "ok": true,
+   "detail": "other=0"
+  },
+  {
+   "check": "feat.gate cell_type_id >= 0 (no unmapped -1)",
+   "ok": true,
+   "detail": "neg=0"
+  },
+  {
+   "check": "feat.iopin pin_direction_id in [0,3]",
+   "ok": true,
+   "detail": "oob=0"
+  },
+  {
+   "check": "feat.pin pin_type_id in [0,14]",
+   "ok": true,
+   "detail": "oob=0"
+  },
+  {
+   "check": "feat.gate placement_status_id == DEF PLACED/FIXED",
+   "ok": true,
+   "detail": "0/38530"
+  },
+  {
+   "check": "feat.net fanout == max(0, pin_count-1)",
+   "ok": true,
+   "detail": "0 rows differ"
+  },
+  {
+   "check": "feat.net num_layer in [0,|routing layers|]; routed nets >= 1",
+   "ok": true,
+   "detail": "oob=0 routed0=0 L=6"
+  },
+  {
+   "check": "feat.iopin nearest_tap_distance bounded (>= nearest cell, <= die diag)",
+   "ok": true,
+   "detail": "0 out of bound"
+  },
+  {
+   "check": "feat.features_stats.json matches recomputed CSV distributions",
+   "ok": true,
+   "detail": "mismatch []"
+  },
+  {
+   "check": "feat.labels_stats.json matches recomputed CSV distributions",
+   "ok": true,
+   "detail": "mismatch []"
+  },
+  {
+   "check": "graph.schema_version supported (generation matches the tensor contract)",
+   "ok": true,
+   "detail": "v1"
+  },
+  {
+   "check": "signoff.provenance recorded (drc/lvs reports or manifest signoff_health)",
+   "ok": true,
+   "detail": "no reports/{drc,lvs}.json and no signoff gate verdict in the manifest \u2014 sign-off provenance unknown (fail-closed, failure-patterns.md #34)"
+  },
+  {
+   "check": "signoff.binding bound (DEF binding not lost by the extractor)",
+   "ok": true,
+   "detail": "binding status='unknown' def_overridden=True \u2014 unknown/unbound means the DEF binding + fingerprint were dropped (extractor re-gated without --def?)"
+  },
+  {
+   "check": "signoff.timing Path_Delay==clk_period-slack (6_final.sdc) & label==log1p",
+   "ok": true,
+   "detail": "bad=0 off_bad=0 inpath=10693 period=16.0"
+  },
+  {
+   "check": "signoff.metadata C_total within [\u03a3ground+\u03a3coupling, \u03a3ground+2\u03a3coupling]",
+   "ok": true,
+   "detail": "C_total=50679.731 lo=40885.438 hi=50679.733"
+  },
+  {
+   "check": "signoff.equiv_res label bounded by SPEF *RES (0<r<=\u03a3R, scale sane)",
+   "ok": true,
+   "detail": "oob=0 er_max=1416.954 \u03a3R=870852.843 minR=0.163"
+  },
+  {
+   "check": "manifest has rc_health",
+   "ok": true,
+   "detail": "{'ground_cap_nets': 10895, 'coupling_pairs': 49572, 'equiv_res_pairs': 265916, 'net_drivers': 10895, 'status': 'ok'}"
+  },
+  {
+   "check": "b rc_edge_* present + consistent shapes",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "b manifest rc_edges == tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "c rc_edge_* present + consistent shapes",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "c manifest rc_edges == tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "d rc_edge_* present + consistent shapes",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "d manifest rc_edges == tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "e rc_edge_* present + consistent shapes",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "e manifest rc_edges == tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "f rc_edge_* present + consistent shapes",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "f manifest rc_edges == tensor",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "b y_raw present + shape==y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "b y_raw NaN-parity with y (all slots)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "b y[:,3] == log1p(y_raw)",
+   "ok": true,
+   "detail": "2.384185791015625e-07"
+  },
+  {
+   "check": "b y[:,4] == log1p(y_raw)",
+   "ok": true,
+   "detail": "4.76837158203125e-07"
+  },
+  {
+   "check": "b y[:,5] == log1p(y_raw)",
+   "ok": true,
+   "detail": "4.76837158203125e-07"
+  },
+  {
+   "check": "b rc_edge_y_raw present + shape==rc_edge_y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "b rc_edge_y[:,1] == log1p(rc_edge_y_raw)",
+   "ok": true,
+   "detail": "4.995381459593773e-07"
+  },
+  {
+   "check": "b rc_edge_y[:,2] == log1p(rc_edge_y_raw)",
+   "ok": true,
+   "detail": "4.76837158203125e-07"
+  },
+  {
+   "check": "c y_raw present + shape==y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "c y_raw NaN-parity with y (all slots)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "c y[:,4] == log1p(y_raw)",
+   "ok": true,
+   "detail": "4.76837158203125e-07"
+  },
+  {
+   "check": "c y[:,5] == log1p(y_raw)",
+   "ok": true,
+   "detail": "4.76837158203125e-07"
+  },
+  {
+   "check": "c edge_y_raw present + shape==edge_y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "c edge_y_raw NaN-parity with edge_y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "c edge_y[:,3] == log1p(edge_y_raw)",
+   "ok": true,
+   "detail": "2.384185791015625e-07"
+  },
+  {
+   "check": "c rc_edge_y_raw present + shape==rc_edge_y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "c rc_edge_y[:,1] == log1p(rc_edge_y_raw)",
+   "ok": true,
+   "detail": "4.995381459593773e-07"
+  },
+  {
+   "check": "d y_raw present + shape==y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "d y_raw NaN-parity with y (all slots)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "d y[:,3] == log1p(y_raw)",
+   "ok": true,
+   "detail": "2.384185791015625e-07"
+  },
+  {
+   "check": "d y[:,5] == log1p(y_raw)",
+   "ok": true,
+   "detail": "4.76837158203125e-07"
+  },
+  {
+   "check": "d edge_y_raw present + shape==edge_y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "d edge_y_raw NaN-parity with edge_y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "d edge_y[:,4] == log1p(edge_y_raw)",
+   "ok": true,
+   "detail": "4.76837158203125e-07"
+  },
+  {
+   "check": "d rc_edge_y_raw present + shape==rc_edge_y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "d rc_edge_y[:,1] == log1p(rc_edge_y_raw)",
+   "ok": true,
+   "detail": "4.995381459593773e-07"
+  },
+  {
+   "check": "d rc_edge_y[:,2] == log1p(rc_edge_y_raw)",
+   "ok": true,
+   "detail": "4.76837158203125e-07"
+  },
+  {
+   "check": "e y_raw present + shape==y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "e y_raw NaN-parity with y (all slots)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "e y[:,3] == log1p(y_raw)",
+   "ok": true,
+   "detail": "2.384185791015625e-07"
+  },
+  {
+   "check": "e y[:,5] == log1p(y_raw)",
+   "ok": true,
+   "detail": "4.76837158203125e-07"
+  },
+  {
+   "check": "e edge_y_raw present + shape==edge_y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "e edge_y_raw NaN-parity with edge_y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "e edge_y[:,4] == log1p(edge_y_raw)",
+   "ok": true,
+   "detail": "4.76837158203125e-07"
+  },
+  {
+   "check": "e rc_edge_y_raw present + shape==rc_edge_y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "e rc_edge_y[:,1] == log1p(rc_edge_y_raw)",
+   "ok": true,
+   "detail": "4.995381459593773e-07"
+  },
+  {
+   "check": "e rc_edge_y[:,2] == log1p(rc_edge_y_raw)",
+   "ok": true,
+   "detail": "4.76837158203125e-07"
+  },
+  {
+   "check": "f y_raw present + shape==y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "f y_raw NaN-parity with y (all slots)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "f edge_y_raw present + shape==edge_y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "f edge_y_raw NaN-parity with edge_y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "f edge_y[:,4] == log1p(edge_y_raw)",
+   "ok": true,
+   "detail": "4.76837158203125e-07"
+  },
+  {
+   "check": "f rc_edge_y_raw present + shape==rc_edge_y",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "rc: SPEF de-escape join rate on escape-sensitive nets >= 0.8",
+   "ok": true,
+   "detail": "3171/3171 joined (100.0%)"
+  },
+  {
+   "check": "b ground cap y5 == log1p(SPEF ground) on net nodes",
+   "ok": true,
+   "detail": "0/400 mismatched"
+  },
+  {
+   "check": "b coupling edge count == SPEF cross-net signal pairs",
+   "ok": true,
+   "detail": "got 83372 want 83372"
+  },
+  {
+   "check": "b coupling edges cross-net + label==log1p(SPEF coupling)",
+   "ok": true,
+   "detail": "0/201"
+  },
+  {
+   "check": "b resistance edges intra-net + non-negative label",
+   "ok": true,
+   "detail": "0/301"
+  },
+  {
+   "check": "b rc_edge_y type/col separation",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "d ground cap y5 broadcast to pins == net ground cap",
+   "ok": true,
+   "detail": "0/302"
+  },
+  {
+   "check": "b ground cap y_raw == raw SPEF ground fF",
+   "ok": true,
+   "detail": "0/400"
+  },
+  {
+   "check": "b coupling rc_edge_y_raw == raw SPEF coupling fF",
+   "ok": true,
+   "detail": "0/201"
+  },
+  {
+   "check": "global_feat == metadata row",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "sum_pin_cap_fF p50 in physical range (0.3..100 fF)",
+   "ok": true,
+   "detail": "p50=2.431 fF"
+  },
+  {
+   "check": "hpwl_um >= 0",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "num_drivers column not all-zero (>=1 on some signal net)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "ext.nodes_gate rows == DEF COMPONENTS (truncation guard)",
+   "ok": true,
+   "detail": "csv=38530 def=38530"
+  },
+  {
+   "check": "ext.gate area == liberty area",
+   "ok": true,
+   "detail": "0/143 mismatched (of 153 sampled)"
+  },
+  {
+   "check": "ext.gate power == liberty leakage",
+   "ok": true,
+   "detail": "0/143 mismatched (of 153 sampled)"
+  },
+  {
+   "check": "ext.gate x/y == DEF PLACED / dbu",
+   "ok": true,
+   "detail": "0/153 mismatched (dbu=1000.0)"
+  },
+  {
+   "check": "ext.gate orientation == DEF",
+   "ok": true,
+   "detail": "0/153 mismatched"
+  },
+  {
+   "check": "ext.cell_type_id single id per master",
+   "ok": true,
+   "detail": "{}"
+  },
+  {
+   "check": "ext.distinct liberty masters get distinct ids",
+   "ok": true,
+   "detail": "0 collisions"
+  },
+  {
+   "check": "ext.sum_pin_cap_fF == \u03a3 liberty load caps (sampled nets)",
+   "ok": true,
+   "detail": "0/25 mismatched"
+  },
+  {
+   "check": "ext.nodes_net rows == DEF NETS (truncation guard)",
+   "ok": true,
+   "detail": "csv=10933 def=10933"
+  },
+  {
+   "check": "ext.net pin_count == DEF conns",
+   "ok": true,
+   "detail": "0/201 mismatched"
+  },
+  {
+   "check": "ext.net num_drivers vs liberty/DEF dirs",
+   "ok": true,
+   "detail": "0/201 mismatched"
+  },
+  {
+   "check": "ext.net num_sinks vs liberty/DEF dirs",
+   "ok": true,
+   "detail": "0/201 mismatched"
+  },
+  {
+   "check": "ext.net hpwl == recomputed pin-center HPWL (LEF geometry; cell-origin fallback)",
+   "ok": true,
+   "detail": "0/201 mismatched"
+  },
+  {
+   "check": "ext.net connects_macro_flag == DEF\u2229LEF-BLOCK truth",
+   "ok": true,
+   "detail": "0/201 mismatched"
+  },
+  {
+   "check": "ext.net num_drivers==0 nets genuinely have no driver (no-fill honesty)",
+   "ok": true,
+   "detail": "0/0 CSV-zero nets actually have a driver"
+  },
+  {
+   "check": "ext.nodes_iopin rows == DEF PINS (truncation guard)",
+   "ok": true,
+   "detail": "csv=286 def=286"
+  },
+  {
+   "check": "ext.iopin x/y/direction == DEF PINS",
+   "ok": true,
+   "detail": "0/50 mismatched"
+  },
+  {
+   "check": "ext.metadata num_cells/num_nets/num_ios == DEF section counts",
+   "ok": true,
+   "detail": "csv=(38530,10933,286) def=(38530,10933,286)"
+  },
+  {
+   "check": "ext.metadata dbu == DEF UNITS",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "ext.metadata die w/h == DEF DIEAREA",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "ext.metadata tracks_per_layer numeric mean (was string\u21920 bug)",
+   "ok": true,
+   "detail": "csv=1883.333 expected\u22481883.3"
+  },
+  {
+   "check": "ext.global_feat[12] tracks nonzero",
+   "ok": true,
+   "detail": "1883.3330078125"
+  },
+  {
+   "check": "ext.metadata V_nom == liberty nom_voltage",
+   "ok": true,
+   "detail": "csv=1.8 lib=1.8"
+  },
+  {
+   "check": "ext.congestion cell_congestion == independent radius-4 bbox recompute",
+   "ok": true,
+   "detail": "0/400 mismatched"
+  },
+  {
+   "check": "ext.congestion label == mean sqrt(gaussian_util) over bbox",
+   "ok": true,
+   "detail": "0/400 mismatched"
+  },
+  {
+   "check": "ext.congestion label_raw == mean sqrt(util) over bbox",
+   "ok": true,
+   "detail": "0/400 mismatched"
+  },
+  {
+   "check": "ext.wirelength um == independent DEF route length (sampled)",
+   "ok": true,
+   "detail": "0/20 mismatched"
+  },
+  {
+   "check": "ext.wirelength label == log1p(um)",
+   "ok": true,
+   "detail": "4.999218816692519e-10"
+  },
+  {
+   "check": "ext.timing covers every sequential instance",
+   "ok": true,
+   "detail": "3039/3039 registers in timing CSV"
+  },
+  {
+   "check": "ext.b edges symmetric (undirected both ways)",
+   "ok": true,
+   "detail": "0 asym"
+  },
+  {
+   "check": "ext.b no self-loops",
+   "ok": true,
+   "detail": "0 loops"
+  },
+  {
+   "check": "ext.b node_name unique within each type block",
+   "ok": true,
+   "detail": "dup in type blocks []"
+  }
+ ],
+ "skipped": [],
+ "not_applicable": [
+  {
+   "check": "ir_drop.csv label present",
+   "scope": "irdrop",
+   "reason": "ir_drop.csv status='missing'"
+  },
+  {
+   "check": "signoff.gate verdict pass (manifest signoff_health)",
+   "scope": "signoff",
+   "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+  }
+ ],
+ "declared_not_applicable": [
+  "irdrop",
+  "signoff"
+ ],
+ "passed": 286,
+ "failed": 0
+}

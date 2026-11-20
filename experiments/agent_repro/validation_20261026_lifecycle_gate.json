@@ -1,0 +1,256 @@
+{
+  "recorded_at": "2026-10-26T02:23:48.015933-07:00",
+  "scope": "Nangate45 lifecycle gate fix and three-design Agent validation; not a full 1070-result reproduction",
+  "base_commit": "b9a0b044e4afb89772ba350b780795ed6e84d4ad",
+  "diagnose_signoff_fix_sha256": "c953d3abaa8be87892047a30800dc3b2ffd26484df59da0982ff10b349205f3a",
+  "root_cause": "Selection admitted untested learner candidates and preregistered attempts, but apply rejected the same lifecycle state.",
+  "change": "Share lifecycle eligibility between selection and freshly revalidated application; no manual promotion or forced recipe selection.",
+  "cancelled_job": {
+    "id": "10260034-73bdda",
+    "status": "cancelled",
+    "design_status_counts": {
+      "failed": 17,
+      "cancelled": 188,
+      "passed": 2
+    }
+  },
+  "tests": {
+    "new_regression_before_fix": {
+      "failed": 2,
+      "passed": 9
+    },
+    "targeted_after_fix": {
+      "passed": 100
+    },
+    "full_signoff_suite_after_fix": {
+      "passed": 1474,
+      "seconds": 233.29
+    }
+  },
+  "canary": {
+    "id": "10260205-72011d",
+    "status": "done",
+    "request": {
+      "designs": [
+        {
+          "name": "C00009__polar_map__sonic-speed-parallelism",
+          "path": "/home/yangao/r2g_agent_ws/repro_n45/corpus/C00009__polar_map__sonic-speed-parallelism",
+          "top": "polar_map"
+        },
+        {
+          "name": "C02612__soc_arb__fpgamp",
+          "path": "/home/yangao/r2g_agent_ws/repro_n45/corpus/C02612__soc_arb__fpgamp",
+          "top": "soc_arb"
+        },
+        {
+          "name": "C03155__register_bank__montgomery_modular_engine",
+          "path": "/home/yangao/r2g_agent_ws/repro_n45/corpus/C03155__register_bank__montgomery_modular_engine",
+          "top": "register_bank"
+        }
+      ],
+      "platform": "nangate45",
+      "output": "graph",
+      "params": {},
+      "title": "N45 lifecycle gate regression: r1 r2 r3 (Codex 2026-10-26)"
+    },
+    "dual_clean": 3,
+    "dataset_passed": 2,
+    "samples": [
+      {
+        "name": "C00009__polar_map__sonic_speed_parallelism",
+        "project": "/home/yangao/r2g_agent_ws/home/workspace/10260205-72011d/C00009__polar_map__sonic_speed_parallelism__10260205-72011d",
+        "agent_status": "failed",
+        "signoff": {
+          "drc": "clean",
+          "drc_violations": 0,
+          "lvs": "clean",
+          "lvs_mismatches": 0,
+          "dual_clean": true
+        },
+        "verification": {
+          "passed": 294,
+          "total": 295,
+          "failed_checks": [
+            {
+              "check": "ext.irdrop IR_Drop_mV physical (0..20% of supply)",
+              "ok": false,
+              "detail": "min=83.392 max=636.0 cap=220.00000000000003"
+            }
+          ]
+        },
+        "repairs": [
+          {
+            "check": "drc",
+            "iter": 1,
+            "strategy": "deck_driven_antenna_diode",
+            "before": "2",
+            "after": "0",
+            "verdict": "cleared",
+            "from_stage": "route"
+          },
+          {
+            "check": "lvs",
+            "iter": 1,
+            "strategy": "none",
+            "before": "0",
+            "after": "0",
+            "verdict": "stop_clean",
+            "from_stage": null
+          }
+        ]
+      },
+      {
+        "name": "C02612__soc_arb__fpgamp",
+        "project": "/home/yangao/r2g_agent_ws/home/workspace/10260205-72011d/C02612__soc_arb__fpgamp__10260205-72011d",
+        "agent_status": "passed",
+        "signoff": {
+          "drc": "clean",
+          "drc_violations": 0,
+          "lvs": "clean",
+          "lvs_mismatches": 0,
+          "dual_clean": true
+        },
+        "verification": {
+          "passed": 297,
+          "total": 297,
+          "failed_checks": []
+        },
+        "repairs": [
+          {
+            "check": "drc",
+            "iter": 1,
+            "strategy": "deck_driven_antenna_diode",
+            "before": "176",
+            "after": "14",
+            "verdict": "applied",
+            "from_stage": "route"
+          },
+          {
+            "check": "drc",
+            "iter": 2,
+            "strategy": "deck_driven_antenna_diode_accumulate",
+            "before": "14",
+            "after": "0",
+            "verdict": "cleared",
+            "from_stage": "route"
+          },
+          {
+            "check": "lvs",
+            "iter": 1,
+            "strategy": "none",
+            "before": "0",
+            "after": "0",
+            "verdict": "stop_clean",
+            "from_stage": null
+          }
+        ]
+      },
+      {
+        "name": "C03155__register_bank__montgomery_modular_engine",
+        "project": "/home/yangao/r2g_agent_ws/home/workspace/10260205-72011d/C03155__register_bank__montgomery_modular_engine__10260205-72011d",
+        "agent_status": "passed",
+        "signoff": {
+          "drc": "clean",
+          "drc_violations": 0,
+          "lvs": "clean",
+          "lvs_mismatches": 0,
+          "dual_clean": true
+        },
+        "verification": {
+          "passed": 296,
+          "total": 296,
+          "failed_checks": []
+        },
+        "repairs": [
+          {
+            "check": "drc",
+            "iter": 1,
+            "strategy": "deck_driven_antenna_diode",
+            "before": "622",
+            "after": "38",
+            "verdict": "applied",
+            "from_stage": "route"
+          },
+          {
+            "check": "drc",
+            "iter": 2,
+            "strategy": "deck_driven_antenna_diode_accumulate",
+            "before": "38",
+            "after": "0",
+            "verdict": "cleared",
+            "from_stage": "route"
+          },
+          {
+            "check": "lvs",
+            "iter": 1,
+            "strategy": "none",
+            "before": "0",
+            "after": "0",
+            "verdict": "stop_clean",
+            "from_stage": null
+          }
+        ]
+      }
+    ],
+    "coverage_note": "Historical r1/r2/r3 winners selected; actual rerun cleared with r1, r2, r2 respectively. No real r3 overconstraint execution occurred in this batch."
+  },
+  "ir_probe": {
+    "project": "/home/yangao/r2g_agent_ws/home/workspace/10260205-72011d/C00009__polar_map__sonic_speed_parallelism__10260205-72011d",
+    "artifacts": "/tmp/r2g_ir_gate_canary_probe",
+    "held_constant": [
+      "final ODB",
+      "Liberty",
+      "supply voltage",
+      "PDN",
+      "activity defaults"
+    ],
+    "changed": "Read matching results/6_final.sdc before power analysis",
+    "current": {
+      "power_w": 0.473,
+      "worst_ir_drop_mv": 636
+    },
+    "with_final_sdc": {
+      "power_w": 0.438,
+      "worst_ir_drop_mv": 599
+    },
+    "conclusion": "Reading final SDC alone does not resolve the IR alarm. Production labels and verification thresholds were not changed."
+  },
+  "remaining": {
+    "ir_label_model_and_validation": "deferred at user request; production labels/thresholds unchanged",
+    "full_agent_reproduction": "127 remaining ported repair wins running in job 10260235-fca0c6; primary criterion DRC+LVS, dataset status separate",
+    "constant_only_graph_eligibility": "separate from dual-clean; C00078 contains only tie/fill/tap masters",
+    "unported_designs": {
+      "C00458__Hist_Eq__jpeg-hardware-decoder": "r2g:dontuse_oai221x4",
+      "C01034__TOP__vga-controller-verilog": "r2g:datafile_fetch_spec",
+      "C01443__rf_stage__riscv-inregistercpu": "r2g:dontuse_ant",
+      "C01492__vga__vga": "r2g:skip_incr",
+      "C01941__string_draw_engine__SpinalTetris": "r2g:datafile_fetch_spec",
+      "C01979__top__verilog-simple-vga": "r2g:datafile_fetch_spec",
+      "C02175__fmxmit__sdr": "r2g:datafile_fetch_spec",
+      "C02514__la_clb4p0__lambdalib": "r2g:no_rcx",
+      "C02521__debug__smartrom": "r2g:datafile_fetch_spec",
+      "C03009__main_system__cmod_a7_spi_example": "r2g:skip_incr",
+      "C03945__timer__fpga_common": "r2g:case_rename",
+      "C03954__itrx_aib_phy_io_buf_rx__tlrb_aib_phy": "r2g:sv_frontend",
+      "C03962__apb_event_unit__apb_event_unit": "r2g:sv_frontend",
+      "C03963__fpu_private__fpu": "r2g:sv_frontend",
+      "C03964__fpu__fpu": "r2g:sv_frontend",
+      "C03965__riscv_fpu__fpu": "r2g:sv_frontend",
+      "C03966__rv_plic_target__rv_plic": "r2g:sv_frontend",
+      "C03986__mac_array_4x4__axi-matrix-accelerator": "r2g:sv_frontend+antenna"
+    }
+  },
+  "followup_jobs": {
+    "ported": {
+      "id": "10260235-fca0c6",
+      "samples": 127,
+      "status": "running"
+    },
+    "sv_frontend": {
+      "id": "10260250-858079",
+      "samples": 7,
+      "status": "queued/running, not yet validated"
+    }
+  },
+  "updated_at": "2026-10-26T02:52:25.170099-07:00"
+}

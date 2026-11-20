@@ -1,0 +1,1332 @@
+[
+ {
+  "task": "image",
+  "label": "r2g",
+  "development": {
+   "model": null,
+   "stop_reason": null,
+   "model_calls": 0,
+   "failed_invocations": null,
+   "usage": null,
+   "cost_usd": 0.0,
+   "wall_seconds": null,
+   "converter_sha256": null
+  },
+  "application": {
+   "n": 43,
+   "success": 43,
+   "wall_s_median": 25.83,
+   "wall_s_max": 74.66,
+   "wall_s_total": 1107.08,
+   "cpu_s_median": 23.61,
+   "peak_rss_mb_median": 229.1,
+   "peak_rss_mb_max": 479.5
+  },
+  "full_pass": 43,
+  "correctness": {
+   "X_cell_density": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "X_macro_region": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "X_pin_density": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "X_pin_rudy": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "X_rudy": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "grid_shape": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "label_congestion": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "label_congestion_raw": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   }
+  },
+  "per_design": [
+   {
+    "design": "C03387__vga1__ego1-vga__nangate45__p2",
+    "success": true,
+    "wall": 7.68,
+    "rss": 202.7,
+    "failed": []
+   },
+   {
+    "design": "C02369__Uart8__verilog-uart__nangate45__p2",
+    "success": true,
+    "wall": 6.88,
+    "rss": 202.9,
+    "failed": []
+   },
+   {
+    "design": "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2",
+    "success": true,
+    "wall": 6.53,
+    "rss": 202.9,
+    "failed": []
+   },
+   {
+    "design": "C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2",
+    "success": true,
+    "wall": 6.63,
+    "rss": 202.7,
+    "failed": []
+   },
+   {
+    "design": "C01026__proc__fpga-busicdc-2025__nangate45__p2",
+    "success": true,
+    "wall": 7.39,
+    "rss": 202.7,
+    "failed": []
+   },
+   {
+    "design": "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+    "success": true,
+    "wall": 7.94,
+    "rss": 202.7,
+    "failed": []
+   },
+   {
+    "design": "C02570__muldiv__koti__nangate45__p2",
+    "success": true,
+    "wall": 13.06,
+    "rss": 203.0,
+    "failed": []
+   },
+   {
+    "design": "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+    "success": true,
+    "wall": 8.02,
+    "rss": 202.8,
+    "failed": []
+   },
+   {
+    "design": "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2",
+    "success": true,
+    "wall": 9.59,
+    "rss": 202.8,
+    "failed": []
+   },
+   {
+    "design": "C00627__fpu_sp_mul__fpu__nangate45__p2",
+    "success": true,
+    "wall": 15.56,
+    "rss": 202.2,
+    "failed": []
+   },
+   {
+    "design": "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2",
+    "success": true,
+    "wall": 13.4,
+    "rss": 202.8,
+    "failed": []
+   },
+   {
+    "design": "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2",
+    "success": true,
+    "wall": 8.44,
+    "rss": 202.7,
+    "failed": []
+   },
+   {
+    "design": "C02306__cordic__cordic-rtl-implementation__nangate45__p2",
+    "success": true,
+    "wall": 10.95,
+    "rss": 202.6,
+    "failed": []
+   },
+   {
+    "design": "C00180__gift_core__gift__nangate45__p2",
+    "success": true,
+    "wall": 15.72,
+    "rss": 203.0,
+    "failed": []
+   },
+   {
+    "design": "C00424__CRC32_D56__ethernetmac__nangate45__p2",
+    "success": true,
+    "wall": 9.51,
+    "rss": 202.9,
+    "failed": []
+   },
+   {
+    "design": "C00622__fpu_sp_add__fpu__nangate45__p2",
+    "success": true,
+    "wall": 12.51,
+    "rss": 202.9,
+    "failed": []
+   },
+   {
+    "design": "C01472__rxuart__qc-tee__nangate45__p2",
+    "success": true,
+    "wall": 9.17,
+    "rss": 202.9,
+    "failed": []
+   },
+   {
+    "design": "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2",
+    "success": true,
+    "wall": 8.59,
+    "rss": 202.8,
+    "failed": []
+   },
+   {
+    "design": "C01484__multiplier_32_bit__comp__nangate45__p2",
+    "success": true,
+    "wall": 23.68,
+    "rss": 237.0,
+    "failed": []
+   },
+   {
+    "design": "C03761__cordic__cordic-core__nangate45__p2",
+    "success": true,
+    "wall": 28.34,
+    "rss": 236.4,
+    "failed": []
+   },
+   {
+    "design": "C00867__user_proj_example__acor_dct32__nangate45__p2",
+    "success": true,
+    "wall": 41.89,
+    "rss": 357.0,
+    "failed": []
+   },
+   {
+    "design": "C01563__ppu__panog2_nes__nangate45__p2",
+    "success": true,
+    "wall": 49.75,
+    "rss": 340.2,
+    "failed": []
+   },
+   {
+    "design": "C03527__tt_um_koti__koti__nangate45__p2",
+    "success": true,
+    "wall": 74.66,
+    "rss": 479.5,
+    "failed": []
+   },
+   {
+    "design": "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2",
+    "success": true,
+    "wall": 44.53,
+    "rss": 362.6,
+    "failed": []
+   },
+   {
+    "design": "C01329__controller__fft_hardware_accelerator__nangate45__p2",
+    "success": true,
+    "wall": 29.86,
+    "rss": 261.6,
+    "failed": []
+   },
+   {
+    "design": "C03932__edge_fpu_fmac__edge-rv__nangate45__p2",
+    "success": true,
+    "wall": 26.84,
+    "rss": 250.1,
+    "failed": []
+   },
+   {
+    "design": "C03232__opl2__arcade-tecmo_mister__nangate45__p2",
+    "success": true,
+    "wall": 57.07,
+    "rss": 417.1,
+    "failed": []
+   },
+   {
+    "design": "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2",
+    "success": true,
+    "wall": 27.85,
+    "rss": 261.3,
+    "failed": []
+   },
+   {
+    "design": "C00023__qoi_compress__qoiimg__nangate45__p2",
+    "success": true,
+    "wall": 30.35,
+    "rss": 230.8,
+    "failed": []
+   },
+   {
+    "design": "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2",
+    "success": true,
+    "wall": 26.72,
+    "rss": 230.0,
+    "failed": []
+   },
+   {
+    "design": "C03011__snake__verilog-snake-game-on-fpga__nangate45__p2",
+    "success": true,
+    "wall": 23.23,
+    "rss": 212.7,
+    "failed": []
+   },
+   {
+    "design": "C03268__core__riscv-tlv-core__nangate45__p2",
+    "success": true,
+    "wall": 25.83,
+    "rss": 220.2,
+    "failed": []
+   },
+   {
+    "design": "C01423__jt12__neogeo_mister__nangate45__p2",
+    "success": true,
+    "wall": 38.66,
+    "rss": 296.5,
+    "failed": []
+   },
+   {
+    "design": "C02031__top__fpga-pid-controller-using-verilog__nangate45__p2",
+    "success": true,
+    "wall": 26.1,
+    "rss": 245.2,
+    "failed": []
+   },
+   {
+    "design": "C01851__top__numericalwordle__nangate45__p2",
+    "success": true,
+    "wall": 31.61,
+    "rss": 279.6,
+    "failed": []
+   },
+   {
+    "design": "C00748__prince__prince__nangate45__p2",
+    "success": true,
+    "wall": 27.95,
+    "rss": 235.8,
+    "failed": []
+   },
+   {
+    "design": "C02544__lumi_rx_ready__umi__nangate45__p2",
+    "success": true,
+    "wall": 27.89,
+    "rss": 205.4,
+    "failed": []
+   },
+   {
+    "design": "C02321__divider_unsigned__risc-v_pipelined_superscalar_processor__nangate45__p2",
+    "success": true,
+    "wall": 22.37,
+    "rss": 229.1,
+    "failed": []
+   },
+   {
+    "design": "C00749__chacha__chacha__nangate45__p2",
+    "success": true,
+    "wall": 52.41,
+    "rss": 360.4,
+    "failed": []
+   },
+   {
+    "design": "C01568__div_pipelined__soc__nangate45__p2",
+    "success": true,
+    "wall": 55.53,
+    "rss": 428.6,
+    "failed": []
+   },
+   {
+    "design": "C01134__gba_cpu__gbatang__nangate45__p2",
+    "success": true,
+    "wall": 58.99,
+    "rss": 388.2,
+    "failed": []
+   },
+   {
+    "design": "C02742__asp_top__abstractx__nangate45__p2",
+    "success": true,
+    "wall": 43.04,
+    "rss": 366.4,
+    "failed": []
+   },
+   {
+    "design": "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2",
+    "success": true,
+    "wall": 34.36,
+    "rss": 255.2,
+    "failed": []
+   }
+  ]
+ },
+ {
+  "task": "image",
+  "label": "deepseek",
+  "development": {
+   "model": "deepseek-flash",
+   "stop_reason": "finished",
+   "model_calls": 79,
+   "failed_invocations": 0,
+   "usage": {
+    "input_tokens": 8315848,
+    "output_tokens": 129352,
+    "total_tokens": 8445200,
+    "cache_read_input_tokens": 8241408,
+    "uncached_input_tokens": 74440,
+    "cache_creation_input_tokens": 0,
+    "reasoning_tokens": 74408
+   },
+   "cost_usd": 0.213148,
+   "wall_seconds": 1122.2,
+   "converter_sha256": "ba3b4d0ea8667455f21f65cea5c6c9ceb3b44e4e637833216418976bfbe93afc"
+  },
+  "application": {
+   "n": 43,
+   "success": 43,
+   "wall_s_median": 1.88,
+   "wall_s_max": 6.04,
+   "wall_s_total": 88.77,
+   "cpu_s_median": 1.84,
+   "peak_rss_mb_median": 49.9,
+   "peak_rss_mb_max": 91.3
+  },
+  "full_pass": 5,
+  "correctness": {
+   "X_cell_density": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "X_macro_region": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "X_pin_density": {
+    "pooled_rate": 0.982269,
+    "designs_pass": 5
+   },
+   "X_pin_rudy": {
+    "pooled_rate": 0.982198,
+    "designs_pass": 5
+   },
+   "X_rudy": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "grid_shape": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "label_congestion": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "label_congestion_raw": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   }
+  },
+  "per_design": [
+   {
+    "design": "C03387__vga1__ego1-vga__nangate45__p2",
+    "success": true,
+    "wall": 0.37,
+    "rss": 33.9,
+    "failed": []
+   },
+   {
+    "design": "C02369__Uart8__verilog-uart__nangate45__p2",
+    "success": true,
+    "wall": 0.37,
+    "rss": 33.4,
+    "failed": []
+   },
+   {
+    "design": "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2",
+    "success": true,
+    "wall": 0.37,
+    "rss": 33.4,
+    "failed": []
+   },
+   {
+    "design": "C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2",
+    "success": true,
+    "wall": 0.37,
+    "rss": 33.6,
+    "failed": []
+   },
+   {
+    "design": "C01026__proc__fpga-busicdc-2025__nangate45__p2",
+    "success": true,
+    "wall": 0.37,
+    "rss": 33.7,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+    "success": true,
+    "wall": 0.52,
+    "rss": 34.5,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02570__muldiv__koti__nangate45__p2",
+    "success": true,
+    "wall": 0.97,
+    "rss": 39.5,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+    "success": true,
+    "wall": 0.52,
+    "rss": 33.9,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2",
+    "success": true,
+    "wall": 0.82,
+    "rss": 36.0,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00627__fpu_sp_mul__fpu__nangate45__p2",
+    "success": true,
+    "wall": 0.82,
+    "rss": 40.6,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2",
+    "success": true,
+    "wall": 0.93,
+    "rss": 37.1,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2",
+    "success": true,
+    "wall": 0.67,
+    "rss": 34.5,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02306__cordic__cordic-rtl-implementation__nangate45__p2",
+    "success": true,
+    "wall": 0.67,
+    "rss": 36.2,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00180__gift_core__gift__nangate45__p2",
+    "success": true,
+    "wall": 1.18,
+    "rss": 39.0,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00424__CRC32_D56__ethernetmac__nangate45__p2",
+    "success": true,
+    "wall": 0.57,
+    "rss": 36.1,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00622__fpu_sp_add__fpu__nangate45__p2",
+    "success": true,
+    "wall": 0.92,
+    "rss": 38.7,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01472__rxuart__qc-tee__nangate45__p2",
+    "success": true,
+    "wall": 0.72,
+    "rss": 35.4,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2",
+    "success": true,
+    "wall": 0.62,
+    "rss": 33.1,
+    "failed": []
+   },
+   {
+    "design": "C01484__multiplier_32_bit__comp__nangate45__p2",
+    "success": true,
+    "wall": 3.02,
+    "rss": 55.6,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03761__cordic__cordic-core__nangate45__p2",
+    "success": true,
+    "wall": 1.88,
+    "rss": 52.2,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00867__user_proj_example__acor_dct32__nangate45__p2",
+    "success": true,
+    "wall": 3.07,
+    "rss": 67.8,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01563__ppu__panog2_nes__nangate45__p2",
+    "success": true,
+    "wall": 3.24,
+    "rss": 66.0,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03527__tt_um_koti__koti__nangate45__p2",
+    "success": true,
+    "wall": 5.73,
+    "rss": 91.3,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2",
+    "success": true,
+    "wall": 4.43,
+    "rss": 71.1,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01329__controller__fft_hardware_accelerator__nangate45__p2",
+    "success": true,
+    "wall": 4.55,
+    "rss": 60.8,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03932__edge_fpu_fmac__edge-rv__nangate45__p2",
+    "success": true,
+    "wall": 2.37,
+    "rss": 54.9,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03232__opl2__arcade-tecmo_mister__nangate45__p2",
+    "success": true,
+    "wall": 6.04,
+    "rss": 76.5,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2",
+    "success": true,
+    "wall": 1.82,
+    "rss": 54.4,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00023__qoi_compress__qoiimg__nangate45__p2",
+    "success": true,
+    "wall": 1.97,
+    "rss": 50.2,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2",
+    "success": true,
+    "wall": 1.64,
+    "rss": 49.5,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03011__snake__verilog-snake-game-on-fpga__nangate45__p2",
+    "success": true,
+    "wall": 2.08,
+    "rss": 45.9,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03268__core__riscv-tlv-core__nangate45__p2",
+    "success": true,
+    "wall": 2.68,
+    "rss": 48.7,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01423__jt12__neogeo_mister__nangate45__p2",
+    "success": true,
+    "wall": 2.03,
+    "rss": 57.3,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02031__top__fpga-pid-controller-using-verilog__nangate45__p2",
+    "success": true,
+    "wall": 1.88,
+    "rss": 53.2,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01851__top__numericalwordle__nangate45__p2",
+    "success": true,
+    "wall": 3.23,
+    "rss": 59.3,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00748__prince__prince__nangate45__p2",
+    "success": true,
+    "wall": 2.08,
+    "rss": 52.7,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02544__lumi_rx_ready__umi__nangate45__p2",
+    "success": true,
+    "wall": 2.38,
+    "rss": 49.9,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02321__divider_unsigned__risc-v_pipelined_superscalar_processor__nangate45__p2",
+    "success": true,
+    "wall": 2.49,
+    "rss": 53.9,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00749__chacha__chacha__nangate45__p2",
+    "success": true,
+    "wall": 4.24,
+    "rss": 76.5,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01568__div_pipelined__soc__nangate45__p2",
+    "success": true,
+    "wall": 3.63,
+    "rss": 83.6,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01134__gba_cpu__gbatang__nangate45__p2",
+    "success": true,
+    "wall": 5.34,
+    "rss": 82.1,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02742__asp_top__abstractx__nangate45__p2",
+    "success": true,
+    "wall": 2.95,
+    "rss": 63.5,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2",
+    "success": true,
+    "wall": 2.22,
+    "rss": 56.3,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   }
+  ]
+ },
+ {
+  "task": "image",
+  "label": "gpt",
+  "development": {
+   "model": "gpt-6.1-sol",
+   "stop_reason": "finished",
+   "model_calls": 11,
+   "failed_invocations": 0,
+   "usage": {
+    "input_tokens": 193806,
+    "output_tokens": 10158,
+    "total_tokens": 203964,
+    "cache_read_input_tokens": 166351,
+    "uncached_input_tokens": 33,
+    "cache_creation_input_tokens": 27422,
+    "reasoning_tokens": 1880
+   },
+   "cost_usd": 0.173125,
+   "wall_seconds": 189.2,
+   "converter_sha256": "6f6bc83c0f6e676d8dd93071665b4f262c76fe93f11beeb1e20dd0865a613120"
+  },
+  "application": {
+   "n": 43,
+   "success": 43,
+   "wall_s_median": 3.78,
+   "wall_s_max": 11.0,
+   "wall_s_total": 170.7,
+   "cpu_s_median": 3.56,
+   "peak_rss_mb_median": 65.9,
+   "peak_rss_mb_max": 131.1
+  },
+  "full_pass": 5,
+  "correctness": {
+   "X_cell_density": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "X_macro_region": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "X_pin_density": {
+    "pooled_rate": 0.982269,
+    "designs_pass": 5
+   },
+   "X_pin_rudy": {
+    "pooled_rate": 0.982198,
+    "designs_pass": 5
+   },
+   "X_rudy": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "grid_shape": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "label_congestion": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   },
+   "label_congestion_raw": {
+    "pooled_rate": 1.0,
+    "designs_pass": 43
+   }
+  },
+  "per_design": [
+   {
+    "design": "C03387__vga1__ego1-vga__nangate45__p2",
+    "success": true,
+    "wall": 0.57,
+    "rss": 33.4,
+    "failed": []
+   },
+   {
+    "design": "C02369__Uart8__verilog-uart__nangate45__p2",
+    "success": true,
+    "wall": 0.49,
+    "rss": 32.8,
+    "failed": []
+   },
+   {
+    "design": "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2",
+    "success": true,
+    "wall": 0.47,
+    "rss": 32.5,
+    "failed": []
+   },
+   {
+    "design": "C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2",
+    "success": true,
+    "wall": 0.53,
+    "rss": 32.5,
+    "failed": []
+   },
+   {
+    "design": "C01026__proc__fpga-busicdc-2025__nangate45__p2",
+    "success": true,
+    "wall": 0.63,
+    "rss": 32.9,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+    "success": true,
+    "wall": 1.13,
+    "rss": 36.1,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02570__muldiv__koti__nangate45__p2",
+    "success": true,
+    "wall": 2.29,
+    "rss": 45.2,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+    "success": true,
+    "wall": 1.52,
+    "rss": 34.5,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2",
+    "success": true,
+    "wall": 1.52,
+    "rss": 40.7,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00627__fpu_sp_mul__fpu__nangate45__p2",
+    "success": true,
+    "wall": 2.62,
+    "rss": 47.5,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2",
+    "success": true,
+    "wall": 1.54,
+    "rss": 44.5,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2",
+    "success": true,
+    "wall": 0.72,
+    "rss": 33.7,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02306__cordic__cordic-rtl-implementation__nangate45__p2",
+    "success": true,
+    "wall": 1.13,
+    "rss": 40.4,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00180__gift_core__gift__nangate45__p2",
+    "success": true,
+    "wall": 1.98,
+    "rss": 45.8,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00424__CRC32_D56__ethernetmac__nangate45__p2",
+    "success": true,
+    "wall": 1.71,
+    "rss": 39.4,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00622__fpu_sp_add__fpu__nangate45__p2",
+    "success": true,
+    "wall": 1.74,
+    "rss": 44.2,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01472__rxuart__qc-tee__nangate45__p2",
+    "success": true,
+    "wall": 0.92,
+    "rss": 36.6,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2",
+    "success": true,
+    "wall": 1.12,
+    "rss": 38.0,
+    "failed": []
+   },
+   {
+    "design": "C01484__multiplier_32_bit__comp__nangate45__p2",
+    "success": true,
+    "wall": 4.33,
+    "rss": 69.5,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03761__cordic__cordic-core__nangate45__p2",
+    "success": true,
+    "wall": 3.83,
+    "rss": 67.0,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00867__user_proj_example__acor_dct32__nangate45__p2",
+    "success": true,
+    "wall": 8.27,
+    "rss": 84.0,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01563__ppu__panog2_nes__nangate45__p2",
+    "success": true,
+    "wall": 8.29,
+    "rss": 97.2,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03527__tt_um_koti__koti__nangate45__p2",
+    "success": true,
+    "wall": 11.0,
+    "rss": 131.1,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2",
+    "success": true,
+    "wall": 8.9,
+    "rss": 107.2,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01329__controller__fft_hardware_accelerator__nangate45__p2",
+    "success": true,
+    "wall": 4.28,
+    "rss": 76.1,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03932__edge_fpu_fmac__edge-rv__nangate45__p2",
+    "success": true,
+    "wall": 4.44,
+    "rss": 71.7,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03232__opl2__arcade-tecmo_mister__nangate45__p2",
+    "success": true,
+    "wall": 8.76,
+    "rss": 113.4,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2",
+    "success": true,
+    "wall": 5.44,
+    "rss": 71.8,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00023__qoi_compress__qoiimg__nangate45__p2",
+    "success": true,
+    "wall": 3.78,
+    "rss": 66.3,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2",
+    "success": true,
+    "wall": 3.47,
+    "rss": 65.1,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03011__snake__verilog-snake-game-on-fpga__nangate45__p2",
+    "success": true,
+    "wall": 3.15,
+    "rss": 61.9,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C03268__core__riscv-tlv-core__nangate45__p2",
+    "success": true,
+    "wall": 3.42,
+    "rss": 66.3,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01423__jt12__neogeo_mister__nangate45__p2",
+    "success": true,
+    "wall": 5.29,
+    "rss": 83.0,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02031__top__fpga-pid-controller-using-verilog__nangate45__p2",
+    "success": true,
+    "wall": 4.53,
+    "rss": 67.1,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01851__top__numericalwordle__nangate45__p2",
+    "success": true,
+    "wall": 5.54,
+    "rss": 77.7,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00748__prince__prince__nangate45__p2",
+    "success": true,
+    "wall": 4.28,
+    "rss": 66.0,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02544__lumi_rx_ready__umi__nangate45__p2",
+    "success": true,
+    "wall": 4.28,
+    "rss": 64.9,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02321__divider_unsigned__risc-v_pipelined_superscalar_processor__nangate45__p2",
+    "success": true,
+    "wall": 5.01,
+    "rss": 65.9,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00749__chacha__chacha__nangate45__p2",
+    "success": true,
+    "wall": 8.75,
+    "rss": 103.9,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01568__div_pipelined__soc__nangate45__p2",
+    "success": true,
+    "wall": 9.25,
+    "rss": 111.9,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C01134__gba_cpu__gbatang__nangate45__p2",
+    "success": true,
+    "wall": 9.97,
+    "rss": 113.0,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C02742__asp_top__abstractx__nangate45__p2",
+    "success": true,
+    "wall": 5.76,
+    "rss": 94.0,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   },
+   {
+    "design": "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2",
+    "success": true,
+    "wall": 4.05,
+    "rss": 71.0,
+    "failed": [
+     "X_pin_density",
+     "X_pin_rudy"
+    ]
+   }
+  ]
+ }
+]

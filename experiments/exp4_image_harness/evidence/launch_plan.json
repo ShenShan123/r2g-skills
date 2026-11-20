@@ -1,0 +1,87 @@
+{
+  "updated_at": "2026-11-15T16:57:30.810326+08:00",
+  "task": "image",
+  "groups": 4,
+  "repeats": 3,
+  "development_designs": 18,
+  "test_designs": 60,
+  "formal_started": false,
+  "control": {
+    "phase": "waiting_for_inputs",
+    "updated_at_utc": "2026-11-15T08:57:10.556322+00:00",
+    "dev": 16,
+    "test": 0
+  },
+  "small_preflight": [
+    {
+      "design": "C00833__alarm_clock_top__alarm_clock__nangate45__p2",
+      "platform": "nangate45",
+      "strict_full_pass": true,
+      "raster_accuracy": 1.0,
+      "failures": []
+    },
+    {
+      "design": "C00539__mcpu16mc__digitalcpuzoo__sky130hd__p5",
+      "platform": "sky130hd",
+      "strict_full_pass": true,
+      "raster_accuracy": 1.0,
+      "failures": []
+    },
+    {
+      "design": "C02136__fifo__hdl-libraries__gf180__p10",
+      "platform": "gf180",
+      "strict_full_pass": true,
+      "raster_accuracy": 1.0,
+      "failures": []
+    }
+  ],
+  "resources": {
+    "cpu_ids": [
+      2,
+      6,
+      7,
+      8,
+      49,
+      51,
+      52,
+      56,
+      10,
+      32,
+      34,
+      37,
+      57,
+      60,
+      63,
+      81,
+      38,
+      39,
+      40,
+      42,
+      82,
+      83,
+      85,
+      87,
+      43,
+      45,
+      46,
+      47,
+      89,
+      90,
+      92,
+      93
+    ],
+    "distinct_physical_cores": 32,
+    "physical_overlap_with_graph": 0,
+    "available_memory_gib": 377.19991302490234,
+    "disk_free_gib": 427.4150505065918
+  },
+  "graph_freeze_unchanged_sha256": "387809ea5fad2f0bf465fbae89b91785601b36fbdd552b85a73a2eb60e1e3879",
+  "tests": {
+    "runner": 6,
+    "image_evaluation": 10,
+    "summary": 1
+  },
+  "compute_root": "/home/yangao/exp4_image_harness_20261115_203",
+  "preparation_root": "memlab216:/proj/workarea/yangao/exp4_image_inputs_20261115",
+  "launcher": "/home/yangao/exp4_image_control_20261115/launch_when_ready.py"
+}

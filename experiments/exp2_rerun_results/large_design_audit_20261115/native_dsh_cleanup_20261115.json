@@ -1,0 +1,1790 @@
+{
+  "checked_at": "2026-11-15T06:37:06.644211+00:00",
+  "method": "native-dsh",
+  "retained_designs": [
+    {
+      "candidate_id": "aes-core-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7d1acce268f6b2aa",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/aes-core-01/mapped_netlist.v",
+      "sha256": "be405e9a4b52f5d1b0f8e9b489f701e0462d1ccac42746c2dd1ee194d50abd46"
+    },
+    {
+      "candidate_id": "aes-decipher-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7d4ea424e88deb5f",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/aes-decipher-01/mapped_netlist.v",
+      "sha256": "4205e5b3b6a60550e0156425c03c329304d7a73d07c475edabe6d1226fd9a40b"
+    },
+    {
+      "candidate_id": "aes-encipher-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7d4ea424e88deb5f",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/aes-encipher-01/mapped_netlist.v",
+      "sha256": "82d43e6ce16880e38bbb4fdb92231c483f01b8f22dc44a5f76ea1e55fde3007e"
+    },
+    {
+      "candidate_id": "aes-inv-sbox-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7d1acce268f6b2aa",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/aes-inv-sbox-01/mapped_netlist.v",
+      "sha256": "41c23b935873e97b6bd806f5b72be59a5fdfe3104b84ab873558ad698e21a657"
+    },
+    {
+      "candidate_id": "aes-keymem-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7d4ea424e88deb5f",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/aes-keymem-01/mapped_netlist.v",
+      "sha256": "07c5d3c5860cb44659cd78a2e676615efc4682954c645da98625b8238521ebea"
+    },
+    {
+      "candidate_id": "aes-mixcolumns-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/95cf958204fafbca",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/aes-mixcolumns-01/mapped_netlist.v",
+      "sha256": "e4fc30bec5dbc4d80905c6ca10b5c597581d85c0e7e5097d5118dc661c441a5f"
+    },
+    {
+      "candidate_id": "aes-sbox-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7d1acce268f6b2aa",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/aes-sbox-01/mapped_netlist.v",
+      "sha256": "5182ddd35ff43a558833b72a760d866a4f9e3ed2bc324ea8162d78967e0ff299"
+    },
+    {
+      "candidate_id": "arm9-code-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7cddc9e96eab07c2",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/arm9-code-01/mapped_netlist.v",
+      "sha256": "e9a6bec46f0d3a6c17544058209cf38c99a382534294f418f036828dc9f6a880"
+    },
+    {
+      "candidate_id": "arm9-mx-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7cddc9e96eab07c2",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/arm9-mx-01/mapped_netlist.v",
+      "sha256": "3d439be60ebe8f1f75d5c5f612463c249e85c86233eb58daa7513c73560f05f0"
+    },
+    {
+      "candidate_id": "audio-dac-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/9983620b5b5d6a81",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/audio-dac-01/mapped_netlist.v",
+      "sha256": "7cd5dd1329bd061074825f5521d040c309de379c299f011dbc5d57a93cbf3aa9"
+    },
+    {
+      "candidate_id": "audio-i2s-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/9983620b5b5d6a81",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/audio-i2s-01/mapped_netlist.v",
+      "sha256": "116ad47cb9bea993d30f5c720eaa298f0371d0077953d3b7b7f508fd668da2be"
+    },
+    {
+      "candidate_id": "audio-spdif-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/9983620b5b5d6a81",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/audio-spdif-01/mapped_netlist.v",
+      "sha256": "1a66eb8d56565609ffe1db7e78722025c06b065c37fdb238a3acb623f161039d"
+    },
+    {
+      "candidate_id": "avr-cpu-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/81ce097284aa2a56",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/avr-cpu-01/mapped_netlist.v",
+      "sha256": "73beee44907ba1384b50da7bed670ffe099c712c5ad5db4f2f8a05af0095c549"
+    },
+    {
+      "candidate_id": "avr-multiply-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/81ce097284aa2a56",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/avr-multiply-01/mapped_netlist.v",
+      "sha256": "1667cd7daa59454e6b74a116a2011d784ffe0989e0675baeb7056562dcd39e8d"
+    },
+    {
+      "candidate_id": "avr-regfile-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/81ce097284aa2a56",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/avr-regfile-01/mapped_netlist.v",
+      "sha256": "8be2b8120c4dad2cef3b75b4db610bd5675f6cc03d6c85dc33f62df5cf7967cc"
+    },
+    {
+      "candidate_id": "axi-ram-rd-if-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/690e1f7a67cf095f",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/axi-ram-rd-if-01/mapped_netlist.v",
+      "sha256": "7a3276b99d1c2c26f97bd932c76c56fb88f15ffe5f287460ed800523ddf5712e"
+    },
+    {
+      "candidate_id": "axi-register-rd-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/690e1f7a67cf095f",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/axi-register-rd-01/mapped_netlist.v",
+      "sha256": "fb8936cc60ba7e3c8b7eaac25f8f7816454e1642a321edbef9c86448ae934dae"
+    },
+    {
+      "candidate_id": "axi-spi-master-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/764cf4be967a5e15",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/axi-spi-master-01/mapped_netlist.v",
+      "sha256": "cced1561b8c00071c8ec5e16a3c12cec996bc2572b6fd91d978cf44318b757dc"
+    },
+    {
+      "candidate_id": "axis-cobs-encode-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2ae6b5d82fa1ea1d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/axis-cobs-encode-01/mapped_netlist.v",
+      "sha256": "73e38a6738981a83c7944ace45b41630db2dce3504d2f9a39f848bf97454e2c3"
+    },
+    {
+      "candidate_id": "axis-frame-length-adjust-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2ae6b5d82fa1ea1d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/axis-frame-length-adjust-01/mapped_netlist.v",
+      "sha256": "6b42b0dfc190ebbb6e3390430a17e455993a3c227c55483b1aa6cced29a6328e"
+    },
+    {
+      "candidate_id": "axis-stat-counter-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2ae6b5d82fa1ea1d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/axis-stat-counter-01/mapped_netlist.v",
+      "sha256": "b9c17ca8385294c4f2bcae837054324fe1f4ca46de3a9ab9ce18b33116666719"
+    },
+    {
+      "candidate_id": "bandpass-basicfir-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/c92241b1988b5b62",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/bandpass-basicfir-01/mapped_netlist.v",
+      "sha256": "2b19780d5c089ed4779b7e57af1336eedb9defffc813c3a6368f9d926dd88440"
+    },
+    {
+      "candidate_id": "beamformer-diff-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/19edbb3c1a550c7d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/beamformer-diff-01/mapped_netlist.v",
+      "sha256": "96bd24356a788b9882b177dbf91215751200ae77ca2de33f7ceb7d0cc449fc50"
+    },
+    {
+      "candidate_id": "beamformer-top-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/19edbb3c1a550c7d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/beamformer-top-01/mapped_netlist.v",
+      "sha256": "ba275d7c08de73a7b312959725e3bdedbbeb94a8650a249711baae504116e227"
+    },
+    {
+      "candidate_id": "beamformer-tt-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/19edbb3c1a550c7d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/beamformer-tt-01/mapped_netlist.v",
+      "sha256": "62f571e267c95f1cc8b523df0cf7943fee5ddbd5d4fbbc6928bcd341814bead9"
+    },
+    {
+      "candidate_id": "cache-bus-arb-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/aba7287f7f01b15a",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/cache-bus-arb-01/mapped_netlist.v",
+      "sha256": "7b293c851a6d8b013de13d1fe3db2b7a3107d4d959c7a619e89c6f44c5db2f2a"
+    },
+    {
+      "candidate_id": "cache-cc-single-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/aba7287f7f01b15a",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/cache-cc-single-01/mapped_netlist.v",
+      "sha256": "f53bafa1c8aaa5c1cdd775770f9eafc2884762d52fd0f043ec03165fe62a8e57"
+    },
+    {
+      "candidate_id": "cache-top-single-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/aba7287f7f01b15a",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/cache-top-single-01/mapped_netlist.v",
+      "sha256": "4e8428693b52ee08598d297955bbc8cc08fa0c02e0363dc9f89869fd1d227b43"
+    },
+    {
+      "candidate_id": "can-level-bit-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/97c0e237a2abbde5",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/can-level-bit-01/mapped_netlist.v",
+      "sha256": "0bdf35f9ff1903ff2d5393aff4ef92e7cbb205bc7efec6dfcefc671387f3739f"
+    },
+    {
+      "candidate_id": "can-level-packet-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/97c0e237a2abbde5",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/can-level-packet-01/mapped_netlist.v",
+      "sha256": "d0aad26ec70015e76d8c8a7b8566fac885baef3e4a9872644f555b56a8f11136"
+    },
+    {
+      "candidate_id": "can-shift-reg-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/6ad2a94b52d9df19",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/can-shift-reg-01/mapped_netlist.v",
+      "sha256": "a1bea9250b683d3e083863a49fd01eab4f6e830901c69476f46ddfc3b47083b0"
+    },
+    {
+      "candidate_id": "can-tx-container-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/6ad2a94b52d9df19",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/can-tx-container-01/mapped_netlist.v",
+      "sha256": "18aa512b0c358077d657963e30d8ca57efb0615a2bc899013af9f411b1b0294c"
+    },
+    {
+      "candidate_id": "chacha-core-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/60407b640aaf0fd0",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/chacha-core-01/mapped_netlist.v",
+      "sha256": "1e4a8cf01beae7d87d211078e9f204f942d40ca4cc398e573de36693c46daf39"
+    },
+    {
+      "candidate_id": "chacha-poly-bus-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/60407b640aaf0fd0",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/chacha-poly-bus-01/mapped_netlist.v",
+      "sha256": "a59831c4087b0d2d37070f08ec7e08c06cefe43d4b1b55b03f4d088bb10e6b7c"
+    },
+    {
+      "candidate_id": "ciphercore-decrypt-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/e184de2eecbaf30c",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/ciphercore-decrypt-01/mapped_netlist.v",
+      "sha256": "66de836a550204fb073c7d9a4117aea86a3f57bc01a0bc180d8f7f80af5c38cf"
+    },
+    {
+      "candidate_id": "ciphercore-top-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/e184de2eecbaf30c",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/ciphercore-top-01/mapped_netlist.v",
+      "sha256": "1882b0663b7cbf0b77f3d2988318825982b82e5d332fef042e578c5271856684"
+    },
+    {
+      "candidate_id": "combine-decoder-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/1d2bf629b3430e8c",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/combine-decoder-01/mapped_netlist.v",
+      "sha256": "b806b9733dac437cb4a5514325b20ca9de21a3eec714eb0ff99aec43e4b2b425"
+    },
+    {
+      "candidate_id": "crc32-core-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4a6fde5840ee9bc4",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/crc32-core-01/mapped_netlist.v",
+      "sha256": "f3b2fe76c1e627159f0a5c7ba49b605c83d626c04cb379a558a8308ae9de5248"
+    },
+    {
+      "candidate_id": "crc32-gen-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4a6fde5840ee9bc4",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/crc32-gen-01/mapped_netlist.v",
+      "sha256": "3cdeddfe1ad978a04e56cacd42a29107f1e485cc3b3ae9545518372609722bb1"
+    },
+    {
+      "candidate_id": "crc32-in8-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4a6fde5840ee9bc4",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/crc32-in8-01/mapped_netlist.v",
+      "sha256": "afe686f11984d88c501401ea7a411f9cccde4f69cd48835e5864f064dc8fd45c"
+    },
+    {
+      "candidate_id": "crc32-mon-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4a6fde5840ee9bc4",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/crc32-mon-01/mapped_netlist.v",
+      "sha256": "94b47bf2d7ff6db51e5f97277dd0f3c8d2db80194bd3e25f1f8141bb805e5363"
+    },
+    {
+      "candidate_id": "darkriscv-ddr-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/1c9db80ffa4020a4",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/darkriscv-ddr-01/mapped_netlist.v",
+      "sha256": "c6304441c19d523e14208962f2664f94e5665b674c4da444eff57d7a0840c681"
+    },
+    {
+      "candidate_id": "dbus-ramdp-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/0d7d64a094985aea",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/dbus-ramdp-01/mapped_netlist.v",
+      "sha256": "373811fa43d5837b0898e17657518898cac86b9a25c1288b24adaaed51acce97"
+    },
+    {
+      "candidate_id": "dbus-ramfifo-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/0d7d64a094985aea",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/dbus-ramfifo-01/mapped_netlist.v",
+      "sha256": "e5d2cf2b555739e7cdc41bfa47b25572c9148e8b86ee06baca9a962a8afff70c"
+    },
+    {
+      "candidate_id": "dma-axi-addrgen-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/213ef3dbe084441b",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/dma-axi-addrgen-01/mapped_netlist.v",
+      "sha256": "40f454a83396c6de8038f5c1f73d7d87fb67724e076832d10e1d53eebba58497"
+    },
+    {
+      "candidate_id": "dma-axi-chfifo-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/213ef3dbe084441b",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/dma-axi-chfifo-01/mapped_netlist.v",
+      "sha256": "00d8662a33bc79580975c5a4e1c7b30b5a1ee5b3004d89cc7221d2f9cb6a202b"
+    },
+    {
+      "candidate_id": "e203-adv-timer-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/ce1c5fdf8b4cc7e0",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/e203-adv-timer-01/mapped_netlist.v",
+      "sha256": "1a8740b38879b5c89d00c941880acf2c2b7a28b4fa4e5c9d26f18858ad499f0f"
+    },
+    {
+      "candidate_id": "e203-spi-fifo-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/ce1c5fdf8b4cc7e0",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/e203-spi-fifo-01/mapped_netlist.v",
+      "sha256": "9f55565ac74fc2bf4a8df9227ee320068e0e00bdac16a4742e1966f1c0486409"
+    },
+    {
+      "candidate_id": "e203-spi-rx-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/ce1c5fdf8b4cc7e0",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/e203-spi-rx-01/mapped_netlist.v",
+      "sha256": "01ba844168da093f8ec1588d03c069f7c49117a0bd8d2a65be3ead84fb1a1c98"
+    },
+    {
+      "candidate_id": "e203-spi-tx-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/ce1c5fdf8b4cc7e0",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/e203-spi-tx-01/mapped_netlist.v",
+      "sha256": "b8af5d5b751ef5ffd18eebf62c63263b456533372933b8e86feda021e9ca697a"
+    },
+    {
+      "candidate_id": "emac-csum-calc-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/230031092f316b1c",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/emac-csum-calc-01/mapped_netlist.v",
+      "sha256": "1bd0bd959f5408def2d8caed87e3927bea60cb61a6d8677c3b3d2c62016aca38"
+    },
+    {
+      "candidate_id": "emac-eth-rx-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/230031092f316b1c",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/emac-eth-rx-01/mapped_netlist.v",
+      "sha256": "652121bcd07809e36ff50d50540357834d5ec194b387fd006b0902aaf53c0be6"
+    },
+    {
+      "candidate_id": "emac-udp-blast-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/230031092f316b1c",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/emac-udp-blast-01/mapped_netlist.v",
+      "sha256": "6089063e83436fe3c6efe0fe793d3107144c4eaffbde8581ac9689903a93e168"
+    },
+    {
+      "candidate_id": "emac-udp-sink-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/230031092f316b1c",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/emac-udp-sink-01/mapped_netlist.v",
+      "sha256": "c93df39fa53b4d9d53952e66314e83c86ecae6362312051c6032072f66f3b634"
+    },
+    {
+      "candidate_id": "enet-mii-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/aaa439892320fdb0",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/enet-mii-01/mapped_netlist.v",
+      "sha256": "3dc35b9550050ed6557862d1ff97b9ebe93c0dae704676bc3f2e347699cfb509"
+    },
+    {
+      "candidate_id": "eth-crc32-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/40fd934c61723e76",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/eth-crc32-01/mapped_netlist.v",
+      "sha256": "c880feee4ebb85ffb0eb3fe4fa5d90d6f84b62d81b23097a4630ff66a7fbeb77"
+    },
+    {
+      "candidate_id": "eth-mac-ctrl-rx-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/3d1bd8643e65fd04",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/eth-mac-ctrl-rx-01/mapped_netlist.v",
+      "sha256": "ace4ec7b7ff0a3225d701fcedee1b0f9a079f67adda067ce523d3919e019e7a9"
+    },
+    {
+      "candidate_id": "eth-udp-ip-rx64-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/3d1bd8643e65fd04",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/eth-udp-ip-rx64-01/mapped_netlist.v",
+      "sha256": "41e6c891d800e60ffe7e7b01ea438d9c22b3438420854c1c70f8b10766ce6ea7"
+    },
+    {
+      "candidate_id": "ethswitch-channel-in-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/5091408ea035bf73",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/ethswitch-channel-in-01/mapped_netlist.v",
+      "sha256": "339751fe213944d8e492a4d61dce04a3b93f944264bf6790de80fc50c0627886"
+    },
+    {
+      "candidate_id": "ethswitch-frame-fifo-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/5091408ea035bf73",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/ethswitch-frame-fifo-01/mapped_netlist.v",
+      "sha256": "caa823cda304f6383622e71a935d13f8f0bc813b7220721ae4632d10bdaa3029"
+    },
+    {
+      "candidate_id": "ethswitch-mactable-dpram-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/5091408ea035bf73",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/ethswitch-mactable-dpram-01/mapped_netlist.v",
+      "sha256": "d19ba0166056e90af03a4c2d04e98305fd599f5b2229cbaa1f80b7567e7e892d"
+    },
+    {
+      "candidate_id": "ethswitch-mactable-line-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/5091408ea035bf73",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/ethswitch-mactable-line-01/mapped_netlist.v",
+      "sha256": "89cb95ab3ccf699e56d7679ced29ee9dcc66025b45a48445d2cb11235b85933c"
+    },
+    {
+      "candidate_id": "fft-complex-add-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/8d170e8e78e1d3f6",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/fft-complex-add-01/mapped_netlist.v",
+      "sha256": "f2594869d7d0047dedc4f3bc00fd0dec2e4dc5d828535a60c87f3ce1eaa6969d"
+    },
+    {
+      "candidate_id": "fft-cordic-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/f3522ca7d9c39cdb",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/fft-cordic-01/mapped_netlist.v",
+      "sha256": "9ca6532b659b0be5e7178ec345dfa0c5e91b7d4c78519263cb0e325350aa2c5e"
+    },
+    {
+      "candidate_id": "fpga-pio-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/23e9c1a3b06e4a7f",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/fpga-pio-01/mapped_netlist.v",
+      "sha256": "f3bcc20346610afb09b6b5b06d024ebde63bf7ec768bc1ae59f74d36778f5cdf"
+    },
+    {
+      "candidate_id": "fpga-pio-machine-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/23e9c1a3b06e4a7f",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/fpga-pio-machine-01/mapped_netlist.v",
+      "sha256": "be0b4c82809e0c19609a0d844bc43443a7c9583e3f5ac3badba02d4668f09e1a"
+    },
+    {
+      "candidate_id": "fpga-pio-osr-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/23e9c1a3b06e4a7f",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/fpga-pio-osr-01/mapped_netlist.v",
+      "sha256": "f9d568ba2d07e1c5651fa22137463c9c5389372c97b001387cbc86a1edcdedcb"
+    },
+    {
+      "candidate_id": "fwdma-ch-rf-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/12bfcf11fdf7e9b0",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/fwdma-ch-rf-01/mapped_netlist.v",
+      "sha256": "27708b2f6a01d5f93dd87c6c6bb15e78b723d326a1b88705f423498107b54b1a"
+    },
+    {
+      "candidate_id": "fwdma-ch-sel-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/12bfcf11fdf7e9b0",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/fwdma-ch-sel-01/mapped_netlist.v",
+      "sha256": "3c74513200014c8d08853d75530c10331877f6d36fc7355a5f8b953a2601a172"
+    },
+    {
+      "candidate_id": "fwdma-de-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/12bfcf11fdf7e9b0",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/fwdma-de-01/mapped_netlist.v",
+      "sha256": "0442142a2bc1eef0cd48a2a078bbb16565861ad5d30d0d1567b433da2d981f61"
+    },
+    {
+      "candidate_id": "hdmi-packet-picker-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/68da802492d092b4",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/hdmi-packet-picker-01/mapped_netlist.v",
+      "sha256": "52d14f2671677dd917a68b23625e76ad80dba12d85f111e4ad7d25759cb915b8"
+    },
+    {
+      "candidate_id": "hdmi-sine-gen-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/68da802492d092b4",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/hdmi-sine-gen-01/mapped_netlist.v",
+      "sha256": "47aab62baaca5b82198084c1900af3a36827106744f037db00e97d60e59a1b52"
+    },
+    {
+      "candidate_id": "i2c-master-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/974323db3275102d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/i2c-master-01/mapped_netlist.v",
+      "sha256": "2fc873c86d25cb29ee0cea8347f42a66d084cbd8c9802ee8bbf12f0e663ca7b7"
+    },
+    {
+      "candidate_id": "i2c-master-axil-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/43c80ee46de14c1e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/i2c-master-axil-01/mapped_netlist.v",
+      "sha256": "947247e6650856434aa232a839b826dbd150a99146a169efb528ee9ff6c7198a"
+    },
+    {
+      "candidate_id": "i2c-master-top-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/974323db3275102d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/i2c-master-top-01/mapped_netlist.v",
+      "sha256": "d6a1c37cc2e46d9a8bbd101f07309ecab0d8d823b009720131b34e0c509bb337"
+    },
+    {
+      "candidate_id": "i2c-master-top-02",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/221e8c4c7ff9c645",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/i2c-master-top-02/mapped_netlist.v",
+      "sha256": "3f7f5ce897b77d877ba6567f52d78c05cdb6b9461a54ccb3c24ea86cd6d586ce"
+    },
+    {
+      "candidate_id": "i2c-master-wbs16-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/43c80ee46de14c1e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/i2c-master-wbs16-01/mapped_netlist.v",
+      "sha256": "c1236b6d39f5d3d007d2664b88e921241e103d7f4475cda6cf72d6a460f410de"
+    },
+    {
+      "candidate_id": "i2c-master-wbs8-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/43c80ee46de14c1e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/i2c-master-wbs8-01/mapped_netlist.v",
+      "sha256": "0bea0291e84a81fcffb94d8348505cac06b5b3e51c8a90abfc1ac4d407a9f954"
+    },
+    {
+      "candidate_id": "i2c-sseg-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/974323db3275102d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/i2c-sseg-01/mapped_netlist.v",
+      "sha256": "59bc43c0d12c97c0cc46188db760cd860fa64d17e41ffab531ec540f98537f87"
+    },
+    {
+      "candidate_id": "ic-regfile-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4f7b358841f6f027",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/ic-regfile-01/mapped_netlist.v",
+      "sha256": "5c4751450591033814ab3fa59a7f22ed6c166e7b5f9cad38d45ed2a6cbac46fe"
+    },
+    {
+      "candidate_id": "ic-uart-recv-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4f7b358841f6f027",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/ic-uart-recv-01/mapped_netlist.v",
+      "sha256": "fe0972f0b7b19a0076b3985930f51c6432ca8e59d240fd12dabe28c0f6766bb6"
+    },
+    {
+      "candidate_id": "iir-filter-02",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/8bfa01252e4e4360",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/iir-filter-02/mapped_netlist.v",
+      "sha256": "bba973101bc8176f0b84c82348d9e3634f78e0da2be844419b1ab73967aa04b2"
+    },
+    {
+      "candidate_id": "iir-mult-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/8bfa01252e4e4360",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/iir-mult-01/mapped_netlist.v",
+      "sha256": "f2112061954fdfe102ecde439aa505986da79701b885248b69ee6d925874bf5a"
+    },
+    {
+      "candidate_id": "img-decoding-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/0bec2321958a447d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/img-decoding-01/mapped_netlist.v",
+      "sha256": "3e3f4f4a8333c33539e5239ac5866d4b70da52a975805d406dc6390bc4162ec8"
+    },
+    {
+      "candidate_id": "img-encode-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/0bec2321958a447d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/img-encode-01/mapped_netlist.v",
+      "sha256": "2634dd42797f8bea531a3ddf2a0787a66a58fed6c919f1f36f74819852a17dff"
+    },
+    {
+      "candidate_id": "img-quantization-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/0bec2321958a447d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/img-quantization-01/mapped_netlist.v",
+      "sha256": "b2d55af02f12ce5b52744a91a1e098d6fd4537d8e5ef070fa60ff57570bfe69a"
+    },
+    {
+      "candidate_id": "ip-decoder-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/1d2bf629b3430e8c",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/ip-decoder-01/mapped_netlist.v",
+      "sha256": "2b2760eb5411e7d9b02a901e28ad740cd60eca1db7210d0347b9d5a188408af5"
+    },
+    {
+      "candidate_id": "jpeg-in-fifo-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/ce8988aa7cfe9f69",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/jpeg-in-fifo-01/mapped_netlist.v",
+      "sha256": "2c83693805886cced58ecb18ad557de5e2ef1e3e981c854cc7c5ee5e853c04cf"
+    },
+    {
+      "candidate_id": "jpeg-out-fifo-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/ce8988aa7cfe9f69",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/jpeg-out-fifo-01/mapped_netlist.v",
+      "sha256": "c97526d8c02eb8697295ce5bbad948b16f5530b52b0756fd3de68a6bb9495bbb"
+    },
+    {
+      "candidate_id": "lc3-control-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/529a44c0ab5111d8",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/lc3-control-01/mapped_netlist.v",
+      "sha256": "13852af9cfb7dd5e5ef320acddfdb0adb9ab08a463c60e929d0d257a51866109"
+    },
+    {
+      "candidate_id": "lcd-init-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/082adfe2a215ec65",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/lcd-init-01/mapped_netlist.v",
+      "sha256": "4ce12a791b788af8044ce974fea85ddbeafd25a4734a498fe08c721baafa2af9"
+    },
+    {
+      "candidate_id": "lms-core-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2bf75d71a981263e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/lms-core-01/mapped_netlist.v",
+      "sha256": "c693de29dbea55000cfb831222152602079036de82a86419ecf0ccc105beb7a5"
+    },
+    {
+      "candidate_id": "lms-fir-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2bf75d71a981263e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/lms-fir-01/mapped_netlist.v",
+      "sha256": "38c3c892d451fafb3d6dd216aeb5af8df29817aa7c9990d57c7b56ebfabf7f3b"
+    },
+    {
+      "candidate_id": "md5-core-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/a156adf8f23c2711",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/md5-core-01/mapped_netlist.v",
+      "sha256": "c2857474645450a858f9887c23f26820542c5d8da09e7a4c6afb3fac8076b927"
+    },
+    {
+      "candidate_id": "mips-core-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/82513d8fa41eb6f9",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/mips-core-01/mapped_netlist.v",
+      "sha256": "51f142f8fb1055c16e4acf9f6e1d5048eb5720c7b0e294f4f90a29ee86a830ba"
+    },
+    {
+      "candidate_id": "mips-datapath-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/82513d8fa41eb6f9",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/mips-datapath-01/mapped_netlist.v",
+      "sha256": "4115621ad41ad5b01f47780e329a61f12d5b520f4a6452167a719a34c4223600"
+    },
+    {
+      "candidate_id": "ms-dmac-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/fdf4888b476d607e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/ms-dmac-01/mapped_netlist.v",
+      "sha256": "3d79e57ad3e54db853c52896c5b078582cb3a264a80ec791325ea71e40f06a18"
+    },
+    {
+      "candidate_id": "nandland-uart-bus16-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/8b286ec9f26c4f15",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/nandland-uart-bus16-01/mapped_netlist.v",
+      "sha256": "d714986dce3e5fa3b787e614f874224717d1f4a6f7039ec3c89462c8b5be9f95"
+    },
+    {
+      "candidate_id": "nandland-uart-bus8-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/8b286ec9f26c4f15",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/nandland-uart-bus8-01/mapped_netlist.v",
+      "sha256": "59584f50970ff2612ca205d16f429804f71bb703770a604bbef679c6f93e0de9"
+    },
+    {
+      "candidate_id": "nandland-uart-rx-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/8b286ec9f26c4f15",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/nandland-uart-rx-01/mapped_netlist.v",
+      "sha256": "6bb1d19f789f09c0efb7876a71b5d781689dde4241a6d1f14f762ce42a09f15b"
+    },
+    {
+      "candidate_id": "nes-cpu-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7b1cc958c719fcab",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/nes-cpu-01/mapped_netlist.v",
+      "sha256": "00344b043494e5a8766ccf9dd2fc5eba395b5152fe3f6da9182b29bb590be76d"
+    },
+    {
+      "candidate_id": "nes-dpram-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7b1cc958c719fcab",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/nes-dpram-01/mapped_netlist.v",
+      "sha256": "cc697383194bca672179135b7be3cbec2087b3ebd2ece2b225a12f0a1c45f4af"
+    },
+    {
+      "candidate_id": "nes-ppu-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7b1cc958c719fcab",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/nes-ppu-01/mapped_netlist.v",
+      "sha256": "0971f65ca479b7c1df6a2a5a934b6e1553084650e95a22fb8e742299c138cc62"
+    },
+    {
+      "candidate_id": "nes-ppu-spr-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7b1cc958c719fcab",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/nes-ppu-spr-01/mapped_netlist.v",
+      "sha256": "f2fd554628e0d2993aed9f712d1828b17f6f41a30bda3f394526c9ea63e931b8"
+    },
+    {
+      "candidate_id": "npu-dc-fifo-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/db475a5b1719d61e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/npu-dc-fifo-01/mapped_netlist.v",
+      "sha256": "52bc6224d0a53b1ef0ff4a12828e590ebb03aca0b96b6e30e04fa3520744caec"
+    },
+    {
+      "candidate_id": "npu-ddr-mux-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/db475a5b1719d61e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/npu-ddr-mux-01/mapped_netlist.v",
+      "sha256": "401fdf76eb023ffc28b93c1534cd543ef6a08567f5b4e194b6449beaaee24421"
+    },
+    {
+      "candidate_id": "npu-dpram-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/db475a5b1719d61e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/npu-dpram-01/mapped_netlist.v",
+      "sha256": "7d3cbdeec41cd34fa82d3f1a4147cc44a97dd15fb7a1e273dc1b880468a9f519"
+    },
+    {
+      "candidate_id": "npu-sc-fifo-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/db475a5b1719d61e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/npu-sc-fifo-01/mapped_netlist.v",
+      "sha256": "4da8628f57d594f9d467efd5cc821c55741c028b036ce92fa5d7e0f4601406ad"
+    },
+    {
+      "candidate_id": "nvdla-cmac-active-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/eef8e7ee990cb189",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/nvdla-cmac-active-01/mapped_netlist.v",
+      "sha256": "7412c92e23be6f121c52e42e8561fa97a0caee77b30ff470b9c8a8e2bd59e847"
+    },
+    {
+      "candidate_id": "nvdla-csc-dl-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/eef8e7ee990cb189",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/nvdla-csc-dl-01/mapped_netlist.v",
+      "sha256": "71d330474b7533780aa79b1ad58422d59184b53ed9208ad7041d00d799060bfe"
+    },
+    {
+      "candidate_id": "nvdla-csc-wl-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/eef8e7ee990cb189",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/nvdla-csc-wl-01/mapped_netlist.v",
+      "sha256": "3ed14ba826b87b9cd8acb2f774d727c04338aeb8b3269a7440f2364e4f42811e"
+    },
+    {
+      "candidate_id": "nvdla-csc-wl-dec-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/eef8e7ee990cb189",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/nvdla-csc-wl-dec-01/mapped_netlist.v",
+      "sha256": "9cab6d75344f3fae5f03c0aeaec6fcfa6511ab54635bc29e53d366d18ddd06d4"
+    },
+    {
+      "candidate_id": "oled-display-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/81a079f1a9db9442",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/oled-display-01/mapped_netlist.v",
+      "sha256": "fdd1a587bb32e3ab6173dc0169820088b41e9dee00d19f3f7c6f8c11b3fad17f"
+    },
+    {
+      "candidate_id": "oled-scroller-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/81a079f1a9db9442",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/oled-scroller-01/mapped_netlist.v",
+      "sha256": "a71efa42f7a278b72a81bf361dd4bb782fa5e064ce2b3a51204755c75a8d0287"
+    },
+    {
+      "candidate_id": "omsp-gpio-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/35ff174e2fdb8e4f",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/omsp-gpio-01/mapped_netlist.v",
+      "sha256": "131076315bd81e2fbe81407b8a66a4fb816b7f700f47312b1e62ba72cc028887"
+    },
+    {
+      "candidate_id": "pcie-dma-if-axi-wr-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4316cf7b098c6232",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/pcie-dma-if-axi-wr-01/mapped_netlist.v",
+      "sha256": "53c727d52d54ebd8789de11337f50d94e9518160ec347f5ff21e46bdf854c072"
+    },
+    {
+      "candidate_id": "pcie-dma-if-wr-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4316cf7b098c6232",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/pcie-dma-if-wr-01/mapped_netlist.v",
+      "sha256": "a630d5bf45d4db0899b5119174ade51ee5d0edb229b3ff9f2f056eed3fe1cc68"
+    },
+    {
+      "candidate_id": "pcie-dma-us-wr-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4316cf7b098c6232",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/pcie-dma-us-wr-01/mapped_netlist.v",
+      "sha256": "a82820d6dc1c0634cc78b28835f79a4f9653f00734de49993d215898e7e94550"
+    },
+    {
+      "candidate_id": "pcie-us-dma-rd-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4316cf7b098c6232",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/pcie-us-dma-rd-01/mapped_netlist.v",
+      "sha256": "afb1e2faacb5d1684b7792e47fbaf46dfd5804a3b14f8ccb70ddb1aaa9058803"
+    },
+    {
+      "candidate_id": "poly1305-mult-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/60407b640aaf0fd0",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/poly1305-mult-01/mapped_netlist.v",
+      "sha256": "67e29ad9f35da90134f6c1cb35d63a20ad529016009477453092301ecfc6261b"
+    },
+    {
+      "candidate_id": "poly1305-reduce-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/60407b640aaf0fd0",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/poly1305-reduce-01/mapped_netlist.v",
+      "sha256": "033347f5dd9a05de0abc42242271031c4c55d14ea2d6143fb83fdbfad0e57cab"
+    },
+    {
+      "candidate_id": "projf-circle-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/f211969c64d6c59e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/projf-circle-01/mapped_netlist.v",
+      "sha256": "9e9f479e6aa0f571ea67aa0ef80240fb69dd67f4fbb13ed901bf4664103c40e1"
+    },
+    {
+      "candidate_id": "projf-cubed-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/f211969c64d6c59e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/projf-cubed-01/mapped_netlist.v",
+      "sha256": "946d1885ce87970771a3948420d493df10e36ec4692c6706ee1a2fd39bd7ef26"
+    },
+    {
+      "candidate_id": "projf-poly-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/f211969c64d6c59e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/projf-poly-01/mapped_netlist.v",
+      "sha256": "766ebd2de2befa763eeb6c14bc30a870e9d83aa5bcfba7779a973c45bab74b87"
+    },
+    {
+      "candidate_id": "projf-sqrt-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/f211969c64d6c59e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/projf-sqrt-01/mapped_netlist.v",
+      "sha256": "373e09de7e570fd4d42d52f720271342bf789846f869d389c50a85d3c03991d5"
+    },
+    {
+      "candidate_id": "ps2-scan-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/005d52f1c69d4b7a",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/ps2-scan-01/mapped_netlist.v",
+      "sha256": "ce12944d920d44e3697bf1255db565ac9a9a6bfbc857c839869bf0c340715008"
+    },
+    {
+      "candidate_id": "qspi-apb-master-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/c488ef0f8a260251",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/qspi-apb-master-01/mapped_netlist.v",
+      "sha256": "cb046c24f87969fd38d9c19b1b671fc38a3483882d8655cbd71ff286c691e197"
+    },
+    {
+      "candidate_id": "qspi-flash-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/1d2e6f77cb280555",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/qspi-flash-01/mapped_netlist.v",
+      "sha256": "3c7525afd2a359224f6e3fbb7467c956f4f8aaffb6c02c909ecff76de9dd2e0b"
+    },
+    {
+      "candidate_id": "qspi-flash-reader-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/1d2e6f77cb280555",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/qspi-flash-reader-01/mapped_netlist.v",
+      "sha256": "d44fa376a561aa7bd289472dc10b2f99bc265ca81f0dc92ead32f829acb70084"
+    },
+    {
+      "candidate_id": "qspi-hyperbus-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/09c990bc07b19ade",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/qspi-hyperbus-01/mapped_netlist.v",
+      "sha256": "87f4ebc96743f309b9fe0ee1237e7b89b801bac1fc27d1c0aa92462fdb347f76"
+    },
+    {
+      "candidate_id": "r22-sdfunit2-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/29e7e3cabbb84926",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/r22-sdfunit2-01/mapped_netlist.v",
+      "sha256": "bfece5702d5bf8778f70914daa5156e220bd65acf7b5552a668d8612cbf4aba9"
+    },
+    {
+      "candidate_id": "r22-twiddle4-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/29e7e3cabbb84926",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/r22-twiddle4-01/mapped_netlist.v",
+      "sha256": "1bf6b2c6a3ba15bc2dc51dad7ab38592eac7a6fc8175c01cae78090977cb7a84"
+    },
+    {
+      "candidate_id": "ramtester-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/047e98d0e75fc509",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/ramtester-01/mapped_netlist.v",
+      "sha256": "83dd798675e62c1174e8e816ec098ca234c09e5fe7ac281af89c837de33190a4"
+    },
+    {
+      "candidate_id": "riscv-alu-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/9ab6a6fb01d1f0ec",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/riscv-alu-01/mapped_netlist.v",
+      "sha256": "c30ae18ee3f5553e3dd815536bb0bec64aa89e39d2f8b4397aff79ff5d44f9eb"
+    },
+    {
+      "candidate_id": "sd-bmp-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/30200bc7c5e6ac53",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/sd-bmp-01/mapped_netlist.v",
+      "sha256": "de2884af1b4c3002467c12925ebcfd0fdbc005d3ec06889627b0f77b20c657c9"
+    },
+    {
+      "candidate_id": "sd-read-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/30200bc7c5e6ac53",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/sd-read-01/mapped_netlist.v",
+      "sha256": "9bf66047bf388a906e2b72bb8d2e2faf51d74a54c0613510d33bb5981ed1f20b"
+    },
+    {
+      "candidate_id": "sd-write-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/30200bc7c5e6ac53",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/sd-write-01/mapped_netlist.v",
+      "sha256": "9b4c12239c8eddea8edc1f74421ed8d052cdbe4f6a0628000b7ccb6e6d18df87"
+    },
+    {
+      "candidate_id": "sdram-axi-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/d20b64d3a2aae0e2",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/sdram-axi-01/mapped_netlist.v",
+      "sha256": "dd6d92ffc0577b11a88dac69a0b9fd3d83b34c677618ce15c0479d16afc3bfca"
+    },
+    {
+      "candidate_id": "sdram-axi-pmem-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/d20b64d3a2aae0e2",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/sdram-axi-pmem-01/mapped_netlist.v",
+      "sha256": "798ccdcb626b6f65400efbf4e4a565e92ad49ecb546c6d85c4142d1b7d9b529d"
+    },
+    {
+      "candidate_id": "serv-rf-top-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/922745556c946404",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/serv-rf-top-01/mapped_netlist.v",
+      "sha256": "71122735f16db784bbb545919464ada223c2bb5288301d7e8e628bd74ec655c1"
+    },
+    {
+      "candidate_id": "sha256-core-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/e45e36ce539d4614",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/sha256-core-01/mapped_netlist.v",
+      "sha256": "33f5ef4a2cbfbcf326982e1322b3d4d108aec59598c1243019605a34f4f001f2"
+    },
+    {
+      "candidate_id": "spi-mem-cmd-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/b203c129d24c7ba8",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/spi-mem-cmd-01/mapped_netlist.v",
+      "sha256": "44d856a07feb77be3173afec3f7431d91e689d6b74964f73c0bcfefbf165b5b6"
+    },
+    {
+      "candidate_id": "srv32-clint-02",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2c402a317a54d0b1",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/srv32-clint-02/mapped_netlist.v",
+      "sha256": "93cd3bc0f5dc59aa52bab4945914af3e8f29cf5ae676fd8a675d0cf9cea97be2"
+    },
+    {
+      "candidate_id": "srv32-soc-top-02",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2c402a317a54d0b1",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/srv32-soc-top-02/mapped_netlist.v",
+      "sha256": "8e0d9f67f54c906e9307fce6c0b5ddb9f02d136547c630e5a6133fdf9ca610d0"
+    },
+    {
+      "candidate_id": "swerv-ram-1024x20-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/42fbf77952f6f946",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/swerv-ram-1024x20-01/mapped_netlist.v",
+      "sha256": "7ae9210944874e542914412a340890509bdb86011c8b7d66a6d9dc3f09f45689"
+    },
+    {
+      "candidate_id": "trivium-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/e184de2eecbaf30c",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/trivium-01/mapped_netlist.v",
+      "sha256": "7230779114ca7d506261b8083a18b85f0c89bf5b4643f8fea2f9a67a80de8493"
+    },
+    {
+      "candidate_id": "trng-fifo-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4384b246bac68c42",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/trng-fifo-01/mapped_netlist.v",
+      "sha256": "1e9117c2df7ae6b6b05e2331ecff945d7060a2877ece83aa406047aff0eb58eb"
+    },
+    {
+      "candidate_id": "uart-echo-fifo-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/818b845e13f098b6",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/uart-echo-fifo-01/mapped_netlist.v",
+      "sha256": "523df3cdb391179ccfa033371ab7009ceddac6b712ae3f5afea5e298d66aac53"
+    },
+    {
+      "candidate_id": "uart-echo-regs-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/818b845e13f098b6",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/uart-echo-regs-01/mapped_netlist.v",
+      "sha256": "12d042f370b9aa6e07f8e40201f6fa402c5023200109037e377f5402076c81f3"
+    },
+    {
+      "candidate_id": "uart-echo-top-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/818b845e13f098b6",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/uart-echo-top-01/mapped_netlist.v",
+      "sha256": "bf186a2d2ee550dca820ec965c9acec980c5230209faaddc2b436b95eed57093"
+    },
+    {
+      "candidate_id": "udp-decoder-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/1d2bf629b3430e8c",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/udp-decoder-01/mapped_netlist.v",
+      "sha256": "0d01570035d3758de93ca06a5fb1b768c478b950ba78df9f25a2defe9c009113"
+    },
+    {
+      "candidate_id": "uriscv-core-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/184933bdad2c6f0d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/uriscv-core-01/mapped_netlist.v",
+      "sha256": "0009c73ba6a49d962f20b2c44b5bc0a822389a3dbeef71125be9acc46e020424"
+    },
+    {
+      "candidate_id": "uriscv-exec-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/184933bdad2c6f0d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/uriscv-exec-01/mapped_netlist.v",
+      "sha256": "e0b4694e139d55d2ae1e0523c3a0ef3fa5fab773aae34b64d952284949c62354"
+    },
+    {
+      "candidate_id": "uriscv-issue-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/184933bdad2c6f0d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/uriscv-issue-01/mapped_netlist.v",
+      "sha256": "813dcf53a747db73a8e43193c19f473a1d04725fab8f87075765e3a4f168ce39"
+    },
+    {
+      "candidate_id": "uriscv-mult-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/184933bdad2c6f0d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/uriscv-mult-01/mapped_netlist.v",
+      "sha256": "aabd2796c7317a0a144ba0e5cafa40adc39e3a25ae7fe62464c1a9846e23419a"
+    },
+    {
+      "candidate_id": "veer-ram-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7dfa7fb0912ad1fe",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/veer-ram-01/mapped_netlist.v",
+      "sha256": "bdfc82dfcb6a57a48870daaeb9814502a2736fbb950a2a3bab209c6665960624"
+    },
+    {
+      "candidate_id": "verigpu-dadda24-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/42012394032f8e8a",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/verigpu-dadda24-01/mapped_netlist.v",
+      "sha256": "dd6f8936ded5e172436c1e155e53a3f41694e00f563bcacc0bfe9f8ca03a6acb"
+    },
+    {
+      "candidate_id": "verigpu-dadda32-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/42012394032f8e8a",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/verigpu-dadda32-01/mapped_netlist.v",
+      "sha256": "dc01ce5615b4357844f21c01bcbcb7c90f6afeec59eb5f72a2d1edf8efafeb4f"
+    },
+    {
+      "candidate_id": "wb-async-reg-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/828cdefe92c9d758",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/wb-async-reg-01/mapped_netlist.v",
+      "sha256": "7545b23f35293715cb0d845f44f091e72720d4d7673e4433dd8be335ad4e7ef1"
+    },
+    {
+      "candidate_id": "wb-axis-master-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/828cdefe92c9d758",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/wb-axis-master-01/mapped_netlist.v",
+      "sha256": "663e1beb7111aadadca9515922395d755fec8c278a1f9445e3146620adbba6a8"
+    },
+    {
+      "candidate_id": "wb-mux2-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/828cdefe92c9d758",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/wb-mux2-01/mapped_netlist.v",
+      "sha256": "0466c31b0435e4f7bb316815717adfe6d4963efad255f395cc8eddacd65d246e"
+    },
+    {
+      "candidate_id": "wb-reg-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/828cdefe92c9d758",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/wb-reg-01/mapped_netlist.v",
+      "sha256": "59b2bd925e425ab23a745f3c0b7f8479607574cb8a5955cc2cc2f70e788b98f1"
+    },
+    {
+      "candidate_id": "wbuart-axil-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/3ee053a7eb789cc6",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/wbuart-axil-01/mapped_netlist.v",
+      "sha256": "3ce96aeba0414e728bfe1158d0269acb2b531eefd096c8c95d5e7730fe3ee2e3"
+    },
+    {
+      "candidate_id": "wbuart-core-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/3ee053a7eb789cc6",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/wbuart-core-01/mapped_netlist.v",
+      "sha256": "1015838d7ec662da86ae9a543a334178e846138255665a57e1fd2f8d2241e26d"
+    },
+    {
+      "candidate_id": "a1-openmsp430-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/35ff174e2fdb8e4f",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a1-openmsp430-01/mapped_netlist.v",
+      "sha256": "8c11fc5ca96ff74739804274dfb3ab36f432d4b87a329160f49507243d37beeb"
+    },
+    {
+      "candidate_id": "a1-picorv32-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/356068d836f44a1e",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a1-picorv32-01/mapped_netlist.v",
+      "sha256": "4ed41886809fb2486dbfd86385f299b0fee6db788679e30ed2230d586ef3ae30"
+    },
+    {
+      "candidate_id": "a1-r8051-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/3f47b7d9febf9f04",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a1-r8051-01/mapped_netlist.v",
+      "sha256": "3cca431322d396e4bc7a57c516b60a53a0f6de8ea3b6182020a5890819c33b69"
+    },
+    {
+      "candidate_id": "a1-srv32-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2c402a317a54d0b1",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a1-srv32-01/mapped_netlist.v",
+      "sha256": "73333ed83a597eda95a48ee3ba32b9a65e11d345101eea67b485f11fdb33dc0f"
+    },
+    {
+      "candidate_id": "a2-lin-top-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4997f39666ff7809",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a2-lin-top-01/mapped_netlist.v",
+      "sha256": "eafe22458e316035266f8d880fc5753ce6e86c96174c86f13b49161477262b1f"
+    },
+    {
+      "candidate_id": "a3-chacha20-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/e184de2eecbaf30c",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a3-chacha20-01/mapped_netlist.v",
+      "sha256": "824b2e3e2bd1a50c8502facdcd4eec31baaf179f56196c15b2e82bacf9a8d1e7"
+    },
+    {
+      "candidate_id": "a3-md5-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/a156adf8f23c2711",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a3-md5-01/mapped_netlist.v",
+      "sha256": "d2930bd8f2b51aba1dc2f46a5344e5dd5d45aea0c0cde40873d9e3b4403f2683"
+    },
+    {
+      "candidate_id": "a4-pipelined-iir-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/c53c4ead501f06a3",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a4-pipelined-iir-01/mapped_netlist.v",
+      "sha256": "3e60c0344bd647002d3d122203880dc2d788bc9dc4906a315521ede2800ddfde"
+    },
+    {
+      "candidate_id": "a5-ddr-sdram-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2d57b53baba04218",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a5-ddr-sdram-01/mapped_netlist.v",
+      "sha256": "cac43c2322723d9425c98eb222784a7686f3a0085e093ace933bf1dbbf14d27f"
+    },
+    {
+      "candidate_id": "a5-qspi-dmc-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/1d2e6f77cb280555",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a5-qspi-dmc-01/mapped_netlist.v",
+      "sha256": "382c511b9a4ff52c0421b818f2a004721ef86a8f50a0a2ae5918b898bf203204"
+    },
+    {
+      "candidate_id": "a6-ip-eth-rx-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/3d1bd8643e65fd04",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a6-ip-eth-rx-01/mapped_netlist.v",
+      "sha256": "466560c2aff68b7969ee194f1c1fc6013a7f71ce0724670361dd77960a8b5ca3"
+    },
+    {
+      "candidate_id": "a6-ip-eth-tx-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/3d1bd8643e65fd04",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a6-ip-eth-tx-01/mapped_netlist.v",
+      "sha256": "6265569120f3306e6fcc418baec95ece793ab9adae59a7cf2dd1a3c5a3911532"
+    },
+    {
+      "candidate_id": "a6-tcp-decoder-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/1d2bf629b3430e8c",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a6-tcp-decoder-01/mapped_netlist.v",
+      "sha256": "fc7abdf115c5a8bf441c74608db7731bcb96f9d2377d2db506264aa72d5a762a"
+    },
+    {
+      "candidate_id": "a7-elevator-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/6b63026ff4009209",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a7-elevator-01/mapped_netlist.v",
+      "sha256": "ba19f8ea26e6211f3be313b261a59fbbda648c2a169c0a04c57cf152bd9727ac"
+    },
+    {
+      "candidate_id": "a7-i2c-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/9ab6a6fb01d1f0ec",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a7-i2c-01/mapped_netlist.v",
+      "sha256": "b69840efe2f55b1c2063f24f02d818c065830ed27953422592db593b2cf1b1ea"
+    },
+    {
+      "candidate_id": "a7-oled-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/81a079f1a9db9442",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a7-oled-01/mapped_netlist.v",
+      "sha256": "7438de0a2ea36dfddf2334c240a57a791f3b4ba25929849a002c2b2dc0f0029d"
+    },
+    {
+      "candidate_id": "a7-uart-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/9ab6a6fb01d1f0ec",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a7-uart-01/mapped_netlist.v",
+      "sha256": "a48bbc55751d69afb3a3d76e400e255a68368614bee166a91719cea4cdbe3e7f"
+    },
+    {
+      "candidate_id": "a7-wavegen-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2d93c7b1b012f6f9",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a7-wavegen-01/mapped_netlist.v",
+      "sha256": "72eb98f142ce712cdaaeed3e1c71d638e5dee583c456997c98ba50acfb2141ea"
+    },
+    {
+      "candidate_id": "a8-axi-cdma-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/690e1f7a67cf095f",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a8-axi-cdma-01/mapped_netlist.v",
+      "sha256": "b462663dea40289ab7dd6e83d6fc3c2c82b8de5abe98ab8fd098a3b4c195855f"
+    },
+    {
+      "candidate_id": "a8-axi-crossbar-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/690e1f7a67cf095f",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a8-axi-crossbar-01/mapped_netlist.v",
+      "sha256": "7335a8ea7dbe77cf1c7bf8800876013507ced583cbeac4461b7cca01273d23a0"
+    },
+    {
+      "candidate_id": "a8-axis-switch-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2ae6b5d82fa1ea1d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a8-axis-switch-01/mapped_netlist.v",
+      "sha256": "457344b4d20a5caf8b5600663c0d377da1cc8c23f5457ee9d1868ffc299734f6"
+    },
+    {
+      "candidate_id": "dpretet-axi-crossbar-lite-top",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/80f4f8e84a9c55ab",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/dpretet-axi-crossbar-lite-top/mapped_netlist.v",
+      "sha256": "12ab8caebd039f9387ee35e8bf1f2a5898614f739c6570b665a9df7875cad353"
+    },
+    {
+      "candidate_id": "x1-aes128-top",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7d4ea424e88deb5f",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/x1-aes128-top/mapped_netlist.v",
+      "sha256": "41b4e8995731f8835c763d950bb1de8cc3e1bd30ef9bc16f29e0c1cdb24521f7"
+    },
+    {
+      "candidate_id": "x1-bandpass-filter",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/c92241b1988b5b62",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/x1-bandpass-filter/mapped_netlist.v",
+      "sha256": "ecdc03cb4ba7f2c6846417817dda749584d770a48645d7f1cb5b5df4be84f009"
+    },
+    {
+      "candidate_id": "x1-can-top",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/97c0e237a2abbde5",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/x1-can-top/mapped_netlist.v",
+      "sha256": "def7ad564466556ac6ab0d8054600f901cc6176320a54a1f254a46efed185a1b"
+    },
+    {
+      "candidate_id": "x1-picorv32",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/bd9dddd95803a446",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/x1-picorv32/mapped_netlist.v",
+      "sha256": "140f589c7c0eac1ab9109511c08e2a4354de65fdc5e48759455a97bde95a9004"
+    },
+    {
+      "candidate_id": "x1-serv-top",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/922745556c946404",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/x1-serv-top/mapped_netlist.v",
+      "sha256": "a9335648d17855e856e812311d8b9f3241b7529229c58be0d8f42398f2982a1c"
+    },
+    {
+      "candidate_id": "x1-sha256-top",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/e45e36ce539d4614",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/x1-sha256-top/mapped_netlist.v",
+      "sha256": "8c6bd0c7c4db6825ed3e8da97587c2824a949058eff1faa801a54b3e28f7afcd"
+    },
+    {
+      "candidate_id": "uart-cdc-001",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/9ff123606e253447",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/uart-cdc-001/mapped_netlist.v",
+      "sha256": "d40202610275e3ca8f8998a54d705370a4ea734dd7ad8f57633fd828b066ba14"
+    },
+    {
+      "candidate_id": "spi-fpga-core-top-001",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/240d9603327bb773",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/spi-fpga-core-top-001/mapped_netlist.v",
+      "sha256": "72a421a2fa8f9ad1c991987f3c5a550254d99f96727b4f650c6cc968781d34e1"
+    },
+    {
+      "candidate_id": "z80-registers-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/00ec029acdf6b0cb",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/z80-registers-01/mapped_netlist.v",
+      "sha256": "fe43ea393968ac958629f8239bdda6e530df5c3cfaeaf9262d0cef4014f529c9"
+    },
+    {
+      "candidate_id": "r22-twiddle8-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/29e7e3cabbb84926",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/r22-twiddle8-01/mapped_netlist.v",
+      "sha256": "2daa7f8c44f67b256c82def89125c2a686ada5ba9b7f0ea67e59a9f8a9bcf915"
+    },
+    {
+      "candidate_id": "img-dct-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/0bec2321958a447d",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/img-dct-01/mapped_netlist.v",
+      "sha256": "dcdd1ae821abeba1635f1ae614980e39a94f5a51d270815597e8010f7669c37f"
+    },
+    {
+      "candidate_id": "oled-ssd1306-ctrl-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/221e8c4c7ff9c645",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/oled-ssd1306-ctrl-01/mapped_netlist.v",
+      "sha256": "4758d7d20575be930e23355b6a1f1321ca3a15761b2ab785f7c841375e86e124"
+    },
+    {
+      "candidate_id": "a3-aes-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7d1acce268f6b2aa",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/a3-aes-01/mapped_netlist.v",
+      "sha256": "36fe23dd031b8ede74fbabf92f642bce21a591a6df2664a90226ef9a01974664"
+    },
+    {
+      "candidate_id": "oled-scene-renderer-01",
+      "source": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/221e8c4c7ff9c645",
+      "mapped_netlist": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/oled-scene-renderer-01/mapped_netlist.v",
+      "sha256": "70f7df6e902e390228b29c42300191877c05e05c024b3daae494992deff134ed"
+    }
+  ],
+  "retained_source_locations": {
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/5200862a4929d984e51c": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7d1acce268f6b2aa",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/2e4b99665d156678bf42": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7d4ea424e88deb5f",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/1c11a408696d586c3210": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/95cf958204fafbca",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/11e6c645bb2f644cc51b": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7cddc9e96eab07c2",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/01e73f8f833257b6db0d": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/9983620b5b5d6a81",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/991bdcb24165d7759d25": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/81ce097284aa2a56",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/26aa3d7bf0426e0a8e93": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/690e1f7a67cf095f",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/e9ebece3aaef69834213": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/764cf4be967a5e15",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/318b136fac495039765f": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2ae6b5d82fa1ea1d",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/04bf15c71ff675fb3003": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/c92241b1988b5b62",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/1fc49288beca81e7913c": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/19edbb3c1a550c7d",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/f654bf106ece347089ee": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/aba7287f7f01b15a",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/cd2c7595c865af089005": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/97c0e237a2abbde5",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/c774948941f9e02ce104": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/6ad2a94b52d9df19",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/52725677a885d636719a": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/60407b640aaf0fd0",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/75f611442f907ca941bc": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/e184de2eecbaf30c",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/74730076b671a1ec8dd6": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/1d2bf629b3430e8c",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/b32d42441cf0580f65c1": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4a6fde5840ee9bc4",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/7c2ecb58182a8541dcde": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/1c9db80ffa4020a4",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/e50f6a9a204945e3f08c": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/0d7d64a094985aea",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/2e2f3d43f781102022e6": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/213ef3dbe084441b",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/11e18ad9e75920fb3c08": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/ce1c5fdf8b4cc7e0",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/21318ce3392097782949": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/230031092f316b1c",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/5d2390f6bcf9d6115f91": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/aaa439892320fdb0",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/5945957e3617e1198f2e": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/40fd934c61723e76",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/4e3efee80b8eb1aa59b7": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/3d1bd8643e65fd04",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/052a939e78388e21c548": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/5091408ea035bf73",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/48d9611b662854d9d300": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/8d170e8e78e1d3f6",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/06380078ce9f50a249c3": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/f3522ca7d9c39cdb",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/ee71b33b067b5e315875": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/23e9c1a3b06e4a7f",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/c5de24a24b682c558265": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/12bfcf11fdf7e9b0",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/d995747874540d687ef2": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/68da802492d092b4",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/09237f45da8f3a12b32b": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/974323db3275102d",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/b33fd93d39815fb93a46": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/43c80ee46de14c1e",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/0b405d46ad26793c6791": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/221e8c4c7ff9c645",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/7c5d4e00e69c396fafaa": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4f7b358841f6f027",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/9d6c92ee60c5bc009443": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/8bfa01252e4e4360",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/2ab2cdae8824241ff262": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/0bec2321958a447d",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/4783bd9fdb2f65736fbd": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/ce8988aa7cfe9f69",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/bcfbab3fca04f8646e81": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/529a44c0ab5111d8",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/c79b15abed21d250c627": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/082adfe2a215ec65",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/c1dda0926a69b2258fa9": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2bf75d71a981263e",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/e703065cabf2d0bda137": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/a156adf8f23c2711",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/ef799aacd8ce1f1814c2": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/82513d8fa41eb6f9",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/0c53f92c29dad45c5778": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/fdf4888b476d607e",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/cd9c09580cc54c15cb65": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/8b286ec9f26c4f15",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/a240d9b7b2fbe47959a2": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7b1cc958c719fcab",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/a36f062bff3065e3043d": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/db475a5b1719d61e",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/a5ee64c0edc0a5a794c9": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/eef8e7ee990cb189",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/eea1f546617cc3380be5": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/81a079f1a9db9442",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/f718b1fd1d6336444e06": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/35ff174e2fdb8e4f",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/fc73caeabdecc3d2ed6f": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4316cf7b098c6232",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/1a788235149e99f759a6": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/f211969c64d6c59e",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/73eba9d6701c60b321c7": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/005d52f1c69d4b7a",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/6dfcfc992ee3c368be97": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/c488ef0f8a260251",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/3b2d24bd860df7592527": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/1d2e6f77cb280555",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/5423a9a9cbe947d6d98c": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/09c990bc07b19ade",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/99493b8baf364ff965b2": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/29e7e3cabbb84926",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/067725ab4578ad11bfed": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/047e98d0e75fc509",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/fccaf32ef3e83aae34e1": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/9ab6a6fb01d1f0ec",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/1ce8af03cbfaec13970c": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/30200bc7c5e6ac53",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/fce2f5af6f78abc44b69": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/d20b64d3a2aae0e2",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/642d0d8cfd2f50768035": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/922745556c946404",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/fe4a98e4af7eeedc6448": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/e45e36ce539d4614",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/7ea588d061de3418d4d6": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/b203c129d24c7ba8",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/62bb5930531fb92cf8fb": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2c402a317a54d0b1",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/c570d3c956b3d75f1564": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/42fbf77952f6f946",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/d64952244f9e008daade": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4384b246bac68c42",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/4e5f408cb7818330a51d": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/818b845e13f098b6",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/7457f532504937f468ce": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/184933bdad2c6f0d",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/f57cb38a29befb7516f1": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/7dfa7fb0912ad1fe",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/44ae2f4fc95141e37e03": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/42012394032f8e8a",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/ea6f952f2d51bf742819": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/828cdefe92c9d758",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/7f638e81118869112c8a": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/3ee053a7eb789cc6",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/970105a55063744309e0": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/356068d836f44a1e",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/6048cbbf22d93041ba17": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/3f47b7d9febf9f04",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/751f39320fa5c7ea4cdb": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/4997f39666ff7809",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/306906c2587d284913fe": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/c53c4ead501f06a3",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/27a5e6c7c5322b5fea43": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2d57b53baba04218",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/3eb98d701aa4f0bbff34": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/6b63026ff4009209",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/a68e5f7ac23a46550ce4": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/2d93c7b1b012f6f9",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/9b0c836d72aa4ce6cc04": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/80f4f8e84a9c55ab",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/8b4f095525c22ea252a5": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/bd9dddd95803a446",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/67ffc368d04123535aff": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/9ff123606e253447",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/da328faf75c5e81f308d": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/240d9603327bb773",
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/9d37d0f679c209c604a6": "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/method_runs/native-dsh.batch1.formal/repositories/00ec029acdf6b0cb"
+  },
+  "deleted_paths_bytes": {
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/01e73f8f833257b6db0d": 249856,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/04bf15c71ff675fb3003": 4096000,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/052a939e78388e21c548": 503808,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/06380078ce9f50a249c3": 1290240,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/067725ab4578ad11bfed": 208896,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/09237f45da8f3a12b32b": 249856,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/0b405d46ad26793c6791": 12120064,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/0c53f92c29dad45c5778": 266240,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/11e18ad9e75920fb3c08": 223219712,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/11e6c645bb2f644cc51b": 238272512,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/1a788235149e99f759a6": 7245824,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/1c11a408696d586c3210": 290816,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/1ce8af03cbfaec13970c": 3088384,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/1fc49288beca81e7913c": 2834432,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/21318ce3392097782949": 6877184,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/26aa3d7bf0426e0a8e93": 2924544,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/27a5e6c7c5322b5fea43": 1314816,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/2ab2cdae8824241ff262": 1220608,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/2e2f3d43f781102022e6": 1024000,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/2e4b99665d156678bf42": 299008,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/306906c2587d284913fe": 2527232,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/318b136fac495039765f": 2686976,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/3b2d24bd860df7592527": 3801088,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/3eb98d701aa4f0bbff34": 208896,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/44ae2f4fc95141e37e03": 12226560,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/4783bd9fdb2f65736fbd": 204800,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/48d9611b662854d9d300": 35418112,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/4e3efee80b8eb1aa59b7": 15806464,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/4e5f408cb7818330a51d": 487424,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/5200862a4929d984e51c": 1363968,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/52725677a885d636719a": 561152,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/5423a9a9cbe947d6d98c": 1048576,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/5945957e3617e1198f2e": 249856,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/5d2390f6bcf9d6115f91": 241664,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/6048cbbf22d93041ba17": 5943296,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/62bb5930531fb92cf8fb": 3944448,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/642d0d8cfd2f50768035": 18604032,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/67ffc368d04123535aff": 200704,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/6dfcfc992ee3c368be97": 88535040,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/73eba9d6701c60b321c7": 155648,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/7457f532504937f468ce": 12283904,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/74730076b671a1ec8dd6": 1269760,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/751f39320fa5c7ea4cdb": 188416,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/75f611442f907ca941bc": 700416,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/7c2ecb58182a8541dcde": 9584640,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/7c5d4e00e69c396fafaa": 589824,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/7ea588d061de3418d4d6": 245760,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/7f638e81118869112c8a": 1413120,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/8b4f095525c22ea252a5": 2146304,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/970105a55063744309e0": 2146304,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/991bdcb24165d7759d25": 2375680,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/99493b8baf364ff965b2": 4849664,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/9b0c836d72aa4ce6cc04": 1839104,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/9d37d0f679c209c604a6": 610304,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/9d6c92ee60c5bc009443": 21458944,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/a240d9b7b2fbe47959a2": 5619712,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/a36f062bff3065e3043d": 6307840,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/a5ee64c0edc0a5a794c9": 179097600,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/a68e5f7ac23a46550ce4": 151552,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/b32d42441cf0580f65c1": 741376,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/b33fd93d39815fb93a46": 663552,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/bcfbab3fca04f8646e81": 212992,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/c1dda0926a69b2258fa9": 1032192,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/c570d3c956b3d75f1564": 10510336,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/c5de24a24b682c558265": 1429504,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/c774948941f9e02ce104": 10350592,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/c79b15abed21d250c627": 1101824,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/cd2c7595c865af089005": 1060864,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/cd9c09580cc54c15cb65": 217088,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/d64952244f9e008daade": 688128,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/d995747874540d687ef2": 372736,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/da328faf75c5e81f308d": 1048576,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/e50f6a9a204945e3f08c": 253952,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/e703065cabf2d0bda137": 233472,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/e9ebece3aaef69834213": 716800,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/ea6f952f2d51bf742819": 655360,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/ee71b33b067b5e315875": 2617344,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/eea1f546617cc3380be5": 188416,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/ef799aacd8ce1f1814c2": 208896,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/f57cb38a29befb7516f1": 8978432,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/f654bf106ece347089ee": 344064,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/f718b1fd1d6336444e06": 400887808,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/fc73caeabdecc3d2ed6f": 9314304,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/fccaf32ef3e83aae34e1": 1404928,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/fce2f5af6f78abc44b69": 401408,
+    "/data/yangao/exp2_rerun/runs/exp2-v5b-20261114/campaign/evaluation/native-dsh.batch1/_source_cache/fe4a98e4af7eeedc6448": 983040,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/CPU/exp1_151eaf28f1f6": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/DMC_Nx16/exp1_b09ccf82da97": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/Decrypt/exp1_deebbe31c4b1": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/FIR_Filter/exp1_3f26a5fa2e2e": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/FLASH_QSPI/exp1_53ef342e6360": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/FLASH_READER_QSPI/exp1_76320a2c8e88": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/Hyperbus/exp1_c4e32c5b6fe5": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/IIR_Filter/exp1_bbc55fc9cca2": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/IP_decoder/exp1_d65cc0d73a4f": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/InitLCD/exp1_e07529139ff4": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/LMS/exp1_aa07ed964af9": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/MS_DMAC_AHBL/exp1_1a0615aa5adf": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/M_BMP_Copire/exp1_1eb05af9ffee": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/M_SD_Card_Read/exp1_681f7c2529c4": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/M_SD_Card_Write/exp1_5199257457c4": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/MixColumns/exp1_5019e563b64c": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/Multiplier/exp1_2660d309dd6f": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/Multiply/exp1_26ed1c116982": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/NV_NVDLA_CMAC_CORE_active/exp1_98f796f2803f": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/NV_NVDLA_CSC_WL_dec/exp1_f128ac9826f7": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/NV_NVDLA_CSC_dl/exp1_ec355bebe6cc": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/NV_NVDLA_CSC_wl/exp1_ccb1ac60a22a": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/Oled_Display/exp1_53633ceb7de1": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/RegFile/exp1_5371de8a60f1": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/Registers/exp1_f6821f874408": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/SHA_TOP/exp1_9634886502fc": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/SPI_master/exp1_89cd0e63a46c": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/SSEG/exp1_4c05a3359989": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/SdfUnit2/exp1_3730250fc3bb": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/TCP_decoder/exp1_8762c2d27a32": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/TextScroller_Hello_Orange_Scaled_Centered/exp1_f5cad70bfa5b": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/Top/exp1_b2f5e0e19574": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/TopLevel/exp1_602153945b0f": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/TwiddleConvert4/exp1_f4805ec0a26b": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/TwiddleConvert8/exp1_b1ff3e560ed9": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/UART_RX/exp1_63d47a778add": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/UART_To_Bus16/exp1_796a9921d43e": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/UART_To_Bus8/exp1_229cd50cbfec": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/UDP_decoder/exp1_388e88c453a4": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/adv_timer_apb_if/exp1_686a4e0980cb": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/aes/exp1_3bd2deb1fe1a": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/aes/exp1_4c56a2b17683": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/aes_core/exp1_1c6c79cdc710": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/aes_decipher_block/exp1_784bcf104201": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/aes_encipher_block/exp1_8f05abf41aea": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/aes_inv_sbox/exp1_6bd069c5bd4d": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/aes_key_mem/exp1_f174d7775347": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/aes_sbox/exp1_119d40ee1584": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/alu_riscv/exp1_d20216895a2f": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/apb_master/exp1_492dd79f2f9a": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/arm9_compitable_code/exp1_96876c845564": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/audio_dac/exp1_93a91b8950b9": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/audio_i2s/exp1_22a106a1c1c4": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/audio_spdif/exp1_b283f7d59873": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/axi_cdma/exp1_ff868f3a154f": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/axi_crossbar/exp1_74cf0462f2af": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/axi_ram_rd_if/exp1_c91572034ad5": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/axi_register_rd/exp1_7ed1d7ccba9c": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/axi_slave_addr_gen/exp1_68f1d15038da": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/axicb_crossbar_lite_top/exp1_e6a4c457fa8d": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/axiluart/exp1_101f6f0a8ebd": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/axis_cobs_encode/exp1_dfc087f2e58f": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/axis_frame_length_adjust/exp1_6fad9c8bf896": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/axis_stat_counter/exp1_52905106d4c1": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/axis_switch/exp1_d1b21c081211": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/axis_wb_master/exp1_48b9f4304f10": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/bandpass_filter/exp1_d27a1128132f": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/basicfir/exp1_0071525d2e57": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/bus_arbitrator/exp1_8722dadf2612": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/can_level_bit/exp1_1a23b7b0ea2f": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/can_level_packet/exp1_f5ba7b24a17d": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/can_top/exp1_b7de578051e8": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/cc_singlebus/exp1_bc614a65f39a": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/chacha20/exp1_5e3aac4be286": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/chacha20_poly1305_bus/exp1_040c26f0968e": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/chacha_core/exp1_0c4921097ad2": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/channel_in/exp1_246ece1e1386": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/clint/exp1_79fb65a838bd": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/combine_decoder/exp1_a59b77e66886": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/complexAddRadix_4/exp1_07cbb49649d0": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/control_unit/exp1_bd76c8247212": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/cordic/exp1_0d7c060816e6": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/cpu/exp1_0aed0f68de1c": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/csum_calc/exp1_6363d5bda909": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/dadda_24bit48/exp1_4482bb17cdb8": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/dadda_32bit32/exp1_13c54a530ef3": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/datapath/exp1_67abef5d9e9a": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/dc_fifo/exp1_273f92ee5421": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/dct/exp1_f65d0bd912cd": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ddr_sdram_ctrl/exp1_399853822b98": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ddr_svc/exp1_8613a3e96efd": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/decoding/exp1_e1e2beb9c1ab": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/dma_axi64_core0_ch_fifo/exp1_6404a42b1919": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/dma_if_axi_wr/exp1_ca8ab832c65a": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/dma_if_pcie_us_wr/exp1_6017121f448e": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/dma_if_pcie_wr/exp1_91275265b68b": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/dpram_2p/exp1_8f722b1c644f": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/dual_port_ram_sync/exp1_15e8eec4f5d5": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/elevador_top/exp1_350163612070": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/encode/exp1_8215154c5ba9": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/enet_mii/exp1_c2e7fb594980": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/eth_mac_rx/exp1_af3303dce2dc": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ethernet_crc32/exp1_1bfeedb3fdc3": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/fifo/exp1_12aa2e23ea41": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/frame_fifo/exp1_acee76ca3b79": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/func_circle/exp1_601129ced0ba": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/func_cubed/exp1_2226068aa53f": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/func_polynomial/exp1_f626f08fa7c8": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/hdmi_packet_picker/exp1_8a1eb5bc4030": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/i2c_ctrl/exp1_979cf8708680": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/i2c_master/exp1_516c6a15d5c5": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/i2c_master_axil/exp1_dc7e35c70242": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/i2c_master_top/exp1_74a0662b3d22": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/i2c_master_wbs_16/exp1_9b8da159407e": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/i2c_master_wbs_8/exp1_e4f9c3917b56": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ip_eth_rx/exp1_59bf0390dc20": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ip_eth_tx/exp1_be3a4abcbbb8": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/jpeg_decoder_input_fifo/exp1_8f2608566eac": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/jpeg_decoder_output_fifo/exp1_07eb8a1a0f2c": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/lin_top/exp1_59f924130f70": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/mac_ctrl_rx/exp1_c36822ee2eab": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/machine/exp1_0732c2e72988": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/mactable_dpcam_dpram/exp1_211eedd90a79": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/mactable_dpcam_line_array/exp1_d571aa09de38": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/md5/exp1_57dcdaca6782": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/md5_core/exp1_a528432fcbba": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/mips/exp1_9689402d56e9": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/mult_130x128_limb/exp1_65a6d72dcad9": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/mux_ddr_access/exp1_d5db23310673": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/omsp_gpio/exp1_0060f2968391": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/op_differentiator/exp1_79fd853e050a": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/openMSP430/exp1_7004ec068797": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/osr/exp1_3959d04e452d": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/pcie_us_axi_dma_rd/exp1_1c0fe1b04236": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/picorv32/exp1_209c454f9031": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/picorv32/exp1_e051d792d27c": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/pio/exp1_245e9834a493": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/pipelined_iir/exp1_4ba73e27cd21": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ppu/exp1_46e1cf321e66": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ppu_spr/exp1_35a21428c1d3": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/proj_crc32_core/exp1_8fd10c6f18ad": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/proj_crc32_gen/exp1_f521ba45b6f9": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/proj_crc32_in8/exp1_eae42d984682": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/proj_crc32_mon/exp1_7409a2ca5951": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ps2_scan2ascii/exp1_9ca479c59408": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/quantization/exp1_37283da18ea1": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/r8051/exp1_332ded340929": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ram_1024x20/exp1_9c6ebfb35446": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ram_1024x20/exp1_bfa812499ecb": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ram_dualport_infer/exp1_dce8a0d90820": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ram_fifo/exp1_c9f88e2b4fb4": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ram_tester/exp1_d857991c23ce": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/reduce_mod_poly1305/exp1_43b48efca8f6": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/regfile/exp1_558eb231fca8": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/risclite_mx/exp1_09a260d012e1": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/riscv/exp1_db1ee236e283": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/riscv_core/exp1_ba0f952882be": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/riscv_exec/exp1_a749185aab33": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/riscv_issue/exp1_8c229fa5ae2d": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/riscv_multiplier/exp1_9df53f0dd94d": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/sc_fifo/exp1_585e935c62ef": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/scene_renderer/exp1_38ee8ada3a6b": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/sdram_axi/exp1_24e93ea339d2": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/sdram_axi_pmem/exp1_af3775ab2e8d": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/serv_rf_top/exp1_fe52f28c6bb2": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/serv_top/exp1_fed6a2f42900": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/sha256_core/exp1_b79556dc8d1b": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/shift_reg/exp1_8d22a770dca8": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/sine_gen/exp1_323860e334ea": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/spi_cmd/exp1_b96384c30ce1": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/spi_master_fifo/exp1_c8b7cca29072": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/spi_master_rx/exp1_0a2cbc36ebb1": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/spi_master_tx/exp1_a59b10944428": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/spi_top/exp1_1b8079bf2650": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/sqrt_int/exp1_8d00ae303826": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/ssd1306_ctrl/exp1_f553b983de14": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/top/exp1_363b5e6b7bd9": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/top/exp1_396fb1049930": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/top_module/exp1_814d94728411": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/top_single/exp1_f4df9a64a4b9": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/trivium/exp1_7072609af182": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/trng_csprng_fifo/exp1_dab1e0ea81d3": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/tt_um_16_mic_beamformer_arghunter/exp1_19077f2beebf": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/tx_container/exp1_1e9b13c84146": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/uart_ctrl/exp1_235a35d6afcb": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/uart_recv/exp1_c43576801804": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/uart_regs/exp1_c85bfd5bc4fc": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/uart_top/exp1_33f3537a1703": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/uart_top/exp1_9c501f2e0038": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/udp_blast_trigger/exp1_e6a0a3b771e3": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/udp_ip_rx_64/exp1_a29fcaf520b1": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/udp_iperf_sink/exp1_eedd7834084b": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/wave_generator/exp1_baeb39e35a11": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/wb_async_reg/exp1_e6733a0bd4a7": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/wb_dma_ch_rf/exp1_84966d7bf4c5": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/wb_dma_ch_sel/exp1_3523ae9c06fb": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/wb_dma_de/exp1_7f8978f9af4c": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/wb_mux_2/exp1_ca14abacfc6f": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/wb_reg/exp1_e4f72d820281": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/objects/sky130hd/wbuart/exp1_6b5cc666afd4": 4096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/CPU/exp1_151eaf28f1f6": 7626752,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/DMC_Nx16/exp1_b09ccf82da97": 5771264,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/Decrypt/exp1_deebbe31c4b1": 16125952,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/FIR_Filter/exp1_3f26a5fa2e2e": 3170304,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/FLASH_QSPI/exp1_53ef342e6360": 3608576,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/FLASH_READER_QSPI/exp1_76320a2c8e88": 3416064,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/Hyperbus/exp1_c4e32c5b6fe5": 4206592,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/IIR_Filter/exp1_bbc55fc9cca2": 9887744,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/IP_decoder/exp1_d65cc0d73a4f": 4157440,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/InitLCD/exp1_e07529139ff4": 3055616,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/LMS/exp1_aa07ed964af9": 10067968,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/MS_DMAC_AHBL/exp1_1a0615aa5adf": 4116480,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/M_BMP_Copire/exp1_1eb05af9ffee": 4599808,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/M_SD_Card_Read/exp1_681f7c2529c4": 3448832,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/M_SD_Card_Write/exp1_5199257457c4": 3563520,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/MixColumns/exp1_5019e563b64c": 3686400,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/Multiplier/exp1_2660d309dd6f": 3121152,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/Multiply/exp1_26ed1c116982": 3256320,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/NV_NVDLA_CMAC_CORE_active/exp1_98f796f2803f": 74248192,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/NV_NVDLA_CSC_WL_dec/exp1_f128ac9826f7": 27529216,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/NV_NVDLA_CSC_dl/exp1_ec355bebe6cc": 52142080,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/NV_NVDLA_CSC_wl/exp1_ccb1ac60a22a": 54501376,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/Oled_Display/exp1_53633ceb7de1": 3604480,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/RegFile/exp1_5371de8a60f1": 3477504,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/Registers/exp1_f6821f874408": 3702784,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/SHA_TOP/exp1_9634886502fc": 13320192,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/SPI_master/exp1_89cd0e63a46c": 4251648,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/SSEG/exp1_4c05a3359989": 3092480,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/SdfUnit2/exp1_3730250fc3bb": 3538944,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/TCP_decoder/exp1_8762c2d27a32": 10457088,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/TextScroller_Hello_Orange_Scaled_Centered/exp1_f5cad70bfa5b": 3534848,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/Top/exp1_b2f5e0e19574": 22810624,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/TopLevel/exp1_602153945b0f": 4415488,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/TwiddleConvert4/exp1_f4805ec0a26b": 3141632,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/TwiddleConvert8/exp1_b1ff3e560ed9": 3248128,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/UART_RX/exp1_63d47a778add": 3080192,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/UART_To_Bus16/exp1_796a9921d43e": 6443008,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/UART_To_Bus8/exp1_229cd50cbfec": 5234688,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/UDP_decoder/exp1_388e88c453a4": 4452352,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/adv_timer_apb_if/exp1_686a4e0980cb": 5922816,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/aes/exp1_3bd2deb1fe1a": 30994432,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/aes/exp1_4c56a2b17683": 30810112,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/aes_core/exp1_1c6c79cdc710": 29409280,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/aes_decipher_block/exp1_784bcf104201": 14053376,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/aes_encipher_block/exp1_8f05abf41aea": 4743168,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/aes_inv_sbox/exp1_6bd069c5bd4d": 6918144,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/aes_key_mem/exp1_f174d7775347": 12115968,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/aes_sbox/exp1_119d40ee1584": 6860800,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/alu_riscv/exp1_d20216895a2f": 3899392,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/apb_master/exp1_492dd79f2f9a": 3108864,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/arm9_compitable_code/exp1_96876c845564": 20455424,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/audio_dac/exp1_93a91b8950b9": 3260416,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/audio_i2s/exp1_22a106a1c1c4": 3039232,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/audio_spdif/exp1_b283f7d59873": 3252224,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/axi_cdma/exp1_ff868f3a154f": 7454720,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/axi_crossbar/exp1_74cf0462f2af": 10539008,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/axi_ram_rd_if/exp1_c91572034ad5": 3358720,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/axi_register_rd/exp1_7ed1d7ccba9c": 3317760,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/axi_slave_addr_gen/exp1_68f1d15038da": 3256320,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/axicb_crossbar_lite_top/exp1_e6a4c457fa8d": 52965376,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/axiluart/exp1_101f6f0a8ebd": 5795840,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/axis_cobs_encode/exp1_dfc087f2e58f": 10743808,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/axis_frame_length_adjust/exp1_6fad9c8bf896": 4321280,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/axis_stat_counter/exp1_52905106d4c1": 4018176,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/axis_switch/exp1_d1b21c081211": 4091904,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/axis_wb_master/exp1_48b9f4304f10": 4198400,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/bandpass_filter/exp1_d27a1128132f": 4304896,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/basicfir/exp1_0071525d2e57": 15200256,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/bus_arbitrator/exp1_8722dadf2612": 4251648,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/can_level_bit/exp1_1a23b7b0ea2f": 3293184,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/can_level_packet/exp1_f5ba7b24a17d": 4579328,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/can_top/exp1_b7de578051e8": 48361472,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/cc_singlebus/exp1_bc614a65f39a": 4063232,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/chacha20/exp1_5e3aac4be286": 16646144,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/chacha20_poly1305_bus/exp1_040c26f0968e": 32763904,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/chacha_core/exp1_0c4921097ad2": 20533248,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/channel_in/exp1_246ece1e1386": 37715968,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/clint/exp1_79fb65a838bd": 3985408,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/combine_decoder/exp1_a59b77e66886": 12890112,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/complexAddRadix_4/exp1_07cbb49649d0": 5591040,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/control_unit/exp1_bd76c8247212": 3125248,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/cordic/exp1_0d7c060816e6": 10420224,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/cpu/exp1_0aed0f68de1c": 8007680,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/csum_calc/exp1_6363d5bda909": 6049792,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/dadda_24bit48/exp1_4482bb17cdb8": 7897088,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/dadda_32bit32/exp1_13c54a530ef3": 7344128,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/datapath/exp1_67abef5d9e9a": 5640192,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/dc_fifo/exp1_273f92ee5421": 5763072,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/dct/exp1_f65d0bd912cd": 15757312,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ddr_sdram_ctrl/exp1_399853822b98": 28192768,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ddr_svc/exp1_8613a3e96efd": 3395584,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/decoding/exp1_e1e2beb9c1ab": 6078464,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/dma_axi64_core0_ch_fifo/exp1_6404a42b1919": 3522560,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/dma_if_axi_wr/exp1_ca8ab832c65a": 33255424,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/dma_if_pcie_us_wr/exp1_6017121f448e": 26329088,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/dma_if_pcie_wr/exp1_91275265b68b": 20623360,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/dpram_2p/exp1_8f722b1c644f": 5607424,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/dual_port_ram_sync/exp1_15e8eec4f5d5": 3846144,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/elevador_top/exp1_350163612070": 3309568,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/encode/exp1_8215154c5ba9": 6991872,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/enet_mii/exp1_c2e7fb594980": 8769536,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/eth_mac_rx/exp1_af3303dce2dc": 35160064,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ethernet_crc32/exp1_1bfeedb3fdc3": 3235840,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/fifo/exp1_12aa2e23ea41": 3686400,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/frame_fifo/exp1_acee76ca3b79": 32735232,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/func_circle/exp1_601129ced0ba": 3407872,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/func_cubed/exp1_2226068aa53f": 3563520,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/func_polynomial/exp1_f626f08fa7c8": 4005888,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/hdmi_packet_picker/exp1_8a1eb5bc4030": 4542464,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/i2c_ctrl/exp1_979cf8708680": 3563520,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/i2c_master/exp1_516c6a15d5c5": 4050944,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/i2c_master_axil/exp1_dc7e35c70242": 6217728,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/i2c_master_top/exp1_74a0662b3d22": 4182016,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/i2c_master_wbs_16/exp1_9b8da159407e": 6144000,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/i2c_master_wbs_8/exp1_e4f9c3917b56": 5980160,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ip_eth_rx/exp1_59bf0390dc20": 4374528,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ip_eth_tx/exp1_be3a4abcbbb8": 5386240,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/jpeg_decoder_input_fifo/exp1_8f2608566eac": 45977600,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/jpeg_decoder_output_fifo/exp1_07eb8a1a0f2c": 47812608,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/lin_top/exp1_59f924130f70": 4939776,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/mac_ctrl_rx/exp1_c36822ee2eab": 4730880,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/machine/exp1_0732c2e72988": 13381632,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/mactable_dpcam_dpram/exp1_211eedd90a79": 7114752,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/mactable_dpcam_line_array/exp1_d571aa09de38": 18608128,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/md5/exp1_57dcdaca6782": 9601024,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/md5_core/exp1_a528432fcbba": 8278016,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/mips/exp1_9689402d56e9": 5873664,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/mult_130x128_limb/exp1_65a6d72dcad9": 7864320,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/mux_ddr_access/exp1_d5db23310673": 29679616,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/omsp_gpio/exp1_0060f2968391": 4444160,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/op_differentiator/exp1_79fd853e050a": 3567616,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/openMSP430/exp1_7004ec068797": 13185024,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/osr/exp1_3959d04e452d": 3883008,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/pcie_us_axi_dma_rd/exp1_1c0fe1b04236": 31109120,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/picorv32/exp1_209c454f9031": 9682944,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/picorv32/exp1_e051d792d27c": 9707520,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/pio/exp1_245e9834a493": 36814848,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/pipelined_iir/exp1_4ba73e27cd21": 32612352,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ppu/exp1_46e1cf321e66": 11706368,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ppu_spr/exp1_35a21428c1d3": 8605696,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/proj_crc32_core/exp1_8fd10c6f18ad": 4141056,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/proj_crc32_gen/exp1_f521ba45b6f9": 3653632,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/proj_crc32_in8/exp1_eae42d984682": 3469312,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/proj_crc32_mon/exp1_7409a2ca5951": 3559424,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ps2_scan2ascii/exp1_9ca479c59408": 3420160,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/quantization/exp1_37283da18ea1": 10285056,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/r8051/exp1_332ded340929": 15032320,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ram_1024x20/exp1_9c6ebfb35446": 32907264,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ram_1024x20/exp1_bfa812499ecb": 32907264,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ram_dualport_infer/exp1_dce8a0d90820": 8966144,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ram_fifo/exp1_c9f88e2b4fb4": 9043968,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ram_tester/exp1_d857991c23ce": 6987776,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/reduce_mod_poly1305/exp1_43b48efca8f6": 5914624,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/regfile/exp1_558eb231fca8": 4902912,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/risclite_mx/exp1_09a260d012e1": 11116544,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/riscv/exp1_db1ee236e283": 26886144,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/riscv_core/exp1_ba0f952882be": 23588864,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/riscv_exec/exp1_a749185aab33": 5873664,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/riscv_issue/exp1_8c229fa5ae2d": 10706944,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/riscv_multiplier/exp1_9df53f0dd94d": 6422528,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/sc_fifo/exp1_585e935c62ef": 5640192,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/scene_renderer/exp1_38ee8ada3a6b": 20545536,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/sdram_axi/exp1_24e93ea339d2": 5636096,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/sdram_axi_pmem/exp1_af3775ab2e8d": 4681728,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/serv_rf_top/exp1_fe52f28c6bb2": 7000064,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/serv_top/exp1_fed6a2f42900": 4841472,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/sha256_core/exp1_b79556dc8d1b": 8130560,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/shift_reg/exp1_8d22a770dca8": 3264512,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/sine_gen/exp1_323860e334ea": 3186688,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/spi_cmd/exp1_b96384c30ce1": 7589888,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/spi_master_fifo/exp1_c8b7cca29072": 3203072,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/spi_master_rx/exp1_0a2cbc36ebb1": 3321856,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/spi_master_tx/exp1_a59b10944428": 3371008,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/spi_top/exp1_1b8079bf2650": 5492736,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/sqrt_int/exp1_8d00ae303826": 3063808,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/ssd1306_ctrl/exp1_f553b983de14": 24825856,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/top/exp1_363b5e6b7bd9": 4669440,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/top/exp1_396fb1049930": 28499968,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/top_module/exp1_814d94728411": 4644864,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/top_single/exp1_f4df9a64a4b9": 4960256,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/trivium/exp1_7072609af182": 3723264,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/trng_csprng_fifo/exp1_dab1e0ea81d3": 9056256,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/tt_um_16_mic_beamformer_arghunter/exp1_19077f2beebf": 4694016,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/tx_container/exp1_1e9b13c84146": 5414912,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/uart_ctrl/exp1_235a35d6afcb": 4157440,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/uart_recv/exp1_c43576801804": 3166208,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/uart_regs/exp1_c85bfd5bc4fc": 5931008,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/uart_top/exp1_33f3537a1703": 6348800,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/uart_top/exp1_9c501f2e0038": 3395584,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/udp_blast_trigger/exp1_e6a0a3b771e3": 4005888,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/udp_ip_rx_64/exp1_a29fcaf520b1": 4538368,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/udp_iperf_sink/exp1_eedd7834084b": 5058560,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/wave_generator/exp1_baeb39e35a11": 3403776,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/wb_async_reg/exp1_e6733a0bd4a7": 3698688,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/wb_dma_ch_rf/exp1_84966d7bf4c5": 4165632,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/wb_dma_ch_sel/exp1_3523ae9c06fb": 8146944,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/wb_dma_de/exp1_7f8978f9af4c": 4608000,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/wb_mux_2/exp1_ca14abacfc6f": 3268608,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/wb_reg/exp1_e4f72d820281": 3346432,
+    "/data/yangao/nvme_home/r2g_toolchain/OpenROAD-flow-scripts/flow/results/sky130hd/wbuart/exp1_6b5cc666afd4": 5664768
+  },
+  "planned_gib": 3.2855377197265625,
+  "retained_scoring_report_sha256": "eb82531d57fae9030955e52df74b404b96a929fec9ee80613e27d578f25723c2",
+  "retained_submission_sha256": "6fffead439da532bebda00be5a3b3a39cecb120fa859d0444ce04083d019332a",
+  "apply": true,
+  "completed_at": "2026-11-15T06:37:07.815687+00:00",
+  "available_gib": 137.04921340942383,
+  "free_space_delta_gib": 3.2887840270996094,
+  "post_cleanup_verified": true
+}

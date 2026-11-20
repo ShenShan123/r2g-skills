@@ -1,0 +1,52 @@
+verify_graph_dataset rc=1
+      1   [FAIL] b coupling edge count == SPEF cross-net signal pairs — got 45598 want 43690
+      1   [FAIL] C00023__qoi_compress__qoiimg__nangate45__p2: 296/297
+      1   [FAIL] C00180__gift_core__gift__nangate45__p2: 294/297
+      1   [FAIL] C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2: 296/297
+      1   [FAIL] C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2: 296/297
+      1   [FAIL] C00424__CRC32_D56__ethernetmac__nangate45__p2: 294/295
+      1   [FAIL] C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2: 295/296
+      1   [FAIL] C00622__fpu_sp_add__fpu__nangate45__p2: 296/297
+      1   [FAIL] C00627__fpu_sp_mul__fpu__nangate45__p2: 296/297
+      1   [FAIL] C00702__wallace_24x28_product__riscv-fpu-interrupt__nangate45__p2: 295/296
+      1   [FAIL] C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2: 296/297
+      1   [FAIL] C01001__tt_um_verilog_meetup_template_project_TODO__ttsky-verilog-template-for-verilog-meetu__nangate45__p2: 296/297
+      1   [FAIL] C01026__proc__fpga-busicdc-2025__nangate45__p2: 296/297
+      1   [FAIL] C01134__gba_cpu__gbatang__nangate45__p2: 296/297
+      1   [FAIL] C01423__jt12__neogeo_mister__nangate45__p2: 296/297
+      1   [FAIL] C01472__rxuart__qc-tee__nangate45__p2: 296/297
+      1   [FAIL] C01484__multiplier_32_bit__comp__nangate45__p2: 293/295
+      1   [FAIL] C01563__ppu__panog2_nes__nangate45__p2: 296/297
+      1   [FAIL] C02031__top__fpga-pid-controller-using-verilog__nangate45__p2: 296/297
+      1   [FAIL] C02146__rv_custom_ascon_if__nasa-riscv-crypto-mvp__nangate45__p2: 296/297
+C00023__qoi_compress__qoiimg__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C00180__gift_core__gift__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C00424__CRC32_D56__ethernetmac__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C00622__fpu_sp_add__fpu__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C00627__fpu_sp_mul__fpu__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C00702__wallace_24x28_product__riscv-fpu-interrupt__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C01001__tt_um_verilog_meetup_template_project_TODO__ttsky-verilog-template-for-verilog-meetu__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C01026__proc__fpga-busicdc-2025__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C01134__gba_cpu__gbatang__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C01423__jt12__neogeo_mister__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C01472__rxuart__qc-tee__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C01484__multiplier_32_bit__comp__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C01563__ppu__panog2_nes__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C02031__top__fpga-pid-controller-using-verilog__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C02146__rv_custom_ascon_if__nasa-riscv-crypto-mvp__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C02241__multi_kernel_conv__edge-ai-cnn-inference-engine-on-fpga__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C02306__cordic__cordic-rtl-implementation__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C02369__Uart8__verilog-uart__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C02509__AES_Comp_DECx__rds__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C02570__muldiv__koti__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C03005__counter__teroshdl-examples__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C03232__opl2__arcade-tecmo_mister__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C03268__core__riscv-tlv-core__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17
+C03387__vga1__ego1-vga__nangate45__p2 | 4stage validate=PASS summarize:structural_issues=0 | images: ok 17 / 17

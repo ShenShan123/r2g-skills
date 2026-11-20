@@ -1,0 +1,225 @@
+--- a/experiments/exp4_harness/scoring.py
++++ b/experiments/exp4_harness/scoring.py
+@@ -47,6 +47,8 @@
+     path avoids recursion limits on designs with many parallel folded entities.
+     Each submitted row can satisfy at most one expected row.
+     """
++    if len(claims) == len(expected) == 1:
++        return int(compatible(claims[0], expected[0]))
+     adjacent = [[j for j, row in enumerate(claims) if compatible(row, truth)] for truth in expected]
+     owner = {}
+     for start in range(len(expected)):
+@@ -212,8 +214,91 @@
+     return value
+ 
+ 
+-def score_design(truth, output_dir, run_report=None):
++_WORKER_TRUTH = None
++_WORKER_DATASET = None
++
++
++def _init_score_worker(truth, dataset):
++    global _WORKER_TRUTH, _WORKER_DATASET
++    _WORKER_TRUTH, _WORKER_DATASET = truth, dataset
++    import torch
++    torch.set_num_threads(1)
++
++
++def _public_view(view):
++    try:
++        from .check_format import check_output
++    except ImportError:
++        from check_format import check_output
++    return check_output(_WORKER_DATASET, views=view)
++
++
++def _private_view(task):
++    form, view, public_ok = task
++    truth, dataset = _WORKER_TRUTH, _WORKER_DATASET
++    adapter, legacy = _legacy_modules()
++    suffix = "_graph.pt" if form == "hetero" else "_graph_homo.pt"
++    key, path = f"{form}.{view}", dataset / f"{view}{suffix}"
++    groups, canonical_b = {}, None
++    try:
++        claim = adapter.load_view_v2(path, view)
++        if claim["form"] != form:
++            raise ValueError(f"expected {form}, found {claim['form']}")
++        if key == "hetero.b":
++            canonical_b = claim
++        legacy.check_view(truth, view, claim, groups, "", check_folded=not public_ok)
++        groups = {name: result for name, result in groups.items() if not name.startswith("E_")}
++        groups.update(folded_checks(truth, view, claim, legacy))
++        failed = [name for name, result in groups.items() if not result.get("passed", False)]
++        report = {"passed": not failed, "n_groups": len(groups), "failed_groups": failed, "groups": groups}
++    except Exception as exc:
++        report = {"passed": False, "error": f"{type(exc).__name__}: {exc}"}
++    # Preserve the original labels exception boundary and avoid giant-claim IPC.
++    labels = score_labels(truth, canonical_b) if key == "hetero.b" else None
++    return key, report, labels
++
++
++def _score_design_parallel(truth, output_dir, run_report, workers):
++    import multiprocessing
++    import os
++    for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
++        os.environ[name] = "1"
++    import torch
++    torch.set_num_threads(1)
++    output_dir = Path(output_dir)
++    dataset = output_dir / "dataset" if (output_dir / "dataset").is_dir() else output_dir
++    views = "bcdef"
++    with multiprocessing.get_context("fork").Pool(
++        processes=min(workers, len(views)), initializer=_init_score_worker, initargs=(truth, dataset), maxtasksperchild=1
++    ) as pool:
++        public_parts = pool.map(_public_view, views, chunksize=1)
++        checks = [check for part in public_parts for check in part["checks"]]
++        failed_checks = [check for check in checks if not check["ok"]]
++        public = {"ok": not failed_checks, "n_checks": len(checks), "failed": failed_checks, "checks": checks}
++        private_parts = pool.map(_private_view, [(form, view, public["ok"])
++                                               for form in ("hetero", "homo") for view in views], chunksize=1)
++    all_views = {key: report for key, report, _ in private_parts}
++    view_reports = {f"{form}.{view}": all_views[f"{form}.{view}"]
++                    for form in ("hetero", "homo") for view in views}
++    failures = [key for key, report in view_reports.items() if not report["passed"]]
++    if not public["ok"]:
++        failures.append("format")
++    if run_report is not None:
++        if run_report.get("timed_out", False) or run_report.get("exit_code", 0) != 0:
++            failures.append("production_run")
++    labels = private_parts[0][2]
++    return _json_safe({
++        "schema_version": "exp4-harness-score-v1", "design": truth["design"],
++        "platform": truth.get("platform"), "strict_full_pass": not failures,
++        **labels, "failures": failures, "format": public, "views": view_reports,
++        "run_report": run_report,
++    })
++
++
++def score_design(truth, output_dir, run_report=None, *, workers=1):
+     """Evaluate one design. Output errors become failed results, never omissions."""
++    if workers > 1:
++        return _score_design_parallel(truth, output_dir, run_report, workers)
+     try:
+         from .check_format import check_output
+     except ImportError:
+@@ -234,7 +319,7 @@
+                     raise ValueError(f"expected {form}, found {claim['form']}")
+                 if key == "hetero.b":
+                     canonical_b = claim
+-                legacy.check_view(truth, view, claim, groups, "")
++                legacy.check_view(truth, view, claim, groups, "", check_folded=not public["ok"])
+                 groups = {name: result for name, result in groups.items() if not name.startswith("E_")}
+                 groups.update(folded_checks(truth, view, claim, legacy))
+                 failed = [name for name, result in groups.items() if not result.get("passed", False)]
+--- a/experiments/exp4_harness/check_format.py
++++ b/experiments/exp4_harness/check_format.py
+@@ -201,25 +201,39 @@
+                 arrays = ()
+         # Reverse relations may serialize edges in a different order. Compare the
+         # full semantic row multiset, excluding only the known power columns.
+-        for i in range(count):
+-            payload = []
+-            for j, a in enumerate(arrays):
+-                row = a[i].tolist()
+-                omit = ({2} if not isrc and j == 0 and family == "gate" else {1} if not isrc and j > 0 else set())
+-                payload.extend("NaN" if value != value else value for k, value in enumerate(row) if k not in omit)
+-            records[(source, family, dest, int(ei[0, i]), int(ei[1, i]), tuple(payload))] += 1
++        # Preserve original malformed-array exceptions; batch valid dimensions.
++        if any(not isinstance(a, torch.Tensor) or a.dim() != 2 or a.shape[0] != count for a in arrays):
++            for i in range(count):
++                payload = []
++                for j, a in enumerate(arrays):
++                    row = a[i].tolist()
++                    omit = ({2} if not isrc and j == 0 and family == "gate" else {1} if not isrc and j > 0 else set())
++                    payload.extend("NaN" if value != value else value for k, value in enumerate(row) if k not in omit)
++                records[(source, family, dest, int(ei[0, i]), int(ei[1, i]), tuple(payload))] += 1
++            continue
++        for first in range(0, count, 65536):
++            stop = min(first + 65536, count)
++            ends = ei[:, first:stop].tolist()
++            rows = [a[first:stop].tolist() for a in arrays]
++            for i in range(stop - first):
++                payload = []
++                for j, a in enumerate(rows):
++                    row = a[i]
++                    omit = ({2} if not isrc and j == 0 and family == "gate" else {1} if not isrc and j > 0 else set())
++                    payload.extend("NaN" if value != value else value for k, value in enumerate(row) if k not in omit)
++                records[(source, family, dest, ends[0][i], ends[1][i], tuple(payload))] += 1
+     reverse = Counter({(d, f, s, b, a, payload): count for (s, f, d, a, b, payload), count in records.items()})
+     r.add(item, "semantic reverse-relation symmetry", records == reverse)
+ 
+ 
+-def check_output(output_dir):
++def check_output(output_dir, *, views="bcdef"):
+     """Return a complete public report; malformed files produce failed checks."""
+     import torch
+ 
+     root = Path(output_dir)
+     root = root / "dataset" if (root / "dataset").is_dir() else root
+     report = Report()
+-    for view in "bcdef":
++    for view in views:
+         homo, types = None, None
+         for form, suffix in (("homo", "_graph_homo.pt"), ("hetero", "_graph.pt")):
+             item, path = f"{view}.{form}", root / f"{view}{suffix}"
+--- a/experiments/exp4_harness/evaluate.py
++++ b/experiments/exp4_harness/evaluate.py
+@@ -47,7 +47,12 @@
+         reference = pickle.load(stream)
+     reference["design"], reference["platform"] = a.design, a.platform
+     run = json.loads(Path("/production/run.json").read_text())
+-    result = score_design(reference, Path("/production/out"), run)
++    output = Path("/production/out")
++    dataset = output / "dataset" if (output / "dataset").is_dir() else output
++    products = [dataset / f"{view}{suffix}" for view in "bcdef"
++                for suffix in ("_graph.pt", "_graph_homo.pt")]
++    workers = 4 if sum(p.stat().st_size for p in products if p.is_file()) >= 64 * 1024**2 else 1
++    result = score_design(reference, output, run, workers=workers)
+     Path("/score/score.json").write_text(json.dumps(result, indent=2, allow_nan=False, default=str))
+     print(json.dumps({k: result[k] for k in ("design", "strict_full_pass", "label_accuracy", "failures")}))
+ 
+--- a/experiments/exp4_validation/v2_defgraph_check.py
++++ b/experiments/exp4_validation/v2_defgraph_check.py
+@@ -78,7 +78,14 @@
+     return sorted(rows, key=lambda r: tuple((1e300 if v != v else round(float(v), 3)) for v in r[0] + r[1]))
+ 
+ 
+-def check_view(T, v, c, G, p):
++def _canonical_row(values):
++    # Exact float64 nan_to_num semantics without one NumPy dispatch per edge.
++    largest = 1.7976931348623157e308
++    return tuple(-7.0 if math.isnan(x) else largest if x == math.inf
++                 else -largest if x == -math.inf else x for x in map(float, values))
++
++
++def check_view(T, v, c, G, p, *, check_folded=True):
+     keyset = dict(gate=set(T['gates']), net=set(T['nets']), iopin=set(T['iopins']), pin=set(map(tuple, T['pins'])))
+     order = T['order']
+     for t in VIEW_TYPES[v]:
+@@ -161,7 +168,7 @@
+                     res['unknown_examples'] = [str(names[i]) for i in unknown_pos[:5]]
+                 G[f'{p}L_{which}_{t}_{s}'] = res
+     # ---- edges: symmetry, topology per family, folded rows
+-    dirs = Counter((f, a, b, r) for f, a, b, *rr in c['edges'] for r in [tuple(np.nan_to_num(np.asarray(sum(map(list, rr), []), float), nan=-7.0))])
++    dirs = Counter((f, a, b, r) for f, a, b, *rr in c['edges'] for r in [_canonical_row(sum(map(list, rr), []))])
+     rev = Counter((f, b, a, r) for (f, a, b, r), m in dirs.items() for _ in range(m))
+     G[p + 'S_edges_reverse_symmetric'] = dict(passed=dirs == rev, n_directed=len(c['edges']))
+     und = [(f, a, b, at, ey, eyr) for f, a, b, at, ey, eyr in c['edges'] if k_(a) < k_(b)]
+@@ -171,7 +178,7 @@
+         tr = [(fam, frozenset((a, b))) for a, b, _ in lst]
+         cl = [(f, frozenset((a, b))) for f, a, b, *_ in und if f == fam]
+         G[f'{p}T_{fam}'] = set_compare(cl, tr)
+-        if v == 'b':
++        if v == 'b' or not check_folded:
+             continue
+         cb, tb = defaultdict(list), defaultdict(list)
+         for f, a, b, at, ey, eyr in und:
+@@ -235,7 +242,7 @@
+             a, b = pnode(ka), pnode(kb)
+             if a is not None and b is not None and a != b:
+                 rc_truth['rc_resistance'][frozenset((a, b))] = ohm
+-    rcd = Counter((f, a, b, tuple(np.nan_to_num(np.asarray(y + yr, float), nan=-7.0))) for f, a, b, y, yr in c['rc'])
++    rcd = Counter((f, a, b, _canonical_row(y + yr)) for f, a, b, y, yr in c['rc'])
+     rcr = Counter((f, b, a, r) for (f, a, b, r), m in rcd.items() for _ in range(m))
+     G[p + 'S_rc_reverse_symmetric'] = dict(passed=rcd == rcr, n_directed=len(c['rc']))
+     rund = [(f, a, b, y, yr) for f, a, b, y, yr in c['rc'] if k_(a) < k_(b)]

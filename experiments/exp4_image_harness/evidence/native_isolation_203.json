@@ -1,0 +1,18 @@
+{
+  "numpy": "2.5.1",
+  "pandas": "3.0.3",
+  "torch": "2.13.0+cpu",
+  "cpu_affinity": [
+    2,
+    6
+  ],
+  "network": [
+    [
+      1,
+      "lo"
+    ]
+  ],
+  "gpu_exposed": false,
+  "private_runtime_exposed": false,
+  "read_only_root": true
+}

@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-26",
+  "feature": "confirmed conversation/job deletion with generated-artifact cleanup",
+  "tests": {
+    "command": "python -P -m pytest agent/tests -q",
+    "passed": 115,
+    "seconds": 11.26
+  },
+  "frontend_build": "npm run build: TypeScript and Vite passed",
+  "isolated_browser": {
+    "passed": true,
+    "checks": [
+      "cancel_confirmation_preserves_files",
+      "one_confirmation_per_delete",
+      "active_process_stopped",
+      "task_artifacts_removed",
+      "detail_redirect",
+      "session_owned_jobs_cascade",
+      "queried_job_preserved",
+      "original_input_preserved",
+      "no_browser_page_errors"
+    ],
+    "dialogs": 4,
+    "fixture": {
+      "home": "/tmp/r2g-delete-browser-20261026",
+      "source": "/tmp/r2g-delete-browser-20261026-input.v",
+      "session": "3b433147b1ea",
+      "owned": "10260832-02375d",
+      "unrelated": "10260832-ed5ba5",
+      "detail": "10260832-45d964",
+      "active": "10260832-0b1fa0"
+    }
+  },
+  "production_browser": {
+    "health": 200,
+    "delete_buttons_visible": 13,
+    "job_delete_api": true,
+    "session_delete_api": true,
+    "page_errors": [],
+    "real_user_data_deleted": false
+  },
+  "deployment": {
+    "state": "deployed",
+    "at": "2026-10-26T08:43:09.074543-07:00",
+    "old_pid": 513344,
+    "new_pid": 2215308
+  },
+  "deletion_scope": [
+    "job workspace including layouts/reports/intermediates",
+    "complete and partial dataset archives",
+    "per-design archives",
+    "task-owned ORFS result/log/report/object directories",
+    "job rows/events and session history"
+  ],
+  "preserved": [
+    "original inputs",
+    "other conversations and their jobs",
+    "shared source caches and global recipe knowledge"
+  ],
+  "safety": [
+    "confirmation required at API boundary",
+    "stop and verify task process identity before deleting",
+    "wait for artifact writers",
+    "durable deletion queue resumes after restart",
+    "symlink parent and cross-job input reference protections",
+    "session retry propagates to failed child deletions"
+  ]
+}

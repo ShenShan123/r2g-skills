@@ -1,0 +1,51 @@
+{
+  "at": "2026-11-15T06:50:46.715699+00:00",
+  "cpu_busy_percent": 10.6,
+  "load_1_5_15": [
+    20.54931640625,
+    23.51318359375,
+    27.15771484375
+  ],
+  "cpu_count": 192,
+  "memory_available_gib": 390.28,
+  "swap_used_gib": 14.63,
+  "pressure": {
+    "cpu": "some avg10=0.00 avg60=0.07 avg300=0.18 total=2880345079\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+    "memory": "some avg10=0.00 avg60=0.00 avg300=0.17 total=20818880757\nfull avg10=0.00 avg60=0.00 avg300=0.17 total=20260316742",
+    "io": "some avg10=6.51 avg60=6.11 avg300=5.75 total=71218381731\nfull avg10=6.51 avg60=6.09 avg300=5.70 total=68878788316"
+  },
+  "disks": {
+    "/data": {
+      "available_gib": 135.01,
+      "used_percent": 92.8
+    },
+    "/": {
+      "available_gib": 269.89,
+      "used_percent": 64.2
+    },
+    "/home/yangao": {
+      "available_gib": 480.23,
+      "used_percent": 88.5
+    }
+  },
+  "alerts": [],
+  "cleanup": {
+    "exp2-v5b-20261114/native-dsh": {
+      "status": "already_cleaned",
+      "deleted_directories": 0
+    },
+    "exp2-v5b-20261114/native-codex": {
+      "status": "evaluating",
+      "deleted_directories": 0
+    },
+    "exp2-v5fix2-20261115/r2g-expander-deepseek": {
+      "status": "pending",
+      "deleted_directories": 0
+    },
+    "exp2-v5fix2-20261115/r2g-expander-gpt": {
+      "status": "pending",
+      "deleted_directories": 0
+    }
+  },
+  "available_data_gib_before": 135.01
+}

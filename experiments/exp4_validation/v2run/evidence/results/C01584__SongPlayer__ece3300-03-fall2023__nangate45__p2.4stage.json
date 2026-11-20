@@ -1,0 +1,353 @@
+{
+ "design": "C01584__SongPlayer__ece3300-03-fall2023__nangate45__p2",
+ "verdict": {
+  "passed": true,
+  "failed_groups": [],
+  "n_groups": 27
+ },
+ "groups": {
+  "I_gate_vs_synthesis": {
+   "n_claim": 2670,
+   "n_truth": 2670,
+   "matched": 2670,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "I_pin_vs_synthesis": {
+   "n_claim": 8661,
+   "n_truth": 8661,
+   "matched": 8661,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "I_net_vs_synthesis": {
+   "n_claim": 3012,
+   "n_truth": 3012,
+   "matched": 3012,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "I_iopin_vs_ports": {
+   "n_claim": 39,
+   "n_truth": 39,
+   "matched": 39,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "T_pin_net_vs_synthesis": {
+   "n_claim": 8661,
+   "n_truth": 8661,
+   "matched": 8661,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "T_gate_pin_vs_synthesis": {
+   "n_claim": 8661,
+   "n_truth": 8661,
+   "matched": 8661,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "A_gate_same_order_all_stages": {
+   "passed": true,
+   "stages": [
+    "cts",
+    "floorplan",
+    "placement",
+    "route"
+   ]
+  },
+  "A_net_same_order_all_stages": {
+   "passed": true,
+   "stages": [
+    "cts",
+    "floorplan",
+    "placement",
+    "route"
+   ]
+  },
+  "A_pin_same_order_all_stages": {
+   "passed": true,
+   "stages": [
+    "cts",
+    "floorplan",
+    "placement",
+    "route"
+   ]
+  },
+  "A_io_pin_same_order_all_stages": {
+   "passed": true,
+   "stages": [
+    "cts",
+    "floorplan",
+    "placement",
+    "route"
+   ]
+  },
+  "A_gate_labels_identical_all_stages": {
+   "passed": true
+  },
+  "A_net_labels_identical_all_stages": {
+   "passed": true
+  },
+  "A_pin_labels_identical_all_stages": {
+   "passed": true
+  },
+  "A_io_pin_labels_identical_all_stages": {
+   "passed": true
+  },
+  "A_edges_identical_all_stages": {
+   "passed": true
+  },
+  "L_route_wirelength_over_pieces": {
+   "n": 2772,
+   "matched": 2772,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.707776462610046e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0002,
+    1e-06
+   ],
+   "examples": []
+  },
+  "L_route_ground_cap_over_pieces_pF": {
+   "n": 2629,
+   "matched": 2629,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.4554556310164557e-09,
+   "max_rel": 5.7664108578935354e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-08,
+    1e-05
+   ],
+   "examples": []
+  },
+  "N_lineage_categories": {
+   "applicable": false,
+   "categories": {
+    "valid_compared": 2772,
+    "wl_valid_cap_masked": 143,
+    "masked_and_truth_unresolved": 240
+   },
+   "examples": {
+    "wl_cap_mask_differ": [
+     {
+      "net": "_0125_",
+      "wl_valid": true,
+      "cap_valid": false,
+      "pieces": [
+       "_0125_"
+      ],
+      "spef_has": [
+       false
+      ]
+     },
+     {
+      "net": "_0126_",
+      "wl_valid": true,
+      "cap_valid": false,
+      "pieces": [
+       "_0126_"
+      ],
+      "spef_has": [
+       false
+      ]
+     },
+     {
+      "net": "_0149_",
+      "wl_valid": true,
+      "cap_valid": false,
+      "pieces": [
+       "_0149_"
+      ],
+      "spef_has": [
+       false
+      ]
+     },
+     {
+      "net": "_0188_",
+      "wl_valid": false,
+      "cap_valid": true,
+      "pieces": [
+       "_0188_",
+       "net737",
+       "net738"
+      ],
+      "spef_has": [
+       true,
+       true,
+       true
+      ]
+     },
+     {
+      "net": "_0205_",
+      "wl_valid": false,
+      "cap_valid": true,
+      "pieces": [
+       "_0205_",
+       "net734",
+       "net735"
+      ],
+      "spef_has": [
+       true,
+       true,
+       true
+      ]
+     },
+     {
+      "net": "_0333_",
+      "wl_valid": false,
+      "cap_valid": true,
+      "pieces": [
+       "_0333_",
+       "net687",
+       "net688",
+       "net689"
+      ],
+      "spef_has": [
+       true,
+       true,
+       true,
+       true
+      ]
+     }
+    ]
+   },
+   "split_nets_truth": 269,
+   "max_split": 18
+  },
+  "F_floorplan_net_pin_count_vs_synthesis": {
+   "n": 3012,
+   "matched": 3012,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0,
+    0.0
+   ],
+   "examples": []
+  },
+  "F_placement_net_pin_count_vs_synthesis": {
+   "n": 3012,
+   "matched": 3012,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0,
+    0.0
+   ],
+   "examples": []
+  },
+  "F_cts_net_pin_count_vs_synthesis": {
+   "n": 3012,
+   "matched": 3012,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0,
+    0.0
+   ],
+   "examples": []
+  },
+  "F_route_net_pin_count_vs_synthesis": {
+   "n": 3012,
+   "matched": 3012,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0,
+    0.0
+   ],
+   "examples": []
+  },
+  "N_clock_nets": {
+   "applicable": false,
+   "nets": [
+    {
+     "net": "clock",
+     "truth_pieces": 18,
+     "wl_valid": true,
+     "wl": 1689.844970703125,
+     "truth_wl": 1689.845
+    }
+   ]
+  },
+  "P_floorplan_std_cell_x_absent": {
+   "passed": true,
+   "finite": 0
+  },
+  "P_placement_std_cell_x_absent": {
+   "passed": true,
+   "finite": 0
+  },
+  "P_cts_x_um_from_3_place": {
+   "n": 2670,
+   "matched": 2670,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.32421875682121e-06,
+   "max_rel": 5.685622385360356e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "P_route_x_um_from_4_cts": {
+   "n": 2670,
+   "matched": 2670,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.32421875682121e-06,
+   "max_rel": 5.685622385360356e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  }
+ }
+}

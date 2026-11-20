@@ -1,0 +1,23 @@
+--- /data/yangao/exp4_validation_20261107/img_builder_src/dump_design.py	2026-11-07 05:13:47.054150473 -0800
++++ /data/yangao/exp4_validation_20261107/img_builder_fixed/dump_design.py	2026-11-07 07:32:00.703520060 -0800
+@@ -62,9 +62,9 @@
+ for line in open(os.path.join(O, "power.tsv")):
+     n, w = line.rstrip("\n").split("\t")
+     try:
+-        power[n] = float(w)
++        power[n.replace("\\", "")] = float(w)
+     except ValueError:
+-        power[n] = 0.0
++        power[n.replace("\\", "")] = 0.0
+ pb = p_design.getBlock()
+ pdbu = pb.getDbUnitsPerMicron()
+ with open(os.path.join(O, "insts.tsv"), "w") as f:
+@@ -75,7 +75,7 @@
+         npins = sum(1 for it in inst.getITerms() if it.getSigType() == "SIGNAL")
+         f.write("%s\t%.4f\t%.4f\t%.4f\t%.4f\t%d\t%d\t%.6e\t%s\n" % (
+             inst.getName(), bb.xMin() / pdbu, bb.yMin() / pdbu, bb.xMax() / pdbu, bb.yMax() / pdbu,
+-            is_macro, npins, power.get(inst.getName(), 0.0), master.getName()))
++            is_macro, npins, power.get(inst.getName().replace("\\", ""), 0.0), master.getName()))
+ with open(os.path.join(O, "nets.tsv"), "w") as f:
+     for net in pb.getNets():
+         if net.getSigType() != "SIGNAL":

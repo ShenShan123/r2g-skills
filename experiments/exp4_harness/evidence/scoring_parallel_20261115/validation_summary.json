@@ -1,0 +1,323 @@
+{
+  "complete": true,
+  "validated_for_deployment": true,
+  "policy": "Ten graph PT files <64 MiB: 1 worker; otherwise 4 worker processes, within the same original arm CPU affinity. Each worker numerical thread count=1.",
+  "benchmark_rows": [
+    {
+      "size": "small",
+      "mode": "policy",
+      "metadata": {
+        "size": "small",
+        "arm": "gpt_r2g",
+        "design": "C03681__top__fpga_fsm_demo__gf180__p10",
+        "reference": "/home/yangao/exp4_harness_20261115_203/reference/C03681__top__fpga_fsm_demo__gf180__p10/truth.pkl"
+      },
+      "baseline": {
+        "mode": "baseline",
+        "size": "small",
+        "wall_seconds": 6.591380650061183,
+        "cpu_seconds": 6.584116858,
+        "load_seconds": 0.07681437500286847,
+        "peak_rss_kib": 379124,
+        "strict_full_pass": true,
+        "label_accuracy": 1.0
+      },
+      "candidate": {
+        "mode": "parallel",
+        "size": "small",
+        "workers": 1,
+        "wall_seconds": 3.0702172530582175,
+        "cpu_seconds": 3.069941292,
+        "load_seconds": 0.05322278500534594,
+        "strict_full_pass": true,
+        "label_accuracy": 1.0
+      },
+      "entire_json_equal": true,
+      "different_top_keys": [],
+      "speedup": 2.1468776007611723
+    },
+    {
+      "size": "medium",
+      "mode": "parallel",
+      "metadata": {
+        "size": "medium",
+        "arm": "gpt_native",
+        "design": "C03174__wbi2cmaster__wbi2c__nangate45__p2",
+        "reference": "/home/yangao/exp4_harness_20261115_203/reference/C03174__wbi2cmaster__wbi2c__nangate45__p2/truth.pkl"
+      },
+      "baseline": {
+        "mode": "baseline",
+        "size": "medium",
+        "wall_seconds": 193.4661290270742,
+        "cpu_seconds": 193.251632766,
+        "load_seconds": 0.45645026001147926,
+        "peak_rss_kib": 1986984,
+        "strict_full_pass": true,
+        "label_accuracy": 1.0
+      },
+      "candidate": {
+        "mode": "parallel",
+        "size": "medium",
+        "workers": 4,
+        "wall_seconds": 44.54318027594127,
+        "cpu_seconds": 131.538788343,
+        "load_seconds": 0.3059087060391903,
+        "strict_full_pass": true,
+        "label_accuracy": 1.0
+      },
+      "resources": {
+        "returncode": 0,
+        "peak_process_tree_rss_bytes": null,
+        "peak_process_tree_pss_bytes": null,
+        "peak_processes": 7,
+        "samples": 45,
+        "sample_interval_seconds": 1,
+        "elapsed_container_seconds": 45.70019311795477,
+        "cpuset": "4,5,9,11",
+        "incomplete_sample_peak_rss_bytes": 2747850752,
+        "incomplete_sample_peak_pss_bytes": 1871339520,
+        "resource_measurement_status": "invalid_incomplete_process_tree",
+        "resource_measurement_note": "INVALID: sampler traversed only /proc/PID/task/PID/children and missed replacement Pool workers spawned by the worker_handler thread. Old RSS/PSS are lower bounds, not full-tree peaks. Large remeasurement pending; timing and JSON-equivalence remain valid."
+      },
+      "entire_json_equal": true,
+      "different_top_keys": [],
+      "speedup": 4.343338931539413
+    },
+    {
+      "size": "failed",
+      "mode": "parallel",
+      "metadata": {
+        "size": "failed",
+        "arm": "deepseek_native",
+        "design": "C00715__fifo_rx__qspi-flash-device-controller__gf180__p10",
+        "reference": "/home/yangao/exp4_harness_20261115_203/reference/C00715__fifo_rx__qspi-flash-device-controller__gf180__p10/truth.pkl"
+      },
+      "baseline": {
+        "mode": "baseline",
+        "size": "failed",
+        "wall_seconds": 207.07488787500188,
+        "cpu_seconds": 206.81684291000002,
+        "load_seconds": 0.30153340101242065,
+        "peak_rss_kib": 2000436,
+        "strict_full_pass": false,
+        "label_accuracy": 0.9260396187551905
+      },
+      "candidate": {
+        "mode": "parallel",
+        "size": "failed",
+        "workers": 4,
+        "wall_seconds": 35.93982007692102,
+        "cpu_seconds": 117.284245294,
+        "load_seconds": 0.20222864695824683,
+        "strict_full_pass": false,
+        "label_accuracy": 0.9260396187551905
+      },
+      "resources": {
+        "returncode": 0,
+        "peak_process_tree_rss_bytes": null,
+        "peak_process_tree_pss_bytes": null,
+        "peak_processes": 7,
+        "samples": 37,
+        "sample_interval_seconds": 1,
+        "elapsed_container_seconds": 37.559619995066896,
+        "cpuset": "4,5,9,11",
+        "incomplete_sample_peak_rss_bytes": 2431418368,
+        "incomplete_sample_peak_pss_bytes": 1713273856,
+        "resource_measurement_status": "invalid_incomplete_process_tree",
+        "resource_measurement_note": "INVALID: sampler traversed only /proc/PID/task/PID/children and missed replacement Pool workers spawned by the worker_handler thread. Old RSS/PSS are lower bounds, not full-tree peaks. Large remeasurement pending; timing and JSON-equivalence remain valid."
+      },
+      "entire_json_equal": true,
+      "different_top_keys": [],
+      "speedup": 5.761711868111891
+    },
+    {
+      "size": "large",
+      "mode": "parallel",
+      "metadata": {
+        "size": "large",
+        "arm": "deepseek_r2g",
+        "design": "C03137__ultrasonicPWMgenerator_v1_0__fpga__gf180__p10",
+        "reference": "/home/yangao/exp4_harness_20261115_203/reference/C03137__ultrasonicPWMgenerator_v1_0__fpga__gf180__p10/truth.pkl"
+      },
+      "baseline": {
+        "mode": "baseline",
+        "size": "large",
+        "wall_seconds": 1549.7056794166565,
+        "measurement": "formal evaluator score.json mtime minus evaluate.log birth time; includes container startup and truth load",
+        "strict_full_pass": true,
+        "label_accuracy": 1.0
+      },
+      "candidate": {
+        "mode": "parallel",
+        "size": "large",
+        "workers": 4,
+        "wall_seconds": 318.5918748599943,
+        "cpu_seconds": 1007.7874492239999,
+        "load_seconds": 1.4333147699944675,
+        "strict_full_pass": true,
+        "label_accuracy": 1.0
+      },
+      "resources": {
+        "returncode": 0,
+        "peak_process_tree_rss_bytes": 30926319616,
+        "peak_process_tree_pss_bytes": 29113337856,
+        "peak_processes": 7,
+        "samples": 239,
+        "sample_interval_seconds": 1,
+        "elapsed_container_seconds": 294.06490713194944,
+        "cpuset": "4,5,9,11",
+        "root_pid": 2058872,
+        "resource_measurement_status": "valid_all_thread_children",
+        "tree_discovery": "recursively enumerate /proc/PID/task/*/children across all threads",
+        "measurement_run": "separate full-process-tree memory recheck; original speed timing unchanged"
+      },
+      "entire_json_equal": true,
+      "different_top_keys": [],
+      "speedup": 4.8642347834441075,
+      "prior_incomplete_resources": {
+        "returncode": 0,
+        "peak_process_tree_rss_bytes": null,
+        "peak_process_tree_pss_bytes": null,
+        "peak_processes": 7,
+        "samples": 313,
+        "sample_interval_seconds": 1,
+        "elapsed_container_seconds": 321.7374136080034,
+        "cpuset": "4,5,9,11",
+        "incomplete_sample_peak_rss_bytes": 12512329728,
+        "incomplete_sample_peak_pss_bytes": 10851784704,
+        "resource_measurement_status": "invalid_incomplete_process_tree",
+        "resource_measurement_note": "INVALID: sampler traversed only /proc/PID/task/PID/children and missed replacement Pool workers spawned by the worker_handler thread. Old RSS/PSS are lower bounds, not full-tree peaks. Large remeasurement pending; timing and JSON-equivalence remain valid."
+      }
+    }
+  ],
+  "semantic_controls": [
+    {
+      "case": "valid",
+      "entire_json_equal": true,
+      "baseline_pass": true,
+      "candidate_pass": true
+    },
+    {
+      "case": "short_attr",
+      "entire_json_equal": true,
+      "baseline_pass": false,
+      "candidate_pass": false
+    },
+    {
+      "case": "short_y",
+      "entire_json_equal": true,
+      "baseline_pass": false,
+      "candidate_pass": false
+    },
+    {
+      "case": "none_attr",
+      "entire_json_equal": true,
+      "baseline_pass": false,
+      "candidate_pass": false
+    },
+    {
+      "case": "list_attr",
+      "entire_json_equal": true,
+      "baseline_pass": false,
+      "candidate_pass": false
+    },
+    {
+      "case": "infinity",
+      "entire_json_equal": true,
+      "baseline_pass": false,
+      "candidate_pass": false
+    },
+    {
+      "case": "nan_label",
+      "entire_json_equal": true,
+      "baseline_pass": false,
+      "candidate_pass": false
+    },
+    {
+      "case": "duplicate_edges",
+      "entire_json_equal": true,
+      "baseline_pass": false,
+      "candidate_pass": false
+    },
+    {
+      "case": "missing",
+      "entire_json_equal": true,
+      "baseline_pass": false,
+      "candidate_pass": false
+    }
+  ],
+  "parallel_unit_tests_returncode": 0,
+  "tests": 12,
+  "entry_smoke": {
+    "actual_run_batch_evaluate_completed": true,
+    "elapsed_seconds": 5.669466299004853,
+    "entire_json_equal": true,
+    "product_bytes": 4971268,
+    "policy_workers": 1,
+    "cpuset": "12",
+    "formal_config_hash_unchanged": true,
+    "strict_full_pass": true
+  },
+  "source_audit": {
+    "all_files_checked": 191,
+    "missing": [],
+    "changed": [
+      "exp4_harness/scoring.py",
+      "exp4_harness/check_format.py",
+      "exp4_harness/evaluate.py",
+      "exp4_validation/v2_defgraph_check.py"
+    ],
+    "changed_hashes": {
+      "exp4_harness/scoring.py": "dfb419843bba75590c023ede36801c871af6f88cd4a249205f7cccb3ac5fe7a1",
+      "exp4_harness/check_format.py": "c2f3b1ca1588c5540d29da8d170699c94d9a97a33985f1ac901487a830179d66",
+      "exp4_harness/evaluate.py": "d168cd11cf17f851423f208d9655dc660f90a555881eee31b576a62e55917c28",
+      "exp4_validation/v2_defgraph_check.py": "bd7b901ce02b382379da2847311bf8fbfdfc5ca944fc068a7e187d9551f7d724"
+    }
+  },
+  "large_baseline_note": "Old score mtime minus evaluate.log birth time includes container startup and truth load; candidate score time measured directly.",
+  "updated_unix": 1794741003.8415048,
+  "memory_measurement_correction": {
+    "status": "corrected_large_remeasured",
+    "cause": "Initial sampler only traversed task/PID/children and missed Pool replacement workers created by worker_handler threads.",
+    "fix": "Recursively discover children from all /proc/PID/task/*/children, deduplicating PIDs.",
+    "large_recheck": {
+      "returncode": 0,
+      "peak_process_tree_rss_bytes": 30926319616,
+      "peak_process_tree_pss_bytes": 29113337856,
+      "peak_processes": 7,
+      "samples": 239,
+      "sample_interval_seconds": 1,
+      "elapsed_container_seconds": 294.06490713194944,
+      "cpuset": "4,5,9,11",
+      "root_pid": 2058872,
+      "resource_measurement_status": "valid_all_thread_children",
+      "tree_discovery": "recursively enumerate /proc/PID/task/*/children across all threads"
+    },
+    "large_recheck_timing": {
+      "mode": "parallel",
+      "size": "large",
+      "workers": 4,
+      "wall_seconds": 291.7727515769657,
+      "cpu_seconds": 954.4072998769999,
+      "load_seconds": 1.4282649640226737,
+      "strict_full_pass": true,
+      "label_accuracy": 1.0
+    },
+    "large_recheck_entire_json_equal": true,
+    "source_hashes_unchanged": true,
+    "sampler_regression_test": {
+      "parent_pid": 2067273,
+      "thread_spawned_child_pid": 2067275,
+      "old_main_thread_children": [],
+      "all_thread_children": [
+        2067275
+      ],
+      "fixed_sampler_process_count": 2,
+      "reproduced_old_omission": true,
+      "fixed_discovery_includes_child": true,
+      "passed": true
+    },
+    "other_sample_memory": "Small/medium/failed original memory figures remain invalid lower bounds and were not repeated. Their timing and JSON equivalence stay valid.",
+    "original_speed_measurements_unchanged": true
+  }
+}

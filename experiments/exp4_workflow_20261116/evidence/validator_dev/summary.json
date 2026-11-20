@@ -1,0 +1,410 @@
+[
+  {
+    "design": "C00016__eq_cascade__sonic-speed-parallelism__sky130hd__p5",
+    "exit_code": 0,
+    "wall_seconds": 38.008,
+    "passed": 283,
+    "failed": 0,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": []
+  },
+  {
+    "design": "C00539__mcpu16mc__digitalcpuzoo__sky130hd__p5",
+    "exit_code": 1,
+    "wall_seconds": 6.439,
+    "passed": 282,
+    "failed": 1,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": [
+      {
+        "check": "ext.sum_pin_cap_fF == \u03a3 liberty load caps (sampled nets)",
+        "ok": false,
+        "detail": "14/25 mismatched"
+      }
+    ]
+  },
+  {
+    "design": "C00566__prince_core__prince__nangate45__p2",
+    "exit_code": 0,
+    "wall_seconds": 21.77,
+    "passed": 283,
+    "failed": 0,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": []
+  },
+  {
+    "design": "C00624__axi_protocol_converter_v2_1_b2s_aw_channel__aeshw__nangate45__p2",
+    "exit_code": 0,
+    "wall_seconds": 6.728,
+    "passed": 283,
+    "failed": 0,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": []
+  },
+  {
+    "design": "C00759__register_file_2r_1w_asymm__scm__nangate45__p2",
+    "exit_code": 1,
+    "wall_seconds": 35.961,
+    "passed": 282,
+    "failed": 1,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": [
+      {
+        "check": "ext.sum_pin_cap_fF == \u03a3 liberty load caps (sampled nets)",
+        "ok": false,
+        "detail": "17/25 mismatched"
+      }
+    ]
+  },
+  {
+    "design": "C00833__alarm_clock_top__alarm_clock__nangate45__p2",
+    "exit_code": 0,
+    "wall_seconds": 6.733,
+    "passed": 283,
+    "failed": 0,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": []
+  },
+  {
+    "design": "C01139__openrv64_icx_protocol_wrapper_nh__openrv64__sky130hd__p5",
+    "exit_code": 0,
+    "wall_seconds": 18.106,
+    "passed": 283,
+    "failed": 0,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": []
+  },
+  {
+    "design": "C01230__basys3_24h_alarm_clock__basys3-24h-alarm-clock__sky130hd__p5",
+    "exit_code": 0,
+    "wall_seconds": 16.204,
+    "passed": 283,
+    "failed": 0,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": []
+  },
+  {
+    "design": "C01253__bias_update__pm25-adaptive-bias__nangate45__p2",
+    "exit_code": 0,
+    "wall_seconds": 8.083,
+    "passed": 281,
+    "failed": 0,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": []
+  },
+  {
+    "design": "C01550__umi_data_aggregator__umi__nangate45__p2",
+    "exit_code": 0,
+    "wall_seconds": 11.795,
+    "passed": 283,
+    "failed": 0,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": []
+  },
+  {
+    "design": "C01961__motor_tests__micromouse-bot-using-verilog__sky130hd__p5",
+    "exit_code": 1,
+    "wall_seconds": 6.681,
+    "passed": 282,
+    "failed": 1,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": [
+      {
+        "check": "ext.sum_pin_cap_fF == \u03a3 liberty load caps (sampled nets)",
+        "ok": false,
+        "detail": "6/25 mismatched"
+      }
+    ]
+  },
+  {
+    "design": "C02136__fifo__hdl-libraries__gf180__p10",
+    "exit_code": 0,
+    "wall_seconds": 8.734,
+    "passed": 283,
+    "failed": 0,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": []
+  },
+  {
+    "design": "C02179__jts16_trackball__jts16__gf180__p10",
+    "exit_code": 1,
+    "wall_seconds": 8.749,
+    "passed": 282,
+    "failed": 1,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": [
+      {
+        "check": "ext.sum_pin_cap_fF == \u03a3 liberty load caps (sampled nets)",
+        "ok": false,
+        "detail": "1/25 mismatched"
+      }
+    ]
+  },
+  {
+    "design": "C02666__filter__e14pathtoprogrammableiii__gf180__p10",
+    "exit_code": 0,
+    "wall_seconds": 9.085,
+    "passed": 283,
+    "failed": 0,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": []
+  },
+  {
+    "design": "C02683__ddr3_axi__core_ddr3_controller__sky130hd__p5",
+    "exit_code": 0,
+    "wall_seconds": 39.663,
+    "passed": 283,
+    "failed": 0,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": []
+  },
+  {
+    "design": "C02854__fifo_top__parameterized_synchronous_fifo__gf180__p10",
+    "exit_code": 0,
+    "wall_seconds": 7.932,
+    "passed": 283,
+    "failed": 0,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": []
+  },
+  {
+    "design": "C03397__a_axi_write_broadcastor_1_to_4__tapa__gf180__p10",
+    "exit_code": 0,
+    "wall_seconds": 124.542,
+    "passed": 283,
+    "failed": 0,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": []
+  },
+  {
+    "design": "C03605__FIFO__minimal-network-switch-verilog-implement__gf180__p10",
+    "exit_code": 1,
+    "wall_seconds": 67.073,
+    "passed": 282,
+    "failed": 1,
+    "skipped": [],
+    "not_applicable": [
+      {
+        "check": "ir_drop.csv label present",
+        "scope": "irdrop",
+        "reason": "ir_drop.csv status='missing'"
+      },
+      {
+        "check": "signoff.gate verdict pass (manifest signoff_health)",
+        "scope": "signoff",
+        "reason": "signoff_health.status='dirty' blockers=['drc', 'lvs', 'orfs'] (sign-off reports are not part of the declared inputs)"
+      }
+    ],
+    "failures": [
+      {
+        "check": "ext.sum_pin_cap_fF == \u03a3 liberty load caps (sampled nets)",
+        "ok": false,
+        "detail": "22/25 mismatched"
+      }
+    ]
+  }
+]

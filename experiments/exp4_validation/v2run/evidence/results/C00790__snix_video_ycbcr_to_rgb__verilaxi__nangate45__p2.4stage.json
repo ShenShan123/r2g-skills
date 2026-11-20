@@ -1,0 +1,361 @@
+{
+ "design": "C00790__snix_video_ycbcr_to_rgb__verilaxi__nangate45__p2",
+ "verdict": {
+  "passed": true,
+  "failed_groups": [],
+  "n_groups": 27
+ },
+ "groups": {
+  "I_gate_vs_synthesis": {
+   "n_claim": 1616,
+   "n_truth": 1616,
+   "matched": 1616,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "I_pin_vs_synthesis": {
+   "n_claim": 5324,
+   "n_truth": 5324,
+   "matched": 5324,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "I_net_vs_synthesis": {
+   "n_claim": 2004,
+   "n_truth": 2004,
+   "matched": 2004,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "I_iopin_vs_ports": {
+   "n_claim": 58,
+   "n_truth": 58,
+   "matched": 58,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "T_pin_net_vs_synthesis": {
+   "n_claim": 5324,
+   "n_truth": 5324,
+   "matched": 5324,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "T_gate_pin_vs_synthesis": {
+   "n_claim": 5324,
+   "n_truth": 5324,
+   "matched": 5324,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "A_gate_same_order_all_stages": {
+   "passed": true,
+   "stages": [
+    "cts",
+    "floorplan",
+    "placement",
+    "route"
+   ]
+  },
+  "A_net_same_order_all_stages": {
+   "passed": true,
+   "stages": [
+    "cts",
+    "floorplan",
+    "placement",
+    "route"
+   ]
+  },
+  "A_pin_same_order_all_stages": {
+   "passed": true,
+   "stages": [
+    "cts",
+    "floorplan",
+    "placement",
+    "route"
+   ]
+  },
+  "A_io_pin_same_order_all_stages": {
+   "passed": true,
+   "stages": [
+    "cts",
+    "floorplan",
+    "placement",
+    "route"
+   ]
+  },
+  "A_gate_labels_identical_all_stages": {
+   "passed": true
+  },
+  "A_net_labels_identical_all_stages": {
+   "passed": true
+  },
+  "A_pin_labels_identical_all_stages": {
+   "passed": true
+  },
+  "A_io_pin_labels_identical_all_stages": {
+   "passed": true
+  },
+  "A_edges_identical_all_stages": {
+   "passed": true
+  },
+  "L_route_wirelength_over_pieces": {
+   "n": 1845,
+   "matched": 1845,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.708984370907274e-05,
+   "max_rel": 5.707776462610046e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0002,
+    1e-06
+   ],
+   "examples": []
+  },
+  "L_route_ground_cap_over_pieces_pF": {
+   "n": 1758,
+   "matched": 1758,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.123274630398523e-10,
+   "max_rel": 5.700671580846693e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-08,
+    1e-05
+   ],
+   "examples": []
+  },
+  "N_lineage_categories": {
+   "applicable": false,
+   "categories": {
+    "valid_compared": 1845,
+    "wl_valid_cap_masked": 87,
+    "masked_and_truth_unresolved": 159
+   },
+   "examples": {
+    "wl_cap_mask_differ": [
+     {
+      "net": "_0013_",
+      "wl_valid": false,
+      "cap_valid": true,
+      "pieces": [
+       "_0013_",
+       "net616",
+       "net617"
+      ],
+      "spef_has": [
+       true,
+       true,
+       true
+      ]
+     },
+     {
+      "net": "_0058_",
+      "wl_valid": false,
+      "cap_valid": true,
+      "pieces": [
+       "_0058_",
+       "net565",
+       "net940"
+      ],
+      "spef_has": [
+       true,
+       true,
+       true
+      ]
+     },
+     {
+      "net": "_0127_",
+      "wl_valid": false,
+      "cap_valid": true,
+      "pieces": [
+       "_0127_",
+       "net627",
+       "net784",
+       "net813"
+      ],
+      "spef_has": [
+       true,
+       true,
+       true,
+       true
+      ]
+     },
+     {
+      "net": "_0129_",
+      "wl_valid": false,
+      "cap_valid": true,
+      "pieces": [
+       "_0129_",
+       "net549"
+      ],
+      "spef_has": [
+       true,
+       true
+      ]
+     },
+     {
+      "net": "_0172_",
+      "wl_valid": false,
+      "cap_valid": true,
+      "pieces": [
+       "_0172_",
+       "net425",
+       "net426"
+      ],
+      "spef_has": [
+       true,
+       true,
+       true
+      ]
+     },
+     {
+      "net": "_0173_",
+      "wl_valid": false,
+      "cap_valid": true,
+      "pieces": [
+       "_0173_",
+       "net485"
+      ],
+      "spef_has": [
+       true,
+       true
+      ]
+     }
+    ]
+   },
+   "split_nets_truth": 354,
+   "max_split": 10
+  },
+  "F_floorplan_net_pin_count_vs_synthesis": {
+   "n": 2004,
+   "matched": 2004,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0,
+    0.0
+   ],
+   "examples": []
+  },
+  "F_placement_net_pin_count_vs_synthesis": {
+   "n": 2004,
+   "matched": 2004,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0,
+    0.0
+   ],
+   "examples": []
+  },
+  "F_cts_net_pin_count_vs_synthesis": {
+   "n": 2004,
+   "matched": 2004,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0,
+    0.0
+   ],
+   "examples": []
+  },
+  "F_route_net_pin_count_vs_synthesis": {
+   "n": 2004,
+   "matched": 2004,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0,
+    0.0
+   ],
+   "examples": []
+  },
+  "N_clock_nets": {
+   "applicable": false,
+   "nets": [
+    {
+     "net": "clk",
+     "truth_pieces": 10,
+     "wl_valid": true,
+     "wl": 629.5449829101562,
+     "truth_wl": 629.545
+    }
+   ]
+  },
+  "P_floorplan_std_cell_x_absent": {
+   "passed": true,
+   "finite": 0
+  },
+  "P_placement_std_cell_x_absent": {
+   "passed": true,
+   "finite": 0
+  },
+  "P_cts_x_um_from_3_place": {
+   "n": 1616,
+   "matched": 1616,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 3.662109378410605e-06,
+   "max_rel": 5.685622385360356e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "P_route_x_um_from_4_cts": {
+   "n": 1616,
+   "matched": 1616,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 3.662109378410605e-06,
+   "max_rel": 5.685622385360356e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  }
+ }
+}

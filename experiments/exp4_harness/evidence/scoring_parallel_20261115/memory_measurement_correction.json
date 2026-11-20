@@ -1,0 +1,44 @@
+{
+  "status": "corrected_large_remeasured",
+  "cause": "Initial sampler only traversed task/PID/children and missed Pool replacement workers created by worker_handler threads.",
+  "fix": "Recursively discover children from all /proc/PID/task/*/children, deduplicating PIDs.",
+  "large_recheck": {
+    "returncode": 0,
+    "peak_process_tree_rss_bytes": 30926319616,
+    "peak_process_tree_pss_bytes": 29113337856,
+    "peak_processes": 7,
+    "samples": 239,
+    "sample_interval_seconds": 1,
+    "elapsed_container_seconds": 294.06490713194944,
+    "cpuset": "4,5,9,11",
+    "root_pid": 2058872,
+    "resource_measurement_status": "valid_all_thread_children",
+    "tree_discovery": "recursively enumerate /proc/PID/task/*/children across all threads"
+  },
+  "large_recheck_timing": {
+    "mode": "parallel",
+    "size": "large",
+    "workers": 4,
+    "wall_seconds": 291.7727515769657,
+    "cpu_seconds": 954.4072998769999,
+    "load_seconds": 1.4282649640226737,
+    "strict_full_pass": true,
+    "label_accuracy": 1.0
+  },
+  "large_recheck_entire_json_equal": true,
+  "source_hashes_unchanged": true,
+  "sampler_regression_test": {
+    "parent_pid": 2067273,
+    "thread_spawned_child_pid": 2067275,
+    "old_main_thread_children": [],
+    "all_thread_children": [
+      2067275
+    ],
+    "fixed_sampler_process_count": 2,
+    "reproduced_old_omission": true,
+    "fixed_discovery_includes_child": true,
+    "passed": true
+  },
+  "other_sample_memory": "Small/medium/failed original memory figures remain invalid lower bounds and were not repeated. Their timing and JSON equivalence stay valid.",
+  "original_speed_measurements_unchanged": true
+}

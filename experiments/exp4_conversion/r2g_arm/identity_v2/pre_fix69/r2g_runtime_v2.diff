@@ -1,0 +1,914 @@
+diff --git a/r2g-skills/def-graph/SKILL.md b/r2g-skills/def-graph/SKILL.md
+index 42cbf3a0..e6d49da7 100644
+--- a/r2g-skills/def-graph/SKILL.md
++++ b/r2g-skills/def-graph/SKILL.md
+@@ -188,7 +188,7 @@ Key differences from b–f — do not "harmonize" them:
+ `checks/summarize_four_stage_graph_data.py --root <generated>` (`structural_issues=0`).
+ 
+ **Editing `scripts/r2g2/` requires reading `scripts/r2g2/R2G2_UPSTREAM.md` first.** That tree is a
+-vendored upstream drop plus eleven recorded deltas (D1–D11); a new drop is re-vendored and the deltas
++vendored upstream drop plus seventeen recorded deltas (D1–D17); a new drop is re-vendored and the deltas
+ re-applied, never hand-merged. `scripts/stage_dataset/` is our glue and is edited normally.
+ 
+ ### 5. Image (feature-map) dataset — `scripts/flow/run_images.sh <project-dir> [platform]`
+@@ -259,7 +259,7 @@ The shared per-platform tech layer every stage consumes:
+ |-----------|------|
+ | `references/graph-dataset.md` | Building/reading the PyG b–f graphs, tensor schema, RC-parasitic label views, torch venv, provenance + audit notes. |
+ | `references/four-stage-dataset.md` | Building/reading the four-stage causal HeteroData graphs (`run_stage_dataset.sh`), the causal input whitelist, the ORFS adapters, and the two mandatory checkers. |
+-| `scripts/r2g2/R2G2_UPSTREAM.md` | **Before editing anything under `scripts/r2g2/`** — upstream provenance, SHA256s, and the eleven local deltas (D1–D11) that must be re-applied on a new drop. |
++| `scripts/r2g2/R2G2_UPSTREAM.md` | **Before editing anything under `scripts/r2g2/`** — upstream provenance, SHA256s, and the seventeen local deltas (D1–D17) that must be re-applied on a new drop. |
+ | `references/label-extraction.md` | Building the Y side (per-cell/per-net labels + stats). |
+ | `references/feature-extraction.md` | Building the X side (per-node/per-edge/metadata CSVs + stats). |
+ | `scripts/extract/techlib/` | Per-platform tech/LEF/liberty/DEF parsing internals. |
+diff --git a/r2g-skills/def-graph/references/four-stage-dataset.md b/r2g-skills/def-graph/references/four-stage-dataset.md
+index b81a8060..97d1edda 100644
+--- a/r2g-skills/def-graph/references/four-stage-dataset.md
++++ b/r2g-skills/def-graph/references/four-stage-dataset.md
+@@ -152,6 +152,15 @@ Upstream expects a hand-written JSON pointing at a curated `/data/...` tree.
+   grid-boundary disconnects while bounding total degree at 20.
+ * `cell_type_id` / `pin_layer_id` are **per-platform**. Never mix platforms in
+   one dataset index without filtering on `platform`.
++* **Route labels aggregate a canonical net's physical pieces.** A synthesis net
++  that the backend split (buffers, CTS, repair) maps to all its pieces through the
++  transparent BUF/INV components; wirelength and ground cap are the sums over those
++  pieces, valid only when every piece is present and the lineage is unambiguous.
++  Two synthesis nets merged into one physical net, an endpoint deleted at route, or
++  a backend logic clone stay `valid=0`. Liberty-proven input-pin swaps (NOR2
++  `A1`<->`A2`, D15) are NOT ambiguous; before D15 they masked 4–12 % of a design's
++  nets. Combinational designs (all timing endpoints are output ports) carry timing
++  labels on `io_pin` only (D16).
+ 
+ ## Verified technologies
+ 
+diff --git a/r2g-skills/def-graph/references/graph-dataset.md b/r2g-skills/def-graph/references/graph-dataset.md
+index d8e3630d..a8a4ba33 100644
+--- a/r2g-skills/def-graph/references/graph-dataset.md
++++ b/r2g-skills/def-graph/references/graph-dataset.md
+@@ -165,9 +165,11 @@ Semantics to know before training:
+ - **The clock tree is not in the graph.** Only `net_type_id == 0` (signal) nets
+   survive; power/ground/clock/reset/scan nets, FILL/TAP cells, and gates with no
+   signal pins are filtered.
+-- Pin positions approximate to the owning instance origin (pin-geometry offsets
+-  are not computed), so `pin_x_std_um`-style stats and `hpwl_um` are
+-  origin-based approximations.
++- Pin positions are the pin's true orientation-aware in-cell LEF position (OpenDB
++  `getAvgXY` contract, `techlib.lef.pin_abs_pos_um`) whenever a cell LEF resolves; only
++  without `SC_LEF`/`ADDITIONAL_LEFS` do they fall back to the owning instance origin
++  (feature-extraction.md). This bullet used to describe the pre-2026-07-14 origin-only
++  behaviour and was stale (corrected 2026-11-07).
+ - `netlist_graph.pt` (from `1_2_yosys.v`) shares the feature stage's
+   deterministic per-platform `cell_type_id` vocabulary
+   (`techlib.cell_types.resolve_cell_type_map`), so its ids agree with
+@@ -181,7 +183,10 @@ the external RTL2Graph `generate_hetero_bgraph.py` from the b-graph to all five
+ views). The verified block-positional **homogeneous `Data` is still built first as
+ the source of truth** (every filter/sort/label-join happens there); the hetero graph
+ is a **value-preserving re-view** — `graph_lib.homo_to_hetero()` changes no number,
+-and `graph_lib.hetero_to_homo()` is its exact inverse.
++and `graph_lib.hetero_to_homo()` is its exact inverse up to edge order (nodes and
++node order are reproduced exactly; edges come back regrouped by relation, each with its own
++attr/type/label row). In `R2G_GRAPH_KIND=both` builds the verifier checks the shipped
++`{v}_graph_homo.pt` against the hetero file on exactly that basis (2026-11-07).
+ 
+ The homo↔hetero mapping:
+ 
+diff --git a/r2g-skills/def-graph/scripts/extract/images/build_images.py b/r2g-skills/def-graph/scripts/extract/images/build_images.py
+index 6c0538e1..eb073276 100644
+--- a/r2g-skills/def-graph/scripts/extract/images/build_images.py
++++ b/r2g-skills/def-graph/scripts/extract/images/build_images.py
+@@ -20,7 +20,8 @@ see routing. The script refuses a feature DEF that carries routed wires.
+                  pin bounding box (w, h floored at one GCell step), clipped to
+                  the die; integrates to (w+h) per net. Units 1/um.
+   pin_rudy       each signal-net pin adds its net's (w+h)/(w*h) to its GCell
+-  pin_density    signal-net pins (instance pins + IO pins) per GCell
++  pin_density    signal-net pins (instance pins + IO pins) per GCell, counted over the
++                 nets that have >= 2 placed pins (the same pins RUDY uses)
+ 
+ Labels (targets) come from the post-route label stage:
+ 
+@@ -82,6 +83,11 @@ class Grid:
+         self.dbu = dbu
+         self.sx, self.sy = sx / dbu, sy / dbu
+         self.x0, self.y0, self.x1, self.y1 = x0 / dbu, y0 / dbu, x1 / dbu, y1 / dbu
++        # Binning is done in DBU, not um: a point exactly on a GCell line (e.g. x = 28500 dbu with a
++        # 5700-dbu step) is 14.25 um / 2.85 um = 4.999999... in floating point and floored into the
++        # cell BELOW. failure-patterns.md "Dataset-Extraction Silent-Value Defects" #68.
++        self._step_dbu = (sx, sy)
++        self._origin_dbu = (x0, y0)
+ 
+     def cell_rect(self, i, j):
+         """GCell (i, j) clipped to the die, in um."""
+@@ -97,12 +103,20 @@ class Grid:
+                 a[i, j] = max(0.0, xb - xa) * max(0.0, yb - ya)
+         return a
+ 
++    def bin(self, v_um, axis):
++        """Floor bin of coordinate v (um) on axis 0 (x) or 1 (y), computed in DBU.
++        The um value is converted back to DBU and snapped to 1e-6 DBU first, so float noise from the
++        um round trip can never move a point across a GCell line; a point ON a line belongs to the
++        cell above it (half-open cells [x_i, x_i+1)), as in the DBU-integer definition."""
++        d = round(v_um * self.dbu - self._origin_dbu[axis], 6)
++        return int(d // self._step_dbu[axis])
++
+     def index(self, x, y):
+         """GCell holding point (x, y) um, or None outside the die."""
+         if not (self.x0 <= x <= self.x1 and self.y0 <= y <= self.y1):
+             return None
+-        i = min(int((x - self.x0) // self.sx), self.nx - 1)
+-        j = min(int((y - self.y0) // self.sy), self.ny - 1)
++        i = min(self.bin(x, 0), self.nx - 1)
++        j = min(self.bin(y, 1), self.ny - 1)
+         return i, j
+ 
+     def splat(self, arr, rect, value_per_area):
+@@ -112,10 +126,10 @@ class Grid:
+         xb, yb = min(xb, self.x1), min(yb, self.y1)
+         if xb <= xa or yb <= ya:
+             return 0.0
+-        i0 = max(0, int((xa - self.x0) // self.sx))
+-        i1 = min(self.nx - 1, int((xb - self.x0) // self.sx))
+-        j0 = max(0, int((ya - self.y0) // self.sy))
+-        j1 = min(self.ny - 1, int((yb - self.y0) // self.sy))
++        i0 = max(0, self.bin(xa, 0))
++        i1 = min(self.nx - 1, self.bin(xb, 0))
++        j0 = max(0, self.bin(ya, 1))
++        j1 = min(self.ny - 1, self.bin(yb, 1))
+         total = 0.0
+         for i in range(i0, i1 + 1):
+             gx0 = self.x0 + i * self.sx
+diff --git a/r2g-skills/def-graph/scripts/extract/images/verify_images.py b/r2g-skills/def-graph/scripts/extract/images/verify_images.py
+index bc0a6546..858146ea 100644
+--- a/r2g-skills/def-graph/scripts/extract/images/verify_images.py
++++ b/r2g-skills/def-graph/scripts/extract/images/verify_images.py
+@@ -161,6 +161,16 @@ def main(argv=None):
+     dbu_g = float(g["db_units"])
+     sx, sy = g["grid_step_dbu"][0] / dbu_g, g["grid_step_dbu"][1] / dbu_g
+     x0, y0, x1, y1 = [v / dbu_g for v in g["die_dbu"]]
++    gx0d, gy0d = g["die_dbu"][0], g["die_dbu"][1]
++    gsxd, gsyd = g["grid_step_dbu"]
++
++    def gbin(v_um, axis):
++        # exact DBU floor bin, independent of build_images.Grid (failure-patterns #68)
++        d = round(v_um * dbu_g - (gx0d, gy0d)[axis], 6)
++        return int(d // (gsxd, gsyd)[axis])
++
++    def gidx(x, y):
++        return min(gbin(x, 0), nx - 1), min(gbin(y, 1), ny - 1)
+     ex = np.minimum(x0 + sx * np.arange(nx + 1), x1)
+     ey = np.minimum(y0 + sy * np.arange(ny + 1), y1)
+     area = np.outer(np.diff(ex), np.diff(ey))
+@@ -228,6 +238,7 @@ def main(argv=None):
+         return (x / dbu + qx, y / dbu + qy)
+ 
+     n_pins, rudy_int, pin_rudy_tot = 0, 0.0, 0.0
++    pd_arr, pr_arr = np.zeros((nx, ny)), np.zeros((nx, ny))
+     for _name, use, conns in nets:
+         if use in ("POWER", "GROUND"):
+             continue
+@@ -244,8 +255,17 @@ def main(argv=None):
+         inside = [p for p in pts if x0 <= p[0] <= x1 and y0 <= p[1] <= y1]
+         n_pins += len(inside)
+         pin_rudy_tot += dens * len(inside)
++        for p in inside:
++            i, j = gidx(p[0], p[1])
++            pd_arr[i, j] += 1; pr_arr[i, j] += dens
+     got = float(F["pin_density"].sum())
+     check("pin_density.total", abs(got - n_pins) < 0.5, "image %d vs pins %d" % (got, n_pins))
++    # per-GCell placement of every pin, not only the total: the total cannot see a pin binned into
++    # the neighbouring GCell (failure-patterns #68, GCell-line pins)
++    bad_cells = int((np.abs(pd_arr - F["pin_density"].astype(float)) > 0.5).sum()) if F["pin_density"].shape == pd_arr.shape else -1
++    check("pin_density.array", bad_cells == 0, "%d GCells differ" % bad_cells)
++    d = maxdiff(pr_arr, F["pin_rudy"])
++    check("pin_rudy.array", d <= 1e-5 * max(1.0, float(pr_arr.max())), "max|diff|=%.2e" % d)
+     got = float((F["rudy"].astype(float) * area).sum()) if F["rudy"].shape == area.shape else float("inf")
+     check("rudy.integral", abs(got - rudy_int) <= 1e-3 * max(rudy_int, 1), "image %.3f vs nets %.3f" % (got, rudy_int))
+     got = float(F["pin_rudy"].astype(float).sum())
+@@ -295,7 +315,7 @@ def main(argv=None):
+             x, y = float(r["X"]), float(r["Y"])
+             if not (x0 <= x <= x1 and y0 <= y <= y1):
+                 continue
+-            i, j = min(int((x - x0) // sx), nx - 1), min(int((y - y0) // sy), ny - 1)
++            i, j = gidx(x, y)
+             ir[i, j] = max(ir[i, j], float(r["IR_Drop_mV"])); seen[i, j] = True
+         d = maxdiff(ir, L["ir_drop"])
+         check("ir_drop.array", d < 1e-3, "max|diff|=%.2e mV" % d)
+@@ -307,8 +327,7 @@ def main(argv=None):
+     probe = [c for c in std[:200]]
+     hits = 0
+     for (rx0, ry0, rx1, ry1) in probe:
+-        i = min(int(((rx0 + rx1) / 2 - x0) // sx), nx - 1)
+-        j = min(int(((ry0 + ry1) / 2 - y0) // sy), ny - 1)
++        i, j = gidx((rx0 + rx1) / 2, (ry0 + ry1) / 2)
+         hits += F["cell_density"].shape == (nx, ny) and F["cell_density"][i, j] > 0
+     check("axis.cells_land_in_own_gcell", not probe or hits == len(probe), "%d/%d" % (hits, len(probe)))
+ 
+diff --git a/r2g-skills/def-graph/scripts/extract/techlib/spef.py b/r2g-skills/def-graph/scripts/extract/techlib/spef.py
+index bfe32502..b3871196 100644
+--- a/r2g-skills/def-graph/scripts/extract/techlib/spef.py
++++ b/r2g-skills/def-graph/scripts/extract/techlib/spef.py
+@@ -69,18 +69,22 @@ _CUNIT_RE = re.compile(r"^\*C_UNIT\s+([0-9eE+.\-]+)\s+(\S+)\s*$")
+ _RUNIT_RE = re.compile(r"^\*R_UNIT\s+([0-9eE+.\-]+)\s+(\S+)\s*$")
+ 
+ # SPEF (write_spef) escapes '.', '$', ':', etc. with a backslash; the DEF
+-# (write_def / techlib.def_parse) escapes ONLY the bus brackets '[' ']', leaving
+-# '.'/'$' bare. So a SPEF net/inst name like `a\.b\[0\]\$_DFF_` must be de-escaped
+-# to `a.b\[0\]$_DFF_` to JOIN the DEF-derived feature CSVs (nodes_net/nodes_pin).
+-# Verified: this drives the RC->feature-CSV join from ~79-92% to 100% on
+-# aes_core (sky130hd) — otherwise every hierarchical net + double-bus register
+-# silently loses its RC labels (2026-07-07, failure-patterns.md).
+-_ESC_NONBRACKET = re.compile(r"\\([^\[\]])")
++# (write_def / techlib.def_parse) escapes the bus brackets '[' ']' AND a literal
++# '/' inside a name ('\/', which distinguishes it from the hierarchy divider),
++# leaving '.'/'$' bare. So a SPEF net/inst name like `a\.b\[0\]\$_DFF_` must be
++# de-escaped to `a.b\[0\]$_DFF_` to JOIN the DEF-derived feature CSVs
++# (nodes_net/nodes_pin). Verified: this drives the RC->feature-CSV join from
++# ~79-92% to 100% on aes_core (sky130hd) — otherwise every hierarchical net +
++# double-bus register silently loses its RC labels (2026-07-07, failure-patterns.md).
++# 2026-11-07: '\/' is kept too (failure-patterns.md #66). De-escaping it to '/'
++# dropped the RC labels of every net with a literal slash in its name (yosys
++# `$func$/path/file.v:193$...` nets): 59 of 4,886 nets on pilot500 C00180.
++_ESC_NONBRACKET = re.compile(r"\\([^\[\]/])")
+ 
+ 
+ def _deesc(name: str) -> str:
+     """SPEF-escaped name -> DEF/def_parse convention (strip backslash except
+-    before bus brackets '[' ']')."""
++    before bus brackets '[' ']' and a literal-slash escape '\\/')."""
+     return _ESC_NONBRACKET.sub(r"\1", name) if "\\" in name else name
+ 
+ 
+diff --git a/r2g-skills/def-graph/scripts/r2g2/01_build_base_graph.py b/r2g-skills/def-graph/scripts/r2g2/01_build_base_graph.py
+index bcba249c..4ada9096 100755
+--- a/r2g-skills/def-graph/scripts/r2g2/01_build_base_graph.py
++++ b/r2g-skills/def-graph/scripts/r2g2/01_build_base_graph.py
+@@ -334,12 +334,45 @@ def resolve_yosys_hierarchy_libs(
+     return unique
+ 
+ 
+-def yosys_signal_names(name: str, detail: dict[str, Any]) -> list[str]:
++def single_bit_vector_names(verilog_text: str, top_module: str = "") -> frozenset[str]:
++    """D17 (local delta): names DECLARED as one-bit vectors (``input [0:0] x;``).
++
++    Yosys JSON keeps no trace of a ``[0:0]`` declaration (one bit, offset 0, not
++    upto -- the same as a scalar), so ``yosys_signal_names`` named the bit ``x``
++    while OpenROAD/OpenSTA, reading the same netlist, call it ``x[0]``. The
++    canonical port then joined no DEF PIN and no STA point (pilot500 C02816:
++    port ``i_register_ready``; NaN IO position on every stage, 24 timing paths
++    rejected, the four-stage build aborted at the 0.95 path-alignment gate).
++    """
++    text = re.sub(r"/\*.*?\*/|//[^\n]*", " ", verilog_text, flags=re.S)
++    if top_module:  # only the top module's declarations name top-level signals
++        block = re.search(
++            r"\bmodule\s+\\?" + re.escape(canonical_name(top_module)) + r"\b(.*?)\bendmodule\b", text, re.S
++        )
++        text = block.group(1) if block else text
++    names: set[str] = set()
++    for match in re.finditer(
++        r"\b(?:input|output|inout|wire|reg)\s+(?:wire\s+|reg\s+)?(?:signed\s+)?"
++        r"\[\s*(-?\d+)\s*:\s*(-?\d+)\s*\]\s*([^;]+);",
++        text,
++    ):
++        if match.group(1) != match.group(2):
++            continue
++        for token in match.group(3).split(","):
++            token = token.strip().split("=")[0].strip()
++            if token:
++                names.add(canonical_name(token))
++    return frozenset(names)
++
++
++def yosys_signal_names(
++    name: str, detail: dict[str, Any], vectors: frozenset[str] = frozenset()
++) -> list[str]:
+     """Yosys stores signal bits LSB first, including ascending/nonzero ranges."""
+     count = len(detail.get("bits", []))
+     offset = int(detail.get("offset", 0))
+     upto = bool(detail.get("upto", 0))
+-    is_bus = count > 1 or offset != 0 or upto
++    is_bus = count > 1 or offset != 0 or upto or name in vectors  # D17
+     return [f"{name}[{offset + (count - 1 - i if upto else i)}]" if is_bus else name
+             for i in range(count)]
+ 
+@@ -408,6 +441,7 @@ def parse_synth_verilog_with_yosys(
+             f"可用module={list(modules)[:10]}"
+         )
+ 
++    vectors = single_bit_vector_names(Path(path).read_text(encoding="utf-8", errors="replace"), top_module)  # D17
+     gate_reference = unique_reference_index(set(reference_gates), "Gate")
+     net_reference = unique_reference_index(set(reference_nets), "Net")
+ 
+@@ -418,7 +452,7 @@ def parse_synth_verilog_with_yosys(
+         name = canonical_name(raw_name)
+         bits = list(detail.get("bits", []))
+         hidden = int(detail.get("hide_name", 0))
+-        indexed_names = yosys_signal_names(name, detail)
++        indexed_names = yosys_signal_names(name, detail, vectors)
+         for bit, alias in zip(bits, indexed_names):
+             if isinstance(bit, int):
+                 bit_aliases[bit].append((alias, hidden))
+@@ -516,7 +550,7 @@ def parse_synth_verilog_with_yosys(
+         port_name = canonical_name(raw_name)
+         bits = list(detail.get("bits", []))
+         direction = canonical_name(detail.get("direction", "")).upper()
+-        port_names = yosys_signal_names(port_name, detail)
++        port_names = yosys_signal_names(port_name, detail, vectors)
+         for bit, bit_port_name in zip(bits, port_names):
+             if isinstance(bit, str):
+                 net_name = "CONST1" if bit == "1" else "CONST0"
+diff --git a/r2g-skills/def-graph/scripts/r2g2/02_extract_features.py b/r2g-skills/def-graph/scripts/r2g2/02_extract_features.py
+index e994ffec..328e6482 100755
+--- a/r2g-skills/def-graph/scripts/r2g2/02_extract_features.py
++++ b/r2g-skills/def-graph/scripts/r2g2/02_extract_features.py
+@@ -161,9 +161,206 @@ class _NetUnionFind:
+             self.parent[right_root] = left_root
+ 
+ 
++# ---- D15 (local delta, see R2G2_UPSTREAM.md): legal input-pin permutations ----
++# The resizer / swap_pins may exchange the nets of logically equivalent input
++# pins of one instance (e.g. NOR2 A1<->A2). Anchoring base endpoints by the
++# literal (inst, pin) then lands each swapped endpoint on the OTHER base net's
++# physical net, so both base nets become "ambiguous" and their route labels are
++# masked although nothing about their routing is uncertain. A permutation is
++# accepted only when (a) the instance keeps the same multiset of input nets by
++# name, and (b) every Liberty output function of the stage master is invariant
++# under it (exhaustive truth table); anything else keeps the old behaviour.
++
++def _liberty_function(expr: str):
++    """Compile a Liberty boolean ``function`` string to (pins, evaluator)."""
++
++    tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_\[\]]*|[01]|[!'&*|+^()]", expr or "")
++    position = 0
++
++    def peek() -> str:
++        return tokens[position] if position < len(tokens) else ""
++
++    def take() -> str:
++        nonlocal position
++        position += 1
++        return tokens[position - 1]
++
++    def primary():
++        token = take()
++        if token == "!":
++            inner = primary()
++            node = lambda v, f=inner: not f(v)
++        elif token == "(":
++            node = expression()
++            if take() != ")":
++                raise ValueError("unbalanced Liberty function: " + expr)
++        elif token in ("0", "1"):
++            node = lambda v, c=(token == "1"): c
++        elif re.match(r"[A-Za-z_]", token):
++            node = lambda v, name=token: v[name]
++        else:
++            raise ValueError("unsupported Liberty function token: " + token)
++        while peek() == "'":
++            take()
++            node = lambda v, f=node: not f(v)
++        return node
++
++    def conjunction():
++        node = primary()
++        while peek() in ("&", "*") or (peek() and peek() not in ("|", "+", "^", ")")):
++            if peek() in ("&", "*"):
++                take()
++            right = primary()
++            node = lambda v, a=node, b=right: a(v) and b(v)
++        return node
++
++    def exclusive():
++        node = conjunction()
++        while peek() == "^":
++            take()
++            right = conjunction()
++            node = lambda v, a=node, b=right: a(v) != b(v)
++        return node
++
++    def expression():
++        node = exclusive()
++        while peek() in ("|", "+"):
++            take()
++            right = exclusive()
++            node = lambda v, a=node, b=right: a(v) or b(v)
++        return node
++
++    evaluator = expression()
++    if position != len(tokens):
++        raise ValueError("trailing Liberty function tokens: " + expr)
++    pins = sorted({t for t in tokens if re.match(r"[A-Za-z_]", t)})
++    return pins, evaluator
++
++
++def _permutation_is_symmetry(cell: dict[str, Any], inputs: list[str], sigma: dict[str, str]) -> bool:
++    """True iff every output function of ``cell`` is unchanged when input pin q
++    takes the value previously seen on pin sigma[q]."""
++
++    functions = [
++        info.get("function", "")
++        for info in cell.get("pins", {}).values()
++        if str(info.get("direction", "")).upper() == "OUTPUT"
++    ]
++    if not functions or any(not f for f in functions) or len(inputs) > 10:
++        return False
++    try:
++        compiled = [_liberty_function(f) for f in functions]
++    except ValueError:
++        return False
++    for _, evaluator in compiled:
++        for bits in range(1 << len(inputs)):
++            values = {pin: bool(bits >> k & 1) for k, pin in enumerate(inputs)}
++            permuted = {q: values[sigma.get(q, q)] for q in inputs}
++            try:
++                if evaluator(values) != evaluator(permuted):
++                    return False
++            except KeyError:
++                return False
++    return True
++
++
++def legal_pin_permutation_remap(
++    base: Any, snapshot: dict[str, Any], cells: dict[str, Any] | None
++) -> dict[Endpoint, Endpoint]:
++    """{base endpoint: stage endpoint} for Liberty-proven input-pin swaps."""
++
++    if not cells:
++        return {}
++    base_pins: dict[str, dict[str, str]] = defaultdict(dict)
++    for net_name, instance, pin_name in zip(
++        base.connection_net_names, base.connection_inst_names, base.connection_pin_names
++    ):
++        base_pins[str(instance)][str(pin_name)] = canonical_name(str(net_name))
++    stage_pins: dict[str, dict[str, str]] = defaultdict(dict)
++    for net_name, info in snapshot["nets"].items():
++        for instance, pin_name in info.get("connections", []):
++            stage_pins[str(instance)][str(pin_name)] = canonical_name(str(net_name))
++    remap: dict[Endpoint, Endpoint] = {}
++    for instance, before in base_pins.items():
++        component = snapshot["components"].get(instance)
++        if component is None:
++            continue
++        cell = cells.get(str(component.get("master", ""))) or cells.get(
++            canonical_name(str(component.get("master", "")))
++        )
++        if not cell:
++            continue
++        inputs = sorted(
++            pin for pin, info in cell.get("pins", {}).items()
++            if str(info.get("direction", "")).upper() == "INPUT"
++        )
++        after = stage_pins.get(instance, {})
++        if len(inputs) < 2 or any(p not in before or p not in after for p in inputs):
++            continue
++        if all(before[p] == after[p] for p in inputs):
++            continue
++        if sorted(before[p] for p in inputs) != sorted(after[p] for p in inputs):
++            continue
++        # sigma[q] = the base pin whose net now sits on stage pin q
++        free = list(inputs)
++        sigma: dict[str, str] = {}
++        for q in inputs:
++            match = next((p for p in free if before[p] == after[q] and p == q), None) or next(
++                (p for p in free if before[p] == after[q]), None
++            )
++            if match is None:
++                break
++            sigma[q] = match
++            free.remove(match)
++        if len(sigma) != len(inputs) or not _permutation_is_symmetry(cell, inputs, sigma):
++            continue
++        for q, p in sigma.items():
++            if p != q:
++                remap[("pin", instance, p)] = ("pin", instance, q)
++    return remap
++
++
++def resolve_liberty_paths(config_path: Path, cfg: dict[str, Any]) -> list[Path]:
++    """The Liberty files of a sample config (shared by 02 and, via D15, 03/05)."""
++
++    lib_raw = cfg.get("lib", "")
++    lib_values = lib_raw if isinstance(lib_raw, list) else [lib_raw]
++    lib_paths = [
++        resolve_path(config_path, str(value), True) for value in lib_values
++    ]
++    hierarchy_lib_dir_raw = str(
++        cfg.get("yosys_hierarchy_lib_dir", "")
++    ).strip()
++    if hierarchy_lib_dir_raw:
++        hierarchy_lib_dir = Path(hierarchy_lib_dir_raw)
++        if not hierarchy_lib_dir.is_absolute():
++            hierarchy_lib_dir = (
++                config_path.parent / hierarchy_lib_dir
++            ).resolve()
++        if not hierarchy_lib_dir.is_dir():
++            raise FileNotFoundError(
++                f"宏Liberty目录不存在: {hierarchy_lib_dir}"
++            )
++        lib_paths.extend(glob_liberty(hierarchy_lib_dir))
++    resolved_lib_paths = list(
++        dict.fromkeys(
++            path.resolve() for path in lib_paths if path is not None
++        )
++    )
++    return resolved_lib_paths
++
++
++def lineage_liberty_cells(config_path: Path, cfg: dict[str, Any]) -> dict[str, Any]:
++    """D15: Liberty cells for the pin-permutation-aware lineage (03/05 callers)."""
++
++    paths = resolve_liberty_paths(config_path, cfg)
++    return parse_liberty(paths)["cells"] if paths else {}
++
++
+ def build_base_to_stage_lineage(
+     base: Any,
+     snapshot: dict[str, Any],
++    cells: dict[str, Any] | None = None,
+ ) -> dict[str, Any]:
+     """返回base Net到阶段物理Net的直接端点+透明组件扩展映射。
+ 
+@@ -178,6 +375,7 @@ def build_base_to_stage_lineage(
+     stage_net_names = sorted(str(name) for name in snapshot["nets"])
+     stage_endpoint_map = stage_endpoint_to_net(snapshot)
+     endpoints_by_base = base_endpoints_by_net(base)
++    pin_remap = legal_pin_permutation_remap(base, snapshot, cells)  # D15
+ 
+     union_find = _NetUnionFind(stage_net_names)
+     nets_by_added_component: dict[str, set[str]] = defaultdict(set)
+@@ -211,7 +409,7 @@ def build_base_to_stage_lineage(
+     root_base_anchors: dict[str, set[str]] = defaultdict(set)
+     for base_net in base_net_names:
+         for endpoint in endpoints_by_base.get(base_net, []):
+-            stage_net = stage_endpoint_map.get(endpoint)
++            stage_net = stage_endpoint_map.get(pin_remap.get(endpoint, endpoint))
+             if stage_net is None:
+                 continue
+             direct_stage_nets[base_net].add(stage_net)
+@@ -298,6 +496,7 @@ def build_base_to_stage_lineage(
+                 for record in records.values()
+             ),
+             "unassigned_stage_net_count": len(unassigned_stage_nets),
++            "legal_pin_permutation_endpoints": len(pin_remap),
+             "transparent_added_component_count": len(
+                 transparent_added_components
+             ),
+@@ -2331,30 +2530,7 @@ def main() -> None:
+     place = snapshot
+     route = snapshot
+ 
+-    lib_raw = cfg.get("lib", "")
+-    lib_values = lib_raw if isinstance(lib_raw, list) else [lib_raw]
+-    lib_paths = [
+-        resolve_path(config_path, str(value), True) for value in lib_values
+-    ]
+-    hierarchy_lib_dir_raw = str(
+-        cfg.get("yosys_hierarchy_lib_dir", "")
+-    ).strip()
+-    if hierarchy_lib_dir_raw:
+-        hierarchy_lib_dir = Path(hierarchy_lib_dir_raw)
+-        if not hierarchy_lib_dir.is_absolute():
+-            hierarchy_lib_dir = (
+-                config_path.parent / hierarchy_lib_dir
+-            ).resolve()
+-        if not hierarchy_lib_dir.is_dir():
+-            raise FileNotFoundError(
+-                f"宏Liberty目录不存在: {hierarchy_lib_dir}"
+-            )
+-        lib_paths.extend(glob_liberty(hierarchy_lib_dir))
+-    resolved_lib_paths = list(
+-        dict.fromkeys(
+-            path.resolve() for path in lib_paths if path is not None
+-        )
+-    )
++    resolved_lib_paths = resolve_liberty_paths(config_path, cfg)
+     if not resolved_lib_paths:
+         raise ValueError("没有可用于特征提取的Liberty文件")
+     lib = parse_liberty(resolved_lib_paths)
+@@ -2913,7 +3089,7 @@ def main() -> None:
+             "ambiguous_stage_net_count": 0,
+         }
+     else:
+-        lineage = build_base_to_stage_lineage(base, snapshot)
++        lineage = build_base_to_stage_lineage(base, snapshot, lib["cells"])
+         lineage_records = lineage["records"]
+         lineage_summary = lineage["summary"]
+     stage_net_geometry_cache: dict[str, dict[str, Any]] = {}
+diff --git a/r2g-skills/def-graph/scripts/r2g2/03_extract_labels.py b/r2g-skills/def-graph/scripts/r2g2/03_extract_labels.py
+index aa5057ca..82af8560 100755
+--- a/r2g-skills/def-graph/scripts/r2g2/03_extract_labels.py
++++ b/r2g-skills/def-graph/scripts/r2g2/03_extract_labels.py
+@@ -3028,7 +3028,8 @@ def main() -> None:
+     congestion_grid_um = feature_module.resolve_congestion_grid_um(cfg)
+     route_snapshot = feature_module.parse_def(label_def)
+     route_lineage = feature_module.build_base_to_stage_lineage(
+-        base, route_snapshot
++        base, route_snapshot,
++        feature_module.lineage_liberty_cells(config_path, cfg),  # D15
+     )
+     lengths, uses = extract_wirelengths(label_def)
+     wirelength_rows = []
+diff --git a/r2g-skills/def-graph/scripts/r2g2/05_build_stage_snapshots.py b/r2g-skills/def-graph/scripts/r2g2/05_build_stage_snapshots.py
+index 326e4488..0c241f7b 100755
+--- a/r2g-skills/def-graph/scripts/r2g2/05_build_stage_snapshots.py
++++ b/r2g-skills/def-graph/scripts/r2g2/05_build_stage_snapshots.py
+@@ -559,10 +559,11 @@ def main() -> None:
+             ),
+         },
+     }
++    lineage_cells = FEATURES.lineage_liberty_cells(config_path, cfg)  # D15
+     for physical_stage, spec in direct_specs.items():
+         after, after_path = parsed_source(str(spec["config_key"]))
+         assert after_path is not None
+-        lineage = FEATURES.build_base_to_stage_lineage(base, after)
++        lineage = FEATURES.build_base_to_stage_lineage(base, after, lineage_cells)  # D15
+         # 直达快照只保存正向base→stage映射；stage_to_base和direct_stage_nets可由
+         # records[*].stage_nets/inferred_backend_stage_nets无损恢复，避免大型设计
+         # 在JSON中重复存储数十万次Net名称。
+diff --git a/r2g-skills/def-graph/scripts/r2g2/R2G2_UPSTREAM.md b/r2g-skills/def-graph/scripts/r2g2/R2G2_UPSTREAM.md
+index 196268e7..d9a810b8 100644
+--- a/r2g-skills/def-graph/scripts/r2g2/R2G2_UPSTREAM.md
++++ b/r2g-skills/def-graph/scripts/r2g2/R2G2_UPSTREAM.md
+@@ -398,6 +398,45 @@ as OpenDB does (identical boxes on all 836 gf180 9t polygon pins).
+ contract. Datasets built on gf180 before this change carry shifted pin
+ positions and must be rebuilt.
+ 
++### D15 - Legal input-pin permutations broke base->stage net lineage (label coverage)
++
++`02.build_base_to_stage_lineage` anchored each synthesis endpoint by its literal
++`(inst, pin)`. The resizer / `swap_pins` exchanges the nets of logically
++equivalent inputs (NOR2 `A1`<->`A2`), so each swapped endpoint landed on the other
++net's physical net, both canonical nets became "ambiguous", and their route
++wirelength / ground-cap labels were masked (honest, but on 1,384 nets of six
++pilot500 nangate45 dev designs, up to 12 % of a design). Delta:
++`legal_pin_permutation_remap` (+ `_liberty_function`, `_permutation_is_symmetry`)
++accepts a permutation only when the instance keeps the same multiset of input-net
++names AND every Liberty output function of the stage master is invariant under
++it (exhaustive truth table). The lineage gains an optional `cells` argument (no
++Liberty = upstream behaviour) and a `legal_pin_permutation_endpoints` summary
++count. `resolve_liberty_paths` is factored out of `02.main`, and
++`lineage_liberty_cells` lets `03` (route labels) and `05` (snapshots) pass the
++same cells. Pin FEATURES are unchanged: a swapped pin node still carries the
++geometry of the physical pin with its own name (recorded residue below).
++Tests: `tests/test_r2g2_lineage_pin_permutation.py`.
++
++### D16 - Validator rejected every purely combinational design (robustness)
++
++`checks/validate_four_stage.py` demanded at least one valid internal-pin timing
++label whenever timing was configured. Pin labels are endpoint slacks, so a
++design whose endpoints are all output ports (virtual clock, no registers) has
++only `io_pin` labels and the whole build aborted. `timing_label_presence_error`
++now requires a valid label overall, plus a valid pin label whenever some pin is
++an internal timing endpoint (`is_timing_endpoint` feature). Tests in the same
++file.
++
++### D17 - One-bit vector ports/nets named as scalars (identity, timing-join)
++
++Yosys JSON cannot distinguish `input [0:0] x;` from `input x;` (one bit, offset 0,
++not upto), so `01.yosys_signal_names` named the bit `x`, while OpenROAD/OpenSTA
++call it `x[0]`. The canonical port joined no DEF PIN (NaN position on every
++stage) and no STA point; on pilot500 C02816 24 of 288 timing paths were rejected
++and `03` refused the design at its 0.95 path-alignment gate. `single_bit_vector_names`
++reads the `[k:k]` declarations of the top module from the netlist text and
++`yosys_signal_names` indexes them. Test: `tests/test_r2g2_single_bit_vector.py`.
++
+ ## Routed patch rectangle correction (2026-09-17)
+ 
+ `03.clause_points` previously treated the first two `RECT` offsets as a route
+@@ -416,6 +455,10 @@ Reference: [LEF/DEF 5.8 NETS routingPoints](https://coriolis.lip6.fr/doc/lefdef/
+ 
+ ## Known upstream residue (not changed here)
+ 
++* D15 residue: a legally swapped input pin keeps the geometry features of the
++  physical pin of the same NAME (not of the pin its canonical net now uses).
++  The label lineage is corrected, the input geometry is not.
++
+ * `01.parse_def_logical`, `unique_reference_index`, `vector_reference_names` and
+   the `def_pins` bus-recovery block are unreachable in the shipped `main()` for
+   the same reason as D6. Left in place: they are the intended implementation if
+diff --git a/r2g-skills/def-graph/scripts/r2g2/checks/validate_four_stage.py b/r2g-skills/def-graph/scripts/r2g2/checks/validate_four_stage.py
+index 3eeeacf4..c13e25e2 100644
+--- a/r2g-skills/def-graph/scripts/r2g2/checks/validate_four_stage.py
++++ b/r2g-skills/def-graph/scripts/r2g2/checks/validate_four_stage.py
+@@ -88,6 +88,33 @@ def sha256(path: Path) -> str:
+     return digest.hexdigest()
+ 
+ 
++def timing_label_presence_error(graph: Any) -> str:
++    """D16 (local delta): timing labels must exist somewhere, and on internal
++    pins whenever the design HAS internal timing endpoints.
++
++    Pin/IO-pin labels are endpoint slacks. A purely combinational design (every
++    endpoint is an output port, e.g. a virtual-clock datapath) legitimately has
++    no valid internal-pin label; the upstream check demanded one and aborted
++    the whole four-stage build. The guard keeps its power: with any internal
++    endpoint present (``is_timing_endpoint`` input feature) zero valid pin
++    labels still fails, and zero labels overall always fails.
++    """
++
++    pin_valid = int(graph["pin"].y_valid_mask.sum()) if "pin" in graph.node_types else 0
++    io_valid = int(graph["io_pin"].y_valid_mask.sum()) if "io_pin" in graph.node_types else 0
++    if pin_valid + io_valid == 0:
++        return "已配置Timing源但没有有效Pin/IO Pin标签"
++    if "pin" in graph.node_types and pin_valid == 0:
++        schema = list(getattr(graph["pin"], "x_schema", []))
++        if "is_timing_endpoint" in schema:
++            column = graph["pin"].x[:, schema.index("is_timing_endpoint")]
++            if bool((column > 0.5).any()):
++                return "已配置Timing源但内部时序端点没有有效Pin标签"
++        else:
++            return "已配置Timing源但没有有效Pin标签"
++    return ""
++
++
+ def flow_recorded_sha256(run_dir: Path, flow_stage: str, artifact: str) -> str:
+     """流程产出该阶段.odb时记录的sha256。
+ 
+@@ -426,10 +453,9 @@ def main() -> None:
+             if int(graph["gate"].y_valid_mask[:, ir_index].sum()) == 0:
+                 raise ValueError(f"{stage}已配置IR-drop源但没有有效Gate标签")
+         if expect_timing:
+-            for node_type in ("pin", "io_pin"):
+-                valid_count = int(graph[node_type].y_valid_mask.sum())
+-                if node_type == "pin" and valid_count == 0:
+-                    raise ValueError(f"{stage}已配置Timing源但没有有效Pin标签")
++            problem = timing_label_presence_error(graph)
++            if problem:
++                raise ValueError(f"{stage}{problem}")
+         if expect_timing_edges and not any(
+             relation == "timing_path" for _, relation, _ in graph.edge_types
+         ):
+diff --git a/r2g-skills/def-graph/tests/test_image_dataset.py b/r2g-skills/def-graph/tests/test_image_dataset.py
+index 77e33003..e0729249 100644
+--- a/r2g-skills/def-graph/tests/test_image_dataset.py
++++ b/r2g-skills/def-graph/tests/test_image_dataset.py
+@@ -167,6 +167,8 @@ def test_verifier_passes_clean_build(toy):
+     ("features", lambda a: {**a, "pin_density": np.where(a["pin_density"] > 0, a["pin_density"] - 1, 0)},
+      "pin_density.total"),
+     ("features", lambda a: {**a, "macro_region": np.zeros_like(a["macro_region"])}, "macro_region.array"),
++    # same total, wrong GCell: only the per-GCell check can see it (failure-patterns #68)
++    ("features", lambda a: {**a, "pin_density": np.roll(a["pin_density"], 1, axis=0)}, "pin_density.array"),
+     ("labels", lambda a: {**a, "congestion": np.roll(a["congestion"], 1, axis=0)}, "congestion.equals_grid_csv"),
+     ("labels", lambda a: {**a, "ir_drop": a["ir_drop"] + (np.arange(32).reshape(8, 4) == 9) * 3.0},
+      "ir_drop.zero_where_no_cell"),
+@@ -181,6 +183,20 @@ def test_verifier_catches_corruption(toy, channel, corrupt, expect):
+     assert rc != 0 and res.get(expect) is False, res
+ 
+ 
++def test_gcell_line_point_bins_in_dbu_not_float_um():
++    """failure-patterns #68: x = 28500 dbu on a 5700-dbu grid (dbu 2000) lies ON GCell line 5.
++    In float um, 14.25 // 2.85 == 4.0, so the old code put the pin one GCell left."""
++    assert 14.25 // 2.85 == 4.0                     # the float trap this guards against
++    g = build_images.Grid({"gcell_size": [10, 10], "db_units": 2000, "grid_step_dbu": [5700, 5700],
++                           "die_dbu": [0, 0, 57000, 57000]})
++    assert g.index(28500 / 2000, 28500 / 2000) == (5, 5)
++    assert g.index(28499 / 2000, 1.0) == (4, 0)
++    assert g.index(57000 / 2000, 57000 / 2000) == (9, 9)     # the far die edge stays in the last cell
++    a = np.zeros((10, 10))
++    g.splat(a, (28500 / 2000, 0.0, 28500 / 2000 + 2.85, 2.85), 1.0)
++    assert a[5, 0] > 0 and a[4, 0] == 0
++
++
+ def test_refuses_routed_feature_def(toy):
+     (toy / "place.def").write_text(DEF_TMPL.replace("{ROUTE}", "+ ROUTED metal1 ( 1000 1000 ) ( 5000 * )"))
+     with pytest.raises(SystemExit):
+diff --git a/r2g-skills/def-graph/tests/test_spef.py b/r2g-skills/def-graph/tests/test_spef.py
+index cdcb399e..858513c4 100644
+--- a/r2g-skills/def-graph/tests/test_spef.py
++++ b/r2g-skills/def-graph/tests/test_spef.py
+@@ -174,7 +174,19 @@ def test_deesc_matches_def_convention():
+     assert spef._deesc(r"dec_block\.block_w0_reg\[0\]") == r"dec_block.block_w0_reg\[0\]"
+     assert spef._deesc(r"keymem\.key_mem\[12\]\[54\]\$_DFFE_PN0P_") == r"keymem.key_mem\[12\]\[54\]$_DFFE_PN0P_"
+     assert spef._deesc("plain_name") == "plain_name"   # no-op fast path
+-    assert spef._deesc(r"a\/b") == "a/b"               # divider also de-escaped
++    # a literal '/' inside a name is escaped in BOTH SPEF and DEF ('\/'); it must stay
++    # escaped or the name no longer joins the DEF CSVs (failure-patterns #66, 2026-11-07).
++    assert spef._deesc(r"a\/b") == r"a\/b"
++
++
++def test_literal_slash_net_joins_def_name(tmp_path):
++    """Regression (pilot500 C00180): yosys names like `AddRoundKey$func$/path/x.v:193$1.ark.u[0]`
++    are written by write_def as `AddRoundKey$func$\/path\/x.v:193$1.ark.u\[0\]` and by
++    write_spef as `AddRoundKey\$func\$\/path\/x\.v\:193\$1\.ark\.u\[0\]`; the de-escaped SPEF name
++    must equal the DEF one."""
++    spef_name = r"AddRoundKey\$func\$\/home\/src\/x\.v\:193\$1\.ark\.u\[0\]"
++    def_name = r"AddRoundKey$func$\/home\/src\/x.v:193$1.ark.u\[0\]"
++    assert spef._deesc(spef_name) == def_name
+ 
+ 
+ def test_names_are_deescaped_end_to_end(tmp_path):
+diff --git a/r2g-skills/def-graph/tests/test_verify_graph_dataset_helpers.py b/r2g-skills/def-graph/tests/test_verify_graph_dataset_helpers.py
+index 901716d7..e8716638 100644
+--- a/r2g-skills/def-graph/tests/test_verify_graph_dataset_helpers.py
++++ b/r2g-skills/def-graph/tests/test_verify_graph_dataset_helpers.py
+@@ -413,3 +413,18 @@ def test_polygon_pin_center_follows_opendb_boxes(tmp_path):
+     got = vgd._lef_pin_geometry([str(lef)])["ADDF"]["pins"]["CI"]
+     assert got == pytest.approx((10.13, 2.08625))
+     assert techlef.macro_pin_geometry([str(lef)])["ADDF"]["pins"]["CI"] == pytest.approx(got)
++
++
++def test_graph_kind_both_counts_as_hetero():
++    """R2G_GRAPH_KIND=both writes the hetero {v}_graph.pt plus {v}_graph_homo.pt; the
++    verifier used to require graph_kind == 'hetero' and false-failed every 'both' build
++    (found 2026-11-07 on pilot500 dev design C03005 counter)."""
++    assert vgd.graph_kind_is_hetero({"graph_kind": "both"})
++    assert vgd.graph_kind_is_hetero({"graph_kind": "hetero"})
++    assert not vgd.graph_kind_is_hetero({"graph_kind": "homo"})
++
++
++def test_verifier_spef_deesc_keeps_literal_slash():
++    """The verifier's independent SPEF oracle must follow the same DEF convention as
++    techlib.spef (failure-patterns #66): '\\/' stays escaped, '\\.'/'\\$' are stripped."""
++    assert vgd._spef_deesc(r"a\$f\$\/home\/x\.v\[0\]") == r"a$f$\/home\/x.v\[0\]"
+diff --git a/tools/verify_graph_dataset.py b/tools/verify_graph_dataset.py
+index 97f6fc4c..844e2643 100755
+--- a/tools/verify_graph_dataset.py
++++ b/tools/verify_graph_dataset.py
+@@ -720,9 +720,10 @@ def irdrop_label_ok(ir):
+ 
+ 
+ def _spef_deesc(name):
+-    # DEF convention: strip backslash EXCEPT before bus brackets (independent copy
+-    # of the spec that scripts/extract/techlib/spef.py implements).
+-    return re.sub(r"\\([^\[\]])", r"\1", name) if "\\" in name else name
++    # DEF convention: strip backslash EXCEPT before bus brackets and a literal-slash
++    # escape '\/' (write_def escapes both; failure-patterns #66, 2026-11-07) --
++    # independent copy of the spec that scripts/extract/techlib/spef.py implements.
++    return re.sub(r"\\([^\[\]/])", r"\1", name) if "\\" in name else name
+ 
+ 
+ def _find_spef(case):
+@@ -1686,13 +1687,67 @@ def _hetero_symmetry_bad(h, rc=False):
+     return bad
+ 
+ 
++def graph_kind_is_hetero(man):
++    """R2G_GRAPH_KIND=both ships hetero {v}_graph.pt (the canonical file) AND
++    {v}_graph_homo.pt; both modes carry the HeteroData that hetero_checks reads.
++    The old ``== "hetero"`` false-failed every 'both' build (2026-11-07)."""
++    return man.get("graph_kind") in ("hetero", "both")
++
++
++def both_mode_homo_checks(ds, tensors, man):
++    """In 'both' mode the extra {v}_graph_homo.pt must hold the SAME homogeneous data
++    the verifier reconstructs from the hetero file: node tensors + node_name exactly
++    (block-positional order is part of the contract), and every edge family as a
++    multiset of full rows (endpoints + type + attr + labels). Edge ORDER is not
++    compared: the hetero re-view regroups edges by relation by design
++    (graph_lib.hetero_to_homo docstring), so order carries no information."""
++    if man.get("graph_kind") != "both":
++        return
++
++    def _same(a, b):
++        return (a is None and b is None) or (
++            a is not None and b is not None and a.shape == b.shape
++            and torch.equal(torch.nan_to_num(a.float(), nan=-7.25), torch.nan_to_num(b.float(), nan=-7.25)))
++
++    def _rows(g, idx, cols):
++        ei = getattr(g, idx, None)
++        if ei is None:
++            return None
++        if ei.shape[1] == 0:
++            return []
++        parts = [ei.t().float()]
++        for c in cols:
++            t = getattr(g, c, None)
++            if t is not None:
++                t = t.float()
++                parts.append(torch.nan_to_num(t.reshape(ei.shape[1], -1) if t.dim() == 2 else t.reshape(-1, 1), nan=-7.25))
++        return sorted(map(tuple, torch.cat(parts, dim=1).tolist()))
++
++    for v, ref in tensors.items():
++        path = os.path.join(ds, f"{v}_graph_homo.pt")
++        ok, detail = os.path.isfile(path), "missing"
++        if ok:
++            homo = torch.load(path, map_location="cpu", weights_only=False)
++            bad = [k for k in ("x", "y", "y_raw") if not _same(getattr(ref, k, None), getattr(homo, k, None))]
++            if list(getattr(ref, "node_name", [])) != list(getattr(homo, "node_name", [])):
++                bad.append("node_name")
++            if _rows(ref, "edge_index", ("edge_type", "edge_attr", "edge_y", "edge_y_raw")) != _rows(
++                    homo, "edge_index", ("edge_type", "edge_attr", "edge_y", "edge_y_raw")):
++                bad.append("edge rows")
++            if _rows(ref, "rc_edge_index", ("rc_edge_type", "rc_edge_y", "rc_edge_y_raw")) != _rows(
++                    homo, "rc_edge_index", ("rc_edge_type", "rc_edge_y", "rc_edge_y_raw")):
++                bad.append("rc edge rows")
++            ok, detail = not bad, f"differs: {bad}"
++        check(f"both-mode {v}_graph_homo.pt == homo re-view of {v}_graph.pt (edge multiset)", ok, detail)
++
++
+ def hetero_checks(hetero, views, man):
+     """GROUP D — the shipped HeteroData structure (the default graph_kind):
+     per-view node types + counts, per-type tensor widths, edge relations over
+     present node types only, and manifest graph_kind / hetero breakdown parity."""
+     gate, net, iopin, pin, egp, epn, ein = views
+     exp_counts = {"gate": len(gate), "net": len(net), "iopin": len(iopin), "pin": len(pin)}
+-    check("hetero manifest graph_kind == hetero", man.get("graph_kind") == "hetero",
++    check("hetero manifest graph_kind in {hetero, both}", graph_kind_is_hetero(man),
+           man.get("graph_kind"))
+     for v in ("b", "c", "d", "e", "f"):
+         h = hetero[v]
+@@ -2682,6 +2737,7 @@ def verify_case(case, design=None, json_out=None):
+     # ---- GROUP D: HeteroData structure (default graph_kind) ----
+     if is_hetero:
+         hetero_checks(hetero_tensors, views, man)
++        both_mode_homo_checks(ds, tensors, man)
+ 
+     # ---- GROUP B: feature column re-derivation + distribution honesty ----
+     feature_stat_checks(case, design, feat, labs, tensors)

@@ -1,0 +1,136 @@
+{
+ "grid_shape": {
+  "passed": true,
+  "truth": [
+   83,
+   83
+  ],
+  "claim": {
+   "cell_density": [
+    83,
+    83
+   ],
+   "macro_region": [
+    83,
+    83
+   ],
+   "rudy": [
+    83,
+    83
+   ],
+   "pin_rudy": [
+    83,
+    83
+   ],
+   "pin_density": [
+    83,
+    83
+   ],
+   "congestion": [
+    83,
+    83
+   ],
+   "congestion_raw": [
+    83,
+    83
+   ],
+   "ir_drop": [
+    83,
+    83
+   ]
+  }
+ },
+ "label_congestion": {
+  "passed": true,
+  "n": 6889,
+  "matched": 6889,
+  "max_abs": 1.5233383332535766e-08,
+  "tol": 3.005501907575209e-07,
+  "worst": [
+   59,
+   0
+  ]
+ },
+ "label_congestion_raw": {
+  "passed": true,
+  "n": 6889,
+  "matched": 6889,
+  "max_abs": 1.51566097450484e-08,
+  "tol": 4.4076190476190493e-07,
+  "worst": [
+   36,
+   5
+  ]
+ },
+ "X_cell_density": {
+  "passed": true,
+  "n": 6889,
+  "matched": 6889,
+  "max_abs": 2.9404971679802827e-08,
+  "tol": 0.00010000100000000136,
+  "worst": [
+   78,
+   76
+  ]
+ },
+ "X_macro_region": {
+  "passed": true,
+  "n": 6889,
+  "matched": 6889,
+  "max_abs": 0.0,
+  "tol": 1e-09,
+  "worst": [
+   0,
+   0
+  ]
+ },
+ "X_rudy": {
+  "passed": true,
+  "n": 6889,
+  "matched": 6889,
+  "max_abs": 5.956195314738011e-08,
+  "tol": 0.0002242658852159594,
+  "worst": [
+   43,
+   2
+  ]
+ },
+ "X_pin_rudy": {
+  "passed": true,
+  "n": 6889,
+  "matched": 6889,
+  "max_abs": 1.141358190182018e-07,
+  "tol": 0.00020738354836272424,
+  "worst": [
+   20,
+   42
+  ]
+ },
+ "X_pin_density": {
+  "passed": true,
+  "n": 6889,
+  "matched": 6889,
+  "max_abs": 0.0,
+  "tol": 1e-09,
+  "worst": [
+   0,
+   0
+  ]
+ },
+ "diag_pin_density_all_signal_pins_incl_single_pin_nets": {
+  "passed": false,
+  "n": 6889,
+  "matched": 6883,
+  "max_abs": 1.0,
+  "tol": 1e-09,
+  "worst": [
+   7,
+   29
+  ],
+  "applicable": false
+ },
+ "verdict": {
+  "passed": true,
+  "failed": []
+ }
+}

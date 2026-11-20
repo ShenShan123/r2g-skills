@@ -1,0 +1,127 @@
+{
+ "r2g-expander-gpt": {
+  "elapsed_s": 8040.0,
+  "phases_s": {
+   "discovery": 180.0,
+   "expander ok": 1464.0,
+   "expander failed": 1638.0,
+   "precheck synth": 4757.000000000001,
+   "other": 0.9999999999990905
+  },
+  "prechecks": 131,
+  "prechecks_qualified": 100,
+  "precheck_s_median": 8.9,
+  "expander_batches": 2,
+  "planner_calls": 1,
+  "repository_revisions": 400,
+  "workload": {
+   "scorer_synth_s_total": 1780,
+   "scorer_eval_s_total": 7316,
+   "mapped_cells_total": 722464,
+   "mapped_cells_median": 2031,
+   "rtl_kb_total": 3524,
+   "rtl_kb_median": 12.4
+  }
+ },
+ "r2g-expander-deepseek": {
+  "elapsed_s": 62127.0,
+  "phases_s": {
+   "discovery": 183.0,
+   "expander ok": 52790.0,
+   "precheck synth": 9150.099999999999,
+   "other": 3.900000000001455
+  },
+  "prechecks": 177,
+  "prechecks_qualified": 100,
+  "precheck_s_median": 11.0,
+  "expander_batches": 4,
+  "planner_calls": 1,
+  "repository_revisions": 800,
+  "workload": {
+   "scorer_synth_s_total": 1934,
+   "scorer_eval_s_total": 6905,
+   "mapped_cells_total": 705848,
+   "mapped_cells_median": 2235.0,
+   "rtl_kb_total": 4680,
+   "rtl_kb_median": 20.6
+  }
+ },
+ "r2g-expander-cold": {
+  "elapsed_s": 82476.0,
+  "phases_s": {
+   "discovery": 128.0,
+   "expander ok": 71501.0,
+   "precheck synth": 10843.200000000006,
+   "other": 3.7999999999883585
+  },
+  "prechecks": 245,
+  "prechecks_qualified": 100,
+  "precheck_s_median": 8.5,
+  "expander_batches": 15,
+  "planner_calls": 0,
+  "repository_revisions": 3019,
+  "workload": {
+   "scorer_synth_s_total": 2400,
+   "scorer_eval_s_total": 11135,
+   "mapped_cells_total": 960995,
+   "mapped_cells_median": 1077.5,
+   "rtl_kb_total": 2829,
+   "rtl_kb_median": 12.1
+  }
+ },
+ "openai-vanilla": {
+  "elapsed_s": 2160.0,
+  "phases_s": {
+   "model": 471.0,
+   "search": 166.0,
+   "download": 337.0,
+   "read repo": 1.0,
+   "qualification synth": 1184.0,
+   "other": 1.0
+  },
+  "tool_calls": {
+   "search_repositories": 45,
+   "clone_repository": 73,
+   "list_repository_files": 69,
+   "run_readonly_command": 130,
+   "validate_candidate": 110,
+   "read_repository_file": 10
+  },
+  "workload": {
+   "scorer_synth_s_total": 1105,
+   "scorer_eval_s_total": 2141,
+   "mapped_cells_total": 344843,
+   "mapped_cells_median": 950.0,
+   "rtl_kb_total": 1713,
+   "rtl_kb_median": 10.3
+  }
+ },
+ "deepseek-vanilla": {
+  "elapsed_s": 13860.0,
+  "phases_s": {
+   "model": 1363.0,
+   "search": 429.0,
+   "download": 1962.0,
+   "read repo": 2.0,
+   "qualification synth": 10102.0,
+   "retry/recovery": 1.0,
+   "other": 1.0
+  },
+  "tool_calls": {
+   "search_repositories": 106,
+   "clone_repository": 100,
+   "list_repository_files": 50,
+   "run_readonly_command": 364,
+   "validate_candidate": 233,
+   "read_repository_file": 26
+  },
+  "workload": {
+   "scorer_synth_s_total": 2452,
+   "scorer_eval_s_total": 3247,
+   "mapped_cells_total": 652166,
+   "mapped_cells_median": 723.0,
+   "rtl_kb_total": 3222,
+   "rtl_kb_median": 13.2
+  }
+ }
+}

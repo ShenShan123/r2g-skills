@@ -1,0 +1,299 @@
+{
+  "updated_at_utc": "2026-11-15T16:39:38.578129+00:00",
+  "updated_at_utc_plus_8": "2026-11-16T00:39:43.970972+08:00",
+  "campaigns": {
+    "graph": [
+      {
+        "arm": "deepseek_native",
+        "repeat": 1,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 0,
+        "development_seconds": 3184.695,
+        "total_tokens": 22350260,
+        "usage_complete": true
+      },
+      {
+        "arm": "deepseek_native",
+        "repeat": 2,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 0,
+        "development_seconds": 4962.309,
+        "total_tokens": 40676213,
+        "usage_complete": true
+      },
+      {
+        "arm": "deepseek_native",
+        "repeat": 3,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 0,
+        "development_seconds": 1939.391,
+        "total_tokens": 34486952,
+        "usage_complete": true
+      },
+      {
+        "arm": "deepseek_r2g",
+        "repeat": 1,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 59,
+        "development_seconds": 4858.52,
+        "total_tokens": 40156375,
+        "usage_complete": true
+      },
+      {
+        "arm": "deepseek_r2g",
+        "repeat": 2,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 19,
+        "development_seconds": 5774.753,
+        "total_tokens": 24474430,
+        "usage_complete": true
+      },
+      {
+        "arm": "deepseek_r2g",
+        "repeat": 3,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 0,
+        "development_seconds": 177.594,
+        "total_tokens": null,
+        "usage_complete": false
+      },
+      {
+        "arm": "gpt_native",
+        "repeat": 1,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 776.489,
+        "total_tokens": 4117189,
+        "usage_complete": true
+      },
+      {
+        "arm": "gpt_native",
+        "repeat": 2,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 861.26,
+        "total_tokens": 3875344,
+        "usage_complete": true
+      },
+      {
+        "arm": "gpt_native",
+        "repeat": 3,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 1065.75,
+        "total_tokens": 4423840,
+        "usage_complete": true
+      },
+      {
+        "arm": "gpt_r2g",
+        "repeat": 1,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 1820.543,
+        "total_tokens": 4192666,
+        "usage_complete": true
+      },
+      {
+        "arm": "gpt_r2g",
+        "repeat": 2,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 1333.866,
+        "total_tokens": 6488966,
+        "usage_complete": true
+      },
+      {
+        "arm": "gpt_r2g",
+        "repeat": 3,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 1531.656,
+        "total_tokens": 4222391,
+        "usage_complete": true
+      }
+    ],
+    "image": [
+      {
+        "arm": "deepseek_native",
+        "repeat": 1,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 1050.948,
+        "total_tokens": 15079481,
+        "usage_complete": true
+      },
+      {
+        "arm": "deepseek_native",
+        "repeat": 2,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 1187.247,
+        "total_tokens": 13376176,
+        "usage_complete": true
+      },
+      {
+        "arm": "deepseek_native",
+        "repeat": 3,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 1128.084,
+        "total_tokens": 13060359,
+        "usage_complete": true
+      },
+      {
+        "arm": "deepseek_r2g",
+        "repeat": 1,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 730.11,
+        "total_tokens": 9871237,
+        "usage_complete": true
+      },
+      {
+        "arm": "deepseek_r2g",
+        "repeat": 2,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 741.599,
+        "total_tokens": 6379053,
+        "usage_complete": true
+      },
+      {
+        "arm": "deepseek_r2g",
+        "repeat": 3,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 1399.392,
+        "total_tokens": 13969632,
+        "usage_complete": true
+      },
+      {
+        "arm": "gpt_native",
+        "repeat": 1,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 470.752,
+        "total_tokens": 1487357,
+        "usage_complete": true
+      },
+      {
+        "arm": "gpt_native",
+        "repeat": 2,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 474.659,
+        "total_tokens": 979514,
+        "usage_complete": true
+      },
+      {
+        "arm": "gpt_native",
+        "repeat": 3,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 465.592,
+        "total_tokens": 1616954,
+        "usage_complete": true
+      },
+      {
+        "arm": "gpt_r2g",
+        "repeat": 1,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 223.586,
+        "total_tokens": 584714,
+        "usage_complete": true
+      },
+      {
+        "arm": "gpt_r2g",
+        "repeat": 2,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 185.612,
+        "total_tokens": 577642,
+        "usage_complete": true
+      },
+      {
+        "arm": "gpt_r2g",
+        "repeat": 3,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "scored": 60,
+        "full_pass": 60,
+        "development_seconds": 188.796,
+        "total_tokens": 507111,
+        "usage_complete": true
+      }
+    ]
+  },
+  "resources": {
+    "sampled_at_utc_plus_8": "2026-11-16T00:39:43.970972+08:00",
+    "physical_cores": 96,
+    "logical_cpus": 192,
+    "cpu_busy_percent": 18.368729053432197,
+    "load_1_5_15": [
+      32.826171875,
+      20.53564453125,
+      19.07080078125
+    ],
+    "memory_available_gib": 409.01640701293945,
+    "experiment_disk_free_gib": 401.3843803405762
+  },
+  "graph_evaluator_revision": "infrastructure/scoring_parallel_v2",
+  "graph_evaluator_cutover_utc_plus_8": "2026-11-15T19:12:35.493+08:00",
+  "accuracy_note": "This progress snapshot reports strict full-pass counts; per-element accuracy was not re-aggregated.",
+  "source": "experiments/exp4_harness/evidence/progress_20261116_0039.json",
+  "campaign_completion": {
+    "graph": "2026-11-16T00:33:15.843302+08:00",
+    "image": "2026-11-15T19:45:53.087642+08:00"
+  },
+  "pending_archive_requests": {
+    "graph": 0,
+    "image": 0
+  }
+}

@@ -1,0 +1,23 @@
+Build one reusable physical-design-to-graph dataset converter.
+
+Read /data/spec/CONTRACT.md, SEMANTICS.md and the three accompanying format documents.
+SEMANTICS.md gives the exact categorical encodings, formulas and edge schemas;
+it takes precedence if a narrative document describes a different convention.
+The 18 development designs are /data/dev/*, and their technology libraries are
+/data/platform/{nangate45,sky130hd,gf180}. The design's config.mk gives PLATFORM.
+Python with torch, torch_geometric, numpy and pandas, and OpenROAD are installed.
+Produce /work/converter/run.sh with this exact interface:
+    bash /converter/run.sh DESIGN_DIR PLATFORM_DIR OUTPUT_DIR
+It must create OUTPUT_DIR/dataset/{b,c,d,e,f}_graph.pt and *_graph_homo.pt.
+During development invoke bash /work/converter/run.sh with the same arguments.
+All reusable code must be inside /work/converter. The converter is mounted
+read-only for evaluation; write temporary files only under OUTPUT_DIR or /tmp.
+No model, network, previous development output or agent home will be available
+during production. Use installed Python/EDA libraries; do not depend on downloading.
+Test your converter across the development designs and all three technologies.
+Use python3 /data/spec/check_format.py OUTPUT_DIR for format feedback.
+You have up to 200 model requests and 4 hours. After development the converter is
+frozen and run on 60 unseen designs, with no per-design model repair. Optimize
+physical correctness and full graph coverage, then total production resources.
+
+Implement the converter yourself using the format documents and standard libraries.

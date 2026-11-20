@@ -1,0 +1,56 @@
+[
+  {
+    "case": "valid",
+    "entire_json_equal": true,
+    "baseline_pass": true,
+    "candidate_pass": true
+  },
+  {
+    "case": "short_attr",
+    "entire_json_equal": true,
+    "baseline_pass": false,
+    "candidate_pass": false
+  },
+  {
+    "case": "short_y",
+    "entire_json_equal": true,
+    "baseline_pass": false,
+    "candidate_pass": false
+  },
+  {
+    "case": "none_attr",
+    "entire_json_equal": true,
+    "baseline_pass": false,
+    "candidate_pass": false
+  },
+  {
+    "case": "list_attr",
+    "entire_json_equal": true,
+    "baseline_pass": false,
+    "candidate_pass": false
+  },
+  {
+    "case": "infinity",
+    "entire_json_equal": true,
+    "baseline_pass": false,
+    "candidate_pass": false
+  },
+  {
+    "case": "nan_label",
+    "entire_json_equal": true,
+    "baseline_pass": false,
+    "candidate_pass": false
+  },
+  {
+    "case": "duplicate_edges",
+    "entire_json_equal": true,
+    "baseline_pass": false,
+    "candidate_pass": false
+  },
+  {
+    "case": "missing",
+    "entire_json_equal": true,
+    "baseline_pass": false,
+    "candidate_pass": false
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "language_toggle": true,
+  "saved_language_survives_reload": true,
+  "query_lang_en": true,
+  "browser_errors": [],
+  "english_opening": "r2g\nRTL → Layout → Dataset\nStart\nJobs\nChat\nSettings\ndeepseek-flash\nDark\nZH\nEN\nTurn RTL into signed-off datasets\n\nSynthesis, place and route, DRC/LVS signoff, automatic repair of failures, dataset generation and check-by-check verification, all automatic.\n\n1\nChoose designs\nOne design\nBatch (many designs)\nUpload an RTL folder\nA folder with .v / .sv f",
+  "chinese_opening": "r2g\nRTL → 版图 → 数据集\n开始\n任务\n对话\n设置\ndeepseek-flash\n深色\nZH\nEN\n把 RTL 变成签核过的数据集\n\n综合、布局布线、DRC/LVS 签核、失败自动修复、生成数据集并逐项校验，全部自动完成。\n\n1\n选择设计\n一个设计\n批量（很多个设计）\n上传 RTL 文件夹\n包含 .v / .sv 的文件夹；只会上传源码和 $readmem 数据文件\n没有现成的 RTL？先用示例试试：\nalu8\ncounter8\nuart_tx\n2\n选择工艺平台\nNangate45\n45 nm\nSKY130 HD\n130 nm\nGF180 MCU\n180 nm\n3\n选择数据集类型\n图数据集\n给 GNN 用：电路转成图，节点和边上带拥塞、线长、时序、IR drop 等标签\n图像数据集"
+}

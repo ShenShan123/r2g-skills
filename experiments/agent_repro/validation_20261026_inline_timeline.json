@@ -1,0 +1,113 @@
+{
+  "recorded_at": "2026-10-26T10:23:11.676162-07:00",
+  "default_collapsed": true,
+  "overall_progress": "original six steps retained",
+  "expanded_timeline": [
+    "synth",
+    "floorplan",
+    "placement",
+    "cts",
+    "route",
+    "final"
+  ],
+  "source_version": "final RUN; verified reuse explicitly labelled; no initial-repair substitution",
+  "interaction": "Single toggle; one horizontal row; click thumbnail for centered lightbox; Escape, close button or backdrop dismiss; mobile scrolls horizontally.",
+  "tests": {
+    "passed": 142,
+    "log": "/tmp/r2g-inline-timeline-tests-20261026.log"
+  },
+  "browser": {
+    "passed": true,
+    "checks": [
+      "overall_progress_preserved",
+      "collapsed_by_default",
+      "no_preview_requests_while_collapsed",
+      "single_expand_button",
+      "six_thumbnails_one_line",
+      "final_repaired_layout_enlarges",
+      "centered_image_dialog",
+      "escape_restores_focus_and_background",
+      "close_button_and_backdrop_close_dialog",
+      "all_previews_use_final_version_api",
+      "collapse_removes_preview_strip",
+      "missing_history_explicit_and_final_available",
+      "failed_repair_keeps_failed_signoff_caption",
+      "mobile_one_line_scroll_and_enlargement_fit_viewport",
+      "detail_panel_defaults_collapsed_and_survives_image_close"
+    ],
+    "measurements": {
+      "desktop_dialog": {
+        "x": 144,
+        "y": 84,
+        "width": 1152,
+        "height": 832
+      },
+      "mobile_dialog": {
+        "x": 12,
+        "y": 242.25,
+        "width": 366,
+        "height": 359.5
+      }
+    },
+    "page_errors": [],
+    "eda_flow_rerun": false
+  },
+  "frontend_build": "passed",
+  "eda_flows_rerun": false,
+  "deployment_status_file": "/tmp/r2g_ui_inline_timeline_upgrade_20261026/status.json",
+  "deployment": {
+    "state": "deployed",
+    "at": "2026-10-26T10:23:43.508362-07:00",
+    "old_pid": 2278742,
+    "new_pid": 2292454
+  },
+  "production_browser": {
+    "passed": true,
+    "default_collapsed": true,
+    "overall_progress_preserved": true,
+    "six_stages_one_line": true,
+    "final_run": "RUN_2026-10-26_08-07-50_2176628_0250",
+    "stage_sources": [
+      {
+        "stage": "synth",
+        "source": "backend/RUN_2026-10-26_07-48-56_2101823_21db/reports_orfs/synth_stat.txt",
+        "available": true,
+        "reused_from": "RUN_2026-10-26_07-48-56_2101823_21db"
+      },
+      {
+        "stage": "floorplan",
+        "source": "backend/RUN_2026-10-26_07-48-56_2101823_21db/results/2_floorplan.odb",
+        "available": true,
+        "reused_from": "RUN_2026-10-26_07-48-56_2101823_21db"
+      },
+      {
+        "stage": "placement",
+        "source": "backend/RUN_2026-10-26_07-48-56_2101823_21db/results/3_place.odb",
+        "available": true,
+        "reused_from": "RUN_2026-10-26_07-48-56_2101823_21db"
+      },
+      {
+        "stage": "cts",
+        "source": "backend/RUN_2026-10-26_07-48-56_2101823_21db/results/4_cts.odb",
+        "available": true,
+        "reused_from": "RUN_2026-10-26_07-48-56_2101823_21db"
+      },
+      {
+        "stage": "route",
+        "source": "backend/RUN_2026-10-26_08-07-50_2176628_0250/results/5_route.odb",
+        "available": true,
+        "reused_from": null
+      },
+      {
+        "stage": "final",
+        "source": "backend/RUN_2026-10-26_08-07-50_2176628_0250/results/6_final.def",
+        "available": true,
+        "reused_from": null
+      }
+    ],
+    "final_image_enlarged": true,
+    "page_errors": [],
+    "mutation_requests": []
+  },
+  "isolated_preview_server_stopped": true
+}

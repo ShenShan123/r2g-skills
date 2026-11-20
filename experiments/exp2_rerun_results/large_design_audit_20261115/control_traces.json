@@ -1,0 +1,3541 @@
+{
+  "captured_at": "2026-11-15T12:00:22.396425+08:00",
+  "submission_validation": {
+    "native-codex": {
+      "errors": [],
+      "eligibility": [
+        true,
+        null
+      ]
+    },
+    "native-dsh": {
+      "errors": [],
+      "eligibility": [
+        true,
+        null
+      ]
+    }
+  },
+  "control_large_candidates": {
+    "native-codex": [
+      {
+        "repo_url": "https://github.com/secworks/aes",
+        "top_module": "aes",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/rtl/aes.v",
+          "src/rtl/aes_core.v",
+          "src/rtl/aes_decipher_block.v",
+          "src/rtl/aes_encipher_block.v",
+          "src/rtl/aes_inv_sbox.v",
+          "src/rtl/aes_key_mem.v",
+          "src/rtl/aes_sbox.v"
+        ],
+        "mapped_cells": 21708
+      },
+      {
+        "repo_url": "https://github.com/secworks/aes",
+        "top_module": "aes_key_mem",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/rtl/aes_key_mem.v"
+        ],
+        "mapped_cells": 11219
+      },
+      {
+        "repo_url": "https://github.com/AhmedSobhy01/AES-Verilog",
+        "top_module": "KeyExpansion",
+        "top_parameters": {},
+        "rtl_files": [
+          "KeyExpansion.v",
+          "SubTable.v"
+        ],
+        "mapped_cells": 24798
+      },
+      {
+        "repo_url": "https://github.com/ahegazy/aes",
+        "top_module": "AES_encryption",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/AddRoundKey.v",
+          "src/MixColumns.v",
+          "src/ShiftRows.v",
+          "src/encryption_top.v",
+          "src/r_con.v",
+          "src/s_box.v",
+          "src/singleKeyExpansion.v",
+          "src/subBytes.v"
+        ],
+        "mapped_cells": 17483
+      },
+      {
+        "repo_url": "https://github.com/megalloid/I2C_Master_Controller",
+        "top_module": "ssd1306_ctrl",
+        "top_parameters": {},
+        "rtl_files": [
+          "quartus_ssd1306/src/scene_renderer.v",
+          "quartus_ssd1306/src/ssd1306_ctrl.v",
+          "rtl/i2c_burst_writer.v"
+        ],
+        "mapped_cells": 26282
+      },
+      {
+        "repo_url": "https://github.com/mcjtag/eth_switch",
+        "top_module": "channel_in",
+        "top_parameters": {},
+        "rtl_files": [
+          "hdl/channel_in.v"
+        ],
+        "mapped_cells": 35413
+      },
+      {
+        "repo_url": "https://github.com/mcjtag/eth_switch",
+        "top_module": "mactable",
+        "top_parameters": {},
+        "rtl_files": [
+          "hdl/mactable.v",
+          "hdl/mactable_dpcam.v"
+        ],
+        "mapped_cells": 40254
+      },
+      {
+        "repo_url": "https://github.com/cjhonlyone/picorv32_Xilinx",
+        "top_module": "axis_async_fifo_adapter",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/eth/axis_adapter.v",
+          "rtl/eth/axis_async_fifo.v",
+          "rtl/eth/axis_async_fifo_adapter.v"
+        ],
+        "mapped_cells": 73677
+      },
+      {
+        "repo_url": "https://github.com/scluconn/LPN-based_PUF",
+        "top_module": "matrix_mul",
+        "top_parameters": {},
+        "rtl_files": [
+          "system/matrix_mul.v"
+        ],
+        "mapped_cells": 34496
+      },
+      {
+        "repo_url": "https://github.com/scluconn/LPN-based_PUF",
+        "top_module": "row_sel",
+        "top_parameters": {},
+        "rtl_files": [
+          "system/row_sel.v"
+        ],
+        "mapped_cells": 73171
+      },
+      {
+        "repo_url": "https://github.com/scluconn/LPN-based_PUF",
+        "top_module": "sha256_block",
+        "top_parameters": {},
+        "rtl_files": [
+          "system/sha2.v",
+          "system/sha256.v"
+        ],
+        "mapped_cells": 11244
+      },
+      {
+        "repo_url": "https://github.com/XueTianyu24/cnn_accelerator",
+        "top_module": "fc",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/fc.v"
+        ],
+        "mapped_cells": 44776
+      },
+      {
+        "repo_url": "https://github.com/secworks/blake2s",
+        "top_module": "blake2s",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/rtl/blake2s.v",
+          "src/rtl/blake2s_core.v",
+          "src/rtl/blake2s_G.v",
+          "src/rtl/blake2s_m_select.v"
+        ],
+        "mapped_cells": 16843
+      },
+      {
+        "repo_url": "https://github.com/secworks/chacha",
+        "top_module": "chacha",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/rtl/chacha.v",
+          "src/rtl/chacha_core.v",
+          "src/rtl/chacha_qr.v"
+        ],
+        "mapped_cells": 15150
+      },
+      {
+        "repo_url": "https://github.com/OnyxRTL/CipherCore",
+        "top_module": "Top",
+        "top_parameters": {},
+        "rtl_files": [
+          "SPECK/SPECK.v"
+        ],
+        "mapped_cells": 20449
+      },
+      {
+        "repo_url": "https://github.com/OnyxRTL/CipherCore",
+        "top_module": "chacha20",
+        "top_parameters": {},
+        "rtl_files": [
+          "Chacha20/chacha20.v"
+        ],
+        "mapped_cells": 15332
+      },
+      {
+        "repo_url": "https://github.com/QShen3/CNN-FPGA",
+        "top_module": "Avg_pool",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/Avg_pool.v",
+          "src/Avg.v"
+        ],
+        "mapped_cells": 60565
+      },
+      {
+        "repo_url": "https://github.com/QShen3/CNN-FPGA",
+        "top_module": "ConvKernel",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/ConvKernel.v",
+          "src/Mult.v"
+        ],
+        "mapped_cells": 12786
+      },
+      {
+        "repo_url": "https://github.com/QShen3/CNN-FPGA",
+        "top_module": "Max_pool",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/Max_pool.v",
+          "src/Max.v"
+        ],
+        "mapped_cells": 68279
+      },
+      {
+        "repo_url": "https://github.com/abdelazeem201/Design-and-ASIC-Implementation-of-32-Point-FFT-Processor",
+        "top_module": "FFT",
+        "top_parameters": {},
+        "rtl_files": [
+          "RTL/FFT.v"
+        ],
+        "mapped_cells": 24948
+      },
+      {
+        "repo_url": "https://github.com/nanamake/r22sdf",
+        "top_module": "FFT",
+        "top_parameters": {},
+        "rtl_files": [
+          "verilog/Butterfly.v",
+          "verilog/DelayBuffer.v",
+          "verilog/FFT64.v",
+          "verilog/Multiply.v",
+          "verilog/SdfUnit.v",
+          "verilog/Twiddle64.v"
+        ],
+        "mapped_cells": 12349
+      },
+      {
+        "repo_url": "https://github.com/nanamake/r22sdf",
+        "top_module": "Multiply",
+        "top_parameters": {
+          "WIDTH": 32
+        },
+        "rtl_files": [
+          "verilog/Multiply.v"
+        ],
+        "mapped_cells": 11111
+      },
+      {
+        "repo_url": "https://github.com/benreynwar/fft-dit-fpga",
+        "top_module": "butterfly",
+        "top_parameters": {
+          "M_WDTH": 32,
+          "X_WDTH": 32
+        },
+        "rtl_files": [
+          "butterfly.v"
+        ],
+        "mapped_cells": 12881
+      },
+      {
+        "repo_url": "https://github.com/lawrie/fpga_pio",
+        "top_module": "pio",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/pio.v",
+          "src/machine.v",
+          "src/fifo.v",
+          "src/divider.v",
+          "src/decoder.v",
+          "src/pc.v",
+          "src/scratch.v",
+          "src/isr.v",
+          "src/osr.v"
+        ],
+        "mapped_cells": 33536
+      },
+      {
+        "repo_url": "https://github.com/Wren6991/Hazard3",
+        "top_module": "hazard3_cpu_1port",
+        "top_parameters": {},
+        "rtl_files": [
+          "hdl/arith/hazard3_alu.v",
+          "hdl/arith/hazard3_branchcmp.v",
+          "hdl/arith/hazard3_mul_fast.v",
+          "hdl/arith/hazard3_muldiv_seq.v",
+          "hdl/arith/hazard3_onehot_encode.v",
+          "hdl/arith/hazard3_onehot_priority.v",
+          "hdl/arith/hazard3_onehot_priority_dynamic.v",
+          "hdl/arith/hazard3_priority_encode.v",
+          "hdl/arith/hazard3_shift_barrel.v",
+          "hdl/hazard3_core.v",
+          "hdl/hazard3_cpu_1port.v",
+          "hdl/hazard3_csr.v",
+          "hdl/hazard3_decode.v",
+          "hdl/hazard3_frontend.v",
+          "hdl/hazard3_instr_decompress.v",
+          "hdl/hazard3_irq_ctrl.v",
+          "hdl/hazard3_pmp.v",
+          "hdl/hazard3_power_ctrl.v",
+          "hdl/hazard3_regfile_1w2r.v",
+          "hdl/hazard3_triggers.v"
+        ],
+        "mapped_cells": 12009
+      },
+      {
+        "repo_url": "https://github.com/karucore/karu64",
+        "top_module": "karu_ffma_d",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/karu_ffma_d.v"
+        ],
+        "mapped_cells": 15494
+      },
+      {
+        "repo_url": "https://github.com/karucore/karu64",
+        "top_module": "karu_vrf_bram_wr",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/karu_ram_prim.v",
+          "rtl/karu_vrf_assert.sv",
+          "rtl/karu_vrf_bram.v",
+          "rtl/karu_vrf_bram_wr.v"
+        ],
+        "mapped_cells": 31149
+      },
+      {
+        "repo_url": "https://github.com/karucore/karu64",
+        "top_module": "keccak",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/zvk/keccak.v",
+          "rtl/zvk/keccak_round.v"
+        ],
+        "mapped_cells": 16987
+      },
+      {
+        "repo_url": "https://github.com/mcjtag/eth_switch",
+        "top_module": "eth_switch",
+        "top_parameters": {
+          "ADDR_WIDTH": 7,
+          "PORT_NUM": 2
+        },
+        "rtl_files": [
+          "hdl/axis_interconnect.v",
+          "hdl/channel_in.v",
+          "hdl/eth_switch.v",
+          "hdl/mactable.v",
+          "hdl/mactable_dpcam.v"
+        ],
+        "mapped_cells": 90853
+      },
+      {
+        "repo_url": "https://github.com/alexforencich/verilog-pcie",
+        "top_module": "dma_if_pcie_rd",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/dma_if_pcie_rd.v"
+        ],
+        "mapped_cells": 72259
+      },
+      {
+        "repo_url": "https://github.com/alexforencich/verilog-pcie",
+        "top_module": "dma_if_pcie_wr",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/dma_if_pcie_wr.v"
+        ],
+        "mapped_cells": 17768
+      },
+      {
+        "repo_url": "https://github.com/secworks/poly1305",
+        "top_module": "poly1305",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/rtl/poly1305.v",
+          "src/rtl/poly1305_core.v",
+          "src/rtl/poly1305_pblock.v",
+          "src/rtl/poly1305_final.v",
+          "src/rtl/poly1305_mulacc.v"
+        ],
+        "mapped_cells": 23669
+      },
+      {
+        "repo_url": "https://github.com/secworks/sha256",
+        "top_module": "sha256",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/rtl/sha256.v",
+          "src/rtl/sha256_core.v",
+          "src/rtl/sha256_k_constants.v",
+          "src/rtl/sha256_w_mem.v"
+        ],
+        "mapped_cells": 11332
+      },
+      {
+        "repo_url": "https://github.com/farooqandniaz/SHA3-high-speed-fpga-implementation",
+        "top_module": "sha3_512",
+        "top_parameters": {},
+        "rtl_files": [
+          "SHA3.v"
+        ],
+        "mapped_cells": 16224
+      },
+      {
+        "repo_url": "https://github.com/Anyunjichong/sha3",
+        "top_module": "keccak_f1600",
+        "top_parameters": {},
+        "rtl_files": [
+          "SHA3/rtl/keccak_f1600.v",
+          "SHA3/rtl/keccak_round.v"
+        ],
+        "mapped_cells": 18121
+      },
+      {
+        "repo_url": "https://github.com/Anyunjichong/sha3",
+        "top_module": "sha3_sponge",
+        "top_parameters": {},
+        "rtl_files": [
+          "SHA3/rtl/keccak_f1600.v",
+          "SHA3/rtl/keccak_round.v",
+          "SHA3/rtl/sha3_sponge.v"
+        ],
+        "mapped_cells": 26612
+      },
+      {
+        "repo_url": "https://github.com/ErosCamacho/sha3_shake",
+        "top_module": "keccak",
+        "top_parameters": {},
+        "rtl_files": [
+          "sha3_xl_1_0/src/chi.v",
+          "sha3_xl_1_0/src/iota.v",
+          "sha3_xl_1_0/src/keccak.v",
+          "sha3_xl_1_0/src/keccak_au.v",
+          "sha3_xl_1_0/src/keccak_ctl.v",
+          "sha3_xl_1_0/src/rho_pi.v",
+          "sha3_xl_1_0/src/theta.v"
+        ],
+        "mapped_cells": 17643
+      },
+      {
+        "repo_url": "https://github.com/secworks/sha3",
+        "top_module": "sha3",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/rtl/sha3.v",
+          "src/rtl/sha3_core.v"
+        ],
+        "mapped_cells": 14572
+      },
+      {
+        "repo_url": "https://github.com/secworks/sha512",
+        "top_module": "sha512",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/rtl/sha512.v",
+          "src/rtl/sha512_core.v",
+          "src/rtl/sha512_h_constants.v",
+          "src/rtl/sha512_k_constants.v",
+          "src/rtl/sha512_w_mem.v"
+        ],
+        "mapped_cells": 24365
+      },
+      {
+        "repo_url": "https://github.com/abdelazeem201/Systolic-array-implementation-in-RTL-for-TPU",
+        "top_module": "systolic",
+        "top_parameters": {
+          "ARRAY_SIZE": 8
+        },
+        "rtl_files": [
+          "rtl/systolic array/systolic.v"
+        ],
+        "mapped_cells": 31780
+      }
+    ],
+    "native-dsh": [
+      {
+        "repo_url": "https://github.com/secworks/aes",
+        "top_module": "aes_core",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/rtl/aes_core.v",
+          "src/rtl/aes_decipher_block.v",
+          "src/rtl/aes_encipher_block.v",
+          "src/rtl/aes_inv_sbox.v",
+          "src/rtl/aes_key_mem.v",
+          "src/rtl/aes_sbox.v"
+        ],
+        "mapped_cells": 20392
+      },
+      {
+        "repo_url": "https://github.com/aryapatil13/AES_encryption_verilog",
+        "top_module": "aes_key_mem",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/src/aes_key_mem.v"
+        ],
+        "mapped_cells": 11219
+      },
+      {
+        "repo_url": "https://github.com/risclite/ARM9-compatible-soft-CPU-core",
+        "top_module": "arm9_compitable_code",
+        "top_parameters": {},
+        "rtl_files": [
+          "RTL/arm9_compitable_code_comment.v"
+        ],
+        "mapped_cells": 17476
+      },
+      {
+        "repo_url": "https://github.com/AbdullahAnsarii/BandPassFilter",
+        "top_module": "basicfir",
+        "top_parameters": {},
+        "rtl_files": [
+          "firbandpass.v"
+        ],
+        "mapped_cells": 11666
+      },
+      {
+        "repo_url": "https://github.com/Sankalpa-Hota/Chacha20-Poly1305-Memory-Processing",
+        "top_module": "chacha_core",
+        "top_parameters": {},
+        "rtl_files": [
+          "chacha_block.v",
+          "chacha_core.v"
+        ],
+        "mapped_cells": 20164
+      },
+      {
+        "repo_url": "https://github.com/Sankalpa-Hota/Chacha20-Poly1305-Memory-Processing",
+        "top_module": "chacha20_poly1305_bus",
+        "top_parameters": {},
+        "rtl_files": [
+          "chacha20_poly1305_bus.v",
+          "chacha20_poly1305_core.v",
+          "chacha_block.v",
+          "chacha_core.v",
+          "mult_130x128_limb.v",
+          "reduce_mod_poly1305.v"
+        ],
+        "mapped_cells": 33544
+      },
+      {
+        "repo_url": "https://github.com/OnyxRTL/CipherCore",
+        "top_module": "Decrypt",
+        "top_parameters": {},
+        "rtl_files": [
+          "SPECK/SPECK.v"
+        ],
+        "mapped_cells": 13699
+      },
+      {
+        "repo_url": "https://github.com/OnyxRTL/CipherCore",
+        "top_module": "Top",
+        "top_parameters": {},
+        "rtl_files": [
+          "SPECK/SPECK.v"
+        ],
+        "mapped_cells": 20449
+      },
+      {
+        "repo_url": "https://github.com/lcapossio/emacZero",
+        "top_module": "eth_mac_rx",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/crc32.v",
+          "rtl/eth_mac_rx.v",
+          "rtl/net/csum_calc.v",
+          "rtl/sync_fifo.v"
+        ],
+        "mapped_cells": 40079
+      },
+      {
+        "repo_url": "https://github.com/mcjtag/eth_switch",
+        "top_module": "channel_in",
+        "top_parameters": {},
+        "rtl_files": [
+          "hdl/channel_in.v"
+        ],
+        "mapped_cells": 35413
+      },
+      {
+        "repo_url": "https://github.com/mcjtag/eth_switch",
+        "top_module": "frame_fifo",
+        "top_parameters": {},
+        "rtl_files": [
+          "hdl/channel_in.v"
+        ],
+        "mapped_cells": 33009
+      },
+      {
+        "repo_url": "https://github.com/mcjtag/eth_switch",
+        "top_module": "mactable_dpcam_line_array",
+        "top_parameters": {},
+        "rtl_files": [
+          "hdl/mactable_dpcam.v"
+        ],
+        "mapped_cells": 11090
+      },
+      {
+        "repo_url": "https://github.com/lawrie/fpga_pio",
+        "top_module": "pio",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/decoder.v",
+          "src/divider.v",
+          "src/fifo.v",
+          "src/isr.v",
+          "src/machine.v",
+          "src/osr.v",
+          "src/pc.v",
+          "src/pio.v",
+          "src/scratch.v"
+        ],
+        "mapped_cells": 33536
+      },
+      {
+        "repo_url": "https://github.com/ultraembedded/core_jpeg_decoder",
+        "top_module": "jpeg_decoder_input_fifo",
+        "top_parameters": {},
+        "rtl_files": [
+          "src_v/jpeg_decoder_input_fifo.v"
+        ],
+        "mapped_cells": 53825
+      },
+      {
+        "repo_url": "https://github.com/ultraembedded/core_jpeg_decoder",
+        "top_module": "jpeg_decoder_output_fifo",
+        "top_parameters": {},
+        "rtl_files": [
+          "src_v/jpeg_decoder_output_fifo.v"
+        ],
+        "mapped_cells": 56711
+      },
+      {
+        "repo_url": "https://github.com/cxdzyq1110/NPU_on_FPGA",
+        "top_module": "mux_ddr_access",
+        "top_parameters": {},
+        "rtl_files": [
+          "projects/aFPGA/00_user_logic/dcfifo/dc_fifo.v",
+          "projects/aFPGA/00_user_logic/dcfifo/gray_dec_1p.v",
+          "projects/aFPGA/00_user_logic/dcfifo/gray_enc_1p.v",
+          "projects/aFPGA/00_user_logic/dcfifo/sync_dual_clock.v",
+          "projects/aFPGA/00_user_logic/multiport/mux_ddr_access.v",
+          "projects/aFPGA/00_user_logic/scfifo/sc_fifo.v"
+        ],
+        "mapped_cells": 25651
+      },
+      {
+        "repo_url": "https://github.com/LCAI-TIHU/HW",
+        "top_module": "NV_NVDLA_CMAC_CORE_active",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/mac/rtl/sv/NV_NVDLA_CMAC_CORE_active.v"
+        ],
+        "mapped_cells": 45302
+      },
+      {
+        "repo_url": "https://github.com/LCAI-TIHU/HW",
+        "top_module": "NV_NVDLA_CSC_dl",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/mac/rtl/sv/NV_NVDLA_CSC_dl.v"
+        ],
+        "mapped_cells": 55876
+      },
+      {
+        "repo_url": "https://github.com/LCAI-TIHU/HW",
+        "top_module": "NV_NVDLA_CSC_wl",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/mac/rtl/sv/NV_NVDLA_CSC_WL_dec.v",
+          "src/mac/rtl/sv/NV_NVDLA_CSC_wl.v"
+        ],
+        "mapped_cells": 52053
+      },
+      {
+        "repo_url": "https://github.com/LCAI-TIHU/HW",
+        "top_module": "NV_NVDLA_CSC_WL_dec",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/mac/rtl/sv/NV_NVDLA_CSC_WL_dec.v"
+        ],
+        "mapped_cells": 21367
+      },
+      {
+        "repo_url": "https://github.com/alexforencich/verilog-pcie",
+        "top_module": "dma_if_axi_wr",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/dma_if_axi_wr.v"
+        ],
+        "mapped_cells": 27642
+      },
+      {
+        "repo_url": "https://github.com/alexforencich/verilog-pcie",
+        "top_module": "dma_if_pcie_wr",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/dma_if_pcie_wr.v"
+        ],
+        "mapped_cells": 17768
+      },
+      {
+        "repo_url": "https://github.com/alexforencich/verilog-pcie",
+        "top_module": "dma_if_pcie_us_wr",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/dma_if_pcie_us_wr.v"
+        ],
+        "mapped_cells": 25941
+      },
+      {
+        "repo_url": "https://github.com/alexforencich/verilog-pcie",
+        "top_module": "pcie_us_axi_dma_rd",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/pcie_us_axi_dma_rd.v"
+        ],
+        "mapped_cells": 29725
+      },
+      {
+        "repo_url": "https://github.com/kuopinghsu/srv32",
+        "top_module": "top",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/clint.v",
+          "rtl/riscv.v",
+          "rtl/top.v"
+        ],
+        "mapped_cells": 28439
+      },
+      {
+        "repo_url": "https://github.com/westerndigitalcorporation/swerv_eh1",
+        "top_module": "ram_1024x20",
+        "top_parameters": {},
+        "rtl_files": [
+          "design/lib/mem_lib.sv"
+        ],
+        "mapped_cells": 39486
+      },
+      {
+        "repo_url": "https://github.com/ultraembedded/riscv",
+        "top_module": "riscv_core",
+        "top_parameters": {},
+        "rtl_files": [
+          "core/riscv/riscv_alu.v",
+          "core/riscv/riscv_core.v",
+          "core/riscv/riscv_csr.v",
+          "core/riscv/riscv_csr_regfile.v",
+          "core/riscv/riscv_decode.v",
+          "core/riscv/riscv_decoder.v",
+          "core/riscv/riscv_divider.v",
+          "core/riscv/riscv_exec.v",
+          "core/riscv/riscv_fetch.v",
+          "core/riscv/riscv_issue.v",
+          "core/riscv/riscv_lsu.v",
+          "core/riscv/riscv_mmu.v",
+          "core/riscv/riscv_multiplier.v",
+          "core/riscv/riscv_pipe_ctrl.v",
+          "core/riscv/riscv_regfile.v",
+          "core/riscv/riscv_xilinx_2r1w.v"
+        ],
+        "mapped_cells": 19689
+      },
+      {
+        "repo_url": "https://github.com/chipsalliance/Cores-VeeR-EH1",
+        "top_module": "ram_1024x20",
+        "top_parameters": {},
+        "rtl_files": [
+          "design/lib/mem_lib.sv"
+        ],
+        "mapped_cells": 39486
+      },
+      {
+        "repo_url": "https://github.com/kuopinghsu/srv32",
+        "top_module": "riscv",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/riscv.v"
+        ],
+        "mapped_cells": 26859
+      },
+      {
+        "repo_url": "https://github.com/OnyxRTL/CipherCore",
+        "top_module": "chacha20",
+        "top_parameters": {
+          "ITERATIONS": 10
+        },
+        "rtl_files": [
+          "Chacha20/chacha20.v"
+        ],
+        "mapped_cells": 15332
+      },
+      {
+        "repo_url": "https://github.com/amoudgl/iir-bandstop-filter",
+        "top_module": "pipelined_iir",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/verilog/pipelined_iir.v"
+        ],
+        "mapped_cells": 28940
+      },
+      {
+        "repo_url": "https://github.com/WangXuan95/FPGA-DDR-SDRAM",
+        "top_module": "ddr_sdram_ctrl",
+        "top_parameters": {},
+        "rtl_files": [
+          "RTL/ddr_sdram_ctrl.v"
+        ],
+        "mapped_cells": 31270
+      },
+      {
+        "repo_url": "https://github.com/dpretet/axi-crossbar",
+        "top_module": "axicb_crossbar_lite_top",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/axicb_checker.sv",
+          "rtl/axicb_crossbar_lite_top.sv",
+          "rtl/axicb_crossbar_top.sv",
+          "rtl/axicb_mst_if.sv",
+          "rtl/axicb_mst_switch.sv",
+          "rtl/axicb_mst_switch_wr.sv",
+          "rtl/axicb_mst_switch_rd.sv",
+          "rtl/axicb_pipeline.sv",
+          "rtl/axicb_round_robin.sv",
+          "rtl/axicb_round_robin_core.sv",
+          "rtl/axicb_scfifo.sv",
+          "rtl/axicb_scfifo_ram.sv",
+          "rtl/axicb_scfifo_regfile.sv",
+          "rtl/axicb_slv_if.sv",
+          "rtl/axicb_slv_switch.sv",
+          "rtl/axicb_slv_switch_wr.sv",
+          "rtl/axicb_slv_switch_rd.sv",
+          "rtl/axicb_slv_ooo.sv",
+          "rtl/axicb_switch_top.sv"
+        ],
+        "mapped_cells": 32584
+      },
+      {
+        "repo_url": "https://github.com/aryapatil13/AES_encryption_verilog",
+        "top_module": "aes",
+        "top_parameters": {},
+        "rtl_files": [
+          "rtl/src/aes.v",
+          "rtl/src/aes_decipher_block.v",
+          "rtl/src/aes_encipher_block.v",
+          "rtl/src/aes_inv_sbox.v",
+          "rtl/src/aes_key_mem.v",
+          "rtl/src/aes_main.v",
+          "rtl/src/aes_sbox.v"
+        ],
+        "mapped_cells": 21708
+      },
+      {
+        "repo_url": "https://github.com/WangXuan95/FPGA-CAN",
+        "top_module": "can_top",
+        "top_parameters": {},
+        "rtl_files": [
+          "RTL/can_top.v",
+          "RTL/can_level_bit.v",
+          "RTL/can_level_packet.v"
+        ],
+        "mapped_cells": 56977
+      },
+      {
+        "repo_url": "https://github.com/farooqandniaz/SHA256-fpga-ultra",
+        "top_module": "SHA_TOP",
+        "top_parameters": {},
+        "rtl_files": [
+          "SHA_TOP.v",
+          "sha256_core.v",
+          "FSM.v",
+          "K_mem.v"
+        ],
+        "mapped_cells": 11749
+      },
+      {
+        "repo_url": "https://github.com/harshbhosale01/image-processing-fpga",
+        "top_module": "dct",
+        "top_parameters": {},
+        "rtl_files": [
+          "Codes/dct.v"
+        ],
+        "mapped_cells": 11851
+      },
+      {
+        "repo_url": "https://github.com/megalloid/I2C_Master_Controller",
+        "top_module": "ssd1306_ctrl",
+        "top_parameters": {},
+        "rtl_files": [
+          "quartus_ssd1306/src/scene_renderer.v",
+          "quartus_ssd1306/src/ssd1306_ctrl.v",
+          "rtl/i2c_burst_writer.v"
+        ],
+        "mapped_cells": 26282
+      },
+      {
+        "repo_url": "https://github.com/secworks/aes",
+        "top_module": "aes",
+        "top_parameters": {},
+        "rtl_files": [
+          "src/rtl/aes.v",
+          "src/rtl/aes_core.v",
+          "src/rtl/aes_decipher_block.v",
+          "src/rtl/aes_encipher_block.v",
+          "src/rtl/aes_inv_sbox.v",
+          "src/rtl/aes_key_mem.v",
+          "src/rtl/aes_sbox.v"
+        ],
+        "mapped_cells": 21708
+      },
+      {
+        "repo_url": "https://github.com/megalloid/I2C_Master_Controller",
+        "top_module": "scene_renderer",
+        "top_parameters": {},
+        "rtl_files": [
+          "quartus_ssd1306/src/scene_renderer.v"
+        ],
+        "mapped_cells": 21340
+      }
+    ]
+  },
+  "r2g_control_traces": {
+    "r2g-expander-deepseek": {
+      "corpus": [],
+      "prechecks": []
+    },
+    "r2g-expander-gpt": {
+      "corpus": [
+        {
+          "repo_url": "https://github.com/secworks/aes",
+          "design_id": "d_172affcf521bc46ee9cc",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "BSD-2-Clause",
+              "BSD-3-Clause"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {},
+            "provider_license_identifier": "BSD-2-Clause",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "src/rtl/aes.v",
+              "src/rtl/aes_core.v",
+              "src/rtl/aes_decipher_block.v",
+              "src/rtl/aes_encipher_block.v",
+              "src/rtl/aes_inv_sbox.v",
+              "src/rtl/aes_key_mem.v",
+              "src/rtl/aes_sbox.v"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "aes",
+              "aes_core",
+              "aes_decipher_block",
+              "aes_encipher_block",
+              "aes_inv_sbox",
+              "aes_key_mem",
+              "aes_sbox"
+            ],
+            "include_dirs": [
+              ".",
+              "src",
+              "src/rtl"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "src/rtl/aes.v",
+              "src/rtl/aes_core.v",
+              "src/rtl/aes_decipher_block.v",
+              "src/rtl/aes_encipher_block.v",
+              "src/rtl/aes_inv_sbox.v",
+              "src/rtl/aes_key_mem.v",
+              "src/rtl/aes_sbox.v"
+            ],
+            "top_evidence": [
+              "STATIC_MANIFEST",
+              "INSTANTIATION_DAG_ROOT",
+              "SEMANTIC_TOP_NAME",
+              "DIRECT_DUT_UNDER_TEST",
+              "HAS_IO"
+            ],
+            "top_module": "aes",
+            "top_score": 1539,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_13fad247f2f84cb55018"
+        },
+        {
+          "repo_url": "https://github.com/secworks/sha256",
+          "design_id": "d_ef921d60d25ffeff9ab2",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "BSD-2-Clause",
+              "BSD-3-Clause"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {},
+            "provider_license_identifier": "BSD-2-Clause",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "src/rtl/sha256.v",
+              "src/rtl/sha256_core.v",
+              "src/rtl/sha256_k_constants.v",
+              "src/rtl/sha256_w_mem.v"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "sha256",
+              "sha256_core",
+              "sha256_k_constants",
+              "sha256_w_mem"
+            ],
+            "include_dirs": [
+              ".",
+              "src",
+              "src/rtl"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "src/rtl/sha256.v",
+              "src/rtl/sha256_core.v",
+              "src/rtl/sha256_k_constants.v",
+              "src/rtl/sha256_w_mem.v"
+            ],
+            "top_evidence": [
+              "STATIC_MANIFEST",
+              "INSTANTIATION_DAG_ROOT",
+              "SEMANTIC_TOP_NAME",
+              "DIRECT_DUT_UNDER_TEST",
+              "HAS_IO"
+            ],
+            "top_module": "sha256",
+            "top_score": 1503,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_4bda12f4bf6fbd419c4d"
+        },
+        {
+          "repo_url": "https://github.com/secworks/sha256",
+          "design_id": "d_264b0679bd5706a4ef36",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "BSD-2-Clause",
+              "BSD-3-Clause"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {},
+            "provider_license_identifier": "BSD-2-Clause",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "src/interfaces/axi4/rtl/sha256_axi4.v",
+              "src/interfaces/axi4/rtl/sha256_axi4_slave.v",
+              "src/rtl/sha256_core.v",
+              "src/rtl/sha256_k_constants.v",
+              "src/rtl/sha256_w_mem.v"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "sha256_axi4",
+              "sha256_axi4_slave",
+              "sha256_core",
+              "sha256_k_constants",
+              "sha256_w_mem"
+            ],
+            "include_dirs": [
+              ".",
+              "src",
+              "src/interfaces",
+              "src/interfaces/axi4",
+              "src/interfaces/axi4/rtl",
+              "src/rtl"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "src/interfaces/axi4/rtl/sha256_axi4.v",
+              "src/interfaces/axi4/rtl/sha256_axi4_slave.v",
+              "src/rtl/sha256_core.v",
+              "src/rtl/sha256_k_constants.v",
+              "src/rtl/sha256_w_mem.v"
+            ],
+            "top_evidence": [
+              "INSTANTIATION_DAG_ROOT",
+              "SEMANTIC_TOP_NAME",
+              "DIRECT_DUT_UNDER_TEST",
+              "HAS_IO"
+            ],
+            "top_module": "sha256_axi4",
+            "top_score": 515,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_911681e0ecb05e88f478"
+        },
+        {
+          "repo_url": "https://github.com/secworks/sha256",
+          "design_id": "d_ce5ba15b3ee2c43a485a",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "BSD-2-Clause",
+              "BSD-3-Clause"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {},
+            "provider_license_identifier": "BSD-2-Clause",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "src/interfaces/stream/rtl/sha256_stream.v",
+              "src/rtl/sha256_core.v",
+              "src/rtl/sha256_k_constants.v",
+              "src/rtl/sha256_w_mem.v"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "sha256_core",
+              "sha256_k_constants",
+              "sha256_stream",
+              "sha256_w_mem"
+            ],
+            "include_dirs": [
+              ".",
+              "src",
+              "src/interfaces",
+              "src/interfaces/stream",
+              "src/interfaces/stream/rtl",
+              "src/rtl"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "src/interfaces/stream/rtl/sha256_stream.v",
+              "src/rtl/sha256_core.v",
+              "src/rtl/sha256_k_constants.v",
+              "src/rtl/sha256_w_mem.v"
+            ],
+            "top_evidence": [
+              "INSTANTIATION_DAG_ROOT",
+              "SEMANTIC_TOP_NAME",
+              "DIRECT_DUT_UNDER_TEST",
+              "HAS_IO"
+            ],
+            "top_module": "sha256_stream",
+            "top_score": 503,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_452433517d5c13ca8e01"
+        },
+        {
+          "repo_url": "https://github.com/secworks/blake2s",
+          "design_id": "d_147b27bfb1f03294cf65",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "BSD-2-Clause",
+              "BSD-3-Clause"
+            ],
+            "license_files": [
+              "LICENSE",
+              "src/model/LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {},
+            "provider_license_identifier": "BSD-2-Clause",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "src/rtl/blake2s.v",
+              "src/rtl/blake2s_G.v",
+              "src/rtl/blake2s_core.v",
+              "src/rtl/blake2s_m_select.v"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "blake2s",
+              "blake2s_G",
+              "blake2s_core",
+              "blake2s_m_select"
+            ],
+            "include_dirs": [
+              ".",
+              "src",
+              "src/rtl"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "src/rtl/blake2s.v",
+              "src/rtl/blake2s_G.v",
+              "src/rtl/blake2s_core.v",
+              "src/rtl/blake2s_m_select.v"
+            ],
+            "top_evidence": [
+              "STATIC_MANIFEST",
+              "INSTANTIATION_DAG_ROOT",
+              "DIRECT_DUT_UNDER_TEST",
+              "HAS_IO"
+            ],
+            "top_module": "blake2s",
+            "top_score": 1468,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_392ad286a8133df606a1"
+        },
+        {
+          "repo_url": "https://github.com/secworks/chacha",
+          "design_id": "d_e7eb3c64c7faa9905638",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "BSD-2-Clause",
+              "BSD-3-Clause"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {},
+            "provider_license_identifier": "BSD-2-Clause",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "src/rtl/chacha.v",
+              "src/rtl/chacha_core.v",
+              "src/rtl/chacha_qr.v"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "chacha",
+              "chacha_core",
+              "chacha_qr"
+            ],
+            "include_dirs": [
+              ".",
+              "src",
+              "src/rtl"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "src/rtl/chacha.v",
+              "src/rtl/chacha_core.v",
+              "src/rtl/chacha_qr.v"
+            ],
+            "top_evidence": [
+              "STATIC_MANIFEST",
+              "INSTANTIATION_DAG_ROOT",
+              "DIRECT_DUT_UNDER_TEST",
+              "HAS_IO"
+            ],
+            "top_module": "chacha",
+            "top_score": 1456,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_3830cc82debf08121d63"
+        },
+        {
+          "repo_url": "https://github.com/secworks/poly1305",
+          "design_id": "d_092042ff3ff9d068a292",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "BSD-2-Clause",
+              "BSD-3-Clause"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {},
+            "provider_license_identifier": "BSD-2-Clause",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "src/rtl/poly1305.v",
+              "src/rtl/poly1305_core.v",
+              "src/rtl/poly1305_final.v",
+              "src/rtl/poly1305_mulacc.v",
+              "src/rtl/poly1305_pblock.v"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "poly1305",
+              "poly1305_core",
+              "poly1305_final",
+              "poly1305_mulacc",
+              "poly1305_pblock"
+            ],
+            "include_dirs": [
+              ".",
+              "src",
+              "src/rtl"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "src/rtl/poly1305.v",
+              "src/rtl/poly1305_core.v",
+              "src/rtl/poly1305_final.v",
+              "src/rtl/poly1305_mulacc.v",
+              "src/rtl/poly1305_pblock.v"
+            ],
+            "top_evidence": [
+              "STATIC_MANIFEST",
+              "INSTANTIATION_DAG_ROOT",
+              "DIRECT_DUT_UNDER_TEST",
+              "HAS_IO"
+            ],
+            "top_module": "poly1305",
+            "top_score": 1480,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_4f4dca4ed9ac745cd0b6"
+        },
+        {
+          "repo_url": "https://github.com/secworks/sha3",
+          "design_id": "d_f832869fa02d4e2b81e2",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "BSD-2-Clause",
+              "BSD-3-Clause"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {},
+            "provider_license_identifier": "BSD-2-Clause",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "src/rtl/sha3.v",
+              "src/rtl/sha3_core.v"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "sha3",
+              "sha3_core"
+            ],
+            "include_dirs": [
+              ".",
+              "src",
+              "src/rtl"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "src/rtl/sha3.v",
+              "src/rtl/sha3_core.v"
+            ],
+            "top_evidence": [
+              "INSTANTIATION_DAG_ROOT",
+              "SEMANTIC_TOP_NAME",
+              "HAS_IO"
+            ],
+            "top_module": "sha3",
+            "top_score": 179,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_c6b8a35b31f22432c44b"
+        },
+        {
+          "repo_url": "https://github.com/secworks/sha512",
+          "design_id": "d_266a791a9d9cb205bd9c",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "BSD-2-Clause",
+              "BSD-3-Clause"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {},
+            "provider_license_identifier": "BSD-2-Clause",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "src/rtl/sha512.v",
+              "src/rtl/sha512_core.v",
+              "src/rtl/sha512_h_constants.v",
+              "src/rtl/sha512_k_constants.v",
+              "src/rtl/sha512_w_mem.v"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "sha512",
+              "sha512_core",
+              "sha512_h_constants",
+              "sha512_k_constants",
+              "sha512_w_mem"
+            ],
+            "include_dirs": [
+              ".",
+              "src",
+              "src/rtl"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "src/rtl/sha512.v",
+              "src/rtl/sha512_core.v",
+              "src/rtl/sha512_h_constants.v",
+              "src/rtl/sha512_k_constants.v",
+              "src/rtl/sha512_w_mem.v"
+            ],
+            "top_evidence": [
+              "STATIC_MANIFEST",
+              "INSTANTIATION_DAG_ROOT",
+              "SEMANTIC_TOP_NAME",
+              "DIRECT_DUT_UNDER_TEST",
+              "HAS_IO"
+            ],
+            "top_module": "sha512",
+            "top_score": 1515,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_284f3b43dbf694cc7342"
+        },
+        {
+          "repo_url": "https://github.com/dpretet/axi-crossbar",
+          "design_id": "d_ceac9dbe57d6554253f0",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "MIT"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {},
+            "provider_license_identifier": "MIT",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "rtl/axicb_crossbar_lite_top.sv",
+              "rtl/axicb_crossbar_top.sv",
+              "rtl/axicb_mst_if.sv",
+              "rtl/axicb_mst_switch.sv",
+              "rtl/axicb_mst_switch_rd.sv",
+              "rtl/axicb_mst_switch_wr.sv",
+              "rtl/axicb_pipeline.sv",
+              "rtl/axicb_round_robin.sv",
+              "rtl/axicb_round_robin_core.sv",
+              "rtl/axicb_scfifo.sv",
+              "rtl/axicb_scfifo_ram.sv",
+              "rtl/axicb_scfifo_regfile.sv",
+              "rtl/axicb_slv_if.sv",
+              "rtl/axicb_slv_ooo.sv",
+              "rtl/axicb_slv_switch.sv",
+              "rtl/axicb_slv_switch_rd.sv",
+              "rtl/axicb_slv_switch_wr.sv",
+              "rtl/axicb_switch_top.sv"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "axicb_crossbar_lite_top",
+              "axicb_crossbar_top",
+              "axicb_mst_if",
+              "axicb_mst_switch",
+              "axicb_mst_switch_rd",
+              "axicb_mst_switch_wr",
+              "axicb_pipeline",
+              "axicb_round_robin",
+              "axicb_round_robin_core",
+              "axicb_scfifo",
+              "axicb_scfifo_ram",
+              "axicb_scfifo_regfile",
+              "axicb_slv_if",
+              "axicb_slv_ooo",
+              "axicb_slv_switch",
+              "axicb_slv_switch_rd",
+              "axicb_slv_switch_wr",
+              "axicb_switch_top"
+            ],
+            "include_dirs": [
+              ".",
+              "rtl"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "rtl/axicb_checker.sv",
+              "rtl/axicb_crossbar_lite_top.sv",
+              "rtl/axicb_crossbar_top.sv",
+              "rtl/axicb_mst_if.sv",
+              "rtl/axicb_mst_switch.sv",
+              "rtl/axicb_mst_switch_rd.sv",
+              "rtl/axicb_mst_switch_wr.sv",
+              "rtl/axicb_pipeline.sv",
+              "rtl/axicb_round_robin.sv",
+              "rtl/axicb_round_robin_core.sv",
+              "rtl/axicb_scfifo.sv",
+              "rtl/axicb_scfifo_ram.sv",
+              "rtl/axicb_scfifo_regfile.sv",
+              "rtl/axicb_slv_if.sv",
+              "rtl/axicb_slv_ooo.sv",
+              "rtl/axicb_slv_switch.sv",
+              "rtl/axicb_slv_switch_rd.sv",
+              "rtl/axicb_slv_switch_wr.sv",
+              "rtl/axicb_switch_top.sv"
+            ],
+            "top_evidence": [
+              "STATIC_MANIFEST",
+              "INSTANTIATION_DAG_ROOT",
+              "SEMANTIC_TOP_NAME",
+              "HAS_IO"
+            ],
+            "top_module": "axicb_crossbar_lite_top",
+            "top_score": 1355,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_159d65c9d85985c0eaa7"
+        },
+        {
+          "repo_url": "https://github.com/dpretet/axi-crossbar",
+          "design_id": "d_4f91fc5d66566f77a0de",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "MIT"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {},
+            "provider_license_identifier": "MIT",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "rtl/axicb_crossbar_top.sv",
+              "rtl/axicb_mst_if.sv",
+              "rtl/axicb_mst_switch.sv",
+              "rtl/axicb_mst_switch_rd.sv",
+              "rtl/axicb_mst_switch_wr.sv",
+              "rtl/axicb_pipeline.sv",
+              "rtl/axicb_round_robin.sv",
+              "rtl/axicb_round_robin_core.sv",
+              "rtl/axicb_scfifo.sv",
+              "rtl/axicb_scfifo_ram.sv",
+              "rtl/axicb_scfifo_regfile.sv",
+              "rtl/axicb_slv_if.sv",
+              "rtl/axicb_slv_ooo.sv",
+              "rtl/axicb_slv_switch.sv",
+              "rtl/axicb_slv_switch_rd.sv",
+              "rtl/axicb_slv_switch_wr.sv",
+              "rtl/axicb_switch_top.sv"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "axicb_crossbar_top",
+              "axicb_mst_if",
+              "axicb_mst_switch",
+              "axicb_mst_switch_rd",
+              "axicb_mst_switch_wr",
+              "axicb_pipeline",
+              "axicb_round_robin",
+              "axicb_round_robin_core",
+              "axicb_scfifo",
+              "axicb_scfifo_ram",
+              "axicb_scfifo_regfile",
+              "axicb_slv_if",
+              "axicb_slv_ooo",
+              "axicb_slv_switch",
+              "axicb_slv_switch_rd",
+              "axicb_slv_switch_wr",
+              "axicb_switch_top"
+            ],
+            "include_dirs": [
+              ".",
+              "rtl"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "rtl/axicb_checker.sv",
+              "rtl/axicb_crossbar_top.sv",
+              "rtl/axicb_mst_if.sv",
+              "rtl/axicb_mst_switch.sv",
+              "rtl/axicb_mst_switch_rd.sv",
+              "rtl/axicb_mst_switch_wr.sv",
+              "rtl/axicb_pipeline.sv",
+              "rtl/axicb_round_robin.sv",
+              "rtl/axicb_round_robin_core.sv",
+              "rtl/axicb_scfifo.sv",
+              "rtl/axicb_scfifo_ram.sv",
+              "rtl/axicb_scfifo_regfile.sv",
+              "rtl/axicb_slv_if.sv",
+              "rtl/axicb_slv_ooo.sv",
+              "rtl/axicb_slv_switch.sv",
+              "rtl/axicb_slv_switch_rd.sv",
+              "rtl/axicb_slv_switch_wr.sv",
+              "rtl/axicb_switch_top.sv"
+            ],
+            "top_evidence": [
+              "STATIC_MANIFEST",
+              "SEMANTIC_TOP_NAME",
+              "HAS_IO"
+            ],
+            "top_module": "axicb_crossbar_top",
+            "top_score": 1255,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_7dc8394c8ce014baf09b"
+        },
+        {
+          "repo_url": "https://github.com/dpretet/axi-crossbar",
+          "design_id": "d_e6c0a70be77cf8c67445",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "MIT"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {},
+            "provider_license_identifier": "MIT",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "rtl/axicb_mst_switch.sv",
+              "rtl/axicb_mst_switch_rd.sv",
+              "rtl/axicb_mst_switch_wr.sv",
+              "rtl/axicb_pipeline.sv",
+              "rtl/axicb_round_robin.sv",
+              "rtl/axicb_round_robin_core.sv",
+              "rtl/axicb_scfifo.sv",
+              "rtl/axicb_scfifo_ram.sv",
+              "rtl/axicb_scfifo_regfile.sv",
+              "rtl/axicb_slv_ooo.sv",
+              "rtl/axicb_slv_switch.sv",
+              "rtl/axicb_slv_switch_rd.sv",
+              "rtl/axicb_slv_switch_wr.sv",
+              "rtl/axicb_switch_top.sv"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "axicb_mst_switch",
+              "axicb_mst_switch_rd",
+              "axicb_mst_switch_wr",
+              "axicb_pipeline",
+              "axicb_round_robin",
+              "axicb_round_robin_core",
+              "axicb_scfifo",
+              "axicb_scfifo_ram",
+              "axicb_scfifo_regfile",
+              "axicb_slv_ooo",
+              "axicb_slv_switch",
+              "axicb_slv_switch_rd",
+              "axicb_slv_switch_wr",
+              "axicb_switch_top"
+            ],
+            "include_dirs": [
+              ".",
+              "rtl"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "rtl/axicb_mst_switch.sv",
+              "rtl/axicb_mst_switch_rd.sv",
+              "rtl/axicb_mst_switch_wr.sv",
+              "rtl/axicb_pipeline.sv",
+              "rtl/axicb_round_robin.sv",
+              "rtl/axicb_round_robin_core.sv",
+              "rtl/axicb_scfifo.sv",
+              "rtl/axicb_scfifo_ram.sv",
+              "rtl/axicb_scfifo_regfile.sv",
+              "rtl/axicb_slv_ooo.sv",
+              "rtl/axicb_slv_switch.sv",
+              "rtl/axicb_slv_switch_rd.sv",
+              "rtl/axicb_slv_switch_wr.sv",
+              "rtl/axicb_switch_top.sv"
+            ],
+            "top_evidence": [
+              "STATIC_FILELIST",
+              "SEMANTIC_TOP_NAME",
+              "HAS_IO"
+            ],
+            "top_module": "axicb_switch_top",
+            "top_score": 473,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_47630ed7295b36f5fd0d"
+        },
+        {
+          "repo_url": "https://github.com/dpretet/axi-crossbar",
+          "design_id": "d_475389dba24bfa84a0fe",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "MIT"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {},
+            "provider_license_identifier": "MIT",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "rtl/axicb_pipeline.sv",
+              "rtl/axicb_round_robin_core.sv",
+              "rtl/axicb_scfifo.sv",
+              "rtl/axicb_scfifo_ram.sv",
+              "rtl/axicb_scfifo_regfile.sv",
+              "rtl/axicb_slv_ooo.sv",
+              "rtl/axicb_slv_switch.sv",
+              "rtl/axicb_slv_switch_rd.sv",
+              "rtl/axicb_slv_switch_wr.sv"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "axicb_pipeline",
+              "axicb_round_robin_core",
+              "axicb_scfifo",
+              "axicb_scfifo_ram",
+              "axicb_scfifo_regfile",
+              "axicb_slv_ooo",
+              "axicb_slv_switch",
+              "axicb_slv_switch_rd",
+              "axicb_slv_switch_wr"
+            ],
+            "include_dirs": [
+              ".",
+              "rtl"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "rtl/axicb_pipeline.sv",
+              "rtl/axicb_round_robin_core.sv",
+              "rtl/axicb_scfifo.sv",
+              "rtl/axicb_scfifo_ram.sv",
+              "rtl/axicb_scfifo_regfile.sv",
+              "rtl/axicb_slv_ooo.sv",
+              "rtl/axicb_slv_switch.sv",
+              "rtl/axicb_slv_switch_rd.sv",
+              "rtl/axicb_slv_switch_wr.sv"
+            ],
+            "top_evidence": [
+              "STATIC_FILELIST",
+              "HAS_IO"
+            ],
+            "top_module": "axicb_slv_switch",
+            "top_score": 378,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_3d8d76535d3302fb94ce"
+        },
+        {
+          "repo_url": "https://github.com/onyxrtl/ciphercore",
+          "design_id": "d_ca0ca2b1a3ecc87c6ba6",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "Apache-2.0"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {
+              "SPECK/SPECK.v": [
+                "Apache-2.0"
+              ],
+              "SPECK/speck_functions.vh": [
+                "Apache-2.0"
+              ],
+              "SPECK/tb_speck.v": [
+                "Apache-2.0"
+              ]
+            },
+            "provider_license_identifier": "Apache-2.0",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "Chacha20/chacha20.v"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "chacha20"
+            ],
+            "include_dirs": [
+              ".",
+              "Chacha20"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "Chacha20/chacha20.v"
+            ],
+            "top_evidence": [
+              "STATIC_MANIFEST",
+              "INSTANTIATION_DAG_ROOT",
+              "PROJECT_NAME_MATCH",
+              "DIRECT_DUT_UNDER_TEST",
+              "HAS_IO"
+            ],
+            "top_module": "chacha20",
+            "top_score": 1462,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_334b7f0a2f8e2cba93e5"
+        },
+        {
+          "repo_url": "https://github.com/onyxrtl/ciphercore",
+          "design_id": "d_e4391dd016b970eff4ed",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "Apache-2.0"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {
+              "SPECK/SPECK.v": [
+                "Apache-2.0"
+              ],
+              "SPECK/speck_functions.vh": [
+                "Apache-2.0"
+              ],
+              "SPECK/tb_speck.v": [
+                "Apache-2.0"
+              ]
+            },
+            "provider_license_identifier": "Apache-2.0",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "SPECK/SPECK.v"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "Decrypt",
+              "Encrypt",
+              "ExpandKey",
+              "Top"
+            ],
+            "include_dirs": [
+              ".",
+              "SPECK"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "SPECK/SPECK.v",
+              "SPECK/speck_functions.vh"
+            ],
+            "top_evidence": [
+              "INSTANTIATION_DAG_ROOT",
+              "SEMANTIC_TOP_NAME",
+              "DIRECT_DUT_UNDER_TEST",
+              "HAS_IO"
+            ],
+            "top_module": "Top",
+            "top_score": 503,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_1af45011d553ab59e360"
+        },
+        {
+          "repo_url": "https://github.com/onyxrtl/ciphercore",
+          "design_id": "d_bd551b15e67bd6d4651e",
+          "release_policy": "PUBLIC_EXPORT_ALLOWED",
+          "license_evidence": {
+            "confidence": "HIGH",
+            "identifiers": [
+              "Apache-2.0"
+            ],
+            "license_files": [
+              "LICENSE"
+            ],
+            "license_status": "PERMISSIVE_CONFIRMED",
+            "per_file_spdx": {
+              "SPECK/SPECK.v": [
+                "Apache-2.0"
+              ],
+              "SPECK/speck_functions.vh": [
+                "Apache-2.0"
+              ],
+              "SPECK/tb_speck.v": [
+                "Apache-2.0"
+              ]
+            },
+            "provider_license_identifier": "Apache-2.0",
+            "readme_license_identifiers": [],
+            "release_policy": "PUBLIC_EXPORT_ALLOWED",
+            "resolution_states": [],
+            "schema": "rtl_license_evidence_v1"
+          },
+          "build": {
+            "compile_source_files": [
+              "trivium/trivium.v"
+            ],
+            "defines": [],
+            "dependency_modules": [
+              "trivium"
+            ],
+            "include_dirs": [
+              ".",
+              "trivium"
+            ],
+            "packages": [],
+            "parameters": {},
+            "source_files": [
+              "trivium/trivium.v"
+            ],
+            "top_evidence": [
+              "INSTANTIATION_DAG_ROOT",
+              "PROJECT_NAME_MATCH",
+              "DIRECT_DUT_UNDER_TEST",
+              "HAS_IO"
+            ],
+            "top_module": "trivium",
+            "top_score": 462,
+            "unresolved_dependencies": []
+          },
+          "family_id": "f_c283e743077a67abb721"
+        }
+      ],
+      "prechecks": [
+        {
+          "at": "2026-11-14T18:46:52-08:00",
+          "candidate_id": "exp_d_bd551b15e67bd6d4651e",
+          "category": "crypto",
+          "failure_class": null,
+          "failure_reasons": null,
+          "family_id": "f_c283e743077a67abb721",
+          "infra_retries": 0,
+          "license_identifiers": [
+            "Apache-2.0"
+          ],
+          "mapped_cells": 828,
+          "publishable_qualified": true,
+          "qualified": true,
+          "repo_url": "https://github.com/onyxrtl/ciphercore",
+          "round": 4,
+          "seconds": 8.1,
+          "top_module": "trivium"
+        },
+        {
+          "at": "2026-11-14T18:47:24-08:00",
+          "candidate_id": "exp_d_ca0ca2b1a3ecc87c6ba6",
+          "category": "crypto",
+          "failure_class": null,
+          "failure_reasons": null,
+          "family_id": "f_334b7f0a2f8e2cba93e5",
+          "infra_retries": 0,
+          "license_identifiers": [
+            "Apache-2.0"
+          ],
+          "mapped_cells": 15332,
+          "publishable_qualified": true,
+          "qualified": true,
+          "repo_url": "https://github.com/onyxrtl/ciphercore",
+          "round": 4,
+          "seconds": 25.6,
+          "top_module": "chacha20"
+        },
+        {
+          "at": "2026-11-14T18:48:48-08:00",
+          "candidate_id": "exp_d_e4391dd016b970eff4ed",
+          "category": "crypto",
+          "failure_class": null,
+          "failure_reasons": null,
+          "family_id": "f_1af45011d553ab59e360",
+          "infra_retries": 0,
+          "license_identifiers": [
+            "Apache-2.0"
+          ],
+          "mapped_cells": 20449,
+          "publishable_qualified": true,
+          "qualified": true,
+          "repo_url": "https://github.com/onyxrtl/ciphercore",
+          "round": 4,
+          "seconds": 83.1,
+          "top_module": "Top"
+        },
+        {
+          "at": "2026-11-14T19:26:11-08:00",
+          "candidate_id": "exp_d_475389dba24bfa84a0fe",
+          "category": "cpu",
+          "failure_class": null,
+          "failure_reasons": null,
+          "family_id": "f_3d8d76535d3302fb94ce",
+          "infra_retries": 0,
+          "license_identifiers": [
+            "MIT"
+          ],
+          "mapped_cells": 1474,
+          "publishable_qualified": true,
+          "qualified": true,
+          "repo_url": "https://github.com/dpretet/axi-crossbar",
+          "round": 4,
+          "seconds": 14.9,
+          "top_module": "axicb_slv_switch"
+        },
+        {
+          "at": "2026-11-14T19:26:31-08:00",
+          "candidate_id": "exp_d_4f91fc5d66566f77a0de",
+          "category": "cpu",
+          "failure_class": "compilation_closure_incomplete",
+          "failure_reasons": null,
+          "family_id": "f_7dc8394c8ce014baf09b",
+          "infra_retries": 0,
+          "license_identifiers": [
+            "MIT"
+          ],
+          "mapped_cells": null,
+          "publishable_qualified": false,
+          "qualified": false,
+          "repo_url": "https://github.com/dpretet/axi-crossbar",
+          "round": 4,
+          "seconds": 0.0,
+          "top_module": "axicb_crossbar_top"
+        },
+        {
+          "at": "2026-11-14T19:29:58-08:00",
+          "candidate_id": "exp_d_ceac9dbe57d6554253f0",
+          "category": "cpu",
+          "failure_class": "compilation_closure_incomplete",
+          "failure_reasons": null,
+          "family_id": "f_159d65c9d85985c0eaa7",
+          "infra_retries": 0,
+          "license_identifiers": [
+            "MIT"
+          ],
+          "mapped_cells": null,
+          "publishable_qualified": false,
+          "qualified": false,
+          "repo_url": "https://github.com/dpretet/axi-crossbar",
+          "round": 4,
+          "seconds": 0.0,
+          "top_module": "axicb_crossbar_lite_top"
+        },
+        {
+          "at": "2026-11-14T19:52:27-08:00",
+          "candidate_id": "exp_d_092042ff3ff9d068a292",
+          "category": "cpu",
+          "failure_class": "license_evidence_incomplete",
+          "failure_reasons": null,
+          "family_id": "f_4f4dca4ed9ac745cd0b6",
+          "infra_retries": 0,
+          "license_identifiers": [
+            "BSD-2-Clause",
+            "BSD-3-Clause"
+          ],
+          "mapped_cells": 23669,
+          "publishable_qualified": false,
+          "qualified": false,
+          "repo_url": "https://github.com/secworks/poly1305",
+          "round": 4,
+          "seconds": 73.9,
+          "top_module": "poly1305"
+        },
+        {
+          "at": "2026-11-14T19:53:18-08:00",
+          "candidate_id": "exp_d_147b27bfb1f03294cf65",
+          "category": "cpu",
+          "failure_class": "license_evidence_incomplete",
+          "failure_reasons": null,
+          "family_id": "f_392ad286a8133df606a1",
+          "infra_retries": 0,
+          "license_identifiers": [
+            "BSD-2-Clause",
+            "BSD-3-Clause"
+          ],
+          "mapped_cells": 16843,
+          "publishable_qualified": false,
+          "qualified": false,
+          "repo_url": "https://github.com/secworks/blake2s",
+          "round": 4,
+          "seconds": 51.5,
+          "top_module": "blake2s"
+        },
+        {
+          "at": "2026-11-14T19:55:24-08:00",
+          "candidate_id": "exp_d_172affcf521bc46ee9cc",
+          "category": "cpu",
+          "failure_class": "license_evidence_incomplete",
+          "failure_reasons": null,
+          "family_id": "f_13fad247f2f84cb55018",
+          "infra_retries": 0,
+          "license_identifiers": [
+            "BSD-2-Clause",
+            "BSD-3-Clause"
+          ],
+          "mapped_cells": 21708,
+          "publishable_qualified": false,
+          "qualified": false,
+          "repo_url": "https://github.com/secworks/aes",
+          "round": 4,
+          "seconds": 125.4,
+          "top_module": "aes"
+        },
+        {
+          "at": "2026-11-14T19:56:52-08:00",
+          "candidate_id": "exp_d_264b0679bd5706a4ef36",
+          "category": "cpu",
+          "failure_class": "license_evidence_incomplete",
+          "failure_reasons": null,
+          "family_id": "f_911681e0ecb05e88f478",
+          "infra_retries": 0,
+          "license_identifiers": [
+            "BSD-2-Clause",
+            "BSD-3-Clause"
+          ],
+          "mapped_cells": 11439,
+          "publishable_qualified": false,
+          "qualified": false,
+          "repo_url": "https://github.com/secworks/sha256",
+          "round": 4,
+          "seconds": 30.5,
+          "top_module": "sha256_axi4"
+        },
+        {
+          "at": "2026-11-14T19:57:56-08:00",
+          "candidate_id": "exp_d_266a791a9d9cb205bd9c",
+          "category": "cpu",
+          "failure_class": "license_evidence_incomplete",
+          "failure_reasons": null,
+          "family_id": "f_284f3b43dbf694cc7342",
+          "infra_retries": 0,
+          "license_identifiers": [
+            "BSD-2-Clause",
+            "BSD-3-Clause"
+          ],
+          "mapped_cells": 24365,
+          "publishable_qualified": false,
+          "qualified": false,
+          "repo_url": "https://github.com/secworks/sha512",
+          "round": 4,
+          "seconds": 64.4,
+          "top_module": "sha512"
+        }
+      ]
+    }
+  },
+  "license_failure_details": {
+    "r2g-expander-deepseek": [
+      {
+        "candidate_id": "exp_d_096c580fdebd928879a3",
+        "repo_url": "https://github.com/mister-devel/wonderswan_mister",
+        "top_module": "video_freak",
+        "mapped_cells": 2910,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": "LGPL-2.1-only",
+          "license_spdx_observed": "GPL-2.0-only"
+        },
+        "license_identifiers": [
+          "LGPL-2.1-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_ec5789167eedc22d8d19",
+        "repo_url": "https://github.com/trenz-electronic/te0720-gigazee-reference-designs",
+        "top_module": "cf_hdmi_tx_12b",
+        "mapped_cells": 43531,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": "BSD-3-Clause",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_25d40ecb308b2e19e2b9",
+        "repo_url": "https://github.com/manal-a7med/approximate_computing-nexys4_implementation",
+        "top_module": "TopWrapper",
+        "mapped_cells": 5473,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_371aaf326f56d3f46ff6",
+        "repo_url": "https://github.com/pulp-platform/riscv-dbg",
+        "top_module": "debug_rom_one_scratch",
+        "mapped_cells": 129,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "Apache-2.0"
+        },
+        "license_identifiers": [
+          "Apache-2.0",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_4055d0d3b4f461796e93",
+        "repo_url": "https://github.com/jotego/jt51",
+        "top_module": "jt51",
+        "mapped_cells": 10512,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only",
+          "GPL-3.0-or-later"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_4c1edc69afdbdf97eda0",
+        "repo_url": "https://github.com/danimanx/littleinstinct",
+        "top_module": "dcs_mem",
+        "mapped_cells": 67302,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_5e09e2edb93e085b61e7",
+        "repo_url": "https://github.com/manal-a7med/approximate_computing-nexys4_implementation",
+        "top_module": "MultiplierComparator",
+        "mapped_cells": 419,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_64c8636d29d34f9e68f7",
+        "repo_url": "https://github.com/manal-a7med/approximate_computing-nexys4_implementation",
+        "top_module": "ApproxMultiplier",
+        "mapped_cells": 109,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_84aad14319cdf83c8097",
+        "repo_url": "https://github.com/jotego/jt51",
+        "top_module": "jt51_interpol",
+        "mapped_cells": 10461,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only",
+          "GPL-3.0-or-later"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_87eb4ad658b33ae316a5",
+        "repo_url": "https://github.com/pulp-platform/riscv-dbg",
+        "top_module": "debug_rom",
+        "mapped_cells": 238,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "Apache-2.0"
+        },
+        "license_identifiers": [
+          "Apache-2.0",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_d696eba9ff6340caf4d1",
+        "repo_url": "https://github.com/rohith-04/noc-visualiser",
+        "top_module": "fifo",
+        "mapped_cells": 285,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_f656d332ce50b24a38ed",
+        "repo_url": "https://github.com/progranism/open-source-fpga-bitcoin-miner",
+        "top_module": "hexdisp",
+        "mapped_cells": 259,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_9f2ed898d5fb7e8e3b94",
+        "repo_url": "https://github.com/mayiacao/axi4_interconnect",
+        "top_module": "axi_interconnect",
+        "mapped_cells": 72958,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": "AGPL-3.0-only",
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_1a5324f1966b9d4ca0d9",
+        "repo_url": "https://github.com/pallavibehurageek-cyber/8x8-weight-stationary-systolic-array",
+        "top_module": "systolic_array",
+        "mapped_cells": 24060,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "Apache-2.0",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "Apache-2.0"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_4feba706d706d66ca8b0",
+        "repo_url": "https://github.com/thales2/logi-projects",
+        "top_module": "stop_watch_cascade",
+        "mapped_cells": 198,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-2.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-2.0-only",
+          "LGPL-2.1-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_c1a320a5cdf11c6cba21",
+        "repo_url": "https://github.com/thales2/logi-projects",
+        "top_module": "div_combined",
+        "mapped_cells": 197,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-2.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-2.0-only",
+          "LGPL-2.1-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_3a2b1d27ffdb2322ba17",
+        "repo_url": "https://github.com/cedarmax/ecen-449",
+        "top_module": "fourbitcounter",
+        "mapped_cells": 181,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": "LGPL-2.1-only",
+          "license_spdx_observed": "GPL-2.0-only"
+        },
+        "license_identifiers": [
+          "LGPL-2.1-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_d886f0c4988cc64ffa57",
+        "repo_url": "https://github.com/cedarmax/ecen-449",
+        "top_module": "multiply_v1_0",
+        "mapped_cells": 617,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": "LGPL-2.1-only",
+          "license_spdx_observed": "GPL-2.0-only"
+        },
+        "license_identifiers": [
+          "LGPL-2.1-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_284209de175469ba63e9",
+        "repo_url": "https://github.com/chuong-dv/thesis-redo",
+        "top_module": "ascon_wb_adapter",
+        "mapped_cells": 109,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "MIT",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "MIT"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_ead62031d308abd3334d",
+        "repo_url": "https://github.com/chuong-dv/thesis-redo",
+        "top_module": "ascon_connect_wb",
+        "mapped_cells": 11492,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "MIT",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "MIT"
+        ]
+      }
+    ],
+    "r2g-expander-gpt": [
+      {
+        "candidate_id": "exp_d_ec5789167eedc22d8d19",
+        "repo_url": "https://github.com/trenz-electronic/te0720-gigazee-reference-designs",
+        "top_module": "cf_hdmi_tx_12b",
+        "mapped_cells": 43531,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": "BSD-3-Clause",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_25d40ecb308b2e19e2b9",
+        "repo_url": "https://github.com/manal-a7med/approximate_computing-nexys4_implementation",
+        "top_module": "TopWrapper",
+        "mapped_cells": 5473,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_371aaf326f56d3f46ff6",
+        "repo_url": "https://github.com/pulp-platform/riscv-dbg",
+        "top_module": "debug_rom_one_scratch",
+        "mapped_cells": 129,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "Apache-2.0"
+        },
+        "license_identifiers": [
+          "Apache-2.0",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_4055d0d3b4f461796e93",
+        "repo_url": "https://github.com/jotego/jt51",
+        "top_module": "jt51",
+        "mapped_cells": 10512,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only",
+          "GPL-3.0-or-later"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_4c1edc69afdbdf97eda0",
+        "repo_url": "https://github.com/danimanx/littleinstinct",
+        "top_module": "dcs_mem",
+        "mapped_cells": 67302,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_5e09e2edb93e085b61e7",
+        "repo_url": "https://github.com/manal-a7med/approximate_computing-nexys4_implementation",
+        "top_module": "MultiplierComparator",
+        "mapped_cells": 419,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_64c8636d29d34f9e68f7",
+        "repo_url": "https://github.com/manal-a7med/approximate_computing-nexys4_implementation",
+        "top_module": "ApproxMultiplier",
+        "mapped_cells": 109,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_84aad14319cdf83c8097",
+        "repo_url": "https://github.com/jotego/jt51",
+        "top_module": "jt51_interpol",
+        "mapped_cells": 10461,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only",
+          "GPL-3.0-or-later"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_87eb4ad658b33ae316a5",
+        "repo_url": "https://github.com/pulp-platform/riscv-dbg",
+        "top_module": "debug_rom",
+        "mapped_cells": 238,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "Apache-2.0"
+        },
+        "license_identifiers": [
+          "Apache-2.0",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_f656d332ce50b24a38ed",
+        "repo_url": "https://github.com/progranism/open-source-fpga-bitcoin-miner",
+        "top_module": "hexdisp",
+        "mapped_cells": 259,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_4feba706d706d66ca8b0",
+        "repo_url": "https://github.com/thales2/logi-projects",
+        "top_module": "stop_watch_cascade",
+        "mapped_cells": 198,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-2.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-2.0-only",
+          "LGPL-2.1-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_284209de175469ba63e9",
+        "repo_url": "https://github.com/chuong-dv/thesis-redo",
+        "top_module": "ascon_wb_adapter",
+        "mapped_cells": 109,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "MIT",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "MIT"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_c1a320a5cdf11c6cba21",
+        "repo_url": "https://github.com/thales2/logi-projects",
+        "top_module": "div_combined",
+        "mapped_cells": 197,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-2.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-2.0-only",
+          "LGPL-2.1-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_ead62031d308abd3334d",
+        "repo_url": "https://github.com/chuong-dv/thesis-redo",
+        "top_module": "ascon_connect_wb",
+        "mapped_cells": 11492,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "MIT",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "MIT"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_3a2b1d27ffdb2322ba17",
+        "repo_url": "https://github.com/cedarmax/ecen-449",
+        "top_module": "fourbitcounter",
+        "mapped_cells": 181,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": "LGPL-2.1-only",
+          "license_spdx_observed": "GPL-2.0-only"
+        },
+        "license_identifiers": [
+          "LGPL-2.1-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_d886f0c4988cc64ffa57",
+        "repo_url": "https://github.com/cedarmax/ecen-449",
+        "top_module": "multiply_v1_0",
+        "mapped_cells": 617,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": "LGPL-2.1-only",
+          "license_spdx_observed": "GPL-2.0-only"
+        },
+        "license_identifiers": [
+          "LGPL-2.1-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_9f2ed898d5fb7e8e3b94",
+        "repo_url": "https://github.com/mayiacao/axi4_interconnect",
+        "top_module": "axi_interconnect",
+        "mapped_cells": 72958,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_1adbfa2012b3d4bd8778",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/titan-x-verification",
+        "top_module": "aes_engine",
+        "mapped_cells": 251,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "Apache-2.0",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "Apache-2.0"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_20710f80a0b16a43eee3",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/smvdu-titanx-rtl-all-modules",
+        "top_module": "sha256_engine",
+        "mapped_cells": 6508,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "Apache-2.0",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "Apache-2.0"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_27b7287005175f3d6f4e",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/titan-x-all-modules-27-oct-2026-part-b-fpga-implementation",
+        "top_module": "aes_engine",
+        "mapped_cells": 648,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "Apache-2.0",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "Apache-2.0"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_9cbf489b53e46d962ef8",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/smvdu-titan-x",
+        "top_module": "aes_engine",
+        "mapped_cells": 2244,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "Apache-2.0"
+        },
+        "license_identifiers": [
+          "Apache-2.0",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_d5dd6822a489aa6f1c0e",
+        "repo_url": "https://github.com/gamesfun13/timer_based_switch_in_verilog",
+        "top_module": "mainmodule",
+        "mapped_cells": 394,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "GPL-3.0-only"
+        },
+        "license_identifiers": [
+          "AGPL-3.0-only",
+          "GPL-3.0-only"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_df12fa1942ecb3f34699",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/titanx_iteration2",
+        "top_module": "aes_engine",
+        "mapped_cells": 10869,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "Apache-2.0",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "Apache-2.0"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_4a99ed204e354615caab",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/titanx_iteration2",
+        "top_module": "l2_cache_top",
+        "mapped_cells": 15642,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "Apache-2.0",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "Apache-2.0"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_da4fe5ef56635329a304",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/smvdu-titan-x",
+        "top_module": "l2_cache_top",
+        "mapped_cells": 15642,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "Apache-2.0"
+        },
+        "license_identifiers": [
+          "Apache-2.0",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_1cc51447db05eb8bbd52",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/project_penguin3",
+        "top_module": "can_controller",
+        "mapped_cells": 438,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "Apache-2.0",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "Apache-2.0"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_45e50bd55cf6ac3927aa",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/smvdu-titanx-rtl-all-modules-backup",
+        "top_module": "can_controller",
+        "mapped_cells": 438,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "Apache-2.0",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "Apache-2.0"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_8d4d0d62457daed94e17",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/titanx_iteration2",
+        "top_module": "pcie_top",
+        "mapped_cells": 375,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "Apache-2.0",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "Apache-2.0"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_19b5cac100dec27d9a3e",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/smvdu-titan-x",
+        "top_module": "titan_x_top",
+        "mapped_cells": 135,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "Apache-2.0"
+        },
+        "license_identifiers": [
+          "Apache-2.0",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_33479e8ac5573f51fe6e",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/project_penguin3",
+        "top_module": "ddr_ctrl_top",
+        "mapped_cells": 1792,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "Apache-2.0",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "Apache-2.0"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_6b5f8a93dbd235bb0727",
+        "repo_url": "https://github.com/secworks/vga",
+        "top_module": "vga",
+        "mapped_cells": 174,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_ab3e85006fd9996220f8",
+        "repo_url": "https://github.com/secworks/robber_language",
+        "top_module": "robber_language",
+        "mapped_cells": 178,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_cef996bea37e13bd44c1",
+        "repo_url": "https://github.com/secworks/ubbefpga",
+        "top_module": "ubbefpga",
+        "mapped_cells": 184,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_ff9186a8623daef30084",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/titanx_iteration2",
+        "top_module": "ddr_ctrl_top",
+        "mapped_cells": 1552,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "Apache-2.0",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "Apache-2.0"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_0c0c013e31daf35d67d1",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/titan-x-design-modules-14-sep-2026",
+        "top_module": "apb_bridge",
+        "mapped_cells": 361,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "Apache-2.0",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "Apache-2.0"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_3140381c87887b417cd2",
+        "repo_url": "https://github.com/github-dcg/axi_crossbar",
+        "top_module": "axi_crossbar",
+        "mapped_cells": 4305,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-3-Clause"
+        },
+        "license_identifiers": [
+          "Apache-2.0",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_48c42519a108b3a16e40",
+        "repo_url": "https://github.com/anupamsarashwat1-cloud/project_penguin3",
+        "top_module": "apb_bridge",
+        "mapped_cells": 334,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": false,
+          "license_spdx_declared": "Apache-2.0",
+          "license_spdx_observed": null
+        },
+        "license_identifiers": [
+          "Apache-2.0"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_4e3f9ad01554774ea471",
+        "repo_url": "https://github.com/github-dcg/axi_crossbar",
+        "top_module": "axi2ahb_bridge",
+        "mapped_cells": 44186,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-3-Clause"
+        },
+        "license_identifiers": [
+          "Apache-2.0",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_61b217664a9ea418e4e4",
+        "repo_url": "https://github.com/github-dcg/axi_crossbar",
+        "top_module": "cross_4k_if",
+        "mapped_cells": 797,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-3-Clause"
+        },
+        "license_identifiers": [
+          "Apache-2.0",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_907203951987a805a94f",
+        "repo_url": "https://github.com/github-dcg/axi_crossbar",
+        "top_module": "axi_m2s_m3",
+        "mapped_cells": 738,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-3-Clause"
+        },
+        "license_identifiers": [
+          "Apache-2.0",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_6cd02d419ae989a0dbbf",
+        "repo_url": "https://github.com/secworks/r5",
+        "top_module": "r5",
+        "mapped_cells": 271,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_092042ff3ff9d068a292",
+        "repo_url": "https://github.com/secworks/poly1305",
+        "top_module": "poly1305",
+        "mapped_cells": 23669,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_147b27bfb1f03294cf65",
+        "repo_url": "https://github.com/secworks/blake2s",
+        "top_module": "blake2s",
+        "mapped_cells": 16843,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_172affcf521bc46ee9cc",
+        "repo_url": "https://github.com/secworks/aes",
+        "top_module": "aes",
+        "mapped_cells": 21708,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_18ddd40be8ad1974029b",
+        "repo_url": "https://github.com/secworks/xchacha",
+        "top_module": "chacha",
+        "mapped_cells": 15496,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_20edeeedd9ab1a170100",
+        "repo_url": "https://github.com/secworks/figaro",
+        "top_module": "figaro",
+        "mapped_cells": 480,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_264b0679bd5706a4ef36",
+        "repo_url": "https://github.com/secworks/sha256",
+        "top_module": "sha256_axi4",
+        "mapped_cells": 11439,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_266a791a9d9cb205bd9c",
+        "repo_url": "https://github.com/secworks/sha512",
+        "top_module": "sha512",
+        "mapped_cells": 24365,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_2c9221d81d3a3af06a9c",
+        "repo_url": "https://github.com/secworks/ca_prng",
+        "top_module": "ca_prng",
+        "mapped_cells": 719,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_2d1d09d69780a4252368",
+        "repo_url": "https://github.com/secworks/siphash",
+        "top_module": "siphash",
+        "mapped_cells": 6237,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      },
+      {
+        "candidate_id": "exp_d_43acb25b502b93ca0736",
+        "repo_url": "https://github.com/secworks/blabla",
+        "top_module": "blabla_core",
+        "mapped_cells": 12998,
+        "technical_qualified": true,
+        "source_evidence": {
+          "license_declared": false,
+          "license_location_ok": true,
+          "license_spdx_declared": null,
+          "license_spdx_observed": "BSD-2-Clause"
+        },
+        "license_identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ]
+      }
+    ]
+  },
+  "license_text_samples": [
+    {
+      "repo_url": "https://github.com/secworks/poly1305",
+      "path": "/data/yangao/exp2_rerun/runs/exp2-v5s-20261114/campaign/method_runs/r2g-expander-gpt.formal_state/expander_corpus/repositories/github/secworks/poly1305/7c950671355467ee9c28909f27a990f4b7fd10ec/source/LICENSE",
+      "sha256": "ea315ad82da93016c8aedfb652140c9aa45ecc3755731f996674760c92a7e8c3",
+      "text": "BSD 2-Clause License\n\nCopyright (c) 2018, Joachim Str\u00f6mbergson\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are met:\n\n* Redistributions of source code must retain the above copyright notice, this\n  list of conditions and the following disclaimer.\n\n* Redistributions in binary form must reproduce the above copyright notice,\n  this list of conditions and the following disclaimer in the documentation\n  and/or other materials provided with the distribution.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\"\nAND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE\nIMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\nDISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE\nFOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL\nDAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR\nSERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER\nCAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,\nOR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE\nOF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n",
+      "bridge_evidence": {
+        "confidence": "HIGH",
+        "identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ],
+        "license_files": [
+          "LICENSE"
+        ],
+        "license_status": "PERMISSIVE_CONFIRMED",
+        "per_file_spdx": {},
+        "provider_license_identifier": "BSD-2-Clause",
+        "readme_license_identifiers": [],
+        "release_policy": "PUBLIC_EXPORT_ALLOWED",
+        "resolution_states": [],
+        "schema": "rtl_license_evidence_v1"
+      }
+    },
+    {
+      "repo_url": "https://github.com/secworks/blake2s",
+      "path": "/data/yangao/exp2_rerun/runs/exp2-v5s-20261114/campaign/method_runs/r2g-expander-gpt.formal_state/expander_corpus/repositories/github/secworks/blake2s/dbecf482a6670fe0872621a8b25bf5b48efd9051/source/LICENSE",
+      "sha256": "6294f64cd772a9bf0f503696182f5629d4e66949bb12cd967a7e288a7ab6bc8e",
+      "text": "BSD 2-Clause License\n\nCopyright (c) 2018, Assured AB\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are met:\n\n* Redistributions of source code must retain the above copyright notice, this\n  list of conditions and the following disclaimer.\n\n* Redistributions in binary form must reproduce the above copyright notice,\n  this list of conditions and the following disclaimer in the documentation\n  and/or other materials provided with the distribution.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\"\nAND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE\nIMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\nDISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE\nFOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL\nDAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR\nSERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER\nCAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,\nOR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE\nOF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n",
+      "bridge_evidence": {
+        "confidence": "HIGH",
+        "identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ],
+        "license_files": [
+          "LICENSE",
+          "src/model/LICENSE"
+        ],
+        "license_status": "PERMISSIVE_CONFIRMED",
+        "per_file_spdx": {},
+        "provider_license_identifier": "BSD-2-Clause",
+        "readme_license_identifiers": [],
+        "release_policy": "PUBLIC_EXPORT_ALLOWED",
+        "resolution_states": [],
+        "schema": "rtl_license_evidence_v1"
+      }
+    },
+    {
+      "repo_url": "https://github.com/secworks/aes",
+      "path": "/data/yangao/exp2_rerun/runs/exp2-v5s-20261114/campaign/method_runs/r2g-expander-gpt.formal_state/expander_corpus/repositories/github/secworks/aes/80dc4718e1dcbbdb4b0dd1bdb393d8f7b98981dc/source/LICENSE",
+      "sha256": "81899e14798bc6a06e02f48959e1825b9e631f0415bccf5b74e589dabd7c7f80",
+      "text": "Copyright (c) 2014, Joachim Str\u00f6mbergson\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without modification,\nare permitted provided that the following conditions are met:\n\n* Redistributions of source code must retain the above copyright notice, this\n  list of conditions and the following disclaimer.\n\n* Redistributions in binary form must reproduce the above copyright notice, this\n  list of conditions and the following disclaimer in the documentation and/or\n  other materials provided with the distribution.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND\nANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED\nWARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\nDISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR\nANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES\n(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;\nLOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON\nANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\nSOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.",
+      "bridge_evidence": {
+        "confidence": "HIGH",
+        "identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ],
+        "license_files": [
+          "LICENSE"
+        ],
+        "license_status": "PERMISSIVE_CONFIRMED",
+        "per_file_spdx": {},
+        "provider_license_identifier": "BSD-2-Clause",
+        "readme_license_identifiers": [],
+        "release_policy": "PUBLIC_EXPORT_ALLOWED",
+        "resolution_states": [],
+        "schema": "rtl_license_evidence_v1"
+      }
+    },
+    {
+      "repo_url": "https://github.com/secworks/sha256",
+      "path": "/data/yangao/exp2_rerun/runs/exp2-v5s-20261114/campaign/method_runs/r2g-expander-gpt.formal_state/expander_corpus/repositories/github/secworks/sha256/837c5cc396f001d18f2c765721c585716eb439ae/source/LICENSE",
+      "sha256": "943866e8c0449b472dfebe4d10f0641240abb37778165eb4e68200ce1180890d",
+      "text": "Copyright (c) 2013, Joachim Str\u00f6mbergson\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without modification,\nare permitted provided that the following conditions are met:\n\n* Redistributions of source code must retain the above copyright notice, this\n  list of conditions and the following disclaimer.\n\n* Redistributions in binary form must reproduce the above copyright notice, this\n  list of conditions and the following disclaimer in the documentation and/or\n  other materials provided with the distribution.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND\nANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED\nWARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\nDISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR\nANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES\n(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;\nLOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON\nANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\nSOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.",
+      "bridge_evidence": {
+        "confidence": "HIGH",
+        "identifiers": [
+          "BSD-2-Clause",
+          "BSD-3-Clause"
+        ],
+        "license_files": [
+          "LICENSE"
+        ],
+        "license_status": "PERMISSIVE_CONFIRMED",
+        "per_file_spdx": {},
+        "provider_license_identifier": "BSD-2-Clause",
+        "readme_license_identifiers": [],
+        "release_policy": "PUBLIC_EXPORT_ALLOWED",
+        "resolution_states": [],
+        "schema": "rtl_license_evidence_v1"
+      }
+    }
+  ]
+}

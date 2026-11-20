@@ -1,0 +1,13 @@
+{
+  "compute_host": "memlab203",
+  "compute_root": "/home/yangao/exp4_harness_20261115_203",
+  "archive_host": "memlab216",
+  "archive_root": "/proj/workarea/yangao/exp4_harness_20261115_203_archive",
+  "local_gpu_used": false,
+  "model_inference": "remote API",
+  "cpu_count_per_arm": 8,
+  "memory_gib_per_arm": 32,
+  "max_workers": 4,
+  "container_runtime": "Bubblewrap 0.6.1; exported pinned OCI filesystem",
+  "archive_validation": "matching source and destination SHA256 before releasing compute payload"
+}

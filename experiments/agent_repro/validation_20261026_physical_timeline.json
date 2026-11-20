@@ -1,0 +1,197 @@
+{
+  "recorded_at": "2026-10-26T09:44:24.022218-07:00",
+  "stages": [
+    "synthesis",
+    "floorplan",
+    "placement",
+    "cts",
+    "route"
+  ],
+  "repair_view": "Only shown when saved repair geometry differs from pre-repair route.",
+  "sources": "Existing synth statistics, stage-specific DEF or read-only ODB export; no EDA flow rerun.",
+  "future_capture": "Agent ORFS producer hook saves each completed physical stage before subsequent work and slimming.",
+  "missing_history": "Truly deleted historical stage files are explicitly unavailable; final route is not substituted.",
+  "tests": {
+    "passed": 150,
+    "log": "/tmp/r2g-timeline-final-tests-20261026.log",
+    "shell_syntax": "passed",
+    "git_diff_check": "passed"
+  },
+  "physical_timeline_browser": {
+    "passed": true,
+    "stages": [
+      "synth",
+      "floorplan",
+      "placement",
+      "cts",
+      "route"
+    ],
+    "distinct_images": 5,
+    "source_odb_stages": [
+      "floorplan",
+      "placement",
+      "cts"
+    ],
+    "mobile_no_overflow": true,
+    "page_errors": [],
+    "eda_flow_rerun": false
+  },
+  "delete_modal_browser": {
+    "passed": true,
+    "checks": [
+      "small_muted_icon_only_delete_button",
+      "desktop_confirmation_centered",
+      "focus_trap_and_focus_restore",
+      "cancel_preserves_files",
+      "escape_preserves_files",
+      "backdrop_cancel_preserves_files",
+      "single_confirmation_single_delete_request",
+      "active_process_stopped_before_cleanup",
+      "active_job_artifacts_removed",
+      "detail_delete_redirect",
+      "mobile_confirmation_centered_above_sidebar",
+      "mobile_cancel_keeps_sidebar_and_data",
+      "session_owned_jobs_cascade",
+      "queried_unrelated_job_and_dataset_preserved",
+      "original_input_preserved",
+      "no_native_dialogs",
+      "no_browser_page_errors"
+    ],
+    "measurements": {
+      "small_delete_button": {
+        "x": 1143,
+        "y": 118,
+        "width": 28,
+        "height": 28
+      },
+      "desktop_dialog": {
+        "x": 496,
+        "y": 352,
+        "width": 448,
+        "height": 296
+      },
+      "desktop_escape_dialog": {
+        "x": 496,
+        "y": 352,
+        "width": 448,
+        "height": 296
+      },
+      "desktop_backdrop_dialog": {
+        "x": 496,
+        "y": 352,
+        "width": 448,
+        "height": 296
+      },
+      "desktop_confirm_dialog": {
+        "x": 496,
+        "y": 352,
+        "width": 448,
+        "height": 296
+      },
+      "mobile_dialog": {
+        "x": 16,
+        "y": 266,
+        "width": 358,
+        "height": 312
+      },
+      "mobile_cascade_dialog": {
+        "x": 16,
+        "y": 266,
+        "width": 358,
+        "height": 312
+      }
+    },
+    "delete_requests": [
+      [
+        "DELETE",
+        "http://127.0.0.1:18773/api/jobs/10260929-427127"
+      ],
+      [
+        "DELETE",
+        "http://127.0.0.1:18773/api/jobs/10260929-8c168c"
+      ],
+      [
+        "DELETE",
+        "http://127.0.0.1:18773/api/sessions/6c2a350f807a"
+      ]
+    ],
+    "stopped_test_pid": 2249687,
+    "fixture": {
+      "home": "/tmp/r2g-delete-browser-modal-20261026",
+      "source": "/tmp/r2g-delete-browser-modal-20261026-input.v",
+      "session": "6c2a350f807a",
+      "owned": "10260929-772566",
+      "unrelated": "10260929-f03ce6",
+      "detail": "10260929-8c168c",
+      "active": "10260929-427127"
+    },
+    "screenshots": [
+      "/tmp/r2g-delete-modal-desktop-20261026.png",
+      "/tmp/r2g-delete-modal-mobile-20261026.png"
+    ],
+    "test_server_stopped": true,
+    "test_server_pids": [
+      2249673
+    ]
+  },
+  "deletion_cleanup_audit": "experiments/agent_repro/validation_20261026_deletion_cleanup.json",
+  "n45_status": "experiments/agent_repro/status_20261026_n45_review.json",
+  "deployment_status_file": "/tmp/r2g_ui_physical_timeline_upgrade_20261026/status.json",
+  "deployment": {
+    "state": "deployed",
+    "at": "2026-10-26T09:44:55.869089-07:00",
+    "old_pid": 2235515,
+    "new_pid": 2261896
+  },
+  "production_browser": {
+    "job": "10260748-58ddeb",
+    "design": "C02511__tiny_tpu_top__tiny_tpu",
+    "checks": [
+      "production_five_physical_stages",
+      "real_odb_previews_render",
+      "five_distinct_images",
+      "production_centered_delete_modal_cancel_no_mutation",
+      "representative_job_packaging_error_cleared"
+    ],
+    "stage_sources": [
+      {
+        "stage": "synth",
+        "source": "backend/RUN_2026-10-26_07-48-42_2095113_79b1/reports_orfs/synth_stat.txt"
+      },
+      {
+        "stage": "floorplan",
+        "source": "backend/RUN_2026-10-26_08-07-50_2176628_0250/results/2_floorplan.odb"
+      },
+      {
+        "stage": "placement",
+        "source": "backend/RUN_2026-10-26_08-07-50_2176628_0250/results/3_place.odb"
+      },
+      {
+        "stage": "cts",
+        "source": "backend/RUN_2026-10-26_08-07-50_2176628_0250/results/4_cts.odb"
+      },
+      {
+        "stage": "route",
+        "source": "backend/RUN_2026-10-26_08-07-50_2176628_0250/results/6_final.def"
+      }
+    ],
+    "page_errors": [],
+    "delete_requests": [],
+    "passed": true
+  },
+  "legacy_alu8": {
+    "job": "10240458-a8f9cd",
+    "available": [
+      "synth",
+      "placement",
+      "route"
+    ],
+    "missing": [
+      "floorplan",
+      "cts"
+    ],
+    "evidence": "backend/SLIMMED records removal of results/objects/final. No DEF/ODB remains in exact ORFS variant. Existing placement DEF and final PNG retained. No EDA rerun."
+  },
+  "frontend_build": "TypeScript and Vite production build passed; index-CCXhhjlT.js / index-C8I0XaB9.css",
+  "isolated_preview_server_stopped": true
+}

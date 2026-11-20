@@ -1,0 +1,49 @@
+{
+  "scope": "same design, same R2G converter source, eight CPU IDs; infrastructure preflight, not formal results",
+  "source_216": "/proj/workarea/yangao/exp4_harness_20261115/smoke/runtime_fixed/preflight",
+  "source_203": "/home/yangao/exp4_harness_20261115_203/smoke/migrated_cpu_preflight_v2/preflight",
+  "source_code_verified_identical": [
+    "runtime/convert_graph.sh",
+    "runtime/def-graph (120 non-pycache files)",
+    "measure.py",
+    "scoring.py",
+    "evaluate.py"
+  ],
+  "rows": [
+    {
+      "platform": "nangate45",
+      "design": "C00833__alarm_clock_top__alarm_clock__nangate45__p2",
+      "wall_216_seconds": 44.186,
+      "wall_203_seconds": 13.52,
+      "speedup": 3.2681952662721896,
+      "cpu_216_seconds": 38.959,
+      "cpu_203_seconds": 12.745,
+      "both_strict_full_pass": true
+    },
+    {
+      "platform": "sky130hd",
+      "design": "C00539__mcpu16mc__digitalcpuzoo__sky130hd__p5",
+      "wall_216_seconds": 45.168,
+      "wall_203_seconds": 13.52,
+      "speedup": 3.340828402366864,
+      "cpu_216_seconds": 42.262,
+      "cpu_203_seconds": 13.47,
+      "both_strict_full_pass": true
+    },
+    {
+      "platform": "gf180",
+      "design": "C02136__fifo__hdl-libraries__gf180__p10",
+      "wall_216_seconds": 58.706,
+      "wall_203_seconds": 19.028,
+      "speedup": 3.085242800084087,
+      "cpu_216_seconds": 56.813,
+      "cpu_203_seconds": 18.722,
+      "both_strict_full_pass": true
+    }
+  ],
+  "limits": "Overall migration benefit, not isolated CPU model benchmark. Scoring has different reference-cache state; model development involves independent API trajectories.",
+  "total_wall_216_seconds": 148.06,
+  "total_wall_203_seconds": 46.068,
+  "overall_speedup": 3.2139446036294177,
+  "wall_reduction_pct": 68.88558692421991
+}

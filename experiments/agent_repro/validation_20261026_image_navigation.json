@@ -1,0 +1,76 @@
+{
+  "recorded_at": "2026-10-26T10:34:51.643460-07:00",
+  "scope": "Frontend lightbox previous/next buttons, keyboard arrows, available-image counter. No other layout or backend changes.",
+  "build": "TypeScript/Vite passed",
+  "browser": {
+    "passed": true,
+    "checks": [
+      "buttons_switch_both_directions",
+      "arrow_keys_switch_both_directions",
+      "title_image_original_link_update",
+      "same_modal_and_focus_preserved",
+      "first_last_disabled_without_wrapping",
+      "boundary_focus_stays_in_modal",
+      "close_restores_original_thumbnail",
+      "missing_stages_skipped",
+      "single_image_disables_both_directions",
+      "no_images_cannot_open_modal",
+      "mobile_navigation_buttons_fit_and_work"
+    ],
+    "page_errors": [],
+    "backend_changed": false,
+    "experiments_rerun": false
+  },
+  "production_browser": {
+    "passed": true,
+    "image_navigation_verified": true,
+    "default_collapsed": true,
+    "overall_progress_preserved": true,
+    "six_stages_one_line": true,
+    "final_run": "RUN_2026-10-26_08-07-50_2176628_0250",
+    "stage_sources": [
+      {
+        "stage": "synth",
+        "source": "backend/RUN_2026-10-26_07-48-56_2101823_21db/reports_orfs/synth_stat.txt",
+        "available": true,
+        "reused_from": "RUN_2026-10-26_07-48-56_2101823_21db"
+      },
+      {
+        "stage": "floorplan",
+        "source": "backend/RUN_2026-10-26_07-48-56_2101823_21db/results/2_floorplan.odb",
+        "available": true,
+        "reused_from": "RUN_2026-10-26_07-48-56_2101823_21db"
+      },
+      {
+        "stage": "placement",
+        "source": "backend/RUN_2026-10-26_07-48-56_2101823_21db/results/3_place.odb",
+        "available": true,
+        "reused_from": "RUN_2026-10-26_07-48-56_2101823_21db"
+      },
+      {
+        "stage": "cts",
+        "source": "backend/RUN_2026-10-26_07-48-56_2101823_21db/results/4_cts.odb",
+        "available": true,
+        "reused_from": "RUN_2026-10-26_07-48-56_2101823_21db"
+      },
+      {
+        "stage": "route",
+        "source": "backend/RUN_2026-10-26_08-07-50_2176628_0250/results/5_route.odb",
+        "available": true,
+        "reused_from": null
+      },
+      {
+        "stage": "final",
+        "source": "backend/RUN_2026-10-26_08-07-50_2176628_0250/results/6_final.def",
+        "available": true,
+        "reused_from": null
+      }
+    ],
+    "final_image_enlarged": true,
+    "page_errors": [],
+    "mutation_requests": []
+  },
+  "service_restarted": false,
+  "experiments_rerun": false,
+  "isolated_preview_server_stopped": true
+}

@@ -1,0 +1,27 @@
+{
+  "verified_at_utc": "2026-11-15T06:55:39.579612+00:00",
+  "destination": "/data1/zhangdy/RTL/test",
+  "platform_counts": {
+    "nangate45": 14,
+    "sky130hd": 8,
+    "gf180": 29
+  },
+  "designs": 51,
+  "original_rtl_hashes_verified": 615,
+  "file_hashes_verified": 2244,
+  "issues": [],
+  "published": true,
+  "host": "192.10.84.203",
+  "excluded_counts": {
+    "existing_learned_recipe_verified_success": 33,
+    "more_than_30000_cells": 20,
+    "known_64GiB_memory_bound": 3
+  },
+  "bytes": 27518805,
+  "acl": {
+    "nangate45": "zhangdy:rwx",
+    "sky130hd": "zhangdy:rwx",
+    "gf180": "zhangdy:rwx"
+  },
+  "original_test_files_preserved": true
+}

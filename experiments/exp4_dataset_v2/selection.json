@@ -1,0 +1,5450 @@
+{
+ "selection": {
+  "gf180": [
+   {
+    "id": "C00001__lcd_timing__sonic-speed-parallelism",
+    "cells": 336,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00049__addsub32__riscv-fpu-interrupt",
+    "cells": 319,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00052__int_holdoff__e_uart",
+    "cells": 329,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00055__wbsmpladc__wbpmic",
+    "cells": 484,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00080__mac__axi-matrix-accelerator",
+    "cells": 751,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00094__wb_master__rv32i-soc",
+    "cells": 444,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00099__avalanche_entropy__avalanche_entropy",
+    "cells": 984,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00168__m6502_alu__6502",
+    "cells": 368,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00236__seven_segment_seconds__vlsi_be_labs",
+    "cells": 550,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00261__pl_reg_ir__riscv-fpu-interrupt",
+    "cells": 406,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00520__buzzer__riscv-fpu-interrupt",
+    "cells": 534,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00539__mcpu16mc__digitalcpuzoo",
+    "cells": 386,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00634__udma_uart_rx__udma_uart",
+    "cells": 309,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00673__fpu_sp_f2i__fpu",
+    "cells": 745,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00721__mult10__ecse_436",
+    "cells": 394,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00741__axi_read_block__qspi-flash-device-controller",
+    "cells": 704,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00754__q15_source_mux_axi__2026_g_periodic-signal-measurement-and-a",
+    "cells": 365,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00833__alarm_clock_top__alarm_clock",
+    "cells": 532,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00885__IO__simple_cpu_in_fpga",
+    "cells": 355,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00887__pm32__librelane",
+    "cells": 548,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00902__gen_uart_ay_31015__apple2efpga",
+    "cells": 425,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00977__FCore__aa",
+    "cells": 463,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00996__tdma_mac__cirradio",
+    "cells": 641,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01042__non_restoring_divider__ignitertl",
+    "cells": 423,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01082__spi_top__spi-master-slave-controller",
+    "cells": 527,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01106__disp_rom__SpinalTetris",
+    "cells": 530,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01114__vga__afck_j1b",
+    "cells": 719,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01141__simpledma__icesugar-z80",
+    "cells": 890,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01225__main__magmathon",
+    "cells": 498,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01252__booth_multiplier__ignitertl",
+    "cells": 366,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01314__uart_to_bytes__misc_hdl_module",
+    "cells": 416,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01401__axi_lite_slave__axi4-dma-uvm-verification-ip",
+    "cells": 990,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01409__barrel_shifter__xcelerium_training",
+    "cells": 618,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01412__cdrs__sky-pll-cdr-test",
+    "cells": 417,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01442__vehicle_diagnostic_top__vehicle_diagnostic_interface",
+    "cells": 403,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01468__signal_generator__fft-ip-core",
+    "cells": 457,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01482__reg_file__digital_system",
+    "cells": 631,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01488__astrarv_ifu__astrarv-32-bit-riscv-processor",
+    "cells": 311,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01497__alu_top__fpga-8bit-alu-verilog-vivado",
+    "cells": 447,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01528__fetch__y86-64-processor",
+    "cells": 727,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01530__gtx_debug_reporter__32-10gbe-open",
+    "cells": 538,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01573__fourbitcounter__ecen-449",
+    "cells": 308,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01594__video_timing_gen__fpga-components",
+    "cells": 320,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01619__adder32__xcelerium_training",
+    "cells": 491,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01665__Segment__simple_cpu_in_fpga",
+    "cells": 612,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01721__top_module__uart-transmitter-receiver-verilog-fpga",
+    "cells": 389,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01751__gen_uart_tr_1602__beeb",
+    "cells": 421,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01756__Synchronous_fifo__synchronous-fifo-using-verilog",
+    "cells": 522,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01773__debug_display__23-fpga-order-book",
+    "cells": 576,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01810__max_subarray_system__coa_project_kadane",
+    "cells": 438,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01834__simple_glitcher__utility-cores",
+    "cells": 793,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01866__uart_top__vlsi-portfolio",
+    "cells": 444,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01883__uart__asyncart",
+    "cells": 688,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01886__rggen_axi4lite_adapter__rggen-verilog-rtl",
+    "cells": 407,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01896__aes_inv_sbox__security_core",
+    "cells": 592,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01970__i2c_master__tinydfu-bootloader",
+    "cells": 445,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01998__jt6295_serial__jt6295",
+    "cells": 865,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02048__alu74181_behavioral__fpga-hdl-portfolio",
+    "cells": 366,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02110__grain128a__grain",
+    "cells": 775,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02114__vga_top__simple_cpu_in_fpga",
+    "cells": 513,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02118__video_timing_ctrl__tangmega-138k-example",
+    "cells": 412,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02122__q3__digital_system_design",
+    "cells": 971,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02126__irq_ctrl__cores",
+    "cells": 309,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02136__fifo__hdl-libraries",
+    "cells": 930,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02137__uart_tx_top__uart-tx",
+    "cells": 661,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02152__uart_fifo_top__uart-with-asynchronous-fifo-design-syste",
+    "cells": 905,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02184__top__7seg-4_verilog",
+    "cells": 590,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02186__trig__easyoscilloscope",
+    "cells": 415,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02193__smart_home_soc__smarthome-soc-rtl-to-asic",
+    "cells": 359,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02241__multi_kernel_conv__edge-ai-cnn-inference-engine-on-fpga",
+    "cells": 651,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02257__blinkspeed__completework_of_fpga_xilinx_2nd_edition",
+    "cells": 427,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02345__top__verilog-mcp-server",
+    "cells": 513,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02354__mojo_top__i2c-eeprom",
+    "cells": 821,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02382__uart_top__fsm-based-parameterized-uart-transceiver",
+    "cells": 358,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02406__rand_gen__openofdm",
+    "cells": 586,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02506__unsigned_multiplier_12x12_async__fpga-code",
+    "cells": 557,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02549__impl_top__uart",
+    "cells": 506,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02557__uart__uart",
+    "cells": 355,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02560__uart_top__uart-tranreceiver-verilog",
+    "cells": 788,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02564__aes_sbox__siliconcompiler",
+    "cells": 553,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02577__i2s_recv__eko",
+    "cells": 375,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02605__alu_8bit__verilog-rtl-designs",
+    "cells": 468,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02606__top__i2s-transceiver-zynq-7000-soc",
+    "cells": 709,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02634__peripheral_top__soc_io_expander",
+    "cells": 616,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02672__pc__mips-cpu",
+    "cells": 843,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02697__lfpga_mac__libfpga-myhdl",
+    "cells": 759,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02705__scandoubler_sdram__mist-modules",
+    "cells": 819,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02746__top__icezum",
+    "cells": 986,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02765__cam__implementation-of-tightly-coupled-data-f",
+    "cells": 776,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02766__TOP_RX__uart",
+    "cells": 307,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02801__SPI_TopModule__Serial-Communication-Protocols",
+    "cells": 356,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02813__uart_core__uart",
+    "cells": 328,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02827__uart__verilog-uart",
+    "cells": 828,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02829__uart_top__fpga-components",
+    "cells": 378,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02872__top__magma",
+    "cells": 416,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02898__heterocore_top__heterocore-rtl",
+    "cells": 714,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02908__omsp_dbg_i2c__SoC-Implementation-of-OpenMSP430-Microco",
+    "cells": 339,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02926__uart__fpga-uart-transceiver",
+    "cells": 396,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02974__vga2__ego1-vga",
+    "cells": 467,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03033__top_v1_uart__fpga-imu-signal-pipeline",
+    "cells": 312,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03041__UART_TOP__uart_transceiver",
+    "cells": 310,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03070__neopixels__hacksterio",
+    "cells": 990,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03109__top__digital-voting-machine",
+    "cells": 421,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03131__ov7670_controller__live-concert-vfx",
+    "cells": 702,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03148__extension__vader",
+    "cells": 705,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03253__Timer__riskow",
+    "cells": 559,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03255__arp_tx__ethernet-core",
+    "cells": 988,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03267__wishbone_configuratorinator_10__config_team",
+    "cells": 844,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03300__alu__parameterized-alu-verilog",
+    "cells": 469,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03324__nf_seven_seg_static__nanofox",
+    "cells": 536,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03362__demo_top__trellisboard",
+    "cells": 326,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03393__la_asyncfifo__lambdalib",
+    "cells": 508,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03412__top__i2s-transceiver-zynq-7000-soc",
+    "cells": 689,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03435__clut_simple__projf-explore",
+    "cells": 949,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03443__uart_top__uart-rtl",
+    "cells": 536,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03469__txuart__qc-tee",
+    "cells": 853,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03472__Uart_Tx__axispi_base",
+    "cells": 568,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03480__i2c_master__fpga-components",
+    "cells": 308,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03488__seq_rgf__uart-tx",
+    "cells": 627,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03501__proc__simple-processor-systemverilog",
+    "cells": 685,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03544__zkf_from_int__zkf",
+    "cells": 808,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03578__MAC_UNIT__vlsi-design-laboratory-hdl",
+    "cells": 304,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03676__uart_top__uart-transmitter-and-receiver-in-vhdl",
+    "cells": 859,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03723__fifo__ustc-cod-lab-2022",
+    "cells": 686,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03724__async_fifo__bits",
+    "cells": 673,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03763__unsigned_multiplier_16x16_async__fpga-code",
+    "cells": 988,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03779__Bridge_top__apb-ahb-slave-interface",
+    "cells": 518,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03785__fp_multiplier__bigspicy",
+    "cells": 372,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03799__reaction_timer__vivado-git",
+    "cells": 649,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03808__top__rtl_labs",
+    "cells": 634,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03829__kronos_counter64__kronos",
+    "cells": 698,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03850__multiplier_registered__xcelerium_training",
+    "cells": 511,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03855__DigitalPort__riskow",
+    "cells": 316,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03874__apb_slave__apb-slave-peripheral",
+    "cells": 956,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03915__secnotas__apio-examples",
+    "cells": 715,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03950__ipi__ompic",
+    "cells": 926,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00022__audio_playout__1bitfm",
+    "cells": 2068,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00028__IDU__tiny_soc",
+    "cells": 8135,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00030__async_fifo__sonic-speed-parallelism",
+    "cells": 2608,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00097__gemmm2s_v2__gemmm2s",
+    "cells": 1835,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00155__Pipelined_Processor_Enc__cryptographic_accelerator",
+    "cells": 2139,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00172__wb_dma__rv32i-soc",
+    "cells": 2041,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00210__Image_Generator__jpeg-hardware-decoder",
+    "cells": 1414,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00212__uart__icarium",
+    "cells": 1037,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00233__Address_Buffer__tiny_soc",
+    "cells": 2929,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00239__fifo_mem__async-fifo-cdc",
+    "cells": 2488,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00260__reg_file__rv32i-soc",
+    "cells": 7882,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00272__spec_sync__sonic-speed-parallelism",
+    "cells": 8116,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00278__impl_top__uart-s.bus-decoder-fpga",
+    "cells": 1315,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00312__Histogram_Generator__jpeg-hardware-decoder",
+    "cells": 1650,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00366__csr_unit_pipeline_adapter__riscv-fpu-interrupt",
+    "cells": 1920,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00393__gemmm2s_wrapper__gemmm2s",
+    "cells": 2880,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00396__CRC32_D40__ethernetmac",
+    "cells": 1724,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00402__wallace_24x24__riscv-fpu-interrupt",
+    "cells": 1382,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00404__pl_stage_exe__riscv-fpu-interrupt",
+    "cells": 2231,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00418__CRC32_D24__ethernetmac",
+    "cells": 1049,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00422__wallace_24x26__riscv-fpu-interrupt",
+    "cells": 1486,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00423__entropy__coretest_bp_entropy",
+    "cells": 1142,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00424__CRC32_D56__ethernetmac",
+    "cells": 2730,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00426__fp_multiplier_3_stage_pipeline__fpu32-ieee754-lite",
+    "cells": 2278,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00430__npu_periph__riscv-npu-soc",
+    "cells": 3391,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00444__Main_Crypt__cryptographic_accelerator",
+    "cells": 4009,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00452__wallace_24x28__riscv-fpu-interrupt",
+    "cells": 1590,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00459__async_fifo__async-fifo-cdc",
+    "cells": 2154,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00460__Table_Generator__jpeg-hardware-decoder",
+    "cells": 4622,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00467__CRC32_D48__ethernetmac",
+    "cells": 2196,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00489__Pipelined_Processor_Dec__cryptographic_accelerator",
+    "cells": 2143,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00496__fm_frequency_word__1bitfm",
+    "cells": 2773,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00510__cpugpio__riscv-fpu-interrupt",
+    "cells": 1678,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00532__demo_src__sonic-speed-parallelism",
+    "cells": 2395,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00567__fpu_sp_i2f__fpu",
+    "cells": 1004,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00671__register_file_1r_1w__scm",
+    "cells": 9147,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00685__axi_protocol_converter_v2_1_b2s_r_channel__aeshw",
+    "cells": 6184,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00702__wallace_24x28_product__riscv-fpu-interrupt",
+    "cells": 2150,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00715__fifo_rx__qspi-flash-device-controller",
+    "cells": 3662,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00729__wallace_26x26__riscv-fpu-interrupt",
+    "cells": 1598,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00742__wallace_26x26_product__riscv-fpu-interrupt",
+    "cells": 2159,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00770__wallace_26x24_product__riscv-fpu-interrupt",
+    "cells": 1989,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00778__register_file_1w_64b_1r_32b__scm",
+    "cells": 9184,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00805__eth_rx_gateway_core__ethernet-rx-gateway-asic",
+    "cells": 1114,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00814__register_file_1w_multi_port_read__scm",
+    "cells": 6902,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00841__array_mul__rtl2gds-multiplier-architectures",
+    "cells": 2271,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00858__top_fifo_fpga__spartan6-synchronous-fifo",
+    "cells": 1175,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00864__top_fifo__spartan6-synchronous-fifo",
+    "cells": 1357,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00878__plic__kianv-rv32-linuxcore",
+    "cells": 1473,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00924__mdu_top__mdu",
+    "cells": 6449,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00927__picorv32_pcpi_div__apis_anatolia",
+    "cells": 2464,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00945__key_sel3__rdf-2020",
+    "cells": 2257,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00974__j4__swapforth",
+    "cells": 5860,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00997__sync_fifo__nb64",
+    "cells": 1016,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01011__regfile__lighter",
+    "cells": 7063,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01133__piece_draw_engine__SpinalTetris",
+    "cells": 1313,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01139__openrv64_icx_protocol_wrapper_nh__openrv64",
+    "cells": 2676,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01216__asynch_fifo__asynchronous-fifo---rtl",
+    "cells": 2090,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01229__top__nexys-a7-adt7420-temperature-sensor",
+    "cells": 1398,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01243__sync_fifo__fifo-design-and-verification",
+    "cells": 1028,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01267__alu__parameterized-32-bit-arithmetic-logic-un",
+    "cells": 2024,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01282__rv_io_gpio__vroom",
+    "cells": 1997,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01312__freq_multi_count__common-hdl",
+    "cells": 1432,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01333__async_fifo__fifo",
+    "cells": 1017,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01399__picosoc_regs__wb_hyperram",
+    "cells": 6766,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01414__matrix_mul_top__mac-based-matrix-multiplication-rtl",
+    "cells": 1726,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01471__dsp_mult__verilog-dsp",
+    "cells": 1536,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01494__picorv32_pcpi_div__pano_hello_g1",
+    "cells": 2490,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01535__async_fifo__asynchronous-fifo",
+    "cells": 2008,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01581__amultp2_32x32__miaow",
+    "cells": 4994,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01586__split__fpga-sdrlib",
+    "cells": 1493,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01595__uart_echo__uart_echo",
+    "cells": 1308,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01596__apb_top__apb-protocol-design-and-verification",
+    "cells": 3572,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01622__Unsigned_Array_Multiplier_16_Bit__verilog_codes",
+    "cells": 1025,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01647__cordic__cordic-sincos",
+    "cells": 7591,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01663__wrapper_full_hash_v1__aes-sbox-hash-core",
+    "cells": 2160,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01740__umi2apb__umi",
+    "cells": 1025,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01862__sync_fifo__sync-fifo-verilog",
+    "cells": 1129,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01943__video_to_axis_v1_0__xlink_zynq_isp",
+    "cells": 1268,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01999__rvfi_wrapper__level-v",
+    "cells": 1070,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02046__jt49_bus__jt49",
+    "cells": 1693,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02087__mac_datapath__mac-based-matrix-multiplication-rtl",
+    "cells": 1148,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02099__image_capture_manager__2dimageprocessing",
+    "cells": 1005,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02143__phy__pcie-phy",
+    "cells": 1077,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02179__jts16_trackball__jts16",
+    "cells": 1290,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02209__ascon_round__asconcan",
+    "cells": 4530,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02220__OFDM_Controller_v0_1__ip_cores",
+    "cells": 6159,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02249__register_file__ustc-cod-lab-2022",
+    "cells": 6766,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02258__fetch__riscvy",
+    "cells": 1592,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02272__mem_wrapper__hrm-cpu",
+    "cells": 9561,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02326__wishbone_master_axis__hacksterio",
+    "cells": 1055,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02355__axi_crc_top__axi-lite-controlled-crc-accelerator",
+    "cells": 1760,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02356__spi_lite__cores",
+    "cells": 1193,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02366__f1_reaction_timer__f1-reaction-timer-on-spartan7-fpga",
+    "cells": 1881,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02384__holoso_imuls__holoso",
+    "cells": 6530,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02395__TOP__kf8253",
+    "cells": 3110,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02428__main_stream_processing__oric_mist_48k",
+    "cells": 1134,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02445__ps2keyboard__minimig_ecs",
+    "cells": 1115,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02481__agr_fxp_mult__agr-fpga-ip-library",
+    "cells": 1016,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02583__intf_v1_0__verilog-scratch",
+    "cells": 1269,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02612__soc_arb__fpgamp",
+    "cells": 4425,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02613__gtx_debug_reporter__38-fpga-order-book-10gbe",
+    "cells": 7262,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02620__sine_gen__vader",
+    "cells": 1906,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02656__fifo__uart_echo",
+    "cells": 1399,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02662__axis_to_video_v1_0__xlink_zynq_isp",
+    "cells": 1342,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02666__filter__e14pathtoprogrammableiii",
+    "cells": 1230,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02674__alu32__verilog",
+    "cells": 2683,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02682__bram_sdp__riscv-pipelined",
+    "cells": 9215,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02754__midside_axis_wrapper__mid-side-transform-module-fpga",
+    "cells": 1584,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02849__myadd_myadd__finn",
+    "cells": 1125,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02883__prim_shifter_64bit__final-capstone",
+    "cells": 1284,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02961__jtopl_reg__jtopl",
+    "cells": 2463,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02969__mkQF100SPIFlashEmulator__qf100",
+    "cells": 1819,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02999__datapath__16bit-alu-datapath",
+    "cells": 1793,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03008__vl53l0x_driver__pong-chip",
+    "cells": 1217,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03029__cache_top__direct-mapped-cache-controller",
+    "cells": 8780,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03090__axi4_cdc_reg_file__sv-axi4-lite-cdc-design",
+    "cells": 3008,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03105__lru__risc-v-vector",
+    "cells": 2083,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03108__urv_divide__urv-core",
+    "cells": 1641,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03149__global_buffer__tpu_systolic_array_hw_accelerator",
+    "cells": 9269,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03155__register_bank__montgomery_modular_engine",
+    "cells": 2735,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03165__rv_io_timer__vroom",
+    "cells": 1599,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03168__tt_um_riyanlord2026_dev_ternary_158__ternary-158-asic",
+    "cells": 2996,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03225__axi4_lite_slave__ARM_AMBA_Design",
+    "cells": 2328,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03263__axi4_lite__axi4-lite-slave-verilog",
+    "cells": 1071,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03294__mult_pipe4_en__verilog",
+    "cells": 5846,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03315__mz__systemverilog_playground",
+    "cells": 9412,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03319__football_scoreboard_top__football-scoreboard-fpga",
+    "cells": 1085,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03368__shake256_pad_block__keccak-mlkem",
+    "cells": 3870,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03377__glb6551__c16nano",
+    "cells": 2078,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03464__prim_multiplier_32x32_pipelined__final-capstone",
+    "cells": 4452,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03474__prim_multiplier_32x32__final-capstone",
+    "cells": 2495,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03483__dbg_bridge__fpgamp",
+    "cells": 2647,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03498__reg_row__riscv-inregistercpu",
+    "cells": 1093,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03510__dsp_iq_mult__verilog-dsp",
+    "cells": 3067,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03520__trencadis_register_file__trencadis-rtl",
+    "cells": 6650,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03535__serv_rf_top__fabulous_fabric",
+    "cells": 6397,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03564__tensorwright_activation_buffer__tensorwright_verify",
+    "cells": 2785,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03629__apb_ram__APB-Peripheral-Wrappers---Verilog-RTL-De",
+    "cells": 4772,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03631__acorn_prng__wrapped_acorn_prng",
+    "cells": 3049,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03637__rv32i_gshare__riscv-pipelined-branch_prediction",
+    "cells": 3941,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03648__PlicVerilog__iob-plic",
+    "cells": 2347,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03663__spirom__core_spiflash",
+    "cells": 2084,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03819__spimemio__pano_hello_g1",
+    "cells": 1327,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03844__sirv_gnrl_ram__tang_e203_mini",
+    "cells": 4593,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03857__rv_decode__riscv",
+    "cells": 7052,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03941__uart2wb__no2misc",
+    "cells": 1004,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03948__top__vhdl",
+    "cells": 1489,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03987__axis_multi_master__hdl-axi-common",
+    "cells": 1480,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03995__Main_Crypt__cryptographic_accelerator",
+    "cells": 9665,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00271__register_file_1r_1w_all__scm",
+    "cells": 14622,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00471__systolic_array__axi4-systolic-array-accelerator",
+    "cells": 12922,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00566__prince_core__prince",
+    "cells": 10901,
+    "stratum": "10k-30k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00570__jpeg_idct_transpose__core_jpeg",
+    "cells": 27609,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00759__register_file_2r_1w_asymm__scm",
+    "cells": 10049,
+    "stratum": "10k-30k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00773__register_file_1w_64b_multi_port_read_32b__scm",
+    "cells": 23122,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00886__axis_cobs_encode__verilog-axis",
+    "cells": 26257,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01632__dm__mips-cpu",
+    "cells": 18825,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01653__dual_ram__verilog-rtl-projects",
+    "cells": 11134,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02146__rv_custom_ascon_if__nasa-riscv-crypto-mvp",
+    "cells": 16352,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02877__a_axi_write_broadcastor_1_to_3__tapa",
+    "cells": 20654,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03137__ultrasonicPWMgenerator_v1_0__fpga",
+    "cells": 16703,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03397__a_axi_write_broadcastor_1_to_4__tapa",
+    "cells": 28142,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03605__FIFO__minimal-network-switch-verilog-implement",
+    "cells": 11747,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   }
+  ],
+  "nangate45": [
+   {
+    "id": "C00001__lcd_timing__sonic-speed-parallelism",
+    "cells": 405,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00049__addsub32__riscv-fpu-interrupt",
+    "cells": 337,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00052__int_holdoff__e_uart",
+    "cells": 398,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00055__wbsmpladc__wbpmic",
+    "cells": 664,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00080__mac__axi-matrix-accelerator",
+    "cells": 898,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00088__mcpu16__digitalcpuzoo",
+    "cells": 508,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00094__wb_master__rv32i-soc",
+    "cells": 507,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00168__m6502_alu__6502",
+    "cells": 393,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00236__seven_segment_seconds__vlsi_be_labs",
+    "cells": 791,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00261__pl_reg_ir__riscv-fpu-interrupt",
+    "cells": 406,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00336__cla_32__riscv-fpu-interrupt",
+    "cells": 323,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00418__CRC32_D24__ethernetmac",
+    "cells": 952,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00520__buzzer__riscv-fpu-interrupt",
+    "cells": 553,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00539__mcpu16mc__digitalcpuzoo",
+    "cells": 454,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00603__sync_fifo__ethernet-rx-gateway-asic",
+    "cells": 999,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00634__udma_uart_rx__udma_uart",
+    "cells": 358,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00673__fpu_sp_f2i__fpu",
+    "cells": 974,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00721__mult10__ecse_436",
+    "cells": 533,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00741__axi_read_block__qspi-flash-device-controller",
+    "cells": 866,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00754__q15_source_mux_axi__2026_g_periodic-signal-measurement-and-a",
+    "cells": 443,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00767__apb_master__qspi-flash-device-controller",
+    "cells": 354,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00833__alarm_clock_top__alarm_clock",
+    "cells": 648,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00885__IO__simple_cpu_in_fpga",
+    "cells": 368,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00887__pm32__librelane",
+    "cells": 604,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00977__FCore__aa",
+    "cells": 478,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00996__tdma_mac__cirradio",
+    "cells": 751,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01042__non_restoring_divider__ignitertl",
+    "cells": 496,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01082__spi_top__spi-master-slave-controller",
+    "cells": 583,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01096__spdif__cores",
+    "cells": 327,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01106__disp_rom__SpinalTetris",
+    "cells": 551,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01114__vga__afck_j1b",
+    "cells": 804,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01160__gen_uart_mos_6551__mistery",
+    "cells": 819,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01225__main__magmathon",
+    "cells": 672,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01252__booth_multiplier__ignitertl",
+    "cells": 406,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01409__barrel_shifter__xcelerium_training",
+    "cells": 618,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01412__cdrs__sky-pll-cdr-test",
+    "cells": 447,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01442__vehicle_diagnostic_top__vehicle_diagnostic_interface",
+    "cells": 445,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01468__signal_generator__fft-ip-core",
+    "cells": 532,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01482__reg_file__digital_system",
+    "cells": 667,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01488__astrarv_ifu__astrarv-32-bit-riscv-processor",
+    "cells": 321,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01497__alu_top__fpga-8bit-alu-verilog-vivado",
+    "cells": 480,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01528__fetch__y86-64-processor",
+    "cells": 762,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01530__gtx_debug_reporter__32-10gbe-open",
+    "cells": 767,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01573__fourbitcounter__ecen-449",
+    "cells": 336,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01594__video_timing_gen__fpga-components",
+    "cells": 334,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01599__gcd__hammer",
+    "cells": 536,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01619__adder32__xcelerium_training",
+    "cells": 538,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01665__Segment__simple_cpu_in_fpga",
+    "cells": 687,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01721__top_module__uart-transmitter-receiver-verilog-fpga",
+    "cells": 400,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01751__gen_uart_tr_1602__beeb",
+    "cells": 474,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01756__Synchronous_fifo__synchronous-fifo-using-verilog",
+    "cells": 539,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01773__debug_display__23-fpga-order-book",
+    "cells": 660,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01810__max_subarray_system__coa_project_kadane",
+    "cells": 504,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01834__simple_glitcher__utility-cores",
+    "cells": 847,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01866__uart_top__vlsi-portfolio",
+    "cells": 455,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01886__rggen_axi4lite_adapter__rggen-verilog-rtl",
+    "cells": 436,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01896__aes_inv_sbox__security_core",
+    "cells": 605,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01970__i2c_master__tinydfu-bootloader",
+    "cells": 462,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01998__jt6295_serial__jt6295",
+    "cells": 964,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02004__audio_and_video_config__cchw",
+    "cells": 637,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02048__alu74181_behavioral__fpga-hdl-portfolio",
+    "cells": 387,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02095__Top__arq-comp",
+    "cells": 406,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02110__grain128a__grain",
+    "cells": 820,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02114__vga_top__simple_cpu_in_fpga",
+    "cells": 602,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02118__video_timing_ctrl__tangmega-138k-example",
+    "cells": 532,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02126__irq_ctrl__cores",
+    "cells": 303,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02136__fifo__hdl-libraries",
+    "cells": 956,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02137__uart_tx_top__uart-tx",
+    "cells": 820,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02152__uart_fifo_top__uart-with-asynchronous-fifo-design-syste",
+    "cells": 911,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02184__top__7seg-4_verilog",
+    "cells": 650,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02186__trig__easyoscilloscope",
+    "cells": 466,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02193__smart_home_soc__smarthome-soc-rtl-to-asic",
+    "cells": 373,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02231__agr_fxp_accumulator__agr-fpga-ip-library",
+    "cells": 822,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02241__multi_kernel_conv__edge-ai-cnn-inference-engine-on-fpga",
+    "cells": 761,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02254__crc_32__fpga_extensionisa",
+    "cells": 827,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02257__blinkspeed__completework_of_fpga_xilinx_2nd_edition",
+    "cells": 437,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02345__top__verilog-mcp-server",
+    "cells": 561,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02367__shift_reg__CAN-Bus-Controller",
+    "cells": 320,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02382__uart_top__fsm-based-parameterized-uart-transceiver",
+    "cells": 593,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02392__DRUMk_M_N_s__drum",
+    "cells": 762,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02399__vga3__ego1-vga",
+    "cells": 444,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02406__rand_gen__openofdm",
+    "cells": 655,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02506__unsigned_multiplier_12x12_async__fpga-code",
+    "cells": 716,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02549__impl_top__uart",
+    "cells": 527,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02557__uart__uart",
+    "cells": 413,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02560__uart_top__uart-tranreceiver-verilog",
+    "cells": 852,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02564__aes_sbox__siliconcompiler",
+    "cells": 593,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02577__i2s_recv__eko",
+    "cells": 379,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02590__alu_8bit__riscv-alu8-openlane",
+    "cells": 426,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02605__alu_8bit__verilog-rtl-designs",
+    "cells": 493,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02606__top__i2s-transceiver-zynq-7000-soc",
+    "cells": 712,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02634__peripheral_top__soc_io_expander",
+    "cells": 655,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02672__pc__mips-cpu",
+    "cells": 902,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02679__sbox_ne_S__caravel_mpw5_prga",
+    "cells": 324,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02697__lfpga_mac__libfpga-myhdl",
+    "cells": 905,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02765__cam__implementation-of-tightly-coupled-data-f",
+    "cells": 861,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02766__TOP_RX__uart",
+    "cells": 303,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02801__SPI_TopModule__Serial-Communication-Protocols",
+    "cells": 351,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02813__uart_core__uart",
+    "cells": 392,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02829__uart_top__fpga-components",
+    "cells": 399,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02872__top__magma",
+    "cells": 488,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02898__heterocore_top__heterocore-rtl",
+    "cells": 760,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02908__omsp_dbg_i2c__SoC-Implementation-of-OpenMSP430-Microco",
+    "cells": 344,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02926__uart__fpga-uart-transceiver",
+    "cells": 423,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02974__vga2__ego1-vga",
+    "cells": 552,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03033__top_v1_uart__fpga-imu-signal-pipeline",
+    "cells": 444,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03041__UART_TOP__uart_transceiver",
+    "cells": 406,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03109__top__digital-voting-machine",
+    "cells": 464,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03131__ov7670_controller__live-concert-vfx",
+    "cells": 732,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03253__Timer__riskow",
+    "cells": 662,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03300__alu__parameterized-alu-verilog",
+    "cells": 490,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03324__nf_seven_seg_static__nanofox",
+    "cells": 473,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03362__demo_top__trellisboard",
+    "cells": 364,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03393__la_asyncfifo__lambdalib",
+    "cells": 588,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03412__top__i2s-transceiver-zynq-7000-soc",
+    "cells": 894,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03443__uart_top__uart-rtl",
+    "cells": 598,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03480__i2c_master__fpga-components",
+    "cells": 324,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03488__seq_rgf__uart-tx",
+    "cells": 860,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03493__multiply_v1_0__ecen-449",
+    "cells": 769,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03501__proc__simple-processor-systemverilog",
+    "cells": 780,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03540__sar_adc_fpga_demo_top__fpga-8bit-sar-adc-controller",
+    "cells": 819,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03544__zkf_from_int__zkf",
+    "cells": 846,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03578__MAC_UNIT__vlsi-design-laboratory-hdl",
+    "cells": 411,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03615__blinkpat__completework_of_fpga_xilinx_2nd_edition",
+    "cells": 453,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03676__uart_top__uart-transmitter-and-receiver-in-vhdl",
+    "cells": 942,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03705__rs232__pipelined_cpu",
+    "cells": 448,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03724__async_fifo__bits",
+    "cells": 737,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03728__testeI2C__verilog-space-invaders",
+    "cells": 415,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03779__Bridge_top__apb-ahb-slave-interface",
+    "cells": 703,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03785__fp_multiplier__bigspicy",
+    "cells": 466,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03799__reaction_timer__vivado-git",
+    "cells": 724,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03808__top__rtl_labs",
+    "cells": 723,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03829__kronos_counter64__kronos",
+    "cells": 784,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03850__multiplier_registered__xcelerium_training",
+    "cells": 689,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03855__DigitalPort__riskow",
+    "cells": 439,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03874__apb_slave__apb-slave-peripheral",
+    "cells": 889,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00022__audio_playout__1bitfm",
+    "cells": 2353,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00030__async_fifo__sonic-speed-parallelism",
+    "cells": 2853,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00069__usb_cdc__ef_usb_cdc",
+    "cells": 3165,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00097__gemmm2s_v2__gemmm2s",
+    "cells": 1990,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00099__avalanche_entropy__avalanche_entropy",
+    "cells": 1104,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00155__Pipelined_Processor_Enc__cryptographic_accelerator",
+    "cells": 2380,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00172__wb_dma__rv32i-soc",
+    "cells": 2420,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00212__uart__icarium",
+    "cells": 1788,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00233__Address_Buffer__tiny_soc",
+    "cells": 3674,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00239__fifo_mem__async-fifo-cdc",
+    "cells": 3230,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00260__reg_file__rv32i-soc",
+    "cells": 8536,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00278__impl_top__uart-s.bus-decoder-fpga",
+    "cells": 1929,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00366__csr_unit_pipeline_adapter__riscv-fpu-interrupt",
+    "cells": 1921,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00389__spectrum__sonic-speed-parallelism",
+    "cells": 3826,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00393__gemmm2s_wrapper__gemmm2s",
+    "cells": 3032,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00396__CRC32_D40__ethernetmac",
+    "cells": 1458,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00402__wallace_24x24__riscv-fpu-interrupt",
+    "cells": 2006,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00404__pl_stage_exe__riscv-fpu-interrupt",
+    "cells": 2459,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00406__fdiv_newton__riscv-fpu-interrupt",
+    "cells": 9773,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00422__wallace_24x26__riscv-fpu-interrupt",
+    "cells": 2160,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00423__entropy__coretest_bp_entropy",
+    "cells": 1186,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00424__CRC32_D56__ethernetmac",
+    "cells": 2404,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00426__fp_multiplier_3_stage_pipeline__fpu32-ieee754-lite",
+    "cells": 2941,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00430__npu_periph__riscv-npu-soc",
+    "cells": 4117,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00444__Main_Crypt__cryptographic_accelerator",
+    "cells": 4196,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00452__wallace_24x28__riscv-fpu-interrupt",
+    "cells": 2314,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00459__async_fifo__async-fifo-cdc",
+    "cells": 2425,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00467__CRC32_D48__ethernetmac",
+    "cells": 1997,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00489__Pipelined_Processor_Dec__cryptographic_accelerator",
+    "cells": 2424,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00496__fm_frequency_word__1bitfm",
+    "cells": 7878,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00510__cpugpio__riscv-fpu-interrupt",
+    "cells": 2064,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00511__fp_multiplier_2_stage_pipeline__fpu32-ieee754-lite",
+    "cells": 2867,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00532__demo_src__sonic-speed-parallelism",
+    "cells": 2285,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00562__jpeg_mcu_proc__core_jpeg",
+    "cells": 2457,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00567__fpu_sp_i2f__fpu",
+    "cells": 1323,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00622__fpu_sp_add__fpu",
+    "cells": 3517,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00626__aes_decipher_block__aes",
+    "cells": 7103,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00685__axi_protocol_converter_v2_1_b2s_r_channel__aeshw",
+    "cells": 7814,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00702__wallace_24x28_product__riscv-fpu-interrupt",
+    "cells": 2999,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00729__wallace_26x26__riscv-fpu-interrupt",
+    "cells": 2326,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00742__wallace_26x26_product__riscv-fpu-interrupt",
+    "cells": 3011,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00770__wallace_26x24_product__riscv-fpu-interrupt",
+    "cells": 2798,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00798__fpu_dp_div__fpu",
+    "cells": 7293,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00805__eth_rx_gateway_core__ethernet-rx-gateway-asic",
+    "cells": 1144,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00817__tt_um_ja_achtung_1x1__ja-achtung-compact",
+    "cells": 1984,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00858__top_fifo_fpga__spartan6-synchronous-fifo",
+    "cells": 1322,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00878__plic__kianv-rv32-linuxcore",
+    "cells": 1694,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00924__mdu_top__mdu",
+    "cells": 8292,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00927__picorv32_pcpi_div__apis_anatolia",
+    "cells": 2714,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00945__key_sel3__rdf-2020",
+    "cells": 3031,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00974__j4__swapforth",
+    "cells": 6251,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00981__jt49__jt49",
+    "cells": 1941,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00995__amxmit__sdr",
+    "cells": 8757,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00997__sync_fifo__nb64",
+    "cells": 1069,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01001__tt_um_verilog_meetup_template_project_TODO__ttsky-verilog-template-for-verilog-meetu",
+    "cells": 3087,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01037__axis_gain_wrapper__audio-gain-module-fpga",
+    "cells": 3509,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01122__jt2413__jtopl",
+    "cells": 9905,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01133__piece_draw_engine__SpinalTetris",
+    "cells": 1540,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01141__simpledma__icesugar-z80",
+    "cells": 1136,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01216__asynch_fifo__asynchronous-fifo---rtl",
+    "cells": 2011,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01229__top__nexys-a7-adt7420-temperature-sensor",
+    "cells": 1413,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01243__sync_fifo__fifo-design-and-verification",
+    "cells": 1060,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01253__bias_update__pm25-adaptive-bias",
+    "cells": 1534,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01267__alu__parameterized-32-bit-arithmetic-logic-un",
+    "cells": 2119,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01282__rv_io_gpio__vroom",
+    "cells": 2250,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01301__uartus__fpgaignite-2023-hackaton-uart",
+    "cells": 1296,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01312__freq_multi_count__common-hdl",
+    "cells": 1761,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01401__axi_lite_slave__axi4-dma-uvm-verification-ip",
+    "cells": 1067,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01414__matrix_mul_top__mac-based-matrix-multiplication-rtl",
+    "cells": 1770,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01471__dsp_mult__verilog-dsp",
+    "cells": 1907,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01494__picorv32_pcpi_div__pano_hello_g1",
+    "cells": 2685,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01581__amultp2_32x32__miaow",
+    "cells": 5699,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01586__split__fpga-sdrlib",
+    "cells": 1719,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01595__uart_echo__uart_echo",
+    "cells": 1516,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01622__Unsigned_Array_Multiplier_16_Bit__verilog_codes",
+    "cells": 1348,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01647__cordic__cordic-sincos",
+    "cells": 8741,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01663__wrapper_full_hash_v1__aes-sbox-hash-core",
+    "cells": 2338,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01789__top_level__whac-a-mole",
+    "cells": 1424,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01943__video_to_axis_v1_0__xlink_zynq_isp",
+    "cells": 1413,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01999__rvfi_wrapper__level-v",
+    "cells": 1120,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02046__jt49_bus__jt49",
+    "cells": 2016,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02079__fft_top__16-point-fft-asic-flow-design",
+    "cells": 4087,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02087__mac_datapath__mac-based-matrix-multiplication-rtl",
+    "cells": 1452,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02099__image_capture_manager__2dimageprocessing",
+    "cells": 1086,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02120__jt7759__prjtrellis",
+    "cells": 2175,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02122__q3__digital_system_design",
+    "cells": 1092,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02179__jts16_trackball__jts16",
+    "cells": 1579,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02258__fetch__riscvy",
+    "cells": 1738,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02326__wishbone_master_axis__hacksterio",
+    "cells": 1142,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02338__pm25_uart_demo_top__pm25-adaptive-bias",
+    "cells": 3259,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02354__mojo_top__i2c-eeprom",
+    "cells": 1126,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02355__axi_crc_top__axi-lite-controlled-crc-accelerator",
+    "cells": 2386,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02356__spi_lite__cores",
+    "cells": 1522,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02362__hack_soc__hack_soc",
+    "cells": 4658,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02366__f1_reaction_timer__f1-reaction-timer-on-spartan7-fpga",
+    "cells": 2636,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02395__TOP__kf8253",
+    "cells": 3894,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02428__main_stream_processing__oric_mist_48k",
+    "cells": 1172,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02445__ps2keyboard__minimig_ecs",
+    "cells": 1133,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02481__agr_fxp_mult__agr-fpga-ip-library",
+    "cells": 1334,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02573__serv_rf_top__caravel_yonga-serv-accelerator",
+    "cells": 9192,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02583__intf_v1_0__verilog-scratch",
+    "cells": 1264,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02613__gtx_debug_reporter__38-fpga-order-book-10gbe",
+    "cells": 7961,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02653__vga_status_panel__risc-v-computer-zybo",
+    "cells": 3866,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02656__fifo__uart_echo",
+    "cells": 1431,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02662__axis_to_video_v1_0__xlink_zynq_isp",
+    "cells": 1606,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02666__filter__e14pathtoprogrammableiii",
+    "cells": 1290,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02674__alu32__verilog",
+    "cells": 2950,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02705__scandoubler_sdram__mist-modules",
+    "cells": 1043,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02746__top__icezum",
+    "cells": 1054,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02754__midside_axis_wrapper__mid-side-transform-module-fpga",
+    "cells": 1734,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02825__wishbone_configuratorinator_00__config_team",
+    "cells": 1019,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02827__uart__verilog-uart",
+    "cells": 1150,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02849__myadd_myadd__finn",
+    "cells": 1258,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02883__prim_shifter_64bit__final-capstone",
+    "cells": 1343,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02961__jtopl_reg__jtopl",
+    "cells": 3613,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02969__mkQF100SPIFlashEmulator__qf100",
+    "cells": 1992,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02999__datapath__16bit-alu-datapath",
+    "cells": 1965,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03008__vl53l0x_driver__pong-chip",
+    "cells": 1404,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03070__neopixels__hacksterio",
+    "cells": 1123,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03083__zkf_div__zkf",
+    "cells": 9192,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03105__lru__risc-v-vector",
+    "cells": 2132,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03108__urv_divide__urv-core",
+    "cells": 1762,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03138__KFSDRAM__kfsdram",
+    "cells": 1025,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03165__rv_io_timer__vroom",
+    "cells": 1804,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03168__tt_um_riyanlord2026_dev_ternary_158__ternary-158-asic",
+    "cells": 3331,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03225__axi4_lite_slave__ARM_AMBA_Design",
+    "cells": 2751,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03255__arp_tx__ethernet-core",
+    "cells": 1310,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03263__axi4_lite__axi4-lite-slave-verilog",
+    "cells": 1198,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03267__wishbone_configuratorinator_10__config_team",
+    "cells": 1026,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03294__mult_pipe4_en__verilog",
+    "cells": 7594,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03319__football_scoreboard_top__football-scoreboard-fpga",
+    "cells": 1303,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03435__clut_simple__projf-explore",
+    "cells": 1221,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03464__prim_multiplier_32x32_pipelined__final-capstone",
+    "cells": 5944,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03469__txuart__qc-tee",
+    "cells": 1230,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03498__reg_row__riscv-inregistercpu",
+    "cells": 1099,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03510__dsp_iq_mult__verilog-dsp",
+    "cells": 3805,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03520__trencadis_register_file__trencadis-rtl",
+    "cells": 7763,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03535__serv_rf_top__fabulous_fabric",
+    "cells": 7727,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03629__apb_ram__APB-Peripheral-Wrappers---Verilog-RTL-De",
+    "cells": 5946,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03631__acorn_prng__wrapped_acorn_prng",
+    "cells": 3602,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03637__rv32i_gshare__riscv-pipelined-branch_prediction",
+    "cells": 4117,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03648__PlicVerilog__iob-plic",
+    "cells": 2673,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03663__spirom__core_spiflash",
+    "cells": 2530,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03725__zkf_fma__zkf",
+    "cells": 4457,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03763__unsigned_multiplier_16x16_async__fpga-code",
+    "cells": 1318,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03819__spimemio__pano_hello_g1",
+    "cells": 1335,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03941__uart2wb__no2misc",
+    "cells": 1137,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03948__top__vhdl",
+    "cells": 1537,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03950__ipi__ompic",
+    "cells": 1007,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03987__axis_multi_master__hdl-axi-common",
+    "cells": 1828,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00214__fpu_dp_top__fpu",
+    "cells": 29661,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00497__fsqrt_newton__riscv-fpu-interrupt",
+    "cells": 10133,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00566__prince_core__prince",
+    "cells": 10242,
+    "stratum": "10k-30k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00739__picorv32_wb__picorv32_xilinx",
+    "cells": 15444,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00748__prince__prince",
+    "cells": 11169,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00759__register_file_2r_1w_asymm__scm",
+    "cells": 11642,
+    "stratum": "10k-30k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00852__pu_or1k_pfpu32_top__pu-or1k",
+    "cells": 14814,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01075__riscv__single-cycle_riscv_processor",
+    "cells": 18071,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01134__gba_cpu__gbatang",
+    "cells": 25539,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01233__decryption_top__vhdl-decryption",
+    "cells": 10848,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01726__des__iverilog",
+    "cells": 15464,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02346__Core_Pipelined_Hazard__riscv-cpu",
+    "cells": 10840,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc",
+    "cells": 23525,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03268__core__riscv-tlv-core",
+    "cells": 10675,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   }
+  ],
+  "sky130hd": [
+   {
+    "id": "C00001__lcd_timing__sonic-speed-parallelism",
+    "cells": 340,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00049__addsub32__riscv-fpu-interrupt",
+    "cells": 327,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00052__int_holdoff__e_uart",
+    "cells": 352,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00055__wbsmpladc__wbpmic",
+    "cells": 475,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00080__mac__axi-matrix-accelerator",
+    "cells": 904,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00094__wb_master__rv32i-soc",
+    "cells": 439,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00168__m6502_alu__6502",
+    "cells": 385,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00236__seven_segment_seconds__vlsi_be_labs",
+    "cells": 587,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00261__pl_reg_ir__riscv-fpu-interrupt",
+    "cells": 406,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00336__cla_32__riscv-fpu-interrupt",
+    "cells": 317,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00539__mcpu16mc__digitalcpuzoo",
+    "cells": 409,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00603__sync_fifo__ethernet-rx-gateway-asic",
+    "cells": 591,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00634__udma_uart_rx__udma_uart",
+    "cells": 346,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00673__fpu_sp_f2i__fpu",
+    "cells": 569,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00741__axi_read_block__qspi-flash-device-controller",
+    "cells": 836,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00754__q15_source_mux_axi__2026_g_periodic-signal-measurement-and-a",
+    "cells": 444,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00767__apb_master__qspi-flash-device-controller",
+    "cells": 363,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00833__alarm_clock_top__alarm_clock",
+    "cells": 644,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00858__top_fifo_fpga__spartan6-synchronous-fifo",
+    "cells": 981,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00887__pm32__librelane",
+    "cells": 650,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00977__FCore__aa",
+    "cells": 415,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00996__tdma_mac__cirradio",
+    "cells": 703,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00997__sync_fifo__nb64",
+    "cells": 661,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01042__non_restoring_divider__ignitertl",
+    "cells": 495,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01082__spi_top__spi-master-slave-controller",
+    "cells": 610,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01096__spdif__cores",
+    "cells": 339,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01114__vga__afck_j1b",
+    "cells": 775,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01141__simpledma__icesugar-z80",
+    "cells": 785,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01160__gen_uart_mos_6551__mistery",
+    "cells": 738,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01225__main__magmathon",
+    "cells": 465,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01243__sync_fifo__fifo-design-and-verification",
+    "cells": 646,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01252__booth_multiplier__ignitertl",
+    "cells": 424,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01314__uart_to_bytes__misc_hdl_module",
+    "cells": 436,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01401__axi_lite_slave__axi4-dma-uvm-verification-ip",
+    "cells": 934,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01409__barrel_shifter__xcelerium_training",
+    "cells": 628,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01412__cdrs__sky-pll-cdr-test",
+    "cells": 377,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01442__vehicle_diagnostic_top__vehicle_diagnostic_interface",
+    "cells": 463,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01468__signal_generator__fft-ip-core",
+    "cells": 488,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01482__reg_file__digital_system",
+    "cells": 805,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01488__astrarv_ifu__astrarv-32-bit-riscv-processor",
+    "cells": 326,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01528__fetch__y86-64-processor",
+    "cells": 786,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01530__gtx_debug_reporter__32-10gbe-open",
+    "cells": 540,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01594__video_timing_gen__fpga-components",
+    "cells": 319,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01599__gcd__hammer",
+    "cells": 444,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01665__Segment__simple_cpu_in_fpga",
+    "cells": 657,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01721__top_module__uart-transmitter-receiver-verilog-fpga",
+    "cells": 399,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01751__gen_uart_tr_1602__beeb",
+    "cells": 383,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01756__Synchronous_fifo__synchronous-fifo-using-verilog",
+    "cells": 343,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01773__debug_display__23-fpga-order-book",
+    "cells": 597,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01810__max_subarray_system__coa_project_kadane",
+    "cells": 459,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01834__simple_glitcher__utility-cores",
+    "cells": 907,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01866__uart_top__vlsi-portfolio",
+    "cells": 422,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01883__uart__asyncart",
+    "cells": 626,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01886__rggen_axi4lite_adapter__rggen-verilog-rtl",
+    "cells": 396,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01896__aes_inv_sbox__security_core",
+    "cells": 586,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01943__video_to_axis_v1_0__xlink_zynq_isp",
+    "cells": 768,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01970__i2c_master__tinydfu-bootloader",
+    "cells": 435,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02004__audio_and_video_config__cchw",
+    "cells": 615,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02048__alu74181_behavioral__fpga-hdl-portfolio",
+    "cells": 357,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02095__Top__arq-comp",
+    "cells": 392,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02099__image_capture_manager__2dimageprocessing",
+    "cells": 860,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02110__grain128a__grain",
+    "cells": 482,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02114__vga_top__simple_cpu_in_fpga",
+    "cells": 514,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02118__video_timing_ctrl__tangmega-138k-example",
+    "cells": 416,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02126__irq_ctrl__cores",
+    "cells": 311,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02136__fifo__hdl-libraries",
+    "cells": 567,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02137__uart_tx_top__uart-tx",
+    "cells": 732,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02184__top__7seg-4_verilog",
+    "cells": 480,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02193__smart_home_soc__smarthome-soc-rtl-to-asic",
+    "cells": 356,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02231__agr_fxp_accumulator__agr-fpga-ip-library",
+    "cells": 792,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02241__multi_kernel_conv__edge-ai-cnn-inference-engine-on-fpga",
+    "cells": 630,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02254__crc_32__fpga_extensionisa",
+    "cells": 999,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02354__mojo_top__i2c-eeprom",
+    "cells": 853,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02382__uart_top__fsm-based-parameterized-uart-transceiver",
+    "cells": 362,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02392__DRUMk_M_N_s__drum",
+    "cells": 735,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02399__vga3__ego1-vga",
+    "cells": 352,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02406__rand_gen__openofdm",
+    "cells": 649,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02506__unsigned_multiplier_12x12_async__fpga-code",
+    "cells": 675,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02549__impl_top__uart",
+    "cells": 505,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02560__uart_top__uart-tranreceiver-verilog",
+    "cells": 840,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02564__aes_sbox__siliconcompiler",
+    "cells": 587,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02577__i2s_recv__eko",
+    "cells": 368,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02590__alu_8bit__riscv-alu8-openlane",
+    "cells": 412,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02605__alu_8bit__verilog-rtl-designs",
+    "cells": 471,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02606__top__i2s-transceiver-zynq-7000-soc",
+    "cells": 708,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02634__peripheral_top__soc_io_expander",
+    "cells": 623,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02662__axis_to_video_v1_0__xlink_zynq_isp",
+    "cells": 875,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02672__pc__mips-cpu",
+    "cells": 904,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02679__sbox_ne_S__caravel_mpw5_prga",
+    "cells": 357,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02705__scandoubler_sdram__mist-modules",
+    "cells": 779,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02746__top__icezum",
+    "cells": 949,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02765__cam__implementation-of-tightly-coupled-data-f",
+    "cells": 639,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02766__TOP_RX__uart",
+    "cells": 313,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02801__SPI_TopModule__Serial-Communication-Protocols",
+    "cells": 438,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02813__uart_core__uart",
+    "cells": 342,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02825__wishbone_configuratorinator_00__config_team",
+    "cells": 944,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02827__uart__verilog-uart",
+    "cells": 793,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02829__uart_top__fpga-components",
+    "cells": 407,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02872__top__magma",
+    "cells": 425,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02898__heterocore_top__heterocore-rtl",
+    "cells": 801,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02908__omsp_dbg_i2c__SoC-Implementation-of-OpenMSP430-Microco",
+    "cells": 363,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02926__uart__fpga-uart-transceiver",
+    "cells": 381,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02974__vga2__ego1-vga",
+    "cells": 455,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03041__UART_TOP__uart_transceiver",
+    "cells": 354,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03070__neopixels__hacksterio",
+    "cells": 835,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03131__ov7670_controller__live-concert-vfx",
+    "cells": 622,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03148__extension__vader",
+    "cells": 738,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03253__Timer__riskow",
+    "cells": 618,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03267__wishbone_configuratorinator_10__config_team",
+    "cells": 960,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03300__alu__parameterized-alu-verilog",
+    "cells": 453,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03362__demo_top__trellisboard",
+    "cells": 311,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03393__la_asyncfifo__lambdalib",
+    "cells": 446,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03412__top__i2s-transceiver-zynq-7000-soc",
+    "cells": 632,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03435__clut_simple__projf-explore",
+    "cells": 814,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03469__txuart__qc-tee",
+    "cells": 810,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03472__Uart_Tx__axispi_base",
+    "cells": 491,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03480__i2c_master__fpga-components",
+    "cells": 318,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03488__seq_rgf__uart-tx",
+    "cells": 858,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03493__multiply_v1_0__ecen-449",
+    "cells": 808,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03501__proc__simple-processor-systemverilog",
+    "cells": 842,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03540__sar_adc_fpga_demo_top__fpga-8bit-sar-adc-controller",
+    "cells": 624,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03544__zkf_from_int__zkf",
+    "cells": 846,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03578__MAC_UNIT__vlsi-design-laboratory-hdl",
+    "cells": 394,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03615__blinkpat__completework_of_fpga_xilinx_2nd_edition",
+    "cells": 377,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03676__uart_top__uart-transmitter-and-receiver-in-vhdl",
+    "cells": 924,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03705__rs232__pipelined_cpu",
+    "cells": 347,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03723__fifo__ustc-cod-lab-2022",
+    "cells": 549,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03724__async_fifo__bits",
+    "cells": 608,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03728__testeI2C__verilog-space-invaders",
+    "cells": 422,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03779__Bridge_top__apb-ahb-slave-interface",
+    "cells": 684,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03799__reaction_timer__vivado-git",
+    "cells": 724,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03808__top__rtl_labs",
+    "cells": 655,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03850__multiplier_registered__xcelerium_training",
+    "cells": 606,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03855__DigitalPort__riskow",
+    "cells": 437,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03874__apb_slave__apb-slave-peripheral",
+    "cells": 816,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03950__ipi__ompic",
+    "cells": 858,
+    "stratum": "300-999",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00022__audio_playout__1bitfm",
+    "cells": 2159,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00025__pipelined_fmul__riscv-fpu-interrupt",
+    "cells": 5165,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00030__async_fifo__sonic-speed-parallelism",
+    "cells": 1427,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00097__gemmm2s_v2__gemmm2s",
+    "cells": 1586,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00099__avalanche_entropy__avalanche_entropy",
+    "cells": 1078,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00155__Pipelined_Processor_Enc__cryptographic_accelerator",
+    "cells": 1834,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00172__wb_dma__rv32i-soc",
+    "cells": 2271,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00195__tt_um_Jsilicon__jsilicon",
+    "cells": 1291,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00227__md5_core__md5",
+    "cells": 6893,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00233__Address_Buffer__tiny_soc",
+    "cells": 2410,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00239__fifo_mem__async-fifo-cdc",
+    "cells": 2121,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00257__newton24__riscv-fpu-interrupt",
+    "cells": 8158,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00260__reg_file__rv32i-soc",
+    "cells": 7190,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00265__Datapath__tiny_soc",
+    "cells": 8869,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00272__spec_sync__sonic-speed-parallelism",
+    "cells": 5212,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00278__impl_top__uart-s.bus-decoder-fpga",
+    "cells": 1934,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00311__axi_dma_mem_port__axi4-systolic-array-accelerator",
+    "cells": 1592,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00366__csr_unit_pipeline_adapter__riscv-fpu-interrupt",
+    "cells": 1918,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00389__spectrum__sonic-speed-parallelism",
+    "cells": 3945,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00393__gemmm2s_wrapper__gemmm2s",
+    "cells": 2747,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00396__CRC32_D40__ethernetmac",
+    "cells": 1743,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00402__wallace_24x24__riscv-fpu-interrupt",
+    "cells": 1958,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00404__pl_stage_exe__riscv-fpu-interrupt",
+    "cells": 2456,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00418__CRC32_D24__ethernetmac",
+    "cells": 1156,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00422__wallace_24x26__riscv-fpu-interrupt",
+    "cells": 2134,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00423__entropy__coretest_bp_entropy",
+    "cells": 1117,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00424__CRC32_D56__ethernetmac",
+    "cells": 2680,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00426__fp_multiplier_3_stage_pipeline__fpu32-ieee754-lite",
+    "cells": 2796,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00430__npu_periph__riscv-npu-soc",
+    "cells": 3626,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00444__Main_Crypt__cryptographic_accelerator",
+    "cells": 3332,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00452__wallace_24x28__riscv-fpu-interrupt",
+    "cells": 2286,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00459__async_fifo__async-fifo-cdc",
+    "cells": 1750,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00467__CRC32_D48__ethernetmac",
+    "cells": 2351,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00489__Pipelined_Processor_Dec__cryptographic_accelerator",
+    "cells": 1887,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00496__fm_frequency_word__1bitfm",
+    "cells": 2709,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00497__fsqrt_newton__riscv-fpu-interrupt",
+    "cells": 9916,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00510__cpugpio__riscv-fpu-interrupt",
+    "cells": 2049,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00521__flash_spi__ef_usb_cdc",
+    "cells": 1113,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00522__fmul_mul__riscv-fpu-interrupt",
+    "cells": 2248,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00532__demo_src__sonic-speed-parallelism",
+    "cells": 2413,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00685__axi_protocol_converter_v2_1_b2s_r_channel__aeshw",
+    "cells": 4101,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00702__wallace_24x28_product__riscv-fpu-interrupt",
+    "cells": 2914,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00729__wallace_26x26__riscv-fpu-interrupt",
+    "cells": 2326,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00742__wallace_26x26_product__riscv-fpu-interrupt",
+    "cells": 2954,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00770__wallace_26x24_product__riscv-fpu-interrupt",
+    "cells": 2704,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00841__array_mul__rtl2gds-multiplier-architectures",
+    "cells": 3295,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00878__plic__kianv-rv32-linuxcore",
+    "cells": 1596,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00909__fp_add_sub__hw-cbmc",
+    "cells": 5092,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00924__mdu_top__mdu",
+    "cells": 6861,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00927__picorv32_pcpi_div__apis_anatolia",
+    "cells": 2097,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00945__key_sel3__rdf-2020",
+    "cells": 2976,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00966__uart_fifo__uart_echo",
+    "cells": 1161,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00974__j4__swapforth",
+    "cells": 6128,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00979__alu32__32-bit-alu-verilog",
+    "cells": 1405,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00981__jt49__jt49",
+    "cells": 1904,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00991__alu__parameterized-32bit-alu-verilog",
+    "cells": 3729,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01001__tt_um_verilog_meetup_template_project_TODO__ttsky-verilog-template-for-verilog-meetu",
+    "cells": 2829,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01011__regfile__lighter",
+    "cells": 6429,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01038__tv80s__z80-fpga",
+    "cells": 5380,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01133__piece_draw_engine__SpinalTetris",
+    "cells": 1044,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01216__asynch_fifo__asynchronous-fifo---rtl",
+    "cells": 1288,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01229__top__nexys-a7-adt7420-temperature-sensor",
+    "cells": 1315,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01267__alu__parameterized-32-bit-arithmetic-logic-un",
+    "cells": 2067,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01282__rv_io_gpio__vroom",
+    "cells": 2338,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01312__freq_multi_count__common-hdl",
+    "cells": 1385,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01414__matrix_mul_top__mac-based-matrix-multiplication-rtl",
+    "cells": 2155,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01471__dsp_mult__verilog-dsp",
+    "cells": 1916,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01472__rxuart__qc-tee",
+    "cells": 1335,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01494__picorv32_pcpi_div__pano_hello_g1",
+    "cells": 2108,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01550__umi_data_aggregator__umi",
+    "cells": 2849,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01581__amultp2_32x32__miaow",
+    "cells": 4959,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01586__split__fpga-sdrlib",
+    "cells": 1609,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01595__uart_echo__uart_echo",
+    "cells": 1194,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01622__Unsigned_Array_Multiplier_16_Bit__verilog_codes",
+    "cells": 1276,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01647__cordic__cordic-sincos",
+    "cells": 7324,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01663__wrapper_full_hash_v1__aes-sbox-hash-core",
+    "cells": 2211,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01730__butterfly__fpga-sdrlib",
+    "cells": 6085,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01842__umi_packet_merge_greedy__umi",
+    "cells": 4990,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01877__spi_top__spi-master",
+    "cells": 2577,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01998__jt6295_serial__jt6295",
+    "cells": 1104,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C01999__rvfi_wrapper__level-v",
+    "cells": 1104,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02042__usbf_device_core__core_usb_cdc",
+    "cells": 1302,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02046__jt49_bus__jt49",
+    "cells": 1954,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02087__mac_datapath__mac-based-matrix-multiplication-rtl",
+    "cells": 1428,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02179__jts16_trackball__jts16",
+    "cells": 1424,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02209__ascon_round__asconcan",
+    "cells": 5172,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02258__fetch__riscvy",
+    "cells": 1613,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02259__cpuops__zipcpu",
+    "cells": 8852,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02272__mem_wrapper__hrm-cpu",
+    "cells": 8343,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02290__zkf_addsub__zkf",
+    "cells": 1522,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02326__wishbone_master_axis__hacksterio",
+    "cells": 1135,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02355__axi_crc_top__axi-lite-controlled-crc-accelerator",
+    "cells": 2211,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02356__spi_lite__cores",
+    "cells": 1114,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02366__f1_reaction_timer__f1-reaction-timer-on-spartan7-fpga",
+    "cells": 1962,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02384__holoso_imuls__holoso",
+    "cells": 8597,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02395__TOP__kf8253",
+    "cells": 3299,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02427__jt49_bus__nabu_mister",
+    "cells": 2025,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02428__main_stream_processing__oric_mist_48k",
+    "cells": 1221,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02445__ps2keyboard__minimig_ecs",
+    "cells": 1027,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02481__agr_fxp_mult__agr-fpga-ip-library",
+    "cells": 1307,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02531__Unsigned_Array_Multiplier_32_Bit__verilog_codes",
+    "cells": 4644,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02573__serv_rf_top__caravel_yonga-serv-accelerator",
+    "cells": 5382,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02583__intf_v1_0__verilog-scratch",
+    "cells": 1181,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02613__gtx_debug_reporter__38-fpga-order-book-10gbe",
+    "cells": 6654,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02637__mini_cnn__edge-ai-cnn-inference-engine-on-fpga",
+    "cells": 2534,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02656__fifo__uart_echo",
+    "cells": 1207,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02660__serv_rf_top__serv",
+    "cells": 4850,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02666__filter__e14pathtoprogrammableiii",
+    "cells": 1245,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02674__alu32__verilog",
+    "cells": 2839,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02754__midside_axis_wrapper__mid-side-transform-module-fpga",
+    "cells": 1600,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02849__myadd_myadd__finn",
+    "cells": 1186,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02883__prim_shifter_64bit__final-capstone",
+    "cells": 1437,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02884__axis_nld_psycho_simple__non-linear-distortion-module-fpga",
+    "cells": 2320,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02911__tt_um_essen__systolic_mac_with_dft",
+    "cells": 2156,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02961__jtopl_reg__jtopl",
+    "cells": 1962,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02969__mkQF100SPIFlashEmulator__qf100",
+    "cells": 1710,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C02999__datapath__16bit-alu-datapath",
+    "cells": 1855,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03008__vl53l0x_driver__pong-chip",
+    "cells": 1207,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03029__cache_top__direct-mapped-cache-controller",
+    "cells": 6950,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03036__core__riscv-rv32i-single-cycle-cpu",
+    "cells": 7219,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03105__lru__risc-v-vector",
+    "cells": 2059,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03108__urv_divide__urv-core",
+    "cells": 1400,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03165__rv_io_timer__vroom",
+    "cells": 1607,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03168__tt_um_riyanlord2026_dev_ternary_158__ternary-158-asic",
+    "cells": 3122,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03182__min_heap__rtl-data-structures",
+    "cells": 5186,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03225__axi4_lite_slave__ARM_AMBA_Design",
+    "cells": 2781,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03263__axi4_lite__axi4-lite-slave-verilog",
+    "cells": 1147,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03294__mult_pipe4_en__verilog",
+    "cells": 7638,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03319__football_scoreboard_top__football-scoreboard-fpga",
+    "cells": 1132,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03464__prim_multiplier_32x32_pipelined__final-capstone",
+    "cells": 6287,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03498__reg_row__riscv-inregistercpu",
+    "cells": 1030,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03510__dsp_iq_mult__verilog-dsp",
+    "cells": 3830,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03518__can_wishbone_top__verilog-can",
+    "cells": 6699,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03520__trencadis_register_file__trencadis-rtl",
+    "cells": 7828,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03535__serv_rf_top__fabulous_fabric",
+    "cells": 4791,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03579__pm25_alert_core__pm25-adaptive-bias",
+    "cells": 1879,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03629__apb_ram__APB-Peripheral-Wrappers---Verilog-RTL-De",
+    "cells": 5953,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03631__acorn_prng__wrapped_acorn_prng",
+    "cells": 3543,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03637__rv32i_gshare__riscv-pipelined-branch_prediction",
+    "cells": 2673,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03648__PlicVerilog__iob-plic",
+    "cells": 2575,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03656__snake__snake-and-apple-game-implementation-on-d",
+    "cells": 8333,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03663__spirom__core_spiflash",
+    "cells": 1870,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03725__zkf_fma__zkf",
+    "cells": 4253,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03747__jt6295_adpcm__jt6295",
+    "cells": 1735,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03763__unsigned_multiplier_16x16_async__fpga-code",
+    "cells": 1288,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03819__spimemio__pano_hello_g1",
+    "cells": 1114,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03894__RAM_IO__fuserisc_ver2",
+    "cells": 1798,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03908__ibex_icache__icesoc",
+    "cells": 4606,
+    "stratum": "1k-10k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03948__top__vhdl",
+    "cells": 1352,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C03987__axis_multi_master__hdl-axi-common",
+    "cells": 1789,
+    "stratum": "1k-10k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00298__fsqrt_newton_raphson__floatcore-fpu",
+    "cells": 10534,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00566__prince_core__prince",
+    "cells": 11896,
+    "stratum": "10k-30k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00570__jpeg_idct_transpose__core_jpeg",
+    "cells": 13711,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00759__register_file_2r_1w_asymm__scm",
+    "cells": 11269,
+    "stratum": "10k-30k",
+    "clean_on_all_three": true
+   },
+   {
+    "id": "C00969__pu_or1k_branch_predictor_gshare__pu-or1k",
+    "cells": 11789,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C00986__axi_crossbar__verilog-axi",
+    "cells": 12858,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01053__picorv32_axi__risc-v-computer",
+    "cells": 10720,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01121__top__network-traffic-generator-performance-mo",
+    "cells": 13975,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01212__tsa_fpga_top_mem_i8__tsa-ai-chip",
+    "cells": 16552,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C01802__axil_crossbar__verilog-axi",
+    "cells": 12672,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02282__Basic_GeMM_CIM__pislib_verilog",
+    "cells": 29548,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C02877__a_axi_write_broadcastor_1_to_3__tapa",
+    "cells": 16090,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03149__global_buffer__tpu_systolic_array_hw_accelerator",
+    "cells": 11581,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   },
+   {
+    "id": "C03341__ZA_LMS8pip__sparse-lms-adaptive-filter-fpga",
+    "cells": 21559,
+    "stratum": "10k-30k",
+    "clean_on_all_three": false
+   }
+  ]
+ },
+ "report": {
+  "seed": 20261107,
+  "strata": [
+   [
+    "300-999",
+    300,
+    999,
+    136
+   ],
+   [
+    "1k-10k",
+    1000,
+    10000,
+    150
+   ],
+   [
+    "10k-30k",
+    10001,
+    30000,
+    14
+   ]
+  ],
+  "common_eligible": 269,
+  "gf180": {
+   "n": 300,
+   "clean_on_all_three": 247,
+   "median_cells": 1077
+  },
+  "nangate45": {
+   "n": 300,
+   "clean_on_all_three": 262,
+   "median_cells": 1123
+  },
+  "sky130hd": {
+   "n": 300,
+   "clean_on_all_three": 240,
+   "median_cells": 1161
+  },
+  "same_rtl_on_all_three": 215
+ }
+}

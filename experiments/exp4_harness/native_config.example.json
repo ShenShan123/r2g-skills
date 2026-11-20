@@ -1,0 +1,17 @@
+{
+  "arm": "deepseek_native",
+  "harness": "dsh",
+  "harness_version": "0.2.2-rc.1",
+  "model": "deepseek-flash",
+  "protocol": "anthropic",
+  "repeat": 1,
+  "out": "/proj/workarea/yangao/exp4_harness_20261115/runs/deepseek_native/s1",
+  "dev_root": "/proj/workarea/yangao/exp4_harness_20261115/data/dev",
+  "public_root": "/proj/workarea/yangao/exp4_harness_20261115/public",
+  "task_file": "/proj/workarea/yangao/exp4_harness_20261115/public/task_native.txt",
+  "native_bins": "/proj/workarea/yangao/exp4_harness_20261115/native_bins",
+  "image": "localhost/exp4c-conv:1",
+  "upstream_url": "http://127.0.0.1:18776/v1",
+  "policy": {"thinking": true, "reasoning_effort": "high", "max_tokens": 32768},
+  "caps": {"model_calls": 200, "wall_seconds": 14400, "cpu_count": 8, "memory_gib": 32}
+}

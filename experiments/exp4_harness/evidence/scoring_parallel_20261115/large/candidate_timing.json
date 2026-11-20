@@ -1,0 +1,10 @@
+{
+  "mode": "candidate",
+  "size": "large",
+  "wall_seconds": 976.2626749860356,
+  "cpu_seconds": 975.114148933,
+  "load_seconds": 2.0148408230161294,
+  "peak_rss_kib": 12244844,
+  "strict_full_pass": true,
+  "label_accuracy": 1.0
+}

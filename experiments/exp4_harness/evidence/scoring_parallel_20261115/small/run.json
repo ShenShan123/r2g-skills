@@ -1,0 +1,17 @@
+{
+  "exit_code": 0,
+  "stop_reason": "finished",
+  "wall_seconds": 12.026,
+  "cpu_seconds": 11.759977,
+  "peak_process_tree_rss_bytes": 392699904,
+  "cpus": [
+    16,
+    17,
+    18,
+    19,
+    64,
+    65,
+    66,
+    67
+  ]
+}

@@ -1,0 +1,83 @@
+{
+ "graph/r2g": {
+  "n": 43,
+  "full_pass": 43,
+  "failing_groups": {}
+ },
+ "graph/deepseek": {
+  "n": 43,
+  "full_pass": 0,
+  "failing_groups": {
+   "L_congestion": {
+    "rate": 0.944376,
+    "designs_pass": 0
+   },
+   "L_wirelength": {
+    "rate": 0.989978,
+    "designs_pass": 0
+   }
+  }
+ },
+ "graph/gpt": {
+  "n": 43,
+  "full_pass": 43,
+  "failing_groups": {}
+ },
+ "image_float/r2g": {
+  "n": 43,
+  "full_pass": 43,
+  "failing_groups": {}
+ },
+ "image_float/deepseek": {
+  "n": 43,
+  "full_pass": 5,
+  "failing_groups": {
+   "IMG_pin_rudy": {
+    "rate": 0.982198,
+    "designs_pass": 5
+   },
+   "IMG_pin_density": {
+    "rate": 0.982269,
+    "designs_pass": 5
+   }
+  }
+ },
+ "image_float/gpt": {
+  "n": 43,
+  "full_pass": 5,
+  "failing_groups": {
+   "IMG_pin_rudy": {
+    "rate": 0.982198,
+    "designs_pass": 5
+   },
+   "IMG_pin_density": {
+    "rate": 0.982269,
+    "designs_pass": 5
+   }
+  }
+ },
+ "image_exactdbu/r2g": {
+  "n": 43,
+  "full_pass": 5,
+  "failing_groups": {
+   "IMG_pin_rudy": {
+    "rate": 0.982198,
+    "designs_pass": 5
+   },
+   "IMG_pin_density": {
+    "rate": 0.982269,
+    "designs_pass": 5
+   }
+  }
+ },
+ "image_exactdbu/deepseek": {
+  "n": 43,
+  "full_pass": 43,
+  "failing_groups": {}
+ },
+ "image_exactdbu/gpt": {
+  "n": 43,
+  "full_pass": 43,
+  "failing_groups": {}
+ }
+}

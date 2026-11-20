@@ -1,0 +1,3398 @@
+{
+ "n_designs": 43,
+ "designs_passed": 0,
+ "groups": {
+  "L1_group_names_map_to_synthesis": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 496099,
+   "matched": 495978,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "entity_match_rate": 0.999756097069335
+  },
+  "L1_group_one_to_one": {
+   "designs": 43,
+   "designs_passed": 41,
+   "n": 0,
+   "matched": 0,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2",
+    "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2"
+   ],
+   "entity_match_rate": null
+  },
+  "L1_group_wirelength": {
+   "designs": 43,
+   "designs_passed": 39,
+   "n": 460738,
+   "matched": 460732,
+   "max_abs": 113.53,
+   "max_rel": 2.060809584316573,
+   "failed_designs": [
+    "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2",
+    "C01134__gba_cpu__gbatang__nangate45__p2",
+    "C01329__controller__fft_hardware_accelerator__nangate45__p2",
+    "C03527__tt_um_koti__koti__nangate45__p2"
+   ],
+   "entity_match_rate": 0.9999869774144958
+  },
+  "L1b_group_boundary_endpoints": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 495978,
+   "matched": 495977,
+   "max_abs": 1.0,
+   "max_rel": 0.029411764705882353,
+   "failed_designs": [
+    "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2"
+   ],
+   "entity_match_rate": 0.9999979837815387
+  },
+  "L1c_total_vs_detailed_router": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 0,
+   "matched": 0,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": null
+  },
+  "L1d_valid_sum_le_total": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 0,
+   "matched": 0,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": null
+  },
+  "L2_field_congestion": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 752024,
+   "matched": 752024,
+   "max_abs": 6.661338147750939e-16,
+   "max_rel": 6.350705577431443e-16,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "L2_field_overflow_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 752024,
+   "matched": 752024,
+   "max_abs": 1.0658141036401503e-14,
+   "max_rel": 5.956272783996152e-12,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "L2_gate_congestion": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 6.661338147750939e-16,
+   "max_rel": 6.350705577431443e-16,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "L2_gate_grid_id": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "L2_gate_mask": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "L2_gate_overflow_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 1.0658141036401503e-14,
+   "max_rel": 5.956272783996152e-12,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "L2_grid_shape": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 0,
+   "matched": 0,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": null
+  },
+  "L3_gcell_pct": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "L4_timing_mask": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 0,
+   "matched": 0,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": null
+  },
+  "L4_tns": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "L4_wns_signed": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "L6_cross_stage_labels_equal": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 0,
+   "matched": 0,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": null
+  },
+  "P.F1_gate_cell_type_id": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F1_gate_drive_strength": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F1_gate_is_buffer_cell": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F1_gate_is_inverter_cell": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F1_gate_is_sequential_cell": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F1_gate_orientation_id": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F1_gate_placement_valid": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F1_io_is_driver_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F1_io_is_sink_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F1_net_fanout": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 523068,
+   "matched": 522947,
+   "max_abs": 5.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "entity_match_rate": 0.9997686725244137
+  },
+  "P.F1_net_num_drivers": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 523068,
+   "matched": 522947,
+   "max_abs": 1.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "entity_match_rate": 0.9997686725244137
+  },
+  "P.F1_net_num_sinks": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 523068,
+   "matched": 522947,
+   "max_abs": 5.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "entity_match_rate": 0.9997686725244137
+  },
+  "P.F1_net_pin_count": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 523068,
+   "matched": 522947,
+   "max_abs": 6.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "entity_match_rate": 0.9997686725244137
+  },
+  "P.F1_pin_cell_type_id": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F1_pin_is_driver_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F1_pin_is_sink_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F3_pin_inside_shape": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F4_gate_cell_area_um2": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 3.967285149286681e-07,
+   "max_rel": 4.04154528633136e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F4_gate_cell_leakage_power": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 7.612304699478045e-06,
+   "max_rel": 5.471008718233699e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F4_net_total_sink_cap_fF": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 523068,
+   "matched": 522947,
+   "max_abs": 9.110774040222168,
+   "max_rel": 5.9319357213079345e-08,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "entity_match_rate": 0.9997686725244137
+  },
+  "P.F4_pin_cap_fF": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 7.282714840073368e-07,
+   "max_rel": 5.64499083191723e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F5_io_clock_period_in_0_or_sdc": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F5_io_input_delay_ns": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 5.416870108021499e-08,
+   "max_rel": 5.715321979011469e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F5_io_output_delay_ns": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 5.416870108021499e-08,
+   "max_rel": 5.715321979011469e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F5_pin_clock_period_in_0_or_sdc": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F6_gate_center_x_normalized": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F6_gate_center_x_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F6_gate_center_y_normalized": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F6_gate_center_y_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F6_gate_x_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F6_gate_y_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F6_io_xy": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 11940,
+   "matched": 11940,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F6_pin_xy_bbox_centre": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 2991786,
+   "matched": 2991786,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F_u_avg_clock_period_ns": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 2.7465820373606675e-07,
+   "max_rel": 5.5655712306478596e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F_u_avg_fanout": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 43,
+   "matched": 42,
+   "max_abs": 0.07144562479575667,
+   "max_rel": 0.035633110250281125,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "entity_match_rate": 0.9767441860465116
+  },
+  "P.F_u_dbu_per_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F_u_die_area_um2": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.007474999962141737,
+   "max_rel": 5.364394429000674e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F_u_die_height_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.572078631230713e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F_u_die_width_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.572078631230713e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F_u_freq_hz": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 120.47058820724487,
+   "max_rel": 5.119999998807907e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F_u_max_clock_period_ns": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 2.7465820373606675e-07,
+   "max_rel": 5.5655712306478596e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F_u_min_clock_period_ns": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 2.7465820373606675e-07,
+   "max_rel": 5.5655712306478596e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F_u_num_ios": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F_u_num_logical_cells": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F_u_num_logical_nets": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.F_u_total_lib_pin_cap_fF": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.0038650000060442835,
+   "max_rel": 4.966562719058945e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.I1_gate_identity": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.I2_net_identity": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 523068,
+   "matched": 522947,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "min_f1": 0.9709901702229681,
+   "entity_match_rate": 0.9997686725244137
+  },
+  "P.I3_pin_identity": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.I4_io_identity": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.L5_C_gate_y": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 6.661338147750939e-16,
+   "max_rel": 6.350705577431443e-16,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.L5_D_gate_y": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 6.661338147750939e-16,
+   "max_rel": 6.350705577431443e-16,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.L5_E_arc_congestion": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1137713,
+   "matched": 1137713,
+   "max_abs": 6.661338147750939e-16,
+   "max_rel": 6.350705577431443e-16,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.L5_E_arc_overflow": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1137713,
+   "matched": 1137713,
+   "max_abs": 1.0658141036401503e-14,
+   "max_rel": 5.956272783996152e-12,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.L5_F_gate_y": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 6.661338147750939e-16,
+   "max_rel": 6.350705577431443e-16,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "P.T1_gate_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.T1_io_net": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.T1_pin_net": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 1495893,
+   "matched": 1495474,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "min_f1": 0.9663264486056418,
+   "entity_match_rate": 0.9997198997521881
+  },
+  "P.T2_C_gate_net": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 1495893,
+   "matched": 1495474,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "min_f1": 0.9663264486056418,
+   "entity_match_rate": 0.9997198997521881
+  },
+  "P.T2_D_io_pin-io_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 98,
+   "matched": 98,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.T2_D_io_pin-pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 50119,
+   "matched": 50119,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.T2_D_pin-io_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 3193,
+   "matched": 3193,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.T2_D_pin-pin": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 960589,
+   "matched": 960291,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "min_f1": 0.962421185372005,
+   "entity_match_rate": 0.9996897736701128
+  },
+  "P.T2_E_cell_arc": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1137713,
+   "matched": 1137713,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.T2_E_io_pin-io_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 98,
+   "matched": 98,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.T2_E_io_pin-pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 50119,
+   "matched": 50119,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.T2_E_pin-io_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 3193,
+   "matched": 3193,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.T2_E_pin-pin": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 960589,
+   "matched": 960291,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "min_f1": 0.962421185372005,
+   "entity_match_rate": 0.9996897736701128
+  },
+  "P.T2_F_gate-gate": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 960589,
+   "matched": 960291,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "min_f1": 0.962421185372005,
+   "entity_match_rate": 0.9996897736701128
+  },
+  "P.T2_F_gate-io_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 3193,
+   "matched": 3193,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.T2_F_io_pin-gate": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 50119,
+   "matched": 50119,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "P.T2_F_io_pin-io_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 98,
+   "matched": 98,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.F1_gate_cell_type_id": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F1_gate_drive_strength": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F1_gate_is_buffer_cell": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F1_gate_is_inverter_cell": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F1_gate_is_sequential_cell": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F1_gate_orientation_id": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F1_gate_placement_valid": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F1_io_is_driver_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F1_io_is_sink_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F1_net_fanout": {
+   "designs": 43,
+   "designs_passed": 40,
+   "n": 523068,
+   "matched": 522675,
+   "max_abs": 5.0,
+   "max_rel": 1.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2",
+    "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2",
+    "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2"
+   ],
+   "entity_match_rate": 0.999248663653674
+  },
+  "R.F1_net_num_drivers": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 523068,
+   "matched": 522947,
+   "max_abs": 1.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "entity_match_rate": 0.9997686725244137
+  },
+  "R.F1_net_num_sinks": {
+   "designs": 43,
+   "designs_passed": 40,
+   "n": 523068,
+   "matched": 522675,
+   "max_abs": 5.0,
+   "max_rel": 1.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2",
+    "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2",
+    "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2"
+   ],
+   "entity_match_rate": 0.999248663653674
+  },
+  "R.F1_net_pin_count": {
+   "designs": 43,
+   "designs_passed": 40,
+   "n": 523068,
+   "matched": 522675,
+   "max_abs": 6.0,
+   "max_rel": 0.5,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2",
+    "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2",
+    "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2"
+   ],
+   "entity_match_rate": 0.999248663653674
+  },
+  "R.F1_pin_cell_type_id": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F1_pin_is_driver_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F1_pin_is_sink_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F2_gate_center_x_normalized": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 2.980095847870956e-08,
+   "max_rel": 5.941832336206224e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F2_gate_center_x_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.685622385360356e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F2_gate_center_y_normalized": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 2.9800799938861644e-08,
+   "max_rel": 5.7103378446015416e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F2_gate_center_y_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 1.2207031261368684e-05,
+   "max_rel": 4.7646492042812976e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F2_gate_x_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.685622385360356e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F2_gate_y_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 1.2207031261368684e-05,
+   "max_rel": 4.7646492042812976e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F2_io_xy": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 11940,
+   "matched": 11940,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.7217106472833315e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F2_net_hpwl_um_unsplit": {
+   "designs": 43,
+   "designs_passed": 0,
+   "n": 405532,
+   "matched": 114972,
+   "max_abs": 6.549998168945251,
+   "max_rel": 11.984732999148108,
+   "failed_designs": [
+    "C00023__qoi_compress__qoiimg__nangate45__p2",
+    "C00180__gift_core__gift__nangate45__p2",
+    "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2",
+    "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2",
+    "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2",
+    "C00424__CRC32_D56__ethernetmac__nangate45__p2",
+    "C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2",
+    "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2",
+    "C00622__fpu_sp_add__fpu__nangate45__p2",
+    "C00627__fpu_sp_mul__fpu__nangate45__p2",
+    "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2",
+    "C00748__prince__prince__nangate45__p2",
+    "C00749__chacha__chacha__nangate45__p2",
+    "C00867__user_proj_example__acor_dct32__nangate45__p2",
+    "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+    "C01026__proc__fpga-busicdc-2025__nangate45__p2",
+    "C01134__gba_cpu__gbatang__nangate45__p2",
+    "C01329__controller__fft_hardware_accelerator__nangate45__p2",
+    "C01423__jt12__neogeo_mister__nangate45__p2",
+    "C01472__rxuart__qc-tee__nangate45__p2",
+    "C01484__multiplier_32_bit__comp__nangate45__p2",
+    "C01563__ppu__panog2_nes__nangate45__p2",
+    "C01568__div_pipelined__soc__nangate45__p2",
+    "C01851__top__numericalwordle__nangate45__p2",
+    "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2",
+    "C02031__top__fpga-pid-controller-using-verilog__nangate45__p2",
+    "C02306__cordic__cordic-rtl-implementation__nangate45__p2",
+    "C02321__divider_unsigned__risc-v_pipelined_superscalar_processor__nangate45__p2",
+    "C02369__Uart8__verilog-uart__nangate45__p2",
+    "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2",
+    "C02544__lumi_rx_ready__umi__nangate45__p2",
+    "C02570__muldiv__koti__nangate45__p2",
+    "C02742__asp_top__abstractx__nangate45__p2",
+    "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2",
+    "C03011__snake__verilog-snake-game-on-fpga__nangate45__p2",
+    "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2",
+    "C03232__opl2__arcade-tecmo_mister__nangate45__p2",
+    "C03268__core__riscv-tlv-core__nangate45__p2",
+    "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+    "C03387__vga1__ego1-vga__nangate45__p2",
+    "C03527__tt_um_koti__koti__nangate45__p2",
+    "C03761__cordic__cordic-core__nangate45__p2",
+    "C03932__edge_fpu_fmac__edge-rv__nangate45__p2"
+   ],
+   "entity_match_rate": 0.28350906956787625
+  },
+  "R.F2_pin_xy_bbox_centre": {
+   "designs": 43,
+   "designs_passed": 0,
+   "n": 2991786,
+   "matched": 1736036,
+   "max_abs": 3.665007324218749,
+   "max_rel": 1.6883779357676305,
+   "failed_designs": [
+    "C00023__qoi_compress__qoiimg__nangate45__p2",
+    "C00180__gift_core__gift__nangate45__p2",
+    "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2",
+    "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2",
+    "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2",
+    "C00424__CRC32_D56__ethernetmac__nangate45__p2",
+    "C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2",
+    "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2",
+    "C00622__fpu_sp_add__fpu__nangate45__p2",
+    "C00627__fpu_sp_mul__fpu__nangate45__p2",
+    "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2",
+    "C00748__prince__prince__nangate45__p2",
+    "C00749__chacha__chacha__nangate45__p2",
+    "C00867__user_proj_example__acor_dct32__nangate45__p2",
+    "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+    "C01026__proc__fpga-busicdc-2025__nangate45__p2",
+    "C01134__gba_cpu__gbatang__nangate45__p2",
+    "C01329__controller__fft_hardware_accelerator__nangate45__p2",
+    "C01423__jt12__neogeo_mister__nangate45__p2",
+    "C01472__rxuart__qc-tee__nangate45__p2",
+    "C01484__multiplier_32_bit__comp__nangate45__p2",
+    "C01563__ppu__panog2_nes__nangate45__p2",
+    "C01568__div_pipelined__soc__nangate45__p2",
+    "C01851__top__numericalwordle__nangate45__p2",
+    "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2",
+    "C02031__top__fpga-pid-controller-using-verilog__nangate45__p2",
+    "C02306__cordic__cordic-rtl-implementation__nangate45__p2",
+    "C02321__divider_unsigned__risc-v_pipelined_superscalar_processor__nangate45__p2",
+    "C02369__Uart8__verilog-uart__nangate45__p2",
+    "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2",
+    "C02544__lumi_rx_ready__umi__nangate45__p2",
+    "C02570__muldiv__koti__nangate45__p2",
+    "C02742__asp_top__abstractx__nangate45__p2",
+    "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2",
+    "C03011__snake__verilog-snake-game-on-fpga__nangate45__p2",
+    "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2",
+    "C03232__opl2__arcade-tecmo_mister__nangate45__p2",
+    "C03268__core__riscv-tlv-core__nangate45__p2",
+    "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+    "C03387__vga1__ego1-vga__nangate45__p2",
+    "C03527__tt_um_koti__koti__nangate45__p2",
+    "C03761__cordic__cordic-core__nangate45__p2",
+    "C03932__edge_fpu_fmac__edge-rv__nangate45__p2"
+   ],
+   "entity_match_rate": 0.5802674389144143
+  },
+  "R.F3_pin_inside_shape": {
+   "designs": 43,
+   "designs_passed": 0,
+   "n": 1495893,
+   "matched": 869221,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00023__qoi_compress__qoiimg__nangate45__p2",
+    "C00180__gift_core__gift__nangate45__p2",
+    "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2",
+    "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2",
+    "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2",
+    "C00424__CRC32_D56__ethernetmac__nangate45__p2",
+    "C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2",
+    "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2",
+    "C00622__fpu_sp_add__fpu__nangate45__p2",
+    "C00627__fpu_sp_mul__fpu__nangate45__p2",
+    "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2",
+    "C00748__prince__prince__nangate45__p2",
+    "C00749__chacha__chacha__nangate45__p2",
+    "C00867__user_proj_example__acor_dct32__nangate45__p2",
+    "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+    "C01026__proc__fpga-busicdc-2025__nangate45__p2",
+    "C01134__gba_cpu__gbatang__nangate45__p2",
+    "C01329__controller__fft_hardware_accelerator__nangate45__p2",
+    "C01423__jt12__neogeo_mister__nangate45__p2",
+    "C01472__rxuart__qc-tee__nangate45__p2",
+    "C01484__multiplier_32_bit__comp__nangate45__p2",
+    "C01563__ppu__panog2_nes__nangate45__p2",
+    "C01568__div_pipelined__soc__nangate45__p2",
+    "C01851__top__numericalwordle__nangate45__p2",
+    "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2",
+    "C02031__top__fpga-pid-controller-using-verilog__nangate45__p2",
+    "C02306__cordic__cordic-rtl-implementation__nangate45__p2",
+    "C02321__divider_unsigned__risc-v_pipelined_superscalar_processor__nangate45__p2",
+    "C02369__Uart8__verilog-uart__nangate45__p2",
+    "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2",
+    "C02544__lumi_rx_ready__umi__nangate45__p2",
+    "C02570__muldiv__koti__nangate45__p2",
+    "C02742__asp_top__abstractx__nangate45__p2",
+    "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2",
+    "C03011__snake__verilog-snake-game-on-fpga__nangate45__p2",
+    "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2",
+    "C03232__opl2__arcade-tecmo_mister__nangate45__p2",
+    "C03268__core__riscv-tlv-core__nangate45__p2",
+    "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+    "C03387__vga1__ego1-vga__nangate45__p2",
+    "C03527__tt_um_koti__koti__nangate45__p2",
+    "C03761__cordic__cordic-core__nangate45__p2",
+    "C03932__edge_fpu_fmac__edge-rv__nangate45__p2"
+   ],
+   "entity_match_rate": 0.5810716408192297
+  },
+  "R.F4_gate_cell_area_um2": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 3.967285149286681e-07,
+   "max_rel": 4.04154528633136e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F4_gate_cell_leakage_power": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 7.612304699478045e-06,
+   "max_rel": 5.471008718233699e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F4_net_total_sink_cap_fF": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 523068,
+   "matched": 522947,
+   "max_abs": 9.110774040222168,
+   "max_rel": 5.9319357213079345e-08,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "entity_match_rate": 0.9997686725244137
+  },
+  "R.F4_pin_cap_fF": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 7.282714840073368e-07,
+   "max_rel": 5.64499083191723e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F5_io_clock_period_in_0_or_sdc": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F5_io_input_delay_ns": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 5.416870108021499e-08,
+   "max_rel": 5.715321979011469e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F5_io_output_delay_ns": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 5.416870108021499e-08,
+   "max_rel": 5.715321979011469e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F5_pin_clock_period_in_0_or_sdc": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F_u_avg_clock_period_ns": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 2.7465820373606675e-07,
+   "max_rel": 5.5655712306478596e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F_u_avg_fanout": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 43,
+   "matched": 42,
+   "max_abs": 0.07144562479575667,
+   "max_rel": 0.035633110250281125,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "entity_match_rate": 0.9767441860465116
+  },
+  "R.F_u_dbu_per_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F_u_die_area_um2": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.007474999962141737,
+   "max_rel": 5.364394429000674e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F_u_die_height_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.572078631230713e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F_u_die_width_um": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.572078631230713e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F_u_freq_hz": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 120.47058820724487,
+   "max_rel": 5.119999998807907e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F_u_max_clock_period_ns": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 2.7465820373606675e-07,
+   "max_rel": 5.5655712306478596e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F_u_min_clock_period_ns": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 2.7465820373606675e-07,
+   "max_rel": 5.5655712306478596e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F_u_num_ios": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F_u_num_logical_cells": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F_u_num_logical_nets": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.F_u_total_lib_pin_cap_fF": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 43,
+   "matched": 43,
+   "max_abs": 0.003891999993356876,
+   "max_rel": 5.3164003798737706e-08,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.I1_gate_identity": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.I2_net_identity": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 523068,
+   "matched": 522947,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "min_f1": 0.9709901702229681,
+   "entity_match_rate": 0.9997686725244137
+  },
+  "R.I3_pin_identity": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.I4_io_identity": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.L5_C_gate_y": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 6.661338147750939e-16,
+   "max_rel": 6.350705577431443e-16,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.L5_D_gate_y": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 6.661338147750939e-16,
+   "max_rel": 6.350705577431443e-16,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.L5_E_arc_congestion": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1137713,
+   "matched": 1137713,
+   "max_abs": 6.661338147750939e-16,
+   "max_rel": 6.350705577431443e-16,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.L5_E_arc_overflow": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1137713,
+   "matched": 1137713,
+   "max_abs": 1.0658141036401503e-14,
+   "max_rel": 5.956272783996152e-12,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.L5_F_gate_y": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 451595,
+   "matched": 451595,
+   "max_abs": 6.661338147750939e-16,
+   "max_rel": 6.350705577431443e-16,
+   "failed_designs": [],
+   "entity_match_rate": 1.0
+  },
+  "R.T1_gate_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1495893,
+   "matched": 1495893,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.T1_io_net": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 5970,
+   "matched": 5970,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.T1_pin_net": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 1495893,
+   "matched": 1495474,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "min_f1": 0.9663264486056418,
+   "entity_match_rate": 0.9997198997521881
+  },
+  "R.T2_C_gate_net": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 1495893,
+   "matched": 1495474,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "min_f1": 0.9663264486056418,
+   "entity_match_rate": 0.9997198997521881
+  },
+  "R.T2_D_io_pin-io_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 98,
+   "matched": 98,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.T2_D_io_pin-pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 50119,
+   "matched": 50119,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.T2_D_pin-io_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 3193,
+   "matched": 3193,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.T2_D_pin-pin": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 960589,
+   "matched": 960291,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "min_f1": 0.962421185372005,
+   "entity_match_rate": 0.9996897736701128
+  },
+  "R.T2_E_cell_arc": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 1137713,
+   "matched": 1137713,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.T2_E_io_pin-io_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 98,
+   "matched": 98,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.T2_E_io_pin-pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 50119,
+   "matched": 50119,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.T2_E_pin-io_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 3193,
+   "matched": 3193,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.T2_E_pin-pin": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 960589,
+   "matched": 960291,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "min_f1": 0.962421185372005,
+   "entity_match_rate": 0.9996897736701128
+  },
+  "R.T2_F_gate-gate": {
+   "designs": 43,
+   "designs_passed": 42,
+   "n": 960589,
+   "matched": 960291,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [
+    "C00180__gift_core__gift__nangate45__p2"
+   ],
+   "min_f1": 0.962421185372005,
+   "entity_match_rate": 0.9996897736701128
+  },
+  "R.T2_F_gate-io_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 3193,
+   "matched": 3193,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.T2_F_io_pin-gate": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 50119,
+   "matched": 50119,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  },
+  "R.T2_F_io_pin-io_pin": {
+   "designs": 43,
+   "designs_passed": 43,
+   "n": 98,
+   "matched": 98,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "failed_designs": [],
+   "min_f1": 1.0,
+   "entity_match_rate": 1.0
+  }
+ },
+ "sta_rerun": {
+  "summary": {
+   "designs": 43,
+   "constrained": 41,
+   "agree": 41,
+   "max_abs_d_ws": 0.00015199999999992997,
+   "max_abs_d_tns": 0.08300500000007105,
+   "unconstrained": [
+    "C00867__user_proj_example__acor_dct32__nangate45__p2",
+    "C03932__edge_fpu_fmac__edge-rv__nangate45__p2"
+   ]
+  },
+  "per_design": {
+   "C00023__qoi_compress__qoiimg__nangate45__p2": {
+    "rerun_ws": 0.085406,
+    "rerun_tns": 0.0,
+    "json_ws": 0.0853559,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": 5.009999999999737e-05,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C00180__gift_core__gift__nangate45__p2": {
+    "rerun_ws": 0.052591,
+    "rerun_tns": 0.0,
+    "json_ws": 0.0525909,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": 9.999999999593667e-08,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2": {
+    "rerun_ws": 0.097969,
+    "rerun_tns": 0.0,
+    "json_ws": 0.0979192,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": 4.980000000000262e-05,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2": {
+    "rerun_ws": 0.083397,
+    "rerun_tns": 0.0,
+    "json_ws": 0.0834973,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": -0.00010029999999999761,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2": {
+    "rerun_ws": -0.356444,
+    "rerun_tns": -14.438046,
+    "json_ws": -0.356444,
+    "json_tns": -14.438,
+    "constrained": true,
+    "d_ws": 0.0,
+    "d_tns": -4.599999999932436e-05,
+    "agree": true
+   },
+   "C00424__CRC32_D56__ethernetmac__nangate45__p2": {
+    "rerun_ws": 0.012343,
+    "rerun_tns": 0.0,
+    "json_ws": 0.0123926,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": -4.960000000000034e-05,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2": {
+    "rerun_ws": 0.064262,
+    "rerun_tns": 0.0,
+    "json_ws": 0.064162,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": 0.00010000000000000286,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2": {
+    "rerun_ws": -2.472852,
+    "rerun_tns": -126.929115,
+    "json_ws": -2.47285,
+    "json_tns": -126.929,
+    "constrained": true,
+    "d_ws": -1.9999999998354667e-06,
+    "d_tns": -0.00011499999999387,
+    "agree": true
+   },
+   "C00622__fpu_sp_add__fpu__nangate45__p2": {
+    "rerun_ws": 0.017564,
+    "rerun_tns": 0.0,
+    "json_ws": 0.017514,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": 5.000000000000143e-05,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C00627__fpu_sp_mul__fpu__nangate45__p2": {
+    "rerun_ws": -0.286067,
+    "rerun_tns": -9.844298,
+    "json_ws": -0.286067,
+    "json_tns": -9.8443,
+    "constrained": true,
+    "d_ws": 0.0,
+    "d_tns": 2.000000000279556e-06,
+    "agree": true
+   },
+   "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2": {
+    "rerun_ws": -0.202818,
+    "rerun_tns": -23.495916,
+    "json_ws": -0.202768,
+    "json_tns": -23.484,
+    "constrained": true,
+    "d_ws": -4.999999999999449e-05,
+    "d_tns": -0.011915999999999372,
+    "agree": true
+   },
+   "C00748__prince__prince__nangate45__p2": {
+    "rerun_ws": -0.247677,
+    "rerun_tns": -55.797462,
+    "json_ws": -0.247677,
+    "json_tns": -55.7975,
+    "constrained": true,
+    "d_ws": 0.0,
+    "d_tns": 3.799999999642978e-05,
+    "agree": true
+   },
+   "C00749__chacha__chacha__nangate45__p2": {
+    "rerun_ws": -1.032554,
+    "rerun_tns": -395.12616,
+    "json_ws": -1.03255,
+    "json_tns": -395.126,
+    "constrained": true,
+    "d_ws": -3.999999999892978e-06,
+    "d_tns": -0.00016000000005078618,
+    "agree": true
+   },
+   "C00867__user_proj_example__acor_dct32__nangate45__p2": {
+    "rerun_ws": Infinity,
+    "rerun_tns": 0.0,
+    "json_ws": 1e+39,
+    "json_tns": 0,
+    "constrained": false
+   },
+   "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2": {
+    "rerun_ws": 0.133251,
+    "rerun_tns": 0.0,
+    "json_ws": 0.133251,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": 0.0,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C01026__proc__fpga-busicdc-2025__nangate45__p2": {
+    "rerun_ws": -0.048008,
+    "rerun_tns": -0.096827,
+    "json_ws": -0.0480075,
+    "json_tns": -0.0968272,
+    "constrained": true,
+    "d_ws": -5.000000000005e-07,
+    "d_tns": 2.0000000000575113e-07,
+    "agree": true
+   },
+   "C01134__gba_cpu__gbatang__nangate45__p2": {
+    "rerun_ws": -1.008617,
+    "rerun_tns": -179.564987,
+    "json_ws": -1.00857,
+    "json_tns": -179.519,
+    "constrained": true,
+    "d_ws": -4.700000000013027e-05,
+    "d_tns": -0.04598699999999667,
+    "agree": true
+   },
+   "C01329__controller__fft_hardware_accelerator__nangate45__p2": {
+    "rerun_ws": -9.567181,
+    "rerun_tns": -265.063385,
+    "json_ws": -9.56718,
+    "json_tns": -265.063,
+    "constrained": true,
+    "d_ws": -9.999999992515995e-07,
+    "d_tns": -0.00038499999999430656,
+    "agree": true
+   },
+   "C01423__jt12__neogeo_mister__nangate45__p2": {
+    "rerun_ws": -0.427785,
+    "rerun_tns": -95.263672,
+    "json_ws": -0.427785,
+    "json_tns": -95.2637,
+    "constrained": true,
+    "d_ws": 0.0,
+    "d_tns": 2.800000000036107e-05,
+    "agree": true
+   },
+   "C01472__rxuart__qc-tee__nangate45__p2": {
+    "rerun_ws": -0.198622,
+    "rerun_tns": -5.143485,
+    "json_ws": -0.198572,
+    "json_tns": -5.14003,
+    "constrained": true,
+    "d_ws": -4.999999999999449e-05,
+    "d_tns": -0.003454999999999764,
+    "agree": true
+   },
+   "C01484__multiplier_32_bit__comp__nangate45__p2": {
+    "rerun_ws": -5.706922,
+    "rerun_tns": -214.288239,
+    "json_ws": -5.70677,
+    "json_tns": -214.281,
+    "constrained": true,
+    "d_ws": -0.00015199999999992997,
+    "d_tns": -0.007238999999998441,
+    "agree": true
+   },
+   "C01563__ppu__panog2_nes__nangate45__p2": {
+    "rerun_ws": -0.143746,
+    "rerun_tns": -21.97489,
+    "json_ws": -0.143846,
+    "json_tns": -21.9878,
+    "constrained": true,
+    "d_ws": 9.999999999998899e-05,
+    "d_tns": 0.012910000000001531,
+    "agree": true
+   },
+   "C01568__div_pipelined__soc__nangate45__p2": {
+    "rerun_ws": 0.037246,
+    "rerun_tns": 0.0,
+    "json_ws": 0.0372964,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": -5.039999999999906e-05,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C01851__top__numericalwordle__nangate45__p2": {
+    "rerun_ws": 0.065626,
+    "rerun_tns": 0.0,
+    "json_ws": 0.0656261,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": -1.0000000000287557e-07,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2": {
+    "rerun_ws": -0.23805,
+    "rerun_tns": -64.450546,
+    "json_ws": -0.2381,
+    "json_tns": -64.4685,
+    "constrained": true,
+    "d_ws": 4.999999999999449e-05,
+    "d_tns": 0.017954000000003134,
+    "agree": true
+   },
+   "C02031__top__fpga-pid-controller-using-verilog__nangate45__p2": {
+    "rerun_ws": -2.397776,
+    "rerun_tns": -16.68099,
+    "json_ws": -2.39778,
+    "json_tns": -16.681,
+    "constrained": true,
+    "d_ws": 4.000000000115023e-06,
+    "d_tns": 9.999999999621423e-06,
+    "agree": true
+   },
+   "C02306__cordic__cordic-rtl-implementation__nangate45__p2": {
+    "rerun_ws": -0.088943,
+    "rerun_tns": -0.611658,
+    "json_ws": -0.0889931,
+    "json_tns": -0.612208,
+    "constrained": true,
+    "d_ws": 5.010000000001125e-05,
+    "d_tns": 0.0005499999999999394,
+    "agree": true
+   },
+   "C02321__divider_unsigned__risc-v_pipelined_superscalar_processor__nangate45__p2": {
+    "rerun_ws": -10.59977,
+    "rerun_tns": -436.679108,
+    "json_ws": -10.5997,
+    "json_tns": -436.677,
+    "constrained": true,
+    "d_ws": -6.999999999912632e-05,
+    "d_tns": -0.0021079999999642496,
+    "agree": true
+   },
+   "C02369__Uart8__verilog-uart__nangate45__p2": {
+    "rerun_ws": -0.070071,
+    "rerun_tns": -1.057114,
+    "json_ws": -0.0701209,
+    "json_tns": -1.05831,
+    "constrained": true,
+    "d_ws": 4.9900000000005496e-05,
+    "d_tns": 0.0011959999999999749,
+    "agree": true
+   },
+   "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2": {
+    "rerun_ws": -0.709921,
+    "rerun_tns": -632.893005,
+    "json_ws": -0.70987,
+    "json_tns": -632.81,
+    "constrained": true,
+    "d_ws": -5.100000000002325e-05,
+    "d_tns": -0.08300500000007105,
+    "agree": true
+   },
+   "C02544__lumi_rx_ready__umi__nangate45__p2": {
+    "rerun_ws": 0.011128,
+    "rerun_tns": 0.0,
+    "json_ws": 0.0112781,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": -0.0001500999999999985,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C02570__muldiv__koti__nangate45__p2": {
+    "rerun_ws": -0.175185,
+    "rerun_tns": -9.148728,
+    "json_ws": -0.175235,
+    "json_tns": -9.15383,
+    "constrained": true,
+    "d_ws": 4.999999999999449e-05,
+    "d_tns": 0.005101999999999052,
+    "agree": true
+   },
+   "C02742__asp_top__abstractx__nangate45__p2": {
+    "rerun_ws": 0.318945,
+    "rerun_tns": 0.0,
+    "json_ws": 0.318945,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": 0.0,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2": {
+    "rerun_ws": 0.122632,
+    "rerun_tns": 0.0,
+    "json_ws": 0.122632,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": 0.0,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C03011__snake__verilog-snake-game-on-fpga__nangate45__p2": {
+    "rerun_ws": -0.177764,
+    "rerun_tns": -3.149015,
+    "json_ws": -0.177764,
+    "json_tns": -3.14901,
+    "constrained": true,
+    "d_ws": 0.0,
+    "d_tns": -4.999999999810711e-06,
+    "agree": true
+   },
+   "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2": {
+    "rerun_ws": 0.004598,
+    "rerun_tns": 0.0,
+    "json_ws": 0.00459816,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": -1.5999999999991715e-07,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C03232__opl2__arcade-tecmo_mister__nangate45__p2": {
+    "rerun_ws": -0.735028,
+    "rerun_tns": -251.897751,
+    "json_ws": -0.735028,
+    "json_tns": -251.898,
+    "constrained": true,
+    "d_ws": 0.0,
+    "d_tns": 0.00024899999999661304,
+    "agree": true
+   },
+   "C03268__core__riscv-tlv-core__nangate45__p2": {
+    "rerun_ws": 0.062557,
+    "rerun_tns": 0.0,
+    "json_ws": 0.0626075,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": -5.049999999999499e-05,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2": {
+    "rerun_ws": -0.357284,
+    "rerun_tns": -12.685075,
+    "json_ws": -0.357184,
+    "json_tns": -12.681,
+    "constrained": true,
+    "d_ws": -9.999999999998899e-05,
+    "d_tns": -0.004075000000000273,
+    "agree": true
+   },
+   "C03387__vga1__ego1-vga__nangate45__p2": {
+    "rerun_ws": 0.166412,
+    "rerun_tns": 0.0,
+    "json_ws": 0.166412,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": 0.0,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C03527__tt_um_koti__koti__nangate45__p2": {
+    "rerun_ws": -0.545888,
+    "rerun_tns": -666.026672,
+    "json_ws": -0.545888,
+    "json_tns": -666.027,
+    "constrained": true,
+    "d_ws": 0.0,
+    "d_tns": 0.0003280000000813743,
+    "agree": true
+   },
+   "C03761__cordic__cordic-core__nangate45__p2": {
+    "rerun_ws": 0.176443,
+    "rerun_tns": 0.0,
+    "json_ws": 0.176393,
+    "json_tns": 0,
+    "constrained": true,
+    "d_ws": 4.999999999999449e-05,
+    "d_tns": 0.0,
+    "agree": true
+   },
+   "C03932__edge_fpu_fmac__edge-rv__nangate45__p2": {
+    "rerun_ws": Infinity,
+    "rerun_tns": 0.0,
+    "json_ws": 1e+39,
+    "json_tns": 0,
+    "constrained": false
+   }
+  }
+ },
+ "images": {
+  "groups": {
+   "grid_def_equals_odb": {
+    "designs": 43,
+    "passed": 43,
+    "failed_designs": [],
+    "max_abs": 0.0
+   },
+   "grid_edges": {
+    "designs": 43,
+    "passed": 43,
+    "failed_designs": [],
+    "max_abs": 0.0
+   },
+   "label_cong": {
+    "designs": 43,
+    "passed": 43,
+    "failed_designs": [],
+    "max_abs": 2.9370404663886518e-08
+   },
+   "X_cell_density": {
+    "designs": 43,
+    "passed": 43,
+    "failed_designs": [],
+    "max_abs": 2.9767483145093365e-08
+   },
+   "X_pin_density": {
+    "designs": 43,
+    "passed": 43,
+    "failed_designs": [],
+    "max_abs": 2.3379553049096558e-07
+   },
+   "X_rudy": {
+    "designs": 43,
+    "passed": 43,
+    "failed_designs": [],
+    "max_abs": 4.7665480629177637e-07
+   },
+   "X_pin_rudy": {
+    "designs": 43,
+    "passed": 43,
+    "failed_designs": [],
+    "max_abs": 7.609439421685238e-06
+   },
+   "X_macro_mask": {
+    "designs": 43,
+    "passed": 43,
+    "failed_designs": [],
+    "max_abs": 0.0
+   },
+   "X_power_density": {
+    "designs": 43,
+    "passed": 13,
+    "failed_designs": [
+     "C00023__qoi_compress__qoiimg__nangate45__p2",
+     "C00180__gift_core__gift__nangate45__p2",
+     "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2",
+     "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2",
+     "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2",
+     "C00622__fpu_sp_add__fpu__nangate45__p2",
+     "C00627__fpu_sp_mul__fpu__nangate45__p2",
+     "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2",
+     "C00748__prince__prince__nangate45__p2",
+     "C00749__chacha__chacha__nangate45__p2",
+     "C00867__user_proj_example__acor_dct32__nangate45__p2",
+     "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+     "C01026__proc__fpga-busicdc-2025__nangate45__p2",
+     "C01423__jt12__neogeo_mister__nangate45__p2",
+     "C01472__rxuart__qc-tee__nangate45__p2",
+     "C01563__ppu__panog2_nes__nangate45__p2",
+     "C01568__div_pipelined__soc__nangate45__p2",
+     "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2",
+     "C02306__cordic__cordic-rtl-implementation__nangate45__p2",
+     "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2",
+     "C02570__muldiv__koti__nangate45__p2",
+     "C02742__asp_top__abstractx__nangate45__p2",
+     "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2",
+     "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2",
+     "C03232__opl2__arcade-tecmo_mister__nangate45__p2",
+     "C03268__core__riscv-tlv-core__nangate45__p2",
+     "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+     "C03387__vga1__ego1-vga__nangate45__p2",
+     "C03527__tt_um_koti__koti__nangate45__p2",
+     "C03761__cordic__cordic-core__nangate45__p2"
+    ],
+    "max_abs": 7.575444520616686e-06
+   }
+  },
+  "diagnostics": {
+   "label_vs_grt0096_table": {
+    "C00023__qoi_compress__qoiimg__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C00180__gift_core__gift__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C00424__CRC32_D56__ethernetmac__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C00622__fpu_sp_add__fpu__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C00627__fpu_sp_mul__fpu__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C00748__prince__prince__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C00749__chacha__chacha__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C00867__user_proj_example__acor_dct32__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C01026__proc__fpga-busicdc-2025__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C01134__gba_cpu__gbatang__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C01329__controller__fft_hardware_accelerator__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C01423__jt12__neogeo_mister__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C01472__rxuart__qc-tee__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C01484__multiplier_32_bit__comp__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C01563__ppu__panog2_nes__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C01568__div_pipelined__soc__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C01851__top__numericalwordle__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C02031__top__fpga-pid-controller-using-verilog__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C02306__cordic__cordic-rtl-implementation__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C02321__divider_unsigned__risc-v_pipelined_superscalar_processor__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C02369__Uart8__verilog-uart__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C02544__lumi_rx_ready__umi__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C02570__muldiv__koti__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C02742__asp_top__abstractx__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C03011__snake__verilog-snake-game-on-fpga__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C03232__opl2__arcade-tecmo_mister__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C03268__core__riscv-tlv-core__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C03387__vga1__ego1-vga__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C03527__tt_um_koti__koti__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C03761__cordic__cordic-core__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    },
+    "C03932__edge_fpu_fmac__edge-rv__nangate45__p2": {
+     "resource_equal": false,
+     "demand_equal": false
+    }
+   },
+   "diag_power_if_escaped_names_dropped": {
+    "C00023__qoi_compress__qoiimg__nangate45__p2": {
+     "passed": true,
+     "max_abs": 5.071697553097579e-12
+    },
+    "C00180__gift_core__gift__nangate45__p2": {
+     "passed": true,
+     "max_abs": 6.32299377448047e-12
+    },
+    "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2": {
+     "passed": true,
+     "max_abs": 4.907384334541852e-13
+    },
+    "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2": {
+     "passed": true,
+     "max_abs": 6.937046237058065e-13
+    },
+    "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2": {
+     "passed": true,
+     "max_abs": 8.846433382826713e-14
+    },
+    "C00424__CRC32_D56__ethernetmac__nangate45__p2": {
+     "passed": true,
+     "max_abs": 5.539827677267153e-12
+    },
+    "C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2": {
+     "passed": true,
+     "max_abs": 3.906946893454243e-13
+    },
+    "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2": {
+     "passed": true,
+     "max_abs": 6.666105129915847e-11
+    },
+    "C00622__fpu_sp_add__fpu__nangate45__p2": {
+     "passed": true,
+     "max_abs": 4.288482073863437e-12
+    },
+    "C00627__fpu_sp_mul__fpu__nangate45__p2": {
+     "passed": true,
+     "max_abs": 5.486065144917965e-11
+    },
+    "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2": {
+     "passed": true,
+     "max_abs": 4.026522506666045e-12
+    },
+    "C00748__prince__prince__nangate45__p2": {
+     "passed": true,
+     "max_abs": 2.4704480396258214e-13
+    },
+    "C00749__chacha__chacha__nangate45__p2": {
+     "passed": true,
+     "max_abs": 8.67710017819282e-14
+    },
+    "C00867__user_proj_example__acor_dct32__nangate45__p2": {
+     "passed": true,
+     "max_abs": 7.353058327421325e-12
+    },
+    "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2": {
+     "passed": true,
+     "max_abs": 9.897748133176859e-13
+    },
+    "C01026__proc__fpga-busicdc-2025__nangate45__p2": {
+     "passed": true,
+     "max_abs": 1.9208841975533724e-12
+    },
+    "C01134__gba_cpu__gbatang__nangate45__p2": {
+     "passed": true,
+     "max_abs": 8.737928229349376e-13
+    },
+    "C01329__controller__fft_hardware_accelerator__nangate45__p2": {
+     "passed": true,
+     "max_abs": 9.371903876868523e-11
+    },
+    "C01423__jt12__neogeo_mister__nangate45__p2": {
+     "passed": true,
+     "max_abs": 4.2771315867306745e-12
+    },
+    "C01472__rxuart__qc-tee__nangate45__p2": {
+     "passed": true,
+     "max_abs": 3.355418209382839e-12
+    },
+    "C01484__multiplier_32_bit__comp__nangate45__p2": {
+     "passed": true,
+     "max_abs": 1.9335263547041494e-11
+    },
+    "C01563__ppu__panog2_nes__nangate45__p2": {
+     "passed": true,
+     "max_abs": 1.2005463353100156e-13
+    },
+    "C01568__div_pipelined__soc__nangate45__p2": {
+     "passed": true,
+     "max_abs": 8.52605005267047e-13
+    },
+    "C01851__top__numericalwordle__nangate45__p2": {
+     "passed": true,
+     "max_abs": 2.299699803984861e-14
+    },
+    "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2": {
+     "passed": true,
+     "max_abs": 3.269290156959249e-13
+    },
+    "C02031__top__fpga-pid-controller-using-verilog__nangate45__p2": {
+     "passed": true,
+     "max_abs": 1.4329890410131468e-11
+    },
+    "C02306__cordic__cordic-rtl-implementation__nangate45__p2": {
+     "passed": true,
+     "max_abs": 7.163975321000909e-13
+    },
+    "C02321__divider_unsigned__risc-v_pipelined_superscalar_processor__nangate45__p2": {
+     "passed": true,
+     "max_abs": 7.147413558358448e-11
+    },
+    "C02369__Uart8__verilog-uart__nangate45__p2": {
+     "passed": true,
+     "max_abs": 1.0130990420490968e-13
+    },
+    "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2": {
+     "passed": true,
+     "max_abs": 4.666177276781307e-14
+    },
+    "C02544__lumi_rx_ready__umi__nangate45__p2": {
+     "passed": true,
+     "max_abs": 4.630417018526768e-13
+    },
+    "C02570__muldiv__koti__nangate45__p2": {
+     "passed": true,
+     "max_abs": 5.0042802543438965e-12
+    },
+    "C02742__asp_top__abstractx__nangate45__p2": {
+     "passed": true,
+     "max_abs": 7.07299754713298e-14
+    },
+    "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2": {
+     "passed": true,
+     "max_abs": 4.590512858042067e-13
+    },
+    "C03011__snake__verilog-snake-game-on-fpga__nangate45__p2": {
+     "passed": true,
+     "max_abs": 5.747607484183736e-13
+    },
+    "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2": {
+     "passed": true,
+     "max_abs": 6.521672079394633e-13
+    },
+    "C03232__opl2__arcade-tecmo_mister__nangate45__p2": {
+     "passed": true,
+     "max_abs": 1.5780507097516825e-13
+    },
+    "C03268__core__riscv-tlv-core__nangate45__p2": {
+     "passed": true,
+     "max_abs": 4.75447496788863e-12
+    },
+    "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2": {
+     "passed": true,
+     "max_abs": 8.491674424987005e-12
+    },
+    "C03387__vga1__ego1-vga__nangate45__p2": {
+     "passed": true,
+     "max_abs": 5.515683662944335e-13
+    },
+    "C03527__tt_um_koti__koti__nangate45__p2": {
+     "passed": true,
+     "max_abs": 5.710935429901586e-13
+    },
+    "C03761__cordic__cordic-core__nangate45__p2": {
+     "passed": true,
+     "max_abs": 1.275910582089891e-12
+    },
+    "C03932__edge_fpu_fmac__edge-rv__nangate45__p2": {
+     "passed": true,
+     "max_abs": 3.021571294765154e-12
+    }
+   },
+   "diag_power_total_W": {
+    "C00023__qoi_compress__qoiimg__nangate45__p2": {
+     "truth": 0.035361023475301456,
+     "claim": 0.01864956653648444,
+     "dropped_fraction": 0.4725953973161844
+    },
+    "C00180__gift_core__gift__nangate45__p2": {
+     "truth": 0.04306142269794577,
+     "claim": 0.03335702099350678,
+     "dropped_fraction": 0.2253618458570329
+    },
+    "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2": {
+     "truth": 0.002325550926413289,
+     "claim": 0.0005078942312116749,
+     "dropped_fraction": 0.7816026192146206
+    },
+    "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2": {
+     "truth": 0.0013950253390309086,
+     "claim": 0.0012444769958161943,
+     "dropped_fraction": 0.10791799905175681
+    },
+    "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2": {
+     "truth": 0.0034821419725236114,
+     "claim": 0.000837282870575226,
+     "dropped_fraction": 0.7595494735189036
+    },
+    "C00424__CRC32_D56__ethernetmac__nangate45__p2": {
+     "truth": 0.01873833618918752,
+     "claim": 0.018738336156356544,
+     "dropped_fraction": 1.7520753736732786e-09
+    },
+    "C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2": {
+     "truth": 0.0009966989372571788,
+     "claim": 0.0009966989360937865,
+     "dropped_fraction": 1.1672454114375341e-09
+    },
+    "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2": {
+     "truth": 1.4078282996977243,
+     "claim": 1.4037895052575946,
+     "dropped_fraction": 0.0028688118011243047
+    },
+    "C00622__fpu_sp_add__fpu__nangate45__p2": {
+     "truth": 0.03504868610663281,
+     "claim": 0.027578863885922174,
+     "dropped_fraction": 0.21312702558904206
+    },
+    "C00627__fpu_sp_mul__fpu__nangate45__p2": {
+     "truth": 0.21815272824246523,
+     "claim": 0.21436613628526088,
+     "dropped_fraction": 0.017357527397025008
+    },
+    "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2": {
+     "truth": 0.03230908787603859,
+     "claim": 0.028702945647654503,
+     "dropped_fraction": 0.11161386673062079
+    },
+    "C00748__prince__prince__nangate45__p2": {
+     "truth": 0.007374939041541628,
+     "claim": 0.0007196919964661452,
+     "dropped_fraction": 0.9024138379433027
+    },
+    "C00749__chacha__chacha__nangate45__p2": {
+     "truth": 0.014499946068585512,
+     "claim": 0.0019231928770341018,
+     "dropped_fraction": 0.8673655151586566
+    },
+    "C00867__user_proj_example__acor_dct32__nangate45__p2": {
+     "truth": 0.2600704345006879,
+     "claim": 0.2548411071385614,
+     "dropped_fraction": 0.020107350426688653
+    },
+    "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2": {
+     "truth": 0.007282734697840576,
+     "claim": 0.005752957587729212,
+     "dropped_fraction": 0.21005531212951678
+    },
+    "C01026__proc__fpga-busicdc-2025__nangate45__p2": {
+     "truth": 0.006767895103571675,
+     "claim": 0.005434958298106987,
+     "dropped_fraction": 0.1969499800257316
+    },
+    "C01134__gba_cpu__gbatang__nangate45__p2": {
+     "truth": 0.0201215701896561,
+     "claim": 0.015583808147956284,
+     "dropped_fraction": 0.22551729308046475
+    },
+    "C01329__controller__fft_hardware_accelerator__nangate45__p2": {
+     "truth": 4.495131100455894,
+     "claim": 4.495054435194886,
+     "dropped_fraction": 1.7055177990332737e-05
+    },
+    "C01423__jt12__neogeo_mister__nangate45__p2": {
+     "truth": 0.10752311752732768,
+     "claim": 0.06431887384977729,
+     "dropped_fraction": 0.4018135324858839
+    },
+    "C01472__rxuart__qc-tee__nangate45__p2": {
+     "truth": 0.009593821013229142,
+     "claim": 0.0073812324809416595,
+     "dropped_fraction": 0.23062641352559043
+    },
+    "C01484__multiplier_32_bit__comp__nangate45__p2": {
+     "truth": 0.3480605901487457,
+     "claim": 0.3480605906906,
+     "dropped_fraction": -1.5567815925265904e-09
+    },
+    "C01563__ppu__panog2_nes__nangate45__p2": {
+     "truth": 0.022622310018415193,
+     "claim": 0.0027700415997288542,
+     "dropped_fraction": 0.8775526638316793
+    },
+    "C01568__div_pipelined__soc__nangate45__p2": {
+     "truth": 0.03978474734242776,
+     "claim": 0.012802119103717159,
+     "dropped_fraction": 0.6782153976364566
+    },
+    "C01851__top__numericalwordle__nangate45__p2": {
+     "truth": 0.00032775388153849505,
+     "claim": 0.00028635009612653283,
+     "dropped_fraction": 0.12632584309180572
+    },
+    "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2": {
+     "truth": 0.010904731844866955,
+     "claim": 0.004085156327930965,
+     "dropped_fraction": 0.6253776446732233
+    },
+    "C02031__top__fpga-pid-controller-using-verilog__nangate45__p2": {
+     "truth": 0.07738725564549798,
+     "claim": 0.07715583675167992,
+     "dropped_fraction": 0.002990400575492158
+    },
+    "C02306__cordic__cordic-rtl-implementation__nangate45__p2": {
+     "truth": 0.005378604966022715,
+     "claim": 0.00475448324573805,
+     "dropped_fraction": 0.11603784331203282
+    },
+    "C02321__divider_unsigned__risc-v_pipelined_superscalar_processor__nangate45__p2": {
+     "truth": 2.8952564363162705,
+     "claim": 2.895256437791345,
+     "dropped_fraction": -5.094795696436449e-10
+    },
+    "C02369__Uart8__verilog-uart__nangate45__p2": {
+     "truth": 0.00013706973813421008,
+     "claim": 0.00012765171313143146,
+     "dropped_fraction": 0.06870973222081367
+    },
+    "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2": {
+     "truth": 0.014224192877132946,
+     "claim": 0.0007300437998605852,
+     "dropped_fraction": 0.9486759068745323
+    },
+    "C02544__lumi_rx_ready__umi__nangate45__p2": {
+     "truth": 0.0023593923450817567,
+     "claim": 0.0019413015700370977,
+     "dropped_fraction": 0.17720273438887146
+    },
+    "C02570__muldiv__koti__nangate45__p2": {
+     "truth": 0.04350215034701854,
+     "claim": 0.03787962462573359,
+     "dropped_fraction": 0.12924707575220584
+    },
+    "C02742__asp_top__abstractx__nangate45__p2": {
+     "truth": 0.02290274935610137,
+     "claim": 0.0012478200766659325,
+     "dropped_fraction": 0.945516581556899
+    },
+    "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2": {
+     "truth": 0.00085185343437999,
+     "claim": 0.00038749511593894574,
+     "dropped_fraction": 0.5451152741774424
+    },
+    "C03011__snake__verilog-snake-game-on-fpga__nangate45__p2": {
+     "truth": 0.0010605097882128156,
+     "claim": 0.0010079960593378785,
+     "dropped_fraction": 0.049517439120891016
+    },
+    "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2": {
+     "truth": 0.007225739077783122,
+     "claim": 0.003233642267601197,
+     "dropped_fraction": 0.5524828349332969
+    },
+    "C03232__opl2__arcade-tecmo_mister__nangate45__p2": {
+     "truth": 0.021389841493373196,
+     "claim": 0.0035924674806570617,
+     "dropped_fraction": 0.8320479615629668
+    },
+    "C03268__core__riscv-tlv-core__nangate45__p2": {
+     "truth": 0.03033621633996231,
+     "claim": 0.014941480955020198,
+     "dropped_fraction": 0.5074705168377383
+    },
+    "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2": {
+     "truth": 0.020489928919789516,
+     "claim": 0.01956053447071112,
+     "dropped_fraction": 0.04535859800766662
+    },
+    "C03387__vga1__ego1-vga__nangate45__p2": {
+     "truth": 0.00014542267146433474,
+     "claim": 6.37825871807166e-05,
+     "dropped_fraction": 0.5613986007927283
+    },
+    "C03527__tt_um_koti__koti__nangate45__p2": {
+     "truth": 0.02659882019764548,
+     "claim": 0.004927877601127257,
+     "dropped_fraction": 0.8147332263419912
+    },
+    "C03761__cordic__cordic-core__nangate45__p2": {
+     "truth": 0.09672464473416031,
+     "claim": 0.0817184490522943,
+     "dropped_fraction": 0.15514345618026615
+    },
+    "C03932__edge_fpu_fmac__edge-rv__nangate45__p2": {
+     "truth": 0.028333942047796597,
+     "claim": 0.028071712812612132,
+     "dropped_fraction": 0.009254950643370008
+    }
+   }
+  }
+ },
+ "per_design": {
+  "C00023__qoi_compress__qoiimg__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C00180__gift_core__gift__nangate45__p2": {
+   "stratum": "medium",
+   "passed": false,
+   "failed": [
+    "L1_group_names_map_to_synthesis",
+    "L1_group_one_to_one",
+    "P.F1_net_fanout",
+    "P.F1_net_num_drivers",
+    "P.F1_net_num_sinks",
+    "P.F1_net_pin_count",
+    "P.F4_net_total_sink_cap_fF",
+    "P.F_u_avg_fanout",
+    "P.I2_net_identity",
+    "P.T1_pin_net",
+    "P.T2_C_gate_net",
+    "P.T2_D_pin-pin",
+    "P.T2_E_pin-pin",
+    "P.T2_F_gate-gate",
+    "R.F1_net_fanout",
+    "R.F1_net_num_drivers",
+    "R.F1_net_num_sinks",
+    "R.F1_net_pin_count",
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape",
+    "R.F4_net_total_sink_cap_fF",
+    "R.F_u_avg_fanout",
+    "R.I2_net_identity",
+    "R.T1_pin_net",
+    "R.T2_C_gate_net",
+    "R.T2_D_pin-pin",
+    "R.T2_E_pin-pin",
+    "R.T2_F_gate-gate"
+   ]
+  },
+  "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2": {
+   "stratum": "medium",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2": {
+   "stratum": "medium",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F1_net_fanout",
+    "R.F1_net_num_sinks",
+    "R.F1_net_pin_count",
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C00424__CRC32_D56__ethernetmac__nangate45__p2": {
+   "stratum": "medium",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C00454__motor_fault_detector__risc-v-motor-fault-detection-fpga__nangate45__p2": {
+   "stratum": "small",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C00622__fpu_sp_add__fpu__nangate45__p2": {
+   "stratum": "medium",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C00627__fpu_sp_mul__fpu__nangate45__p2": {
+   "stratum": "medium",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2": {
+   "stratum": "medium",
+   "passed": false,
+   "failed": [
+    "L1_group_wirelength",
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C00748__prince__prince__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C00749__chacha__chacha__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C00867__user_proj_example__acor_dct32__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2": {
+   "stratum": "medium",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C01026__proc__fpga-busicdc-2025__nangate45__p2": {
+   "stratum": "small",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C01134__gba_cpu__gbatang__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "L1_group_wirelength",
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C01329__controller__fft_hardware_accelerator__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "L1_group_wirelength",
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C01423__jt12__neogeo_mister__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C01472__rxuart__qc-tee__nangate45__p2": {
+   "stratum": "medium",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C01484__multiplier_32_bit__comp__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C01563__ppu__panog2_nes__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C01568__div_pipelined__soc__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C01851__top__numericalwordle__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C01901__top_wrapper__sky130-4x4-int8-systolic-array-ai-accele__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C02031__top__fpga-pid-controller-using-verilog__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C02306__cordic__cordic-rtl-implementation__nangate45__p2": {
+   "stratum": "medium",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C02321__divider_unsigned__risc-v_pipelined_superscalar_processor__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C02369__Uart8__verilog-uart__nangate45__p2": {
+   "stratum": "small",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C02544__lumi_rx_ready__umi__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C02570__muldiv__koti__nangate45__p2": {
+   "stratum": "medium",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C02742__asp_top__abstractx__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2": {
+   "stratum": "small",
+   "passed": false,
+   "failed": [
+    "L1_group_one_to_one",
+    "L1b_group_boundary_endpoints",
+    "R.F1_net_fanout",
+    "R.F1_net_num_sinks",
+    "R.F1_net_pin_count",
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C03011__snake__verilog-snake-game-on-fpga__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2": {
+   "stratum": "medium",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C03232__opl2__arcade-tecmo_mister__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C03268__core__riscv-tlv-core__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2": {
+   "stratum": "medium",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C03387__vga1__ego1-vga__nangate45__p2": {
+   "stratum": "small",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C03527__tt_um_koti__koti__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "L1_group_wirelength",
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C03761__cordic__cordic-core__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  },
+  "C03932__edge_fpu_fmac__edge-rv__nangate45__p2": {
+   "stratum": "large",
+   "passed": false,
+   "failed": [
+    "R.F2_net_hpwl_um_unsplit",
+    "R.F2_pin_xy_bbox_centre",
+    "R.F3_pin_inside_shape"
+   ]
+  }
+ }
+}

@@ -1,0 +1,841 @@
+{
+ "seed": 20261111,
+ "n_per_platform": 30,
+ "cell_range": [
+  300,
+  30000
+ ],
+ "frozen": "2026-11-07",
+ "generator": "make_sample_v2.py",
+ "inputs": {
+  "collect216.py": "b00c6b83f9b85c37d0d3f86c0c4624bacb4f4995060b44414e1d5ca2a2287706",
+  "rows216.json": "8fe5b6dad2d7917ae4df61b97983f510037a4cb9d940b0b328ec91dc4ca2c1cd",
+  "select_cells.tsv": "307d8aeff5bf5f0e1181b9e7d1ca9f06fcd8aa8c0042e4cd0a23c6ba8e33cebc"
+ },
+ "meta": {
+  "nangate45": {
+   "source": "memlab203:/data/r2g_n45_pilot500/select_cells.tsv",
+   "source_sha256": "307d8aeff5bf5f0e1181b9e7d1ca9f06fcd8aa8c0042e4cd0a23c6ba8e33cebc",
+   "population": 500,
+   "excluded_dev_or_defgraph_debug": [
+    "C00180__gift_core__gift__nangate45__p2",
+    "C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2",
+    "C00293__tiled_dma_shell__axi4-systolic-array-accelerator__nangate45__p2",
+    "C00424__CRC32_D56__ethernetmac__nangate45__p2",
+    "C00627__fpu_sp_mul__fpu__nangate45__p2",
+    "C00702__wallace_24x28_product__riscv-fpu-interrupt__nangate45__p2",
+    "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+    "C01001__tt_um_verilog_meetup_template_project_TODO__ttsky-verilog-template-for-verilog-meetu__nangate45__p2",
+    "C01026__proc__fpga-busicdc-2025__nangate45__p2",
+    "C01423__jt12__neogeo_mister__nangate45__p2",
+    "C01484__multiplier_32_bit__comp__nangate45__p2",
+    "C01563__ppu__panog2_nes__nangate45__p2",
+    "C02146__rv_custom_ascon_if__nasa-riscv-crypto-mvp__nangate45__p2",
+    "C02241__multi_kernel_conv__edge-ai-cnn-inference-engine-on-fpga__nangate45__p2",
+    "C02369__Uart8__verilog-uart__nangate45__p2",
+    "C02414__tt_um_kianV_rv32ima_uLinux_SoC__kianv_rv32ia_ulinux_soc__nangate45__p2",
+    "C02509__AES_Comp_DECx__rds__nangate45__p2",
+    "C02816__rggen_native_adapter__rggen-verilog-rtl__nangate45__p2",
+    "C03005__counter__teroshdl-examples__nangate45__p2",
+    "C03069__sirv_flash_qspi_top__e203_hdmi__nangate45__p2",
+    "C03387__vga1__ego1-vga__nangate45__p2"
+   ],
+   "pool": 462,
+   "four_stage": true,
+   "checker_proof": [
+    "C01584__SongPlayer__ece3300-03-fall2023__nangate45__p2",
+    "C03894__RAM_IO__fuserisc_ver2__nangate45__p2",
+    "C00790__snix_video_ycbcr_to_rgb__verilaxi__nangate45__p2"
+   ]
+  },
+  "sky130hd": {
+   "source": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs",
+   "runs": 1249,
+   "dropped": {
+    "not_dual_clean": 92,
+    "cells_out_of_range": 508
+   },
+   "pool": 649,
+   "four_stage": false,
+   "checker_proof": [
+    "C02705__scandoubler_sdram__mist-modules__sky130hd__p5",
+    "C01571__bpred_gshare__riscv-branch-predictors-ppa__sky130hd__p5",
+    "C02099__image_capture_manager__2dimageprocessing__sky130hd__p5"
+   ]
+  },
+  "gf180": {
+   "source": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs",
+   "runs": 1249,
+   "dropped": {
+    "not_dual_clean": 420,
+    "cells_out_of_range": 476
+   },
+   "pool": 353,
+   "four_stage": false,
+   "checker_proof": [
+    "C02612__soc_arb__fpgamp__gf180__p10",
+    "C01595__uart_echo__uart_echo__gf180__p10",
+    "C02126__irq_ctrl__cores__gf180__p10"
+   ]
+  },
+  "dev_split_sha256": "1e5005104eafd96e8d24bf611e43c7a92cc08df53a8751c84b75fdcd0a58b486"
+ },
+ "platforms": {
+  "nangate45": [
+   {
+    "design": "C01584__SongPlayer__ece3300-03-fall2023__nangate45__p2",
+    "cells": 2670,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C01584__SongPlayer__ece3300-03-fall2023__nangate45__p2"
+   },
+   {
+    "design": "C03894__RAM_IO__fuserisc_ver2__nangate45__p2",
+    "cells": 1869,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C03894__RAM_IO__fuserisc_ver2__nangate45__p2"
+   },
+   {
+    "design": "C00790__snix_video_ycbcr_to_rgb__verilaxi__nangate45__p2",
+    "cells": 1616,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00790__snix_video_ycbcr_to_rgb__verilaxi__nangate45__p2"
+   },
+   {
+    "design": "C01109__ahb_apb_bridge_top__ahb-apb-bridge-verilog__nangate45__p2",
+    "cells": 984,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C01109__ahb_apb_bridge_top__ahb-apb-bridge-verilog__nangate45__p2"
+   },
+   {
+    "design": "C00446__alu_module__rv32i-soc__nangate45__p2",
+    "cells": 2383,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00446__alu_module__rv32i-soc__nangate45__p2"
+   },
+   {
+    "design": "C01663__wrapper_full_hash_v1__aes-sbox-hash-core__nangate45__p2",
+    "cells": 2338,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C01663__wrapper_full_hash_v1__aes-sbox-hash-core__nangate45__p2"
+   },
+   {
+    "design": "C00981__jt49__jt49__nangate45__p2",
+    "cells": 1941,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00981__jt49__jt49__nangate45__p2"
+   },
+   {
+    "design": "C03435__clut_simple__projf-explore__nangate45__p2",
+    "cells": 1221,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C03435__clut_simple__projf-explore__nangate45__p2"
+   },
+   {
+    "design": "C02573__serv_rf_top__caravel_yonga-serv-accelerator__nangate45__p2",
+    "cells": 9192,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C02573__serv_rf_top__caravel_yonga-serv-accelerator__nangate45__p2"
+   },
+   {
+    "design": "C03873__elevator_controller_top__fpga_elevator_controller__nangate45__p2",
+    "cells": 1370,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C03873__elevator_controller_top__fpga_elevator_controller__nangate45__p2"
+   },
+   {
+    "design": "C02279__divider__fpu__nangate45__p2",
+    "cells": 3560,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C02279__divider__fpu__nangate45__p2"
+   },
+   {
+    "design": "C00337__t2h__digitalcpuzoo__nangate45__p2",
+    "cells": 1824,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00337__t2h__digitalcpuzoo__nangate45__p2"
+   },
+   {
+    "design": "C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2",
+    "cells": 10133,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00497__fsqrt_newton__riscv-fpu-interrupt__nangate45__p2"
+   },
+   {
+    "design": "C03168__tt_um_riyanlord2026_dev_ternary_158__ternary-158-asic__nangate45__p2",
+    "cells": 3331,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C03168__tt_um_riyanlord2026_dev_ternary_158__ternary-158-asic__nangate45__p2"
+   },
+   {
+    "design": "C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2",
+    "cells": 1489,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00210__Image_Generator__jpeg-hardware-decoder__nangate45__p2"
+   },
+   {
+    "design": "C00115__jt12_op__s32multi__nangate45__p2",
+    "cells": 3018,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00115__jt12_op__s32multi__nangate45__p2"
+   },
+   {
+    "design": "C01746__cordic_sincos_50000_core_20__tt_pump_out_chip__nangate45__p2",
+    "cells": 1421,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C01746__cordic_sincos_50000_core_20__tt_pump_out_chip__nangate45__p2"
+   },
+   {
+    "design": "C01758__jt49__jt49__nangate45__p2",
+    "cells": 1934,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C01758__jt49__jt49__nangate45__p2"
+   },
+   {
+    "design": "C00745__snix_video_axis_mixer2__verilaxi__nangate45__p2",
+    "cells": 1257,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00745__snix_video_axis_mixer2__verilaxi__nangate45__p2"
+   },
+   {
+    "design": "C00404__pl_stage_exe__riscv-fpu-interrupt__nangate45__p2",
+    "cells": 2459,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00404__pl_stage_exe__riscv-fpu-interrupt__nangate45__p2"
+   },
+   {
+    "design": "C03725__zkf_fma__zkf__nangate45__p2",
+    "cells": 4457,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C03725__zkf_fma__zkf__nangate45__p2"
+   },
+   {
+    "design": "C00867__user_proj_example__acor_dct32__nangate45__p2",
+    "cells": 17449,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00867__user_proj_example__acor_dct32__nangate45__p2"
+   },
+   {
+    "design": "C01216__asynch_fifo__asynchronous-fifo---rtl__nangate45__p2",
+    "cells": 2011,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C01216__asynch_fifo__asynchronous-fifo---rtl__nangate45__p2"
+   },
+   {
+    "design": "C00350__frame_latency__video_processing__nangate45__p2",
+    "cells": 3802,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00350__frame_latency__video_processing__nangate45__p2"
+   },
+   {
+    "design": "C02742__asp_top__abstractx__nangate45__p2",
+    "cells": 19462,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C02742__asp_top__abstractx__nangate45__p2"
+   },
+   {
+    "design": "C02395__TOP__kf8253__nangate45__p2",
+    "cells": 3894,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C02395__TOP__kf8253__nangate45__p2"
+   },
+   {
+    "design": "C00800__fpu_sp_div__fpu__nangate45__p2",
+    "cells": 3572,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00800__fpu_sp_div__fpu__nangate45__p2"
+   },
+   {
+    "design": "C02099__image_capture_manager__2dimageprocessing__nangate45__p2",
+    "cells": 1086,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C02099__image_capture_manager__2dimageprocessing__nangate45__p2"
+   },
+   {
+    "design": "C00546__fft_addr_gen__sonic-speed-parallelism__nangate45__p2",
+    "cells": 305,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00546__fft_addr_gen__sonic-speed-parallelism__nangate45__p2"
+   },
+   {
+    "design": "C00212__uart__icarium__nangate45__p2",
+    "cells": 1788,
+    "source_dir": "memlab203:/data/r2g_n45_pilot500/nangate45_pilot500/C00212__uart__icarium__nangate45__p2"
+   }
+  ],
+  "sky130hd": [
+   {
+    "design": "C02705__scandoubler_sdram__mist-modules__sky130hd__p5",
+    "key": "C02705__scandoubler_sdram__mist-modules",
+    "cells": 779,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C02705__scandoubler_sdram__mist-modules__sky130hd__p5"
+   },
+   {
+    "design": "C01571__bpred_gshare__riscv-branch-predictors-ppa__sky130hd__p5",
+    "key": "C01571__bpred_gshare__riscv-branch-predictors-ppa",
+    "cells": 21482,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C01571__bpred_gshare__riscv-branch-predictors-ppa__sky130hd__p5"
+   },
+   {
+    "design": "C02099__image_capture_manager__2dimageprocessing__sky130hd__p5",
+    "key": "C02099__image_capture_manager__2dimageprocessing",
+    "cells": 860,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C02099__image_capture_manager__2dimageprocessing__sky130hd__p5"
+   },
+   {
+    "design": "C00838__iir_biquad_axis__iir-biquad-module-fpga__sky130hd__p5",
+    "key": "C00838__iir_biquad_axis__iir-biquad-module-fpga",
+    "cells": 14763,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C00838__iir_biquad_axis__iir-biquad-module-fpga__sky130hd__p5"
+   },
+   {
+    "design": "C02813__uart_core__uart__sky130hd__p5",
+    "key": "C02813__uart_core__uart",
+    "cells": 342,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C02813__uart_core__uart__sky130hd__p5"
+   },
+   {
+    "design": "C01875__tt_um_kianV_rv32ima_uLinux_SoC__kianv-rv32ima-risc-v-ulinux-soc__sky130hd__p5",
+    "key": "C01875__tt_um_kianV_rv32ima_uLinux_SoC__kianv-rv32ima-risc-v-ulinux-soc",
+    "cells": 19934,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C01875__tt_um_kianV_rv32ima_uLinux_SoC__kianv-rv32ima-risc-v-ulinux-soc__sky130hd__p5"
+   },
+   {
+    "design": "C03625__decimal__tm1637-verilog__sky130hd__p5",
+    "key": "C03625__decimal__tm1637-verilog",
+    "cells": 773,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C03625__decimal__tm1637-verilog__sky130hd__p5"
+   },
+   {
+    "design": "C00562__jpeg_mcu_proc__core_jpeg__sky130hd__p5",
+    "key": "C00562__jpeg_mcu_proc__core_jpeg",
+    "cells": 2308,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C00562__jpeg_mcu_proc__core_jpeg__sky130hd__p5"
+   },
+   {
+    "design": "C00977__FCore__aa__sky130hd__p5",
+    "key": "C00977__FCore__aa",
+    "cells": 415,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C00977__FCore__aa__sky130hd__p5"
+   },
+   {
+    "design": "C00398__gtx_debug_reporter__33-fpga-10gbe-phy-custom__sky130hd__p5",
+    "key": "C00398__gtx_debug_reporter__33-fpga-10gbe-phy-custom",
+    "cells": 3956,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C00398__gtx_debug_reporter__33-fpga-10gbe-phy-custom__sky130hd__p5"
+   },
+   {
+    "design": "C00214__fpu_dp_top__fpu__sky130hd__p5",
+    "key": "C00214__fpu_dp_top__fpu",
+    "cells": 24187,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C00214__fpu_dp_top__fpu__sky130hd__p5"
+   },
+   {
+    "design": "C02904__parking_uart_top__smart-parking-fpga-ai__sky130hd__p5",
+    "key": "C02904__parking_uart_top__smart-parking-fpga-ai",
+    "cells": 9541,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C02904__parking_uart_top__smart-parking-fpga-ai__sky130hd__p5"
+   },
+   {
+    "design": "C02919__qspim_rx__qspim__sky130hd__p5",
+    "key": "C02919__qspim_rx__qspim",
+    "cells": 740,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C02919__qspim_rx__qspim__sky130hd__p5"
+   },
+   {
+    "design": "C01468__signal_generator__fft-ip-core__sky130hd__p5",
+    "key": "C01468__signal_generator__fft-ip-core",
+    "cells": 488,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C01468__signal_generator__fft-ip-core__sky130hd__p5"
+   },
+   {
+    "design": "C00754__q15_source_mux_axi__2026_g_periodic-signal-measurement-and-a__sky130hd__p5",
+    "key": "C00754__q15_source_mux_axi__2026_g_periodic-signal-measurement-and-a",
+    "cells": 444,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C00754__q15_source_mux_axi__2026_g_periodic-signal-measurement-and-a__sky130hd__p5"
+   },
+   {
+    "design": "C01677__int8_matmul_engine__heterocore-rtl__sky130hd__p5",
+    "key": "C01677__int8_matmul_engine__heterocore-rtl",
+    "cells": 2003,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C01677__int8_matmul_engine__heterocore-rtl__sky130hd__p5"
+   },
+   {
+    "design": "C02193__smart_home_soc__smarthome-soc-rtl-to-asic__sky130hd__p5",
+    "key": "C02193__smart_home_soc__smarthome-soc-rtl-to-asic",
+    "cells": 356,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C02193__smart_home_soc__smarthome-soc-rtl-to-asic__sky130hd__p5"
+   },
+   {
+    "design": "C00598__eth_mac_1g__picorv32_xilinx__sky130hd__p5",
+    "key": "C00598__eth_mac_1g__picorv32_xilinx",
+    "cells": 1653,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C00598__eth_mac_1g__picorv32_xilinx__sky130hd__p5"
+   },
+   {
+    "design": "C03844__sirv_gnrl_ram__tang_e203_mini__sky130hd__p5",
+    "key": "C03844__sirv_gnrl_ram__tang_e203_mini",
+    "cells": 3672,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C03844__sirv_gnrl_ram__tang_e203_mini__sky130hd__p5"
+   },
+   {
+    "design": "C01586__split__fpga-sdrlib__sky130hd__p5",
+    "key": "C01586__split__fpga-sdrlib",
+    "cells": 1609,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C01586__split__fpga-sdrlib__sky130hd__p5"
+   },
+   {
+    "design": "C03474__prim_multiplier_32x32__final-capstone__sky130hd__p5",
+    "key": "C03474__prim_multiplier_32x32__final-capstone",
+    "cells": 3410,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C03474__prim_multiplier_32x32__final-capstone__sky130hd__p5"
+   },
+   {
+    "design": "C01042__non_restoring_divider__ignitertl__sky130hd__p5",
+    "key": "C01042__non_restoring_divider__ignitertl",
+    "cells": 495,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C01042__non_restoring_divider__ignitertl__sky130hd__p5"
+   },
+   {
+    "design": "C00404__pl_stage_exe__riscv-fpu-interrupt__sky130hd__p5",
+    "key": "C00404__pl_stage_exe__riscv-fpu-interrupt",
+    "cells": 2456,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C00404__pl_stage_exe__riscv-fpu-interrupt__sky130hd__p5"
+   },
+   {
+    "design": "C01055__apb_slave_top__amba-apb-slave-verilog__sky130hd__p5",
+    "key": "C01055__apb_slave_top__amba-apb-slave-verilog",
+    "cells": 23460,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C01055__apb_slave_top__amba-apb-slave-verilog__sky130hd__p5"
+   },
+   {
+    "design": "C00422__wallace_24x26__riscv-fpu-interrupt__sky130hd__p5",
+    "key": "C00422__wallace_24x26__riscv-fpu-interrupt",
+    "cells": 2134,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C00422__wallace_24x26__riscv-fpu-interrupt__sky130hd__p5"
+   },
+   {
+    "design": "C00260__reg_file__rv32i-soc__sky130hd__p5",
+    "key": "C00260__reg_file__rv32i-soc",
+    "cells": 7190,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C00260__reg_file__rv32i-soc__sky130hd__p5"
+   },
+   {
+    "design": "C02890__jtopl2__jtopl__sky130hd__p5",
+    "key": "C02890__jtopl2__jtopl",
+    "cells": 7140,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C02890__jtopl2__jtopl__sky130hd__p5"
+   },
+   {
+    "design": "C01883__uart__asyncart__sky130hd__p5",
+    "key": "C01883__uart__asyncart",
+    "cells": 626,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C01883__uart__asyncart__sky130hd__p5"
+   },
+   {
+    "design": "C00446__alu_module__rv32i-soc__sky130hd__p5",
+    "key": "C00446__alu_module__rv32i-soc",
+    "cells": 2264,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C00446__alu_module__rv32i-soc__sky130hd__p5"
+   },
+   {
+    "design": "C00551__EXU__tiny_soc__sky130hd__p5",
+    "key": "C00551__EXU__tiny_soc",
+    "cells": 1850,
+    "period": "5",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_sky130hd_20261022/runs/C00551__EXU__tiny_soc__sky130hd__p5"
+   }
+  ],
+  "gf180": [
+   {
+    "design": "C02612__soc_arb__fpgamp__gf180__p10",
+    "key": "C02612__soc_arb__fpgamp",
+    "cells": 4425,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C02612__soc_arb__fpgamp__gf180__p10"
+   },
+   {
+    "design": "C01595__uart_echo__uart_echo__gf180__p10",
+    "key": "C01595__uart_echo__uart_echo",
+    "cells": 1308,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C01595__uart_echo__uart_echo__gf180__p10"
+   },
+   {
+    "design": "C02126__irq_ctrl__cores__gf180__p10",
+    "key": "C02126__irq_ctrl__cores",
+    "cells": 309,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C02126__irq_ctrl__cores__gf180__p10"
+   },
+   {
+    "design": "C00864__top_fifo__spartan6-synchronous-fifo__gf180__p10",
+    "key": "C00864__top_fifo__spartan6-synchronous-fifo",
+    "cells": 1357,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C00864__top_fifo__spartan6-synchronous-fifo__gf180__p10"
+   },
+   {
+    "design": "C02672__pc__mips-cpu__gf180__p10",
+    "key": "C02672__pc__mips-cpu",
+    "cells": 843,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C02672__pc__mips-cpu__gf180__p10"
+   },
+   {
+    "design": "C01951__alu__y86-64-processor__gf180__p10",
+    "key": "C01951__alu__y86-64-processor",
+    "cells": 350,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C01951__alu__y86-64-processor__gf180__p10"
+   },
+   {
+    "design": "C03763__unsigned_multiplier_16x16_async__fpga-code__gf180__p10",
+    "key": "C03763__unsigned_multiplier_16x16_async__fpga-code",
+    "cells": 988,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C03763__unsigned_multiplier_16x16_async__fpga-code__gf180__p10"
+   },
+   {
+    "design": "C03435__clut_simple__projf-explore__gf180__p10",
+    "key": "C03435__clut_simple__projf-explore",
+    "cells": 949,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C03435__clut_simple__projf-explore__gf180__p10"
+   },
+   {
+    "design": "C00603__sync_fifo__ethernet-rx-gateway-asic__gf180__p10",
+    "key": "C00603__sync_fifo__ethernet-rx-gateway-asic",
+    "cells": 984,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C00603__sync_fifo__ethernet-rx-gateway-asic__gf180__p10"
+   },
+   {
+    "design": "C00996__tdma_mac__cirradio__gf180__p10",
+    "key": "C00996__tdma_mac__cirradio",
+    "cells": 641,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C00996__tdma_mac__cirradio__gf180__p10"
+   },
+   {
+    "design": "C00424__CRC32_D56__ethernetmac__gf180__p10",
+    "key": "C00424__CRC32_D56__ethernetmac",
+    "cells": 2730,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C00424__CRC32_D56__ethernetmac__gf180__p10"
+   },
+   {
+    "design": "C00260__reg_file__rv32i-soc__gf180__p10",
+    "key": "C00260__reg_file__rv32i-soc",
+    "cells": 7882,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C00260__reg_file__rv32i-soc__gf180__p10"
+   },
+   {
+    "design": "C02765__cam__implementation-of-tightly-coupled-data-f__gf180__p10",
+    "key": "C02765__cam__implementation-of-tightly-coupled-data-f",
+    "cells": 776,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C02765__cam__implementation-of-tightly-coupled-data-f__gf180__p10"
+   },
+   {
+    "design": "C02801__SPI_TopModule__Serial-Communication-Protocols__gf180__p10",
+    "key": "C02801__SPI_TopModule__Serial-Communication-Protocols",
+    "cells": 356,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C02801__SPI_TopModule__Serial-Communication-Protocols__gf180__p10"
+   },
+   {
+    "design": "C01494__picorv32_pcpi_div__pano_hello_g1__gf180__p10",
+    "key": "C01494__picorv32_pcpi_div__pano_hello_g1",
+    "cells": 2490,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C01494__picorv32_pcpi_div__pano_hello_g1__gf180__p10"
+   },
+   {
+    "design": "C00770__wallace_26x24_product__riscv-fpu-interrupt__gf180__p10",
+    "key": "C00770__wallace_26x24_product__riscv-fpu-interrupt",
+    "cells": 1989,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C00770__wallace_26x24_product__riscv-fpu-interrupt__gf180__p10"
+   },
+   {
+    "design": "C01721__top_module__uart-transmitter-receiver-verilog-fpga__gf180__p10",
+    "key": "C01721__top_module__uart-transmitter-receiver-verilog-fpga",
+    "cells": 389,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C01721__top_module__uart-transmitter-receiver-verilog-fpga__gf180__p10"
+   },
+   {
+    "design": "C02186__trig__easyoscilloscope__gf180__p10",
+    "key": "C02186__trig__easyoscilloscope",
+    "cells": 415,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C02186__trig__easyoscilloscope__gf180__p10"
+   },
+   {
+    "design": "C00671__register_file_1r_1w__scm__gf180__p10",
+    "key": "C00671__register_file_1r_1w__scm",
+    "cells": 9147,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C00671__register_file_1r_1w__scm__gf180__p10"
+   },
+   {
+    "design": "C03948__top__vhdl__gf180__p10",
+    "key": "C03948__top__vhdl",
+    "cells": 1489,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C03948__top__vhdl__gf180__p10"
+   },
+   {
+    "design": "C03535__serv_rf_top__fabulous_fabric__gf180__p10",
+    "key": "C03535__serv_rf_top__fabulous_fabric",
+    "cells": 6397,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C03535__serv_rf_top__fabulous_fabric__gf180__p10"
+   },
+   {
+    "design": "C01599__gcd__hammer__gf180__p10",
+    "key": "C01599__gcd__hammer",
+    "cells": 459,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C01599__gcd__hammer__gf180__p10"
+   },
+   {
+    "design": "C03263__axi4_lite__axi4-lite-slave-verilog__gf180__p10",
+    "key": "C03263__axi4_lite__axi4-lite-slave-verilog",
+    "cells": 1071,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C03263__axi4_lite__axi4-lite-slave-verilog__gf180__p10"
+   },
+   {
+    "design": "C01114__vga__afck_j1b__gf180__p10",
+    "key": "C01114__vga__afck_j1b",
+    "cells": 719,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C01114__vga__afck_j1b__gf180__p10"
+   },
+   {
+    "design": "C00426__fp_multiplier_3_stage_pipeline__fpu32-ieee754-lite__gf180__p10",
+    "key": "C00426__fp_multiplier_3_stage_pipeline__fpu32-ieee754-lite",
+    "cells": 2278,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C00426__fp_multiplier_3_stage_pipeline__fpu32-ieee754-lite__gf180__p10"
+   },
+   {
+    "design": "C03648__PlicVerilog__iob-plic__gf180__p10",
+    "key": "C03648__PlicVerilog__iob-plic",
+    "cells": 2347,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C03648__PlicVerilog__iob-plic__gf180__p10"
+   },
+   {
+    "design": "C01133__piece_draw_engine__SpinalTetris__gf180__p10",
+    "key": "C01133__piece_draw_engine__SpinalTetris",
+    "cells": 1313,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C01133__piece_draw_engine__SpinalTetris__gf180__p10"
+   },
+   {
+    "design": "C00452__wallace_24x28__riscv-fpu-interrupt__gf180__p10",
+    "key": "C00452__wallace_24x28__riscv-fpu-interrupt",
+    "cells": 1590,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C00452__wallace_24x28__riscv-fpu-interrupt__gf180__p10"
+   },
+   {
+    "design": "C00312__Histogram_Generator__jpeg-hardware-decoder__gf180__p10",
+    "key": "C00312__Histogram_Generator__jpeg-hardware-decoder",
+    "cells": 1650,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C00312__Histogram_Generator__jpeg-hardware-decoder__gf180__p10"
+   },
+   {
+    "design": "C02754__midside_axis_wrapper__mid-side-transform-module-fpga__gf180__p10",
+    "key": "C02754__midside_axis_wrapper__mid-side-transform-module-fpga",
+    "cells": 1584,
+    "period": "10",
+    "drc_verdict": "clean",
+    "drc_recovered": false,
+    "drc_checker": "r2g_run_drc.sh",
+    "source_dir": "memlab216:/proj/workarea/yangao/rerun_gf180_20261026/runs/C02754__midside_axis_wrapper__mid-side-transform-module-fpga__gf180__p10"
+   }
+  ]
+ }
+}

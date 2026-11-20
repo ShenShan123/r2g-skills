@@ -1,0 +1,8 @@
+design C00198__uart_transceiver__cmod-a7-uart-sram-test__nangate45__p2 GCell (i,j) = (4, 17)
+  pin_density gpt       [4,17]=8  [3,17]=4  [4,16]=10
+  pin_density deepseek  [4,17]=8  [3,17]=4  [4,16]=10
+  pin_density r2g       [4,17]=9  [3,17]=4  [4,16]=10
+  truth float-um      [4,17]=9  [3,17]=4  [4,16]=10
+  truth exact-DBU     [4,17]=8  [3,17]=4  [4,16]=10
+  net _0124_  point _1797_/ZN at (14.2500, 51.0108) um = (28500.0, 102021.7) DBU; float-um floor -> GCell (4, 17), exact floor -> GCell (5, 17); e.g. x/2000 // 2.85 = 4.0, x_dbu/5700 = 5.0
+  boundary points touching this GCell: 1

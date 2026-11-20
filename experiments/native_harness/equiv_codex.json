@@ -1,0 +1,198 @@
+[
+ {
+  "case_id": "gf180_C03966",
+  "pending": [
+   "rtl/rv_plic_target.sv"
+  ],
+  "reader": "slang",
+  "verdict": "not_proven",
+  "equiv_cells": 14,
+  "proven": 7,
+  "unproven": 7,
+  "root": "/data/yangao/native_harness/codex_runs_20261113",
+  "arm": "native_codex",
+  "model": "gpt-6.1-sol"
+ },
+ {
+  "case_id": "nangate45_C03945",
+  "pending": [
+   "utils/timer.v"
+  ],
+  "reader": "verilog",
+  "verdict": "not_proven",
+  "equiv_cells": 2,
+  "proven": 0,
+  "unproven": 2,
+  "root": "/data/yangao/native_harness/codex_runs_20261113",
+  "arm": "native_codex",
+  "model": "gpt-6.1-sol"
+ },
+ {
+  "case_id": "sky130hd_C03962",
+  "pending": [
+   "generic_service_unit.sv",
+   "sleep_unit.sv"
+  ],
+  "reader": "slang",
+  "verdict": "equivalent",
+  "equiv_cells": 1380,
+  "proven": 1380,
+  "unproven": 0,
+  "root": "/data/yangao/native_harness/codex_runs_20261113",
+  "arm": "native_codex",
+  "model": "gpt-6.1-sol"
+ },
+ {
+  "case_id": "nangate45_C02098",
+  "pending": [
+   "rtl/areset_synchronizer.sv"
+  ],
+  "reader": "verilog",
+  "verdict": "equivalent",
+  "equiv_cells": 4,
+  "proven": 4,
+  "unproven": 0,
+  "root": "/data/yangao/native_harness/codex_runs_20261113",
+  "arm": "native_codex",
+  "model": "gpt-6.1-sol"
+ },
+ {
+  "case_id": "nangate45_C03962",
+  "pending": [
+   "generic_service_unit.sv",
+   "sleep_unit.sv"
+  ],
+  "reader": "slang",
+  "verdict": "equivalent",
+  "equiv_cells": 1380,
+  "proven": 1380,
+  "unproven": 0,
+  "root": "/data/yangao/native_harness/codex_runs_20261113",
+  "arm": "native_codex",
+  "model": "gpt-6.1-sol"
+ },
+ {
+  "case_id": "sky130hd_C03966",
+  "pending": [
+   "rtl/rv_plic_target.sv"
+  ],
+  "reader": "slang",
+  "verdict": "not_proven",
+  "equiv_cells": 14,
+  "proven": 7,
+  "unproven": 7,
+  "root": "/data/yangao/native_harness/codex_runs_20261113",
+  "arm": "native_codex",
+  "model": "gpt-6.1-sol"
+ },
+ {
+  "case_id": "nangate45_C02132",
+  "pending": [
+   "src/demux2x4_behav.v"
+  ],
+  "reader": "verilog",
+  "verdict": "equivalent",
+  "equiv_cells": 164,
+  "proven": 164,
+  "unproven": 0,
+  "root": "/data/yangao/native_harness/codex_runs_20261113",
+  "arm": "native_codex",
+  "model": "gpt-6.1-sol"
+ },
+ {
+  "case_id": "nangate45_C03986",
+  "pending": [
+   "rtl/mac/mac_array_4x4.sv"
+  ],
+  "reader": "slang",
+  "verdict": "equivalent",
+  "equiv_cells": 2112,
+  "proven": 2112,
+  "unproven": 0,
+  "root": "/data/yangao/native_harness/codex_runs_20261113",
+  "arm": "native_codex",
+  "model": "gpt-6.1-sol"
+ },
+ {
+  "case_id": "sky130hd_C03980",
+  "pending": [
+   "src/rtl/app/market_data_decoder.sv",
+   "src/rtl/app/top_of_book.sv",
+   "src/rtl/fifo/axis_async_fifo.sv",
+   "src/rtl/parser/eth_frame_parser.sv",
+   "src/rtl/parser/ipv4_parser.sv",
+   "src/rtl/parser/packet_classifier.sv",
+   "src/rtl/parser/udp_parser.sv",
+   "src/rtl/top/pkg_defines.sv",
+   "src/rtl/top/system_top.sv"
+  ],
+  "reader": "slang",
+  "verdict": "equivalent",
+  "equiv_cells": 8988,
+  "proven": 8988,
+  "unproven": 0,
+  "root": "/data/yangao/native_harness/codex_runs_20261113",
+  "arm": "native_codex",
+  "model": "gpt-6.1-sol"
+ },
+ {
+  "case_id": "nangate45_C02143",
+  "pending": [
+   "src/demux1x4_behav.v",
+   "src/mux4x1_behav.v",
+   "src/mux4x2_behav.v",
+   "src/phy.v",
+   "src/phy_rx.v",
+   "src/phy_tx.v"
+  ],
+  "reader": "verilog",
+  "verdict": "equivalent",
+  "equiv_cells": 1508,
+  "proven": 1508,
+  "unproven": 0,
+  "root": "/data/yangao/native_harness/codex_runs_20261113",
+  "arm": "native_codex",
+  "model": "gpt-6.1-sol"
+ },
+ {
+  "case_id": "sky130hd_C02511",
+  "pending": [
+   "generated/tiny_tpu_top.v"
+  ],
+  "reader": "slang",
+  "verdict": "equivalent",
+  "equiv_cells": 5980,
+  "proven": 5980,
+  "unproven": 0,
+  "root": "/data/yangao/native_harness/equiv/tmp_C02511",
+  "arm": "native_codex",
+  "model": "gpt-6.1-sol",
+  "note": "first review failed in the reviewer (VERILOG_FILES given as make expression $(dir $(SDC_FILE))/../rtl/generated/tiny_tpu_top.v, not expanded); re-run with that path resolved, agent files unchanged",
+  "first_review": {
+   "case_id": "sky130hd_C02511",
+   "pending": [
+    "generated/tiny_tpu_top.v"
+   ],
+   "reader": "slang",
+   "verdict": "not_proven",
+   "reason": "yosys failed: ERROR: Bad command",
+   "root": "/data/yangao/native_harness/codex_runs_20261113",
+   "arm": "native_codex",
+   "model": "gpt-6.1-sol"
+  }
+ },
+ {
+  "case_id": "sky130hd_C03986",
+  "pending": [
+   "rtl/mac/mac_array_4x4.sv"
+  ],
+  "reader": "slang",
+  "verdict": "not_proven",
+  "equiv_cells": 2112,
+  "proven": 1600,
+  "unproven": 512,
+  "root": "/data/yangao/native_harness/codex_runs_20261113",
+  "arm": "native_codex",
+  "model": "gpt-6.1-sol"
+ }
+]

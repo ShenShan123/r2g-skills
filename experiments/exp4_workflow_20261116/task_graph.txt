@@ -1,0 +1,13 @@
+Produce the graph dataset defined in /data/spec/CONTRACT.md and SEMANTICS.md
+using R2G's installed generation and physical-validation workflow. Development
+designs are /data/dev/*, with libraries under /data/platform/{nangate45,sky130hd,gf180}.
+Use generate_and_validate and inspect its reports across the development designs
+and three technologies. IR-drop and sign-off checks are outside this input scope.
+
+Deliver /work/converter/run.sh as a reusable launch wrapper with this interface:
+    bash /converter/run.sh DESIGN_DIR PLATFORM_DIR OUTPUT_DIR
+It should invoke /r2g/generate_graph.sh with those arguments. The installed workflow
+produces all B-F heterogeneous/homogeneous graphs and a validation.json report.
+The wrapper will be frozen and run without a model on 60 held-out designs.
+The budget is 200 model requests and 4 hours. Finish when the workflow is ready;
+report any unresolved failures.

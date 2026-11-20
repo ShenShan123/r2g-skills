@@ -1,0 +1,10 @@
+{
+  "mode": "baseline",
+  "size": "small",
+  "wall_seconds": 6.591380650061183,
+  "cpu_seconds": 6.584116858,
+  "load_seconds": 0.07681437500286847,
+  "peak_rss_kib": 379124,
+  "strict_full_pass": true,
+  "label_accuracy": 1.0
+}

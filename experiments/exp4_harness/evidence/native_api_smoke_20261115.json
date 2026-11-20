@@ -1,0 +1,101 @@
+{
+  "all_four_mechanical_api_checks_passed": true,
+  "smokes": [
+    {
+      "smoke": "dsh_api2",
+      "harness": "dsh",
+      "model": "deepseek-flash",
+      "harness_version": "0.2.2-rc.1",
+      "exit_code": 1,
+      "stop_reason": "cap_model_calls",
+      "model_calls": 3,
+      "usage_complete": true,
+      "converter_sha256": "f9360bf6de9766102e251020cb40e976f65fd6dcb7f6813f9ef0b892ee8b36d8",
+      "script_executed": true,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "wall_seconds": 29.517,
+      "artifact_dir": "/proj/workarea/yangao/exp4_harness_20261115/native_smoke/dsh_api2"
+    },
+    {
+      "smoke": "codex_api2",
+      "harness": "codex",
+      "model": "gpt-6.1-sol",
+      "harness_version": "codex-cli 0.169.0",
+      "exit_code": 0,
+      "stop_reason": "finished",
+      "model_calls": 2,
+      "usage_complete": true,
+      "converter_sha256": "f9360bf6de9766102e251020cb40e976f65fd6dcb7f6813f9ef0b892ee8b36d8",
+      "script_executed": true,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "wall_seconds": 15.683,
+      "artifact_dir": "/proj/workarea/yangao/exp4_harness_20261115/native_smoke/codex_api2"
+    },
+    {
+      "smoke": "deepseek_r2g_api",
+      "harness": "r2g",
+      "model": "deepseek-flash",
+      "harness_version": "r2g-agent",
+      "exit_code": 0,
+      "stop_reason": "finished",
+      "model_calls": 3,
+      "usage_complete": true,
+      "converter_sha256": "f9360bf6de9766102e251020cb40e976f65fd6dcb7f6813f9ef0b892ee8b36d8",
+      "script_executed": true,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "wall_seconds": 8.443,
+      "artifact_dir": "/proj/workarea/yangao/exp4_harness_20261115/native_smoke/deepseek_r2g_api"
+    },
+    {
+      "smoke": "gpt_r2g_api",
+      "harness": "r2g",
+      "model": "gpt-6.1-sol",
+      "harness_version": "r2g-agent",
+      "exit_code": 0,
+      "stop_reason": "cap_model_calls",
+      "model_calls": 5,
+      "usage_complete": true,
+      "converter_sha256": "f9360bf6de9766102e251020cb40e976f65fd6dcb7f6813f9ef0b892ee8b36d8",
+      "script_executed": true,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "wall_seconds": 48.622,
+      "artifact_dir": "/proj/workarea/yangao/exp4_harness_20261115/native_smoke/gpt_r2g_api"
+    }
+  ]
+}

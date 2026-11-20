@@ -1,0 +1,46 @@
+{
+ "seed": 20261108,
+ "purpose": "development designs for dataset converters; disjoint from sample.json v1_all",
+ "source": "memlab203:/data/r2g_n45_pilot500/select_cells.tsv",
+ "source_sha256": "307d8aeff5bf5f0e1181b9e7d1ca9f06fcd8aa8c0042e4cd0a23c6ba8e33cebc",
+ "strata": {
+  "small": [
+   {
+    "design": "C02241__multi_kernel_conv__edge-ai-cnn-inference-engine-on-fpga__nangate45__p2",
+    "cells": 761
+   },
+   {
+    "design": "C03005__counter__teroshdl-examples__nangate45__p2",
+    "cells": 245
+   }
+  ],
+  "medium": [
+   {
+    "design": "C00702__wallace_24x28_product__riscv-fpu-interrupt__nangate45__p2",
+    "cells": 2999
+   },
+   {
+    "design": "C01001__tt_um_verilog_meetup_template_project_TODO__ttsky-verilog-template-for-verilog-meetu__nangate45__p2",
+    "cells": 3087
+   }
+  ],
+  "large": [
+   {
+    "design": "C02509__AES_Comp_DECx__rds__nangate45__p2",
+    "cells": 12317
+   },
+   {
+    "design": "C02146__rv_custom_ascon_if__nasa-riscv-crypto-mvp__nangate45__p2",
+    "cells": 16402
+   }
+  ]
+ },
+ "designs": [
+  "C02241__multi_kernel_conv__edge-ai-cnn-inference-engine-on-fpga__nangate45__p2",
+  "C03005__counter__teroshdl-examples__nangate45__p2",
+  "C00702__wallace_24x28_product__riscv-fpu-interrupt__nangate45__p2",
+  "C01001__tt_um_verilog_meetup_template_project_TODO__ttsky-verilog-template-for-verilog-meetu__nangate45__p2",
+  "C02509__AES_Comp_DECx__rds__nangate45__p2",
+  "C02146__rv_custom_ascon_if__nasa-riscv-crypto-mvp__nangate45__p2"
+ ]
+}

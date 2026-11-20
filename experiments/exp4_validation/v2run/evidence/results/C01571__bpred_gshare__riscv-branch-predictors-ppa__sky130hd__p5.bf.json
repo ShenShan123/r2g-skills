@@ -1,0 +1,7697 @@
+{
+ "truth": "C01571__bpred_gshare__riscv-branch-predictors-ppa__sky130hd__p5",
+ "platform": "sky130hd",
+ "verdict": {
+  "passed": true,
+  "failed_groups": [],
+  "n_groups": 900
+ },
+ "groups": {
+  "homo.present_views": {
+   "passed": true,
+   "views": [
+    "b",
+    "c",
+    "d",
+    "e",
+    "f"
+   ]
+  },
+  "homo.b.I_gate": {
+   "n_claim": 20896,
+   "n_truth": 20896,
+   "matched": 20896,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.b.O_gate": {
+   "passed": true,
+   "n": 20896
+  },
+  "homo.b.I_net": {
+   "n_claim": 20940,
+   "n_truth": 20940,
+   "matched": 20940,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.b.O_net": {
+   "passed": true,
+   "n": 20940
+  },
+  "homo.b.I_iopin": {
+   "n_claim": 68,
+   "n_truth": 68,
+   "matched": 68,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.b.O_iopin": {
+   "passed": true,
+   "n": 68
+  },
+  "homo.b.I_pin": {
+   "n_claim": 63127,
+   "n_truth": 63127,
+   "matched": 63127,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.b.O_pin": {
+   "passed": true,
+   "n": 63127
+  },
+  "homo.b.I_no_extra_node_types": {
+   "passed": true,
+   "extra": []
+  },
+  "homo.b.O_global_block_layout": {
+   "passed": true
+  },
+  "homo.b.S_y0_is_node_type": {
+   "passed": true
+  },
+  "homo.b.S_y_raw0_is_node_type": {
+   "passed": true
+  },
+  "homo.b.S_edges_interleaved": {
+   "passed": true
+  },
+  "homo.b.S_edge_pair_rows_identical": {
+   "passed": true
+  },
+  "homo.b.S_edge_y0_is_edge_type": {
+   "passed": true
+  },
+  "homo.b.S_edge_y_raw0_is_edge_type": {
+   "passed": true
+  },
+  "homo.b.S_x_y_width": {
+   "passed": true,
+   "x": 10,
+   "y": 6
+  },
+  "homo.b.S_rc_tensors_present": {
+   "passed": true
+  },
+  "homo.b.S_rc_interleaved": {
+   "passed": true
+  },
+  "homo.b.S_rc_y0_is_rc_type": {
+   "passed": true
+  },
+  "homo.b.F_gate_cell_type_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.b.F_gate_cell_area": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.286621108131385e-07,
+   "max_rel": 3.211435254000783e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.b.F_gate_x_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.6966778850596645e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.b.F_gate_y_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.412517556031045e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.b.F_gate_orientation_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.b.F_gate_placement_status_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.b.F_net_net_type_id": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.b.F_net_fanout": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.b.F_net_pin_count": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.b.F_net_num_drivers": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.b.F_net_num_sinks": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.b.F_net_connects_macro_flag": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.b.F_net_num_layer": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.b.F_net_hpwl_um": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.005017089843704525,
+   "max_rel": 0.005246562697671789,
+   "nan_mismatch": 0,
+   "tol": [
+    0.006,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.b.F_iopin_pin_x_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.504655035001473e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.b.F_iopin_pin_y_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.9042968801841198e-05,
+   "max_rel": 3.39593956060133e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.b.F_iopin_nearest_tap_distance_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.978475125014484e-07,
+   "max_rel": 1.586360221678498e-07,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.b.F_iopin_pin_direction_id": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.b.F_pin_pin_type_id": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.b.F_pin_sum_pin_cap_fF": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.3916015632275958e-05,
+   "max_rel": 5.307566833570802e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.b.L_y_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 3.0192435995779476e-08,
+   "max_rel": 5.993012991028857e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.b.L_nan_y_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.b.L_y_raw_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.5372521311451948e-08,
+   "max_rel": 6.10907875388402e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.b.L_nan_y_raw_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_raw_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_raw_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_net_congestion": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_net_irdrop": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_net_timing": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "homo.b.L_y_net_wirelength": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.3866145326678634e-07,
+   "max_rel": 5.8860607247186466e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.b.L_y_net_ground_cap": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.378372050415578e-07,
+   "max_rel": 6.179719143861405e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.b.L_nan_y_raw_net_congestion": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_raw_net_irdrop": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_raw_net_timing": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "homo.b.L_y_raw_net_wirelength": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 5.859375005456968e-05,
+   "max_rel": 5.707776462610046e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0002,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.b.L_y_raw_net_ground_cap": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.726367186933203e-06,
+   "max_rel": 2.4377334068361682e-05,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.b.L_nan_y_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_raw_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_raw_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_raw_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_raw_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_raw_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_pin_congestion": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_pin_irdrop": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.b.L_y_pin_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.195954846267e-07,
+   "max_rel": 5.910239190347734e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.b.L_nan_y_pin_wirelength": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_pin_ground_cap": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_raw_pin_congestion": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_raw_pin_irdrop": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.b.L_y_raw_pin_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 4.7625732335632165e-07,
+   "max_rel": 5.857384762155625e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.b.L_nan_y_raw_pin_wirelength": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.b.L_nan_y_raw_pin_ground_cap": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.b.S_edges_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 252644
+  },
+  "homo.b.T_families": {
+   "passed": true,
+   "claim": [
+    "connects"
+   ],
+   "truth": [
+    "connects"
+   ]
+  },
+  "homo.b.T_connects": {
+   "n_claim": 126322,
+   "n_truth": 126322,
+   "matched": 126322,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.b.S_rc_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 848446
+  },
+  "homo.b.R_rc_coupling_edges": {
+   "n_claim": 101196,
+   "n_truth": 101196,
+   "matched": 101196,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.b.R_rc_coupling_raw": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.113739012825192e-07,
+   "max_rel": 0.01105340019897233,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.b.R_rc_coupling_label": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.178050772487893e-07,
+   "max_rel": 2.4830155246797687e-06,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.b.R_rc_coupling_offtype_nan": {
+   "passed": true
+  },
+  "homo.b.R_rc_resistance_edges": {
+   "n_claim": 323027,
+   "n_truth": 323027,
+   "matched": 323027,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.b.R_rc_resistance_raw": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.097656250858563e-05,
+   "max_rel": 5.9421990537811246e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.b.R_rc_resistance_label": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.388766144889587e-07,
+   "max_rel": 5.939258059635926e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.b.R_rc_resistance_offtype_nan": {
+   "passed": true
+  },
+  "homo.c.I_gate": {
+   "n_claim": 20896,
+   "n_truth": 20896,
+   "matched": 20896,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.c.O_gate": {
+   "passed": true,
+   "n": 20896
+  },
+  "homo.c.I_net": {
+   "n_claim": 20940,
+   "n_truth": 20940,
+   "matched": 20940,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.c.O_net": {
+   "passed": true,
+   "n": 20940
+  },
+  "homo.c.I_iopin": {
+   "n_claim": 68,
+   "n_truth": 68,
+   "matched": 68,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.c.O_iopin": {
+   "passed": true,
+   "n": 68
+  },
+  "homo.c.I_no_extra_node_types": {
+   "passed": true,
+   "extra": []
+  },
+  "homo.c.O_global_block_layout": {
+   "passed": true
+  },
+  "homo.c.S_y0_is_node_type": {
+   "passed": true
+  },
+  "homo.c.S_y_raw0_is_node_type": {
+   "passed": true
+  },
+  "homo.c.S_edges_interleaved": {
+   "passed": true
+  },
+  "homo.c.S_edge_pair_rows_identical": {
+   "passed": true
+  },
+  "homo.c.S_edge_y0_is_edge_type": {
+   "passed": true
+  },
+  "homo.c.S_edge_y_raw0_is_edge_type": {
+   "passed": true
+  },
+  "homo.c.S_x_y_width": {
+   "passed": true,
+   "x": 10,
+   "y": 6
+  },
+  "homo.c.S_rc_tensors_present": {
+   "passed": true
+  },
+  "homo.c.S_rc_interleaved": {
+   "passed": true
+  },
+  "homo.c.S_rc_y0_is_rc_type": {
+   "passed": true
+  },
+  "homo.c.F_gate_cell_type_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.F_gate_cell_area": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.286621108131385e-07,
+   "max_rel": 3.211435254000783e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.c.F_gate_x_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.6966778850596645e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.c.F_gate_y_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.412517556031045e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.c.F_gate_orientation_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.F_gate_placement_status_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.F_net_net_type_id": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.F_net_fanout": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.F_net_pin_count": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.F_net_num_drivers": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.F_net_num_sinks": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.F_net_connects_macro_flag": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.F_net_num_layer": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.F_net_hpwl_um": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.005017089843704525,
+   "max_rel": 0.005246562697671789,
+   "nan_mismatch": 0,
+   "tol": [
+    0.006,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.c.F_iopin_pin_x_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.504655035001473e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.c.F_iopin_pin_y_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.9042968801841198e-05,
+   "max_rel": 3.39593956060133e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.c.F_iopin_nearest_tap_distance_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.978475125014484e-07,
+   "max_rel": 1.586360221678498e-07,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.c.F_iopin_pin_direction_id": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.L_y_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 3.0192435995779476e-08,
+   "max_rel": 5.993012991028857e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.c.L_nan_y_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.c.L_y_raw_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.5372521311451948e-08,
+   "max_rel": 6.10907875388402e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.c.L_nan_y_raw_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_raw_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_raw_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_net_congestion": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_net_irdrop": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_net_timing": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "homo.c.L_y_net_wirelength": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.3866145326678634e-07,
+   "max_rel": 5.8860607247186466e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.c.L_y_net_ground_cap": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.378372050415578e-07,
+   "max_rel": 6.179719143861405e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.c.L_nan_y_raw_net_congestion": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_raw_net_irdrop": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_raw_net_timing": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "homo.c.L_y_raw_net_wirelength": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 5.859375005456968e-05,
+   "max_rel": 5.707776462610046e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0002,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.c.L_y_raw_net_ground_cap": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.726367186933203e-06,
+   "max_rel": 2.4377334068361682e-05,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.c.L_nan_y_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_raw_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_raw_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_raw_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_raw_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.c.L_nan_y_raw_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.c.S_edges_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 126390
+  },
+  "homo.c.T_families": {
+   "passed": true,
+   "claim": [
+    "iopin_connection",
+    "pin"
+   ],
+   "truth": [
+    "iopin_connection",
+    "pin"
+   ]
+  },
+  "homo.c.T_pin": {
+   "n_claim": 63127,
+   "n_truth": 63127,
+   "matched": 63127,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.c.E_pin_aligned": {
+   "passed": true,
+   "aligned": 63127,
+   "truth": 63127
+  },
+  "homo.c.E_pin_attr0_pin_type_id": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_pin_attr1_sum_pin_cap_fF": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.3916015632275958e-05,
+   "max_rel": 5.307566833570802e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.c.E_pin_attr2_pad2": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_pin_attr3_pad3": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_pin_attr4_pad4": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_pin_attr5_pad5": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_pin_attr6_pad6": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_pin_attr7_pad7": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_pin_edge_y_congestion_nan": {
+   "passed": true
+  },
+  "homo.c.E_pin_edge_y_irdrop_nan": {
+   "passed": true
+  },
+  "homo.c.E_pin_edge_y_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.195954846267e-07,
+   "max_rel": 5.910239190347734e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.c.E_pin_edge_y_wirelength_nan": {
+   "passed": true
+  },
+  "homo.c.E_pin_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.c.E_pin_edge_y_raw_congestion_nan": {
+   "passed": true
+  },
+  "homo.c.E_pin_edge_y_raw_irdrop_nan": {
+   "passed": true
+  },
+  "homo.c.E_pin_edge_y_raw_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 4.7625732335632165e-07,
+   "max_rel": 5.857384762155625e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.c.E_pin_edge_y_raw_wirelength_nan": {
+   "passed": true
+  },
+  "homo.c.E_pin_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.c.T_iopin_connection": {
+   "n_claim": 68,
+   "n_truth": 68,
+   "matched": 68,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.c.E_iopin_connection_aligned": {
+   "passed": true,
+   "aligned": 68,
+   "truth": 68
+  },
+  "homo.c.E_iopin_connection_attr0_pad0": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_iopin_connection_attr1_pad1": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_iopin_connection_attr2_pad2": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_iopin_connection_attr3_pad3": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_iopin_connection_attr4_pad4": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_iopin_connection_attr5_pad5": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_iopin_connection_attr6_pad6": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_iopin_connection_attr7_pad7": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.c.E_iopin_connection_edge_y_congestion_nan": {
+   "passed": true
+  },
+  "homo.c.E_iopin_connection_edge_y_irdrop_nan": {
+   "passed": true
+  },
+  "homo.c.E_iopin_connection_edge_y_timing_nan": {
+   "passed": true
+  },
+  "homo.c.E_iopin_connection_edge_y_wirelength_nan": {
+   "passed": true
+  },
+  "homo.c.E_iopin_connection_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.c.E_iopin_connection_edge_y_raw_congestion_nan": {
+   "passed": true
+  },
+  "homo.c.E_iopin_connection_edge_y_raw_irdrop_nan": {
+   "passed": true
+  },
+  "homo.c.E_iopin_connection_edge_y_raw_timing_nan": {
+   "passed": true
+  },
+  "homo.c.E_iopin_connection_edge_y_raw_wirelength_nan": {
+   "passed": true
+  },
+  "homo.c.E_iopin_connection_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.c.S_rc_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 202392
+  },
+  "homo.c.R_rc_coupling_edges": {
+   "n_claim": 101196,
+   "n_truth": 101196,
+   "matched": 101196,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.c.R_rc_coupling_raw": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.113739012825192e-07,
+   "max_rel": 0.01105340019897233,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.c.R_rc_coupling_label": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.178050772487893e-07,
+   "max_rel": 2.4830155246797687e-06,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.c.R_rc_coupling_offtype_nan": {
+   "passed": true
+  },
+  "homo.c.R_rc_resistance_edges": {
+   "n_claim": 0,
+   "n_truth": 0,
+   "matched": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.d.I_gate": {
+   "n_claim": 20896,
+   "n_truth": 20896,
+   "matched": 20896,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.d.O_gate": {
+   "passed": true,
+   "n": 20896
+  },
+  "homo.d.I_iopin": {
+   "n_claim": 68,
+   "n_truth": 68,
+   "matched": 68,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.d.O_iopin": {
+   "passed": true,
+   "n": 68
+  },
+  "homo.d.I_pin": {
+   "n_claim": 63127,
+   "n_truth": 63127,
+   "matched": 63127,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.d.O_pin": {
+   "passed": true,
+   "n": 63127
+  },
+  "homo.d.I_no_extra_node_types": {
+   "passed": true,
+   "extra": []
+  },
+  "homo.d.O_global_block_layout": {
+   "passed": true
+  },
+  "homo.d.S_y0_is_node_type": {
+   "passed": true
+  },
+  "homo.d.S_y_raw0_is_node_type": {
+   "passed": true
+  },
+  "homo.d.S_edges_interleaved": {
+   "passed": true
+  },
+  "homo.d.S_edge_pair_rows_identical": {
+   "passed": true
+  },
+  "homo.d.S_edge_y0_is_edge_type": {
+   "passed": true
+  },
+  "homo.d.S_edge_y_raw0_is_edge_type": {
+   "passed": true
+  },
+  "homo.d.S_x_y_width": {
+   "passed": true,
+   "x": 10,
+   "y": 6
+  },
+  "homo.d.S_rc_tensors_present": {
+   "passed": true
+  },
+  "homo.d.S_rc_interleaved": {
+   "passed": true
+  },
+  "homo.d.S_rc_y0_is_rc_type": {
+   "passed": true
+  },
+  "homo.d.F_gate_cell_type_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.F_gate_cell_area": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.286621108131385e-07,
+   "max_rel": 3.211435254000783e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.d.F_gate_x_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.6966778850596645e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.d.F_gate_y_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.412517556031045e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.d.F_gate_orientation_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.F_gate_placement_status_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.F_iopin_pin_x_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.504655035001473e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.d.F_iopin_pin_y_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.9042968801841198e-05,
+   "max_rel": 3.39593956060133e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.d.F_iopin_nearest_tap_distance_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.978475125014484e-07,
+   "max_rel": 1.586360221678498e-07,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.d.F_iopin_pin_direction_id": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.F_pin_pin_type_id": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.F_pin_sum_pin_cap_fF": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.3916015632275958e-05,
+   "max_rel": 5.307566833570802e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.d.L_y_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 3.0192435995779476e-08,
+   "max_rel": 5.993012991028857e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.d.L_nan_y_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.d.L_y_raw_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.5372521311451948e-08,
+   "max_rel": 6.10907875388402e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.d.L_nan_y_raw_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_raw_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_raw_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_raw_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_raw_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_raw_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_raw_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_raw_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_pin_congestion": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_pin_irdrop": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.d.L_y_pin_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.195954846267e-07,
+   "max_rel": 5.910239190347734e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.d.L_nan_y_pin_wirelength": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.d.L_y_pin_ground_cap": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.378372050415578e-07,
+   "max_rel": 6.179719143861405e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.d.L_nan_y_raw_pin_congestion": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.d.L_nan_y_raw_pin_irdrop": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.d.L_y_raw_pin_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 4.7625732335632165e-07,
+   "max_rel": 5.857384762155625e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.d.L_nan_y_raw_pin_wirelength": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.d.L_y_raw_pin_ground_cap": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.726367186933203e-06,
+   "max_rel": 2.4377334068361682e-05,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.d.S_edges_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 772308
+  },
+  "homo.d.T_families": {
+   "passed": true,
+   "claim": [
+    "gate_pin",
+    "net"
+   ],
+   "truth": [
+    "gate_pin",
+    "net"
+   ]
+  },
+  "homo.d.T_gate_pin": {
+   "n_claim": 63127,
+   "n_truth": 63127,
+   "matched": 63127,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.d.E_gate_pin_aligned": {
+   "passed": true,
+   "aligned": 63127,
+   "truth": 63127
+  },
+  "homo.d.E_gate_pin_attr0_pad0": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_gate_pin_attr1_pad1": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_gate_pin_attr2_pad2": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_gate_pin_attr3_pad3": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_gate_pin_attr4_pad4": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_gate_pin_attr5_pad5": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_gate_pin_attr6_pad6": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_gate_pin_attr7_pad7": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_gate_pin_edge_y_congestion_nan": {
+   "passed": true
+  },
+  "homo.d.E_gate_pin_edge_y_irdrop_nan": {
+   "passed": true
+  },
+  "homo.d.E_gate_pin_edge_y_timing_nan": {
+   "passed": true
+  },
+  "homo.d.E_gate_pin_edge_y_wirelength_nan": {
+   "passed": true
+  },
+  "homo.d.E_gate_pin_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.d.E_gate_pin_edge_y_raw_congestion_nan": {
+   "passed": true
+  },
+  "homo.d.E_gate_pin_edge_y_raw_irdrop_nan": {
+   "passed": true
+  },
+  "homo.d.E_gate_pin_edge_y_raw_timing_nan": {
+   "passed": true
+  },
+  "homo.d.E_gate_pin_edge_y_raw_wirelength_nan": {
+   "passed": true
+  },
+  "homo.d.E_gate_pin_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.d.T_net": {
+   "n_claim": 323027,
+   "n_truth": 323027,
+   "matched": 323027,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.d.E_net_aligned": {
+   "passed": true,
+   "aligned": 323027,
+   "truth": 323027
+  },
+  "homo.d.E_net_attr0_net_type_id": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_net_attr1_fanout": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_net_attr2_pin_count": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_net_attr3_num_drivers": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_net_attr4_num_sinks": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_net_attr5_connects_macro_flag": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_net_attr6_num_layer": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.d.E_net_attr7_hpwl_um": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.005017089843704525,
+   "max_rel": 0.005246562697671789,
+   "nan_mismatch": 0,
+   "tol": [
+    0.006,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.d.E_net_edge_y_congestion_nan": {
+   "passed": true
+  },
+  "homo.d.E_net_edge_y_irdrop_nan": {
+   "passed": true
+  },
+  "homo.d.E_net_edge_y_timing_nan": {
+   "passed": true
+  },
+  "homo.d.E_net_edge_y_wirelength": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.3866145326678634e-07,
+   "max_rel": 5.8860607247186466e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.d.E_net_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.d.E_net_edge_y_raw_congestion_nan": {
+   "passed": true
+  },
+  "homo.d.E_net_edge_y_raw_irdrop_nan": {
+   "passed": true
+  },
+  "homo.d.E_net_edge_y_raw_timing_nan": {
+   "passed": true
+  },
+  "homo.d.E_net_edge_y_raw_wirelength": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 5.859375005456968e-05,
+   "max_rel": 5.707776462610046e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0002,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.d.E_net_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.d.S_rc_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 848446
+  },
+  "homo.d.R_rc_coupling_edges": {
+   "n_claim": 101196,
+   "n_truth": 101196,
+   "matched": 101196,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.d.R_rc_coupling_raw": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.113739012825192e-07,
+   "max_rel": 0.01105340019897233,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.d.R_rc_coupling_label": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.178050772487893e-07,
+   "max_rel": 2.4830155246797687e-06,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.d.R_rc_coupling_offtype_nan": {
+   "passed": true
+  },
+  "homo.d.R_rc_resistance_edges": {
+   "n_claim": 323027,
+   "n_truth": 323027,
+   "matched": 323027,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.d.R_rc_resistance_raw": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.097656250858563e-05,
+   "max_rel": 5.9421990537811246e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.d.R_rc_resistance_label": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.388766144889587e-07,
+   "max_rel": 5.939258059635926e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.d.R_rc_resistance_offtype_nan": {
+   "passed": true
+  },
+  "homo.e.I_iopin": {
+   "n_claim": 68,
+   "n_truth": 68,
+   "matched": 68,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.e.O_iopin": {
+   "passed": true,
+   "n": 68
+  },
+  "homo.e.I_pin": {
+   "n_claim": 63127,
+   "n_truth": 63127,
+   "matched": 63127,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.e.O_pin": {
+   "passed": true,
+   "n": 63127
+  },
+  "homo.e.I_no_extra_node_types": {
+   "passed": true,
+   "extra": []
+  },
+  "homo.e.O_global_block_layout": {
+   "passed": true
+  },
+  "homo.e.S_y0_is_node_type": {
+   "passed": true
+  },
+  "homo.e.S_y_raw0_is_node_type": {
+   "passed": true
+  },
+  "homo.e.S_edges_interleaved": {
+   "passed": true
+  },
+  "homo.e.S_edge_pair_rows_identical": {
+   "passed": true
+  },
+  "homo.e.S_edge_y0_is_edge_type": {
+   "passed": true
+  },
+  "homo.e.S_edge_y_raw0_is_edge_type": {
+   "passed": true
+  },
+  "homo.e.S_x_y_width": {
+   "passed": true,
+   "x": 10,
+   "y": 6
+  },
+  "homo.e.S_rc_tensors_present": {
+   "passed": true
+  },
+  "homo.e.S_rc_interleaved": {
+   "passed": true
+  },
+  "homo.e.S_rc_y0_is_rc_type": {
+   "passed": true
+  },
+  "homo.e.F_iopin_pin_x_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.504655035001473e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.e.F_iopin_pin_y_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.9042968801841198e-05,
+   "max_rel": 3.39593956060133e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.e.F_iopin_nearest_tap_distance_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.978475125014484e-07,
+   "max_rel": 1.586360221678498e-07,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.e.F_iopin_pin_direction_id": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.e.F_pin_pin_type_id": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.e.F_pin_sum_pin_cap_fF": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.3916015632275958e-05,
+   "max_rel": 5.307566833570802e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.e.L_nan_y_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.e.L_nan_y_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.e.L_nan_y_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.e.L_nan_y_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.e.L_nan_y_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.e.L_nan_y_raw_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.e.L_nan_y_raw_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.e.L_nan_y_raw_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.e.L_nan_y_raw_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.e.L_nan_y_raw_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.e.L_nan_y_pin_congestion": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.e.L_nan_y_pin_irdrop": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.e.L_y_pin_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.195954846267e-07,
+   "max_rel": 5.910239190347734e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.e.L_nan_y_pin_wirelength": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.e.L_y_pin_ground_cap": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.378372050415578e-07,
+   "max_rel": 6.179719143861405e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.e.L_nan_y_raw_pin_congestion": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.e.L_nan_y_raw_pin_irdrop": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.e.L_y_raw_pin_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 4.7625732335632165e-07,
+   "max_rel": 5.857384762155625e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.e.L_nan_y_raw_pin_wirelength": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "homo.e.L_y_raw_pin_ground_cap": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.726367186933203e-06,
+   "max_rel": 2.4377334068361682e-05,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.e.S_edges_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 779600
+  },
+  "homo.e.T_families": {
+   "passed": true,
+   "claim": [
+    "gate",
+    "net"
+   ],
+   "truth": [
+    "gate",
+    "net"
+   ]
+  },
+  "homo.e.T_gate": {
+   "n_claim": 66773,
+   "n_truth": 66773,
+   "matched": 66773,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.e.E_gate_aligned": {
+   "passed": true,
+   "aligned": 66773,
+   "truth": 66773
+  },
+  "homo.e.E_gate_attr0_cell_type_id": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.e.E_gate_attr1_cell_area": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.286621108131385e-07,
+   "max_rel": 3.211435254000783e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.e.E_gate_attr3_x_um": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.6966778850596645e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.e.E_gate_attr4_y_um": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.412517556031045e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.e.E_gate_attr5_orientation_id": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.e.E_gate_attr6_placement_status_id": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.e.E_gate_attr7_pad7": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.e.E_gate_edge_y_congestion": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 3.0192435995779476e-08,
+   "max_rel": 5.993012991028857e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.e.E_gate_edge_y_timing_nan": {
+   "passed": true
+  },
+  "homo.e.E_gate_edge_y_wirelength_nan": {
+   "passed": true
+  },
+  "homo.e.E_gate_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.e.E_gate_edge_y_raw_congestion": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.5372521311451948e-08,
+   "max_rel": 6.10907875388402e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.e.E_gate_edge_y_raw_timing_nan": {
+   "passed": true
+  },
+  "homo.e.E_gate_edge_y_raw_wirelength_nan": {
+   "passed": true
+  },
+  "homo.e.E_gate_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.e.T_net": {
+   "n_claim": 323027,
+   "n_truth": 323027,
+   "matched": 323027,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.e.E_net_aligned": {
+   "passed": true,
+   "aligned": 323027,
+   "truth": 323027
+  },
+  "homo.e.E_net_attr0_net_type_id": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.e.E_net_attr1_fanout": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.e.E_net_attr2_pin_count": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.e.E_net_attr3_num_drivers": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.e.E_net_attr4_num_sinks": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.e.E_net_attr5_connects_macro_flag": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.e.E_net_attr6_num_layer": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.e.E_net_attr7_hpwl_um": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.005017089843704525,
+   "max_rel": 0.005246562697671789,
+   "nan_mismatch": 0,
+   "tol": [
+    0.006,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.e.E_net_edge_y_congestion_nan": {
+   "passed": true
+  },
+  "homo.e.E_net_edge_y_irdrop_nan": {
+   "passed": true
+  },
+  "homo.e.E_net_edge_y_timing_nan": {
+   "passed": true
+  },
+  "homo.e.E_net_edge_y_wirelength": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.3866145326678634e-07,
+   "max_rel": 5.8860607247186466e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.e.E_net_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.e.E_net_edge_y_raw_congestion_nan": {
+   "passed": true
+  },
+  "homo.e.E_net_edge_y_raw_irdrop_nan": {
+   "passed": true
+  },
+  "homo.e.E_net_edge_y_raw_timing_nan": {
+   "passed": true
+  },
+  "homo.e.E_net_edge_y_raw_wirelength": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 5.859375005456968e-05,
+   "max_rel": 5.707776462610046e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0002,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.e.E_net_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.e.S_rc_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 848446
+  },
+  "homo.e.R_rc_coupling_edges": {
+   "n_claim": 101196,
+   "n_truth": 101196,
+   "matched": 101196,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.e.R_rc_coupling_raw": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.113739012825192e-07,
+   "max_rel": 0.01105340019897233,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.e.R_rc_coupling_label": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.178050772487893e-07,
+   "max_rel": 2.4830155246797687e-06,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.e.R_rc_coupling_offtype_nan": {
+   "passed": true
+  },
+  "homo.e.R_rc_resistance_edges": {
+   "n_claim": 323027,
+   "n_truth": 323027,
+   "matched": 323027,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.e.R_rc_resistance_raw": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.097656250858563e-05,
+   "max_rel": 5.9421990537811246e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.e.R_rc_resistance_label": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.388766144889587e-07,
+   "max_rel": 5.939258059635926e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.e.R_rc_resistance_offtype_nan": {
+   "passed": true
+  },
+  "homo.f.I_gate": {
+   "n_claim": 20896,
+   "n_truth": 20896,
+   "matched": 20896,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.f.O_gate": {
+   "passed": true,
+   "n": 20896
+  },
+  "homo.f.I_iopin": {
+   "n_claim": 68,
+   "n_truth": 68,
+   "matched": 68,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.f.O_iopin": {
+   "passed": true,
+   "n": 68
+  },
+  "homo.f.I_no_extra_node_types": {
+   "passed": true,
+   "extra": []
+  },
+  "homo.f.O_global_block_layout": {
+   "passed": true
+  },
+  "homo.f.S_y0_is_node_type": {
+   "passed": true
+  },
+  "homo.f.S_y_raw0_is_node_type": {
+   "passed": true
+  },
+  "homo.f.S_edges_interleaved": {
+   "passed": true
+  },
+  "homo.f.S_edge_pair_rows_identical": {
+   "passed": true
+  },
+  "homo.f.S_edge_y0_is_edge_type": {
+   "passed": true
+  },
+  "homo.f.S_edge_y_raw0_is_edge_type": {
+   "passed": true
+  },
+  "homo.f.S_x_y_width": {
+   "passed": true,
+   "x": 10,
+   "y": 6
+  },
+  "homo.f.S_rc_tensors_present": {
+   "passed": true
+  },
+  "homo.f.F_gate_cell_type_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.f.F_gate_cell_area": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.286621108131385e-07,
+   "max_rel": 3.211435254000783e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.f.F_gate_x_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.6966778850596645e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.f.F_gate_y_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.412517556031045e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.f.F_gate_orientation_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.f.F_gate_placement_status_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.f.F_iopin_pin_x_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.504655035001473e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.f.F_iopin_pin_y_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.9042968801841198e-05,
+   "max_rel": 3.39593956060133e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.f.F_iopin_nearest_tap_distance_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.978475125014484e-07,
+   "max_rel": 1.586360221678498e-07,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.f.F_iopin_pin_direction_id": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.f.L_y_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 3.0192435995779476e-08,
+   "max_rel": 5.993012991028857e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.f.L_nan_y_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.f.L_y_raw_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.5372521311451948e-08,
+   "max_rel": 6.10907875388402e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "homo.f.L_nan_y_raw_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_raw_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_raw_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_raw_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_raw_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_raw_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_raw_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.f.L_nan_y_raw_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "homo.f.S_edges_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 646054
+  },
+  "homo.f.T_families": {
+   "passed": true,
+   "claim": [
+    "net"
+   ],
+   "truth": [
+    "net"
+   ]
+  },
+  "homo.f.T_net": {
+   "n_claim": 323027,
+   "n_truth": 323027,
+   "matched": 323027,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.f.E_net_aligned": {
+   "passed": true,
+   "aligned": 323027,
+   "truth": 323027
+  },
+  "homo.f.E_net_attr0_net_type_id": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.f.E_net_attr1_fanout": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.f.E_net_attr2_pin_count": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.f.E_net_attr3_num_drivers": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.f.E_net_attr4_num_sinks": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.f.E_net_attr5_connects_macro_flag": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.f.E_net_attr6_num_layer": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "homo.f.E_net_attr7_hpwl_um": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.005017089843704525,
+   "max_rel": 0.005246562697671789,
+   "nan_mismatch": 0,
+   "tol": [
+    0.006,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.f.E_net_edge_y_congestion_nan": {
+   "passed": true
+  },
+  "homo.f.E_net_edge_y_irdrop_nan": {
+   "passed": true
+  },
+  "homo.f.E_net_edge_y_timing_nan": {
+   "passed": true
+  },
+  "homo.f.E_net_edge_y_wirelength": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.3866145326678634e-07,
+   "max_rel": 5.8860607247186466e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.f.E_net_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.f.E_net_edge_y_raw_congestion_nan": {
+   "passed": true
+  },
+  "homo.f.E_net_edge_y_raw_irdrop_nan": {
+   "passed": true
+  },
+  "homo.f.E_net_edge_y_raw_timing_nan": {
+   "passed": true
+  },
+  "homo.f.E_net_edge_y_raw_wirelength": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 5.859375005456968e-05,
+   "max_rel": 5.707776462610046e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0002,
+    1e-06
+   ],
+   "examples": []
+  },
+  "homo.f.E_net_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "homo.f.S_rc_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 0
+  },
+  "homo.f.R_rc_coupling_edges": {
+   "n_claim": 0,
+   "n_truth": 0,
+   "matched": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "homo.f.R_rc_resistance_edges": {
+   "n_claim": 0,
+   "n_truth": 0,
+   "matched": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.present_views": {
+   "passed": true,
+   "views": [
+    "b",
+    "c",
+    "d",
+    "e",
+    "f"
+   ]
+  },
+  "hetero.b.I_gate": {
+   "n_claim": 20896,
+   "n_truth": 20896,
+   "matched": 20896,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.b.O_gate": {
+   "passed": true,
+   "n": 20896
+  },
+  "hetero.b.I_net": {
+   "n_claim": 20940,
+   "n_truth": 20940,
+   "matched": 20940,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.b.O_net": {
+   "passed": true,
+   "n": 20940
+  },
+  "hetero.b.I_iopin": {
+   "n_claim": 68,
+   "n_truth": 68,
+   "matched": 68,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.b.O_iopin": {
+   "passed": true,
+   "n": 68
+  },
+  "hetero.b.I_pin": {
+   "n_claim": 63127,
+   "n_truth": 63127,
+   "matched": 63127,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.b.O_pin": {
+   "passed": true,
+   "n": 63127
+  },
+  "hetero.b.I_no_extra_node_types": {
+   "passed": true,
+   "extra": []
+  },
+  "hetero.b.S_hetero_widths": {
+   "passed": true,
+   "widths": {
+    "gate": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    },
+    "net": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    },
+    "iopin": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    },
+    "pin": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    }
+   }
+  },
+  "hetero.b.S_hetero_edge_y_width": {
+   "passed": true,
+   "widths": []
+  },
+  "hetero.b.S_graph_kind": {
+   "passed": true,
+   "value": "hetero"
+  },
+  "hetero.b.F_gate_cell_type_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.b.F_gate_cell_area": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.286621108131385e-07,
+   "max_rel": 3.211435254000783e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.b.F_gate_x_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.6966778850596645e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.b.F_gate_y_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.412517556031045e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.b.F_gate_orientation_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.b.F_gate_placement_status_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.b.F_net_net_type_id": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.b.F_net_fanout": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.b.F_net_pin_count": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.b.F_net_num_drivers": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.b.F_net_num_sinks": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.b.F_net_connects_macro_flag": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.b.F_net_num_layer": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.b.F_net_hpwl_um": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.005017089843704525,
+   "max_rel": 0.005246562697671789,
+   "nan_mismatch": 0,
+   "tol": [
+    0.006,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.b.F_iopin_pin_x_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.504655035001473e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.b.F_iopin_pin_y_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.9042968801841198e-05,
+   "max_rel": 3.39593956060133e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.b.F_iopin_nearest_tap_distance_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.978475125014484e-07,
+   "max_rel": 1.586360221678498e-07,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.b.F_iopin_pin_direction_id": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.b.F_pin_pin_type_id": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.b.F_pin_sum_pin_cap_fF": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.3916015632275958e-05,
+   "max_rel": 5.307566833570802e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.b.L_y_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 3.0192435995779476e-08,
+   "max_rel": 5.993012991028857e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.b.L_nan_y_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.b.L_y_raw_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.5372521311451948e-08,
+   "max_rel": 6.10907875388402e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.b.L_nan_y_raw_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_raw_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_raw_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_net_congestion": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_net_irdrop": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_net_timing": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "hetero.b.L_y_net_wirelength": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.3866145326678634e-07,
+   "max_rel": 5.8860607247186466e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.b.L_y_net_ground_cap": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.378372050415578e-07,
+   "max_rel": 6.179719143861405e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.b.L_nan_y_raw_net_congestion": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_raw_net_irdrop": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_raw_net_timing": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "hetero.b.L_y_raw_net_wirelength": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 5.859375005456968e-05,
+   "max_rel": 5.707776462610046e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0002,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.b.L_y_raw_net_ground_cap": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.726367186933203e-06,
+   "max_rel": 2.4377334068361682e-05,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.b.L_nan_y_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_raw_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_raw_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_raw_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_raw_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_raw_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_pin_congestion": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_pin_irdrop": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.b.L_y_pin_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.195954846267e-07,
+   "max_rel": 5.910239190347734e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.b.L_nan_y_pin_wirelength": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_pin_ground_cap": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_raw_pin_congestion": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_raw_pin_irdrop": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.b.L_y_raw_pin_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 4.7625732335632165e-07,
+   "max_rel": 5.857384762155625e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.b.L_nan_y_raw_pin_wirelength": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.b.L_nan_y_raw_pin_ground_cap": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.b.S_edges_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 252644
+  },
+  "hetero.b.T_families": {
+   "passed": true,
+   "claim": [
+    "connects"
+   ],
+   "truth": [
+    "connects"
+   ]
+  },
+  "hetero.b.T_connects": {
+   "n_claim": 126322,
+   "n_truth": 126322,
+   "matched": 126322,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.b.S_rc_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 848446
+  },
+  "hetero.b.R_rc_coupling_edges": {
+   "n_claim": 101196,
+   "n_truth": 101196,
+   "matched": 101196,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.b.R_rc_coupling_raw": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.113739012825192e-07,
+   "max_rel": 0.01105340019897233,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.b.R_rc_coupling_label": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.178050772487893e-07,
+   "max_rel": 2.4830155246797687e-06,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.b.R_rc_coupling_offtype_nan": {
+   "passed": true
+  },
+  "hetero.b.R_rc_resistance_edges": {
+   "n_claim": 323027,
+   "n_truth": 323027,
+   "matched": 323027,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.b.R_rc_resistance_raw": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.097656250858563e-05,
+   "max_rel": 5.9421990537811246e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.b.R_rc_resistance_label": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.388766144889587e-07,
+   "max_rel": 5.939258059635926e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.b.R_rc_resistance_offtype_nan": {
+   "passed": true
+  },
+  "hetero.c.I_gate": {
+   "n_claim": 20896,
+   "n_truth": 20896,
+   "matched": 20896,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.c.O_gate": {
+   "passed": true,
+   "n": 20896
+  },
+  "hetero.c.I_net": {
+   "n_claim": 20940,
+   "n_truth": 20940,
+   "matched": 20940,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.c.O_net": {
+   "passed": true,
+   "n": 20940
+  },
+  "hetero.c.I_iopin": {
+   "n_claim": 68,
+   "n_truth": 68,
+   "matched": 68,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.c.O_iopin": {
+   "passed": true,
+   "n": 68
+  },
+  "hetero.c.I_no_extra_node_types": {
+   "passed": true,
+   "extra": []
+  },
+  "hetero.c.S_hetero_widths": {
+   "passed": true,
+   "widths": {
+    "gate": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    },
+    "net": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    },
+    "iopin": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    }
+   }
+  },
+  "hetero.c.S_hetero_edge_y_width": {
+   "passed": true,
+   "widths": [
+    5
+   ]
+  },
+  "hetero.c.S_graph_kind": {
+   "passed": true,
+   "value": "hetero"
+  },
+  "hetero.c.F_gate_cell_type_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.F_gate_cell_area": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.286621108131385e-07,
+   "max_rel": 3.211435254000783e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.c.F_gate_x_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.6966778850596645e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.c.F_gate_y_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.412517556031045e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.c.F_gate_orientation_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.F_gate_placement_status_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.F_net_net_type_id": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.F_net_fanout": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.F_net_pin_count": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.F_net_num_drivers": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.F_net_num_sinks": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.F_net_connects_macro_flag": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.F_net_num_layer": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.F_net_hpwl_um": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.005017089843704525,
+   "max_rel": 0.005246562697671789,
+   "nan_mismatch": 0,
+   "tol": [
+    0.006,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.c.F_iopin_pin_x_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.504655035001473e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.c.F_iopin_pin_y_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.9042968801841198e-05,
+   "max_rel": 3.39593956060133e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.c.F_iopin_nearest_tap_distance_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.978475125014484e-07,
+   "max_rel": 1.586360221678498e-07,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.c.F_iopin_pin_direction_id": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.L_y_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 3.0192435995779476e-08,
+   "max_rel": 5.993012991028857e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.c.L_nan_y_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.c.L_y_raw_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.5372521311451948e-08,
+   "max_rel": 6.10907875388402e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.c.L_nan_y_raw_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_raw_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_raw_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_net_congestion": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_net_irdrop": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_net_timing": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "hetero.c.L_y_net_wirelength": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.3866145326678634e-07,
+   "max_rel": 5.8860607247186466e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.c.L_y_net_ground_cap": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.378372050415578e-07,
+   "max_rel": 6.179719143861405e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.c.L_nan_y_raw_net_congestion": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_raw_net_irdrop": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_raw_net_timing": {
+   "passed": true,
+   "n": 20940,
+   "non_nan": 0
+  },
+  "hetero.c.L_y_raw_net_wirelength": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 5.859375005456968e-05,
+   "max_rel": 5.707776462610046e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0002,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.c.L_y_raw_net_ground_cap": {
+   "n": 20940,
+   "matched": 20940,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.726367186933203e-06,
+   "max_rel": 2.4377334068361682e-05,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.c.L_nan_y_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_raw_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_raw_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_raw_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_raw_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.c.L_nan_y_raw_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.c.S_edges_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 126390
+  },
+  "hetero.c.T_families": {
+   "passed": true,
+   "claim": [
+    "iopin_connection",
+    "pin"
+   ],
+   "truth": [
+    "iopin_connection",
+    "pin"
+   ]
+  },
+  "hetero.c.T_pin": {
+   "n_claim": 63127,
+   "n_truth": 63127,
+   "matched": 63127,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.c.E_pin_aligned": {
+   "passed": true,
+   "aligned": 63127,
+   "truth": 63127
+  },
+  "hetero.c.E_pin_attr0_pin_type_id": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_pin_attr1_sum_pin_cap_fF": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.3916015632275958e-05,
+   "max_rel": 5.307566833570802e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.c.E_pin_attr2_pad2": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_pin_attr3_pad3": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_pin_attr4_pad4": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_pin_attr5_pad5": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_pin_attr6_pad6": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_pin_attr7_pad7": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_pin_edge_y_congestion_nan": {
+   "passed": true
+  },
+  "hetero.c.E_pin_edge_y_irdrop_nan": {
+   "passed": true
+  },
+  "hetero.c.E_pin_edge_y_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.195954846267e-07,
+   "max_rel": 5.910239190347734e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.c.E_pin_edge_y_wirelength_nan": {
+   "passed": true
+  },
+  "hetero.c.E_pin_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.c.E_pin_edge_y_raw_congestion_nan": {
+   "passed": true
+  },
+  "hetero.c.E_pin_edge_y_raw_irdrop_nan": {
+   "passed": true
+  },
+  "hetero.c.E_pin_edge_y_raw_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 4.7625732335632165e-07,
+   "max_rel": 5.857384762155625e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.c.E_pin_edge_y_raw_wirelength_nan": {
+   "passed": true
+  },
+  "hetero.c.E_pin_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.c.T_iopin_connection": {
+   "n_claim": 68,
+   "n_truth": 68,
+   "matched": 68,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.c.E_iopin_connection_aligned": {
+   "passed": true,
+   "aligned": 68,
+   "truth": 68
+  },
+  "hetero.c.E_iopin_connection_attr0_pad0": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_iopin_connection_attr1_pad1": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_iopin_connection_attr2_pad2": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_iopin_connection_attr3_pad3": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_iopin_connection_attr4_pad4": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_iopin_connection_attr5_pad5": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_iopin_connection_attr6_pad6": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_iopin_connection_attr7_pad7": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.c.E_iopin_connection_edge_y_congestion_nan": {
+   "passed": true
+  },
+  "hetero.c.E_iopin_connection_edge_y_irdrop_nan": {
+   "passed": true
+  },
+  "hetero.c.E_iopin_connection_edge_y_timing_nan": {
+   "passed": true
+  },
+  "hetero.c.E_iopin_connection_edge_y_wirelength_nan": {
+   "passed": true
+  },
+  "hetero.c.E_iopin_connection_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.c.E_iopin_connection_edge_y_raw_congestion_nan": {
+   "passed": true
+  },
+  "hetero.c.E_iopin_connection_edge_y_raw_irdrop_nan": {
+   "passed": true
+  },
+  "hetero.c.E_iopin_connection_edge_y_raw_timing_nan": {
+   "passed": true
+  },
+  "hetero.c.E_iopin_connection_edge_y_raw_wirelength_nan": {
+   "passed": true
+  },
+  "hetero.c.E_iopin_connection_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.c.S_rc_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 202392
+  },
+  "hetero.c.R_rc_coupling_edges": {
+   "n_claim": 101196,
+   "n_truth": 101196,
+   "matched": 101196,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.c.R_rc_coupling_raw": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.113739012825192e-07,
+   "max_rel": 0.01105340019897233,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.c.R_rc_coupling_label": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.178050772487893e-07,
+   "max_rel": 2.4830155246797687e-06,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.c.R_rc_coupling_offtype_nan": {
+   "passed": true
+  },
+  "hetero.c.R_rc_resistance_edges": {
+   "n_claim": 0,
+   "n_truth": 0,
+   "matched": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.d.I_gate": {
+   "n_claim": 20896,
+   "n_truth": 20896,
+   "matched": 20896,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.d.O_gate": {
+   "passed": true,
+   "n": 20896
+  },
+  "hetero.d.I_iopin": {
+   "n_claim": 68,
+   "n_truth": 68,
+   "matched": 68,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.d.O_iopin": {
+   "passed": true,
+   "n": 68
+  },
+  "hetero.d.I_pin": {
+   "n_claim": 63127,
+   "n_truth": 63127,
+   "matched": 63127,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.d.O_pin": {
+   "passed": true,
+   "n": 63127
+  },
+  "hetero.d.I_no_extra_node_types": {
+   "passed": true,
+   "extra": []
+  },
+  "hetero.d.S_hetero_widths": {
+   "passed": true,
+   "widths": {
+    "gate": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    },
+    "iopin": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    },
+    "pin": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    }
+   }
+  },
+  "hetero.d.S_hetero_edge_y_width": {
+   "passed": true,
+   "widths": [
+    5
+   ]
+  },
+  "hetero.d.S_graph_kind": {
+   "passed": true,
+   "value": "hetero"
+  },
+  "hetero.d.F_gate_cell_type_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.F_gate_cell_area": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.286621108131385e-07,
+   "max_rel": 3.211435254000783e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.d.F_gate_x_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.6966778850596645e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.d.F_gate_y_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.412517556031045e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.d.F_gate_orientation_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.F_gate_placement_status_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.F_iopin_pin_x_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.504655035001473e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.d.F_iopin_pin_y_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.9042968801841198e-05,
+   "max_rel": 3.39593956060133e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.d.F_iopin_nearest_tap_distance_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.978475125014484e-07,
+   "max_rel": 1.586360221678498e-07,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.d.F_iopin_pin_direction_id": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.F_pin_pin_type_id": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.F_pin_sum_pin_cap_fF": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.3916015632275958e-05,
+   "max_rel": 5.307566833570802e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.d.L_y_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 3.0192435995779476e-08,
+   "max_rel": 5.993012991028857e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.d.L_nan_y_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.d.L_y_raw_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.5372521311451948e-08,
+   "max_rel": 6.10907875388402e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.d.L_nan_y_raw_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_raw_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_raw_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_raw_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_raw_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_raw_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_raw_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_raw_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_pin_congestion": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_pin_irdrop": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.d.L_y_pin_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.195954846267e-07,
+   "max_rel": 5.910239190347734e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.d.L_nan_y_pin_wirelength": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.d.L_y_pin_ground_cap": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.378372050415578e-07,
+   "max_rel": 6.179719143861405e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.d.L_nan_y_raw_pin_congestion": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.d.L_nan_y_raw_pin_irdrop": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.d.L_y_raw_pin_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 4.7625732335632165e-07,
+   "max_rel": 5.857384762155625e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.d.L_nan_y_raw_pin_wirelength": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.d.L_y_raw_pin_ground_cap": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.726367186933203e-06,
+   "max_rel": 2.4377334068361682e-05,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.d.S_edges_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 772308
+  },
+  "hetero.d.T_families": {
+   "passed": true,
+   "claim": [
+    "gate_pin",
+    "net"
+   ],
+   "truth": [
+    "gate_pin",
+    "net"
+   ]
+  },
+  "hetero.d.T_gate_pin": {
+   "n_claim": 63127,
+   "n_truth": 63127,
+   "matched": 63127,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.d.E_gate_pin_aligned": {
+   "passed": true,
+   "aligned": 63127,
+   "truth": 63127
+  },
+  "hetero.d.E_gate_pin_attr0_pad0": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_gate_pin_attr1_pad1": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_gate_pin_attr2_pad2": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_gate_pin_attr3_pad3": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_gate_pin_attr4_pad4": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_gate_pin_attr5_pad5": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_gate_pin_attr6_pad6": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_gate_pin_attr7_pad7": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_gate_pin_edge_y_congestion_nan": {
+   "passed": true
+  },
+  "hetero.d.E_gate_pin_edge_y_irdrop_nan": {
+   "passed": true
+  },
+  "hetero.d.E_gate_pin_edge_y_timing_nan": {
+   "passed": true
+  },
+  "hetero.d.E_gate_pin_edge_y_wirelength_nan": {
+   "passed": true
+  },
+  "hetero.d.E_gate_pin_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.d.E_gate_pin_edge_y_raw_congestion_nan": {
+   "passed": true
+  },
+  "hetero.d.E_gate_pin_edge_y_raw_irdrop_nan": {
+   "passed": true
+  },
+  "hetero.d.E_gate_pin_edge_y_raw_timing_nan": {
+   "passed": true
+  },
+  "hetero.d.E_gate_pin_edge_y_raw_wirelength_nan": {
+   "passed": true
+  },
+  "hetero.d.E_gate_pin_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.d.T_net": {
+   "n_claim": 323027,
+   "n_truth": 323027,
+   "matched": 323027,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.d.E_net_aligned": {
+   "passed": true,
+   "aligned": 323027,
+   "truth": 323027
+  },
+  "hetero.d.E_net_attr0_net_type_id": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_net_attr1_fanout": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_net_attr2_pin_count": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_net_attr3_num_drivers": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_net_attr4_num_sinks": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_net_attr5_connects_macro_flag": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_net_attr6_num_layer": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.d.E_net_attr7_hpwl_um": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.005017089843704525,
+   "max_rel": 0.005246562697671789,
+   "nan_mismatch": 0,
+   "tol": [
+    0.006,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.d.E_net_edge_y_congestion_nan": {
+   "passed": true
+  },
+  "hetero.d.E_net_edge_y_irdrop_nan": {
+   "passed": true
+  },
+  "hetero.d.E_net_edge_y_timing_nan": {
+   "passed": true
+  },
+  "hetero.d.E_net_edge_y_wirelength": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.3866145326678634e-07,
+   "max_rel": 5.8860607247186466e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.d.E_net_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.d.E_net_edge_y_raw_congestion_nan": {
+   "passed": true
+  },
+  "hetero.d.E_net_edge_y_raw_irdrop_nan": {
+   "passed": true
+  },
+  "hetero.d.E_net_edge_y_raw_timing_nan": {
+   "passed": true
+  },
+  "hetero.d.E_net_edge_y_raw_wirelength": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 5.859375005456968e-05,
+   "max_rel": 5.707776462610046e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0002,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.d.E_net_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.d.S_rc_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 848446
+  },
+  "hetero.d.R_rc_coupling_edges": {
+   "n_claim": 101196,
+   "n_truth": 101196,
+   "matched": 101196,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.d.R_rc_coupling_raw": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.113739012825192e-07,
+   "max_rel": 0.01105340019897233,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.d.R_rc_coupling_label": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.178050772487893e-07,
+   "max_rel": 2.4830155246797687e-06,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.d.R_rc_coupling_offtype_nan": {
+   "passed": true
+  },
+  "hetero.d.R_rc_resistance_edges": {
+   "n_claim": 323027,
+   "n_truth": 323027,
+   "matched": 323027,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.d.R_rc_resistance_raw": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.097656250858563e-05,
+   "max_rel": 5.9421990537811246e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.d.R_rc_resistance_label": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.388766144889587e-07,
+   "max_rel": 5.939258059635926e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.d.R_rc_resistance_offtype_nan": {
+   "passed": true
+  },
+  "hetero.e.I_iopin": {
+   "n_claim": 68,
+   "n_truth": 68,
+   "matched": 68,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.e.O_iopin": {
+   "passed": true,
+   "n": 68
+  },
+  "hetero.e.I_pin": {
+   "n_claim": 63127,
+   "n_truth": 63127,
+   "matched": 63127,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.e.O_pin": {
+   "passed": true,
+   "n": 63127
+  },
+  "hetero.e.I_no_extra_node_types": {
+   "passed": true,
+   "extra": []
+  },
+  "hetero.e.S_hetero_widths": {
+   "passed": true,
+   "widths": {
+    "iopin": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    },
+    "pin": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    }
+   }
+  },
+  "hetero.e.S_hetero_edge_y_width": {
+   "passed": true,
+   "widths": [
+    5
+   ]
+  },
+  "hetero.e.S_graph_kind": {
+   "passed": true,
+   "value": "hetero"
+  },
+  "hetero.e.F_iopin_pin_x_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.504655035001473e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.e.F_iopin_pin_y_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.9042968801841198e-05,
+   "max_rel": 3.39593956060133e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.e.F_iopin_nearest_tap_distance_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.978475125014484e-07,
+   "max_rel": 1.586360221678498e-07,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.e.F_iopin_pin_direction_id": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.e.F_pin_pin_type_id": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.e.F_pin_sum_pin_cap_fF": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.3916015632275958e-05,
+   "max_rel": 5.307566833570802e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.e.L_nan_y_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.e.L_nan_y_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.e.L_nan_y_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.e.L_nan_y_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.e.L_nan_y_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.e.L_nan_y_raw_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.e.L_nan_y_raw_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.e.L_nan_y_raw_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.e.L_nan_y_raw_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.e.L_nan_y_raw_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.e.L_nan_y_pin_congestion": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.e.L_nan_y_pin_irdrop": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.e.L_y_pin_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.195954846267e-07,
+   "max_rel": 5.910239190347734e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.e.L_nan_y_pin_wirelength": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.e.L_y_pin_ground_cap": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.378372050415578e-07,
+   "max_rel": 6.179719143861405e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.e.L_nan_y_raw_pin_congestion": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.e.L_nan_y_raw_pin_irdrop": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.e.L_y_raw_pin_timing": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 4.7625732335632165e-07,
+   "max_rel": 5.857384762155625e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.e.L_nan_y_raw_pin_wirelength": {
+   "passed": true,
+   "n": 63127,
+   "non_nan": 0
+  },
+  "hetero.e.L_y_raw_pin_ground_cap": {
+   "n": 63127,
+   "matched": 63127,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.726367186933203e-06,
+   "max_rel": 2.4377334068361682e-05,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.e.S_edges_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 779600
+  },
+  "hetero.e.T_families": {
+   "passed": true,
+   "claim": [
+    "gate",
+    "net"
+   ],
+   "truth": [
+    "gate",
+    "net"
+   ]
+  },
+  "hetero.e.T_gate": {
+   "n_claim": 66773,
+   "n_truth": 66773,
+   "matched": 66773,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.e.E_gate_aligned": {
+   "passed": true,
+   "aligned": 66773,
+   "truth": 66773
+  },
+  "hetero.e.E_gate_attr0_cell_type_id": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.e.E_gate_attr1_cell_area": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.286621108131385e-07,
+   "max_rel": 3.211435254000783e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.e.E_gate_attr3_x_um": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.6966778850596645e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.e.E_gate_attr4_y_um": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.412517556031045e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.e.E_gate_attr5_orientation_id": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.e.E_gate_attr6_placement_status_id": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.e.E_gate_attr7_pad7": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.e.E_gate_edge_y_congestion": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 3.0192435995779476e-08,
+   "max_rel": 5.993012991028857e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.e.E_gate_edge_y_timing_nan": {
+   "passed": true
+  },
+  "hetero.e.E_gate_edge_y_wirelength_nan": {
+   "passed": true
+  },
+  "hetero.e.E_gate_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.e.E_gate_edge_y_raw_congestion": {
+   "n": 66773,
+   "matched": 66773,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.5372521311451948e-08,
+   "max_rel": 6.10907875388402e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.e.E_gate_edge_y_raw_timing_nan": {
+   "passed": true
+  },
+  "hetero.e.E_gate_edge_y_raw_wirelength_nan": {
+   "passed": true
+  },
+  "hetero.e.E_gate_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.e.T_net": {
+   "n_claim": 323027,
+   "n_truth": 323027,
+   "matched": 323027,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.e.E_net_aligned": {
+   "passed": true,
+   "aligned": 323027,
+   "truth": 323027
+  },
+  "hetero.e.E_net_attr0_net_type_id": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.e.E_net_attr1_fanout": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.e.E_net_attr2_pin_count": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.e.E_net_attr3_num_drivers": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.e.E_net_attr4_num_sinks": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.e.E_net_attr5_connects_macro_flag": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.e.E_net_attr6_num_layer": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.e.E_net_attr7_hpwl_um": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.005017089843704525,
+   "max_rel": 0.005246562697671789,
+   "nan_mismatch": 0,
+   "tol": [
+    0.006,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.e.E_net_edge_y_congestion_nan": {
+   "passed": true
+  },
+  "hetero.e.E_net_edge_y_irdrop_nan": {
+   "passed": true
+  },
+  "hetero.e.E_net_edge_y_timing_nan": {
+   "passed": true
+  },
+  "hetero.e.E_net_edge_y_wirelength": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.3866145326678634e-07,
+   "max_rel": 5.8860607247186466e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.e.E_net_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.e.E_net_edge_y_raw_congestion_nan": {
+   "passed": true
+  },
+  "hetero.e.E_net_edge_y_raw_irdrop_nan": {
+   "passed": true
+  },
+  "hetero.e.E_net_edge_y_raw_timing_nan": {
+   "passed": true
+  },
+  "hetero.e.E_net_edge_y_raw_wirelength": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 5.859375005456968e-05,
+   "max_rel": 5.707776462610046e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0002,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.e.E_net_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.e.S_rc_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 848446
+  },
+  "hetero.e.R_rc_coupling_edges": {
+   "n_claim": 101196,
+   "n_truth": 101196,
+   "matched": 101196,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.e.R_rc_coupling_raw": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.113739012825192e-07,
+   "max_rel": 0.01105340019897233,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-05,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.e.R_rc_coupling_label": {
+   "n": 101196,
+   "matched": 101196,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.178050772487893e-07,
+   "max_rel": 2.4830155246797687e-06,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.e.R_rc_coupling_offtype_nan": {
+   "passed": true
+  },
+  "hetero.e.R_rc_resistance_edges": {
+   "n_claim": 323027,
+   "n_truth": 323027,
+   "matched": 323027,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.e.R_rc_resistance_raw": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.097656250858563e-05,
+   "max_rel": 5.9421990537811246e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.e.R_rc_resistance_label": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.388766144889587e-07,
+   "max_rel": 5.939258059635926e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.e.R_rc_resistance_offtype_nan": {
+   "passed": true
+  },
+  "hetero.f.I_gate": {
+   "n_claim": 20896,
+   "n_truth": 20896,
+   "matched": 20896,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.f.O_gate": {
+   "passed": true,
+   "n": 20896
+  },
+  "hetero.f.I_iopin": {
+   "n_claim": 68,
+   "n_truth": 68,
+   "matched": 68,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.f.O_iopin": {
+   "passed": true,
+   "n": 68
+  },
+  "hetero.f.I_no_extra_node_types": {
+   "passed": true,
+   "extra": []
+  },
+  "hetero.f.S_hetero_widths": {
+   "passed": true,
+   "widths": {
+    "gate": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    },
+    "iopin": {
+     "x": 9,
+     "y": 5,
+     "y_raw": 5
+    }
+   }
+  },
+  "hetero.f.S_hetero_edge_y_width": {
+   "passed": true,
+   "widths": [
+    5
+   ]
+  },
+  "hetero.f.S_graph_kind": {
+   "passed": true,
+   "value": "hetero"
+  },
+  "hetero.f.F_gate_cell_type_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.f.F_gate_cell_area": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 6.286621108131385e-07,
+   "max_rel": 3.211435254000783e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.f.F_gate_x_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.6966778850596645e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.f.F_gate_y_um": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.929687502728484e-05,
+   "max_rel": 5.412517556031045e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.f.F_gate_orientation_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.f.F_gate_placement_status_id": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.f.F_iopin_pin_x_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.464843751364242e-05,
+   "max_rel": 5.504655035001473e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.f.F_iopin_pin_y_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.9042968801841198e-05,
+   "max_rel": 3.39593956060133e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.f.F_iopin_nearest_tap_distance_um": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 7.978475125014484e-07,
+   "max_rel": 1.586360221678498e-07,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0001,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.f.F_iopin_pin_direction_id": {
+   "n": 68,
+   "matched": 68,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.f.L_y_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 3.0192435995779476e-08,
+   "max_rel": 5.993012991028857e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.f.L_nan_y_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.f.L_y_raw_gate_congestion": {
+   "n": 20896,
+   "matched": 20896,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 1.5372521311451948e-08,
+   "max_rel": 6.10907875388402e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-05
+   ],
+   "examples": []
+  },
+  "hetero.f.L_nan_y_raw_gate_timing": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_raw_gate_wirelength": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_raw_gate_ground_cap": {
+   "passed": true,
+   "n": 20896,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_raw_iopin_congestion": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_raw_iopin_irdrop": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_raw_iopin_timing": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_raw_iopin_wirelength": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.f.L_nan_y_raw_iopin_ground_cap": {
+   "passed": true,
+   "n": 68,
+   "non_nan": 0
+  },
+  "hetero.f.S_edges_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 646054
+  },
+  "hetero.f.T_families": {
+   "passed": true,
+   "claim": [
+    "net"
+   ],
+   "truth": [
+    "net"
+   ]
+  },
+  "hetero.f.T_net": {
+   "n_claim": 323027,
+   "n_truth": 323027,
+   "matched": 323027,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.f.E_net_aligned": {
+   "passed": true,
+   "aligned": 323027,
+   "truth": 323027
+  },
+  "hetero.f.E_net_attr0_net_type_id": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.f.E_net_attr1_fanout": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.f.E_net_attr2_pin_count": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.f.E_net_attr3_num_drivers": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.f.E_net_attr4_num_sinks": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.f.E_net_attr5_connects_macro_flag": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.f.E_net_attr6_num_layer": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "nan_mismatch": 0,
+   "tol": [
+    0,
+    0
+   ],
+   "examples": []
+  },
+  "hetero.f.E_net_attr7_hpwl_um": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 0.005017089843704525,
+   "max_rel": 0.005246562697671789,
+   "nan_mismatch": 0,
+   "tol": [
+    0.006,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.f.E_net_edge_y_congestion_nan": {
+   "passed": true
+  },
+  "hetero.f.E_net_edge_y_irdrop_nan": {
+   "passed": true
+  },
+  "hetero.f.E_net_edge_y_timing_nan": {
+   "passed": true
+  },
+  "hetero.f.E_net_edge_y_wirelength": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 2.3866145326678634e-07,
+   "max_rel": 5.8860607247186466e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    1e-06,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.f.E_net_edge_y_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.f.E_net_edge_y_raw_congestion_nan": {
+   "passed": true
+  },
+  "hetero.f.E_net_edge_y_raw_irdrop_nan": {
+   "passed": true
+  },
+  "hetero.f.E_net_edge_y_raw_timing_nan": {
+   "passed": true
+  },
+  "hetero.f.E_net_edge_y_raw_wirelength": {
+   "n": 323027,
+   "matched": 323027,
+   "rate": 1.0,
+   "passed": true,
+   "max_abs": 5.859375005456968e-05,
+   "max_rel": 5.707776462610046e-08,
+   "nan_mismatch": 0,
+   "tol": [
+    0.0002,
+    1e-06
+   ],
+   "examples": []
+  },
+  "hetero.f.E_net_edge_y_raw_ground_cap_nan": {
+   "passed": true
+  },
+  "hetero.f.S_rc_reverse_symmetric": {
+   "passed": true,
+   "n_directed": 0
+  },
+  "hetero.f.R_rc_coupling_edges": {
+   "n_claim": 0,
+   "n_truth": 0,
+   "matched": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  },
+  "hetero.f.R_rc_resistance_edges": {
+   "n_claim": 0,
+   "n_truth": 0,
+   "matched": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "passed": true,
+   "extra_examples": [],
+   "missing_examples": []
+  }
+ },
+ "spef_stats": {
+  "unresolved_coupling": 0,
+  "n_cap4": 329842,
+  "n_dnet": 21141,
+  "n_coupling_pairs": 110130,
+  "n_res_pairs": 337692,
+  "cyclic": 0
+ }
+}

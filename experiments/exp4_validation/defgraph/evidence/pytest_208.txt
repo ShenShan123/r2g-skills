@@ -1,0 +1,22 @@
+........................................................................ [ 11%]
+.....................ssssssss........................................... [ 22%]
+........................................................................ [ 33%]
+........................................................................ [ 44%]
+........................................................................ [ 55%]
+........................................................................ [ 66%]
+.....................ss.s.sssssss............ssssssss.................ss [ 77%]
+ssssssssssssssssssssss.....ssss.ss....s................................. [ 88%]
+........................................................................ [ 99%]
+......                                                                   [100%]
+=============================== warnings summary ===============================
+../../../r2g_toolchain/pyenvs/r2g-graph/lib/python3.13/site-packages/torch/jit/_script.py:1488
+../../../r2g_toolchain/pyenvs/r2g-graph/lib/python3.13/site-packages/torch/jit/_script.py:1488
+  /home/yangao/r2g_toolchain/pyenvs/r2g-graph/lib/python3.13/site-packages/torch/jit/_script.py:1488: DeprecationWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+tests/test_spef.py:184
+  /home/yangao/r2g-skills/r2g-skills/def-graph/tests/test_spef.py:184: SyntaxWarning: invalid escape sequence '\/'
+    are written by write_def as `AddRoundKey$func$\/path\/x.v:193$1.ark.u\[0\]` and by
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+597 passed, 57 skipped, 3 warnings in 51.81s

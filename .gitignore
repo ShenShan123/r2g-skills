@@ -343,3 +343,4 @@ paper_figures_review_20261111/
 /asap7.bz2
 paper/*.zip
 .vscode/
+experiments/exp4_harness/evidence/*/deployment/

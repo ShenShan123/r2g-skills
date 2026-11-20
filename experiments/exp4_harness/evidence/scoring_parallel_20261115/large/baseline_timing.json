@@ -1,0 +1,8 @@
+{
+  "mode": "baseline",
+  "size": "large",
+  "wall_seconds": 1549.7056794166565,
+  "measurement": "formal evaluator score.json mtime minus evaluate.log birth time; includes container startup and truth load",
+  "strict_full_pass": true,
+  "label_accuracy": 1.0
+}

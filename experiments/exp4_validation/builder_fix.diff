@@ -1,0 +1,29 @@
+# Minimal fixes for dataset-A builder defects (demonstrated on copies only; release untouched).
+# Hunk 1 (D-A1): transform_pin FN/FS were swapped vs DEF/OpenROAD (FS=MX reflect y, FN=MY reflect x).
+# Hunk 2 (D-A2): IO port net must come from the canonical floorplan incidence (io_map), not the
+#   stage DEF, so route-stage net terminal counts stay canonical on CTS port feedthroughs.
+# The net-lineage study (lineage_summary.json) found no further lineage defect, so no third hunk.
+--- project/pipeline/vendor/legacy/02_extract_features.py	2026-10-27 23:32:44.791792200 -0700
++++ project_fixed/pipeline/vendor/legacy/02_extract_features.py	2026-11-07 07:27:29.303194545 -0800
+@@ -761,8 +761,8 @@
+         "S": (width - x, height - y),
+         "W": (height - y, x),
+         "E": (y, width - x),
+-        "FN": (x, height - y),
+-        "FS": (width - x, y),
++        "FN": (width - x, y),
++        "FS": (x, height - y),
+         "FW": (y, x),
+         "FE": (height - y, width - x),
+     }
+@@ -2249,7 +2249,7 @@
+     ]
+     for name in sorted(io_map):
+         physical = place["iopins"].get(name, {})
+-        net_name = canonical_name(physical.get("net") or io_map[name]["net"])
++        net_name = canonical_name(io_map[name]["net"] or physical.get("net"))
+         direction = str(
+             physical.get("direction") or io_map[name]["direction"]
+         ).upper()
+755:def transform_pin(
+783:    dx, dy = transform_pin(

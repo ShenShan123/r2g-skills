@@ -1,0 +1,13 @@
+{
+  "returncode": 0,
+  "peak_process_tree_rss_bytes": 30926319616,
+  "peak_process_tree_pss_bytes": 29113337856,
+  "peak_processes": 7,
+  "samples": 239,
+  "sample_interval_seconds": 1,
+  "elapsed_container_seconds": 294.06490713194944,
+  "cpuset": "4,5,9,11",
+  "root_pid": 2058872,
+  "resource_measurement_status": "valid_all_thread_children",
+  "tree_discovery": "recursively enumerate /proc/PID/task/*/children across all threads"
+}

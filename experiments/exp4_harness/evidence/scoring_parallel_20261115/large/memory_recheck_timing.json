@@ -1,0 +1,10 @@
+{
+  "mode": "parallel",
+  "size": "large",
+  "workers": 4,
+  "wall_seconds": 291.7727515769657,
+  "cpu_seconds": 954.4072998769999,
+  "load_seconds": 1.4282649640226737,
+  "strict_full_pass": true,
+  "label_accuracy": 1.0
+}

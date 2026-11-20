@@ -1,0 +1,338 @@
+{
+ "py39": {
+  "runtime": "Python 3.9.23 + torch 2.5.1+cpu + torch_geometric 2.6.1 + numpy 2.0.2 + scipy 1.13.1 (conda-forge/pip, /data)",
+  "designs": 10,
+  "graphs": 100,
+  "byte_identical": 100,
+  "value_identical": 100,
+  "inputs_identical": 100,
+  "release_matches_manifest": 100,
+  "differing_fields": {},
+  "max_abs_value_difference": 0.0,
+  "per_design": {
+   "C00627__fpu_sp_mul__fpu__nangate45__p2": {
+    "design": "C00627__fpu_sp_mul__fpu__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 10,
+    "value_identical": 10,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2": {
+    "design": "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 10,
+    "value_identical": 10,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C00867__user_proj_example__acor_dct32__nangate45__p2": {
+    "design": "C00867__user_proj_example__acor_dct32__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 10,
+    "value_identical": 10,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2": {
+    "design": "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 10,
+    "value_identical": 10,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C01484__multiplier_32_bit__comp__nangate45__p2": {
+    "design": "C01484__multiplier_32_bit__comp__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 10,
+    "value_identical": 10,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C02369__Uart8__verilog-uart__nangate45__p2": {
+    "design": "C02369__Uart8__verilog-uart__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 10,
+    "value_identical": 10,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C02570__muldiv__koti__nangate45__p2": {
+    "design": "C02570__muldiv__koti__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 10,
+    "value_identical": 10,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2": {
+    "design": "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 10,
+    "value_identical": 10,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C03387__vga1__ego1-vga__nangate45__p2": {
+    "design": "C03387__vga1__ego1-vga__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 10,
+    "value_identical": 10,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C03761__cordic__cordic-core__nangate45__p2": {
+    "design": "C03761__cordic__cordic-core__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 10,
+    "value_identical": 10,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   }
+  }
+ },
+ "main": {
+  "runtime": "Python 3.13.5 + torch 2.13.0+cpu + torch_geometric 2.8.0 + numpy 2.5.1 + scipy 1.18.1 (graph-venv + scipy)",
+  "designs": 10,
+  "graphs": 100,
+  "byte_identical": 0,
+  "value_identical": 0,
+  "inputs_identical": 100,
+  "release_matches_manifest": 100,
+  "differing_fields": {
+   "global.wl_group_y": 100
+  },
+  "max_abs_value_difference": 1.8189894035458565e-12,
+  "per_design": {
+   "C00627__fpu_sp_mul__fpu__nangate45__p2": {
+    "design": "C00627__fpu_sp_mul__fpu__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 0,
+    "value_identical": 0,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2": {
+    "design": "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 0,
+    "value_identical": 0,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C00867__user_proj_example__acor_dct32__nangate45__p2": {
+    "design": "C00867__user_proj_example__acor_dct32__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 0,
+    "value_identical": 0,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2": {
+    "design": "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 0,
+    "value_identical": 0,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C01484__multiplier_32_bit__comp__nangate45__p2": {
+    "design": "C01484__multiplier_32_bit__comp__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 0,
+    "value_identical": 0,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C02369__Uart8__verilog-uart__nangate45__p2": {
+    "design": "C02369__Uart8__verilog-uart__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 0,
+    "value_identical": 0,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C02570__muldiv__koti__nangate45__p2": {
+    "design": "C02570__muldiv__koti__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 0,
+    "value_identical": 0,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2": {
+    "design": "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 0,
+    "value_identical": 0,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C03387__vga1__ego1-vga__nangate45__p2": {
+    "design": "C03387__vga1__ego1-vga__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 0,
+    "value_identical": 0,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   },
+   "C03761__cordic__cordic-core__nangate45__p2": {
+    "design": "C03761__cordic__cordic-core__nangate45__p2",
+    "graphs": 10,
+    "byte_identical": 0,
+    "value_identical": 0,
+    "inputs_identical": 10,
+    "release_matches_manifest": 10
+   }
+  }
+ },
+ "images": {
+  "runtime": "shipped dump_design.py/ir_design.tcl on memlab203 (OpenROAD 26Q3-318-g6b9d7fb806, ORFS nangate45 platform) + shipped rasterize.py on 208 with the original r2g-cnn venv (numpy 2.5.4)",
+  "designs": 10,
+  "byte_identical": 10,
+  "value_identical": 10,
+  "per_design": {
+   "C00627__fpu_sp_mul__fpu__nangate45__p2": {
+    "byte_identical": true,
+    "sha_release": "14306f020c4e78ef9b99fd38b1a4a2a090c02f0bd9e704814dddc09e9d826338",
+    "sha_rebuild": "14306f020c4e78ef9b99fd38b1a4a2a090c02f0bd9e704814dddc09e9d826338",
+    "fields": {
+     "X": "identical",
+     "channels": "identical",
+     "cong": "identical",
+     "ir_drop_mV": "identical",
+     "x_edges_um": "identical",
+     "y_edges_um": "identical"
+    },
+    "value_identical": true
+   },
+   "C00734__snix_video_rgb24_pack__verilaxi__nangate45__p2": {
+    "byte_identical": true,
+    "sha_release": "8ac31eee9c70985c005fbb25f7051de17bafb906ce674609959f59835da05a51",
+    "sha_rebuild": "8ac31eee9c70985c005fbb25f7051de17bafb906ce674609959f59835da05a51",
+    "fields": {
+     "X": "identical",
+     "channels": "identical",
+     "cong": "identical",
+     "ir_drop_mV": "identical",
+     "x_edges_um": "identical",
+     "y_edges_um": "identical"
+    },
+    "value_identical": true
+   },
+   "C00867__user_proj_example__acor_dct32__nangate45__p2": {
+    "byte_identical": true,
+    "sha_release": "c1cbeca51ce19ff08aa582611dcbd435058307da57b6f127b294e2726fee4a8c",
+    "sha_rebuild": "c1cbeca51ce19ff08aa582611dcbd435058307da57b6f127b294e2726fee4a8c",
+    "fields": {
+     "X": "identical",
+     "channels": "identical",
+     "cong": "identical",
+     "ir_drop_mV": "identical",
+     "x_edges_um": "identical",
+     "y_edges_um": "identical"
+    },
+    "value_identical": true
+   },
+   "C01000__custom_FPGA_door_lock__fpga-enhanced-digital-door-lock__nangate45__p2": {
+    "byte_identical": true,
+    "sha_release": "1b556e350a15b231e64ec05b85d7a4cbeff52ec589a21b6967bd1119bda646a4",
+    "sha_rebuild": "1b556e350a15b231e64ec05b85d7a4cbeff52ec589a21b6967bd1119bda646a4",
+    "fields": {
+     "X": "identical",
+     "channels": "identical",
+     "cong": "identical",
+     "ir_drop_mV": "identical",
+     "x_edges_um": "identical",
+     "y_edges_um": "identical"
+    },
+    "value_identical": true
+   },
+   "C01484__multiplier_32_bit__comp__nangate45__p2": {
+    "byte_identical": true,
+    "sha_release": "54a23fcf97d1e152a8e21c7dabd0904e1c8fa51021efb5b0ba7a7c5001e7b709",
+    "sha_rebuild": "54a23fcf97d1e152a8e21c7dabd0904e1c8fa51021efb5b0ba7a7c5001e7b709",
+    "fields": {
+     "X": "identical",
+     "channels": "identical",
+     "cong": "identical",
+     "ir_drop_mV": "identical",
+     "x_edges_um": "identical",
+     "y_edges_um": "identical"
+    },
+    "value_identical": true
+   },
+   "C02369__Uart8__verilog-uart__nangate45__p2": {
+    "byte_identical": true,
+    "sha_release": "37a554d987ab01dc40b4cac0118d0bf4b7cee5fee5241b6eef80373e866ebbda",
+    "sha_rebuild": "37a554d987ab01dc40b4cac0118d0bf4b7cee5fee5241b6eef80373e866ebbda",
+    "fields": {
+     "X": "identical",
+     "channels": "identical",
+     "cong": "identical",
+     "ir_drop_mV": "identical",
+     "x_edges_um": "identical",
+     "y_edges_um": "identical"
+    },
+    "value_identical": true
+   },
+   "C02570__muldiv__koti__nangate45__p2": {
+    "byte_identical": true,
+    "sha_release": "f2c61b9abfa855c23f5e594384c1eb11a0c463544df0c65206db40422dd3604a",
+    "sha_rebuild": "f2c61b9abfa855c23f5e594384c1eb11a0c463544df0c65206db40422dd3604a",
+    "fields": {
+     "X": "identical",
+     "channels": "identical",
+     "cong": "identical",
+     "ir_drop_mV": "identical",
+     "x_edges_um": "identical",
+     "y_edges_um": "identical"
+    },
+    "value_identical": true
+   },
+   "C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2": {
+    "byte_identical": true,
+    "sha_release": "a1b823e87e9c7bd32b287ccfa8da0de88cbf26c730624ff0619f264e9e93b098",
+    "sha_rebuild": "a1b823e87e9c7bd32b287ccfa8da0de88cbf26c730624ff0619f264e9e93b098",
+    "fields": {
+     "X": "identical",
+     "channels": "identical",
+     "cong": "identical",
+     "ir_drop_mV": "identical",
+     "x_edges_um": "identical",
+     "y_edges_um": "identical"
+    },
+    "value_identical": true
+   },
+   "C03387__vga1__ego1-vga__nangate45__p2": {
+    "byte_identical": true,
+    "sha_release": "d20746f7ec370649a321fb05c37a3e6e75402ade3fccfe0c90069af8bbdf1cb5",
+    "sha_rebuild": "d20746f7ec370649a321fb05c37a3e6e75402ade3fccfe0c90069af8bbdf1cb5",
+    "fields": {
+     "X": "identical",
+     "channels": "identical",
+     "cong": "identical",
+     "ir_drop_mV": "identical",
+     "x_edges_um": "identical",
+     "y_edges_um": "identical"
+    },
+    "value_identical": true
+   },
+   "C03761__cordic__cordic-core__nangate45__p2": {
+    "byte_identical": true,
+    "sha_release": "2bb1c13557809d25c2b28a860c79dcb52cc189f08ee1d240e74079189a30916a",
+    "sha_rebuild": "2bb1c13557809d25c2b28a860c79dcb52cc189f08ee1d240e74079189a30916a",
+    "fields": {
+     "X": "identical",
+     "channels": "identical",
+     "cong": "identical",
+     "ir_drop_mV": "identical",
+     "x_edges_um": "identical",
+     "y_edges_um": "identical"
+    },
+    "value_identical": true
+   }
+  }
+ }
+}

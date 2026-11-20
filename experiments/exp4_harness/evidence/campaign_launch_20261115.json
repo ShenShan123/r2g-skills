@@ -1,0 +1,54 @@
+{
+  "observed_at_utc": "2026-11-15T06:11:47.788031+00:00",
+  "server": "memlab216",
+  "root": "/proj/workarea/yangao/exp4_harness_20261115",
+  "tmux_session": "exp4_harness_20261115",
+  "tmux_alive": true,
+  "frozen_at_utc": "2026-11-15T06:09:00.809411+00:00",
+  "planned_runs": 12,
+  "max_parallel_runs": 2,
+  "image_id": "066962880879fa0810c359602eb0a00fed3f5c38b81cb13b296f4f0f4c66a509",
+  "active_runs": [
+    {
+      "arm": "deepseek_native",
+      "repeat": 1,
+      "status": "running",
+      "phase": "development",
+      "model_requests": 13,
+      "successful_requests": 13,
+      "started_at_utc": "2026-11-15T06:10:16.926732+00:00"
+    },
+    {
+      "arm": "gpt_native",
+      "repeat": 1,
+      "status": "running",
+      "phase": "development",
+      "model_requests": 7,
+      "successful_requests": 7,
+      "started_at_utc": "2026-11-15T06:10:16.927115+00:00"
+    }
+  ],
+  "preflight": [
+    {
+      "design": "C00833__alarm_clock_top__alarm_clock__nangate45__p2",
+      "platform": "nangate45",
+      "strict_full_pass": true,
+      "label_accuracy": 1.0,
+      "failures": []
+    },
+    {
+      "design": "C00539__mcpu16mc__digitalcpuzoo__sky130hd__p5",
+      "platform": "sky130hd",
+      "strict_full_pass": true,
+      "label_accuracy": 1.0,
+      "failures": []
+    },
+    {
+      "design": "C02136__fifo__hdl-libraries__gf180__p10",
+      "platform": "gf180",
+      "strict_full_pass": true,
+      "label_accuracy": 1.0,
+      "failures": []
+    }
+  ]
+}

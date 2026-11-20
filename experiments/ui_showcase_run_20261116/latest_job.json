@@ -1,0 +1,107 @@
+{
+  "id": "11152239-a8af96",
+  "created": 1794811169.1099572,
+  "updated": 1794812240.8463902,
+  "status": "done",
+  "title": "1 个设计 · nangate45 · graph",
+  "spec": {
+    "platform": "nangate45",
+    "output": "graph",
+    "sources": [
+      {
+        "name": "md5",
+        "path": "/data/yangao/r2g_ui_20261115/state/uploads/1115223929-0cd311",
+        "top": "md5"
+      }
+    ],
+    "params": {}
+  },
+  "result": {
+    "passed": 1,
+    "total": 1,
+    "package": "/data/yangao/r2g_ui_20261115/state/datasets/r2g_dataset_11152239-a8af96.tar.gz"
+  },
+  "designs": [
+    {
+      "job_id": "11152239-a8af96",
+      "name": "md5",
+      "project": "/data/yangao/r2g_ui_20261115/state/workspace/11152239-a8af96/md5__11152239-a8af96",
+      "stage": "done",
+      "status": "passed",
+      "detail": {
+        "source": "/data/yangao/r2g_ui_20261115/state/uploads/1115223929-0cd311",
+        "top": "md5",
+        "owner": "3176647:79519096",
+        "top_source": "用户指定",
+        "frontend_fixes": [],
+        "pgid": 267559,
+        "process_start": "85011376",
+        "execution_id": "e22466d548ce4acdbc07ba4a5d76b394",
+        "sizing": {
+          "core_side_um": 174,
+          "die_side_um": 178.0,
+          "core_inset_um": 2.0,
+          "binding": "area",
+          "cells": 8866,
+          "area_um2": 14785.078,
+          "pins": 76,
+          "period_ns": 3.0,
+          "period_source": "tiers"
+        },
+        "signoff": {
+          "drc": "clean",
+          "drc_violations": 0,
+          "lvs": "clean",
+          "lvs_mismatches": 0,
+          "drc_scope": null,
+          "dual_clean": true
+        },
+        "repair": [
+          {
+            "check": "drc",
+            "iter": 1,
+            "strategy": "deck_driven_antenna_diode",
+            "before": "2",
+            "after": "0",
+            "verdict": "cleared",
+            "from_stage": "route",
+            "fix_session_id": "54e2248599c3f717",
+            "violation_class": "METAL4_ANTENNA",
+            "after_status": "clean",
+            "before_categories": "{\"METAL4_ANTENNA\": {\"count\": 2, \"description\": \"METAL4_ANTENNA : Ratio of Maximum Allowed (Field poly area or Metal Layer Area) to transistor gate area : 300:1\"}}",
+            "cumulative_config": "{\"PRE_GLOBAL_ROUTE_TCL\": \"/data/yangao/r2g_ui_20261115/state/workspace/11152239-a8af96/md5__11152239-a8af96/signoff_fix/deck_antenna_diodes.tcl\"}",
+            "config_delta": "{\"PRE_GLOBAL_ROUTE_TCL\": \"/data/yangao/r2g_ui_20261115/state/workspace/11152239-a8af96/md5__11152239-a8af96/signoff_fix/deck_antenna_diodes.tcl\"}",
+            "env_flags": "{}",
+            "predicates": {},
+            "global_regressions": [],
+            "ts": "2026-11-15T22:54:40-08:00"
+          },
+          {
+            "check": "lvs",
+            "iter": 1,
+            "strategy": "none",
+            "before": "0",
+            "after": "0",
+            "verdict": "stop_clean",
+            "from_stage": null,
+            "fix_session_id": "54e2248599c3f717",
+            "violation_class": null,
+            "after_status": "clean",
+            "before_categories": "{\"mismatch_count\": 0}",
+            "cumulative_config": "{\"PRE_GLOBAL_ROUTE_TCL\": \"/data/yangao/r2g_ui_20261115/state/workspace/11152239-a8af96/md5__11152239-a8af96/signoff_fix/deck_antenna_diodes.tcl\"}",
+            "config_delta": "{}",
+            "env_flags": "{}",
+            "predicates": {},
+            "global_regressions": [],
+            "ts": "2026-11-15T22:55:31-08:00"
+          }
+        ],
+        "verify": {
+          "passed": 297,
+          "total": 297
+        }
+      },
+      "updated": 1794812208.5829113
+    }
+  ]
+}

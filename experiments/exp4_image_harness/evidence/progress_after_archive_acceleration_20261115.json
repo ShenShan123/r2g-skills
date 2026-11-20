@@ -1,0 +1,102 @@
+{
+  "sampled_at_utc": "2026-11-15T10:54:15.991252+00:00",
+  "sampled_at_utc_plus_8": "2026-11-15T18:54:15.991292+08:00",
+  "arms": {
+    "deepseek_native": [
+      {
+        "repeat": "s1",
+        "scored": 60,
+        "strict_full_pass": 60,
+        "raster_accuracy_mean": 1.0,
+        "development_seconds": 1050.948,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "started_at_utc": "2026-11-15T10:15:23.093942+00:00",
+        "finished_at_utc": "2026-11-15T10:53:34.983183+00:00"
+      },
+      {
+        "repeat": "s2",
+        "scored": 0,
+        "strict_full_pass": 0,
+        "raster_accuracy_mean": null,
+        "development_seconds": null,
+        "status": "running",
+        "phase": "development",
+        "started_at_utc": "2026-11-15T10:53:34.983783+00:00",
+        "finished_at_utc": null
+      }
+    ],
+    "deepseek_r2g": [
+      {
+        "repeat": "s1",
+        "scored": 60,
+        "strict_full_pass": 60,
+        "raster_accuracy_mean": 1.0,
+        "development_seconds": 730.11,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "started_at_utc": "2026-11-15T10:15:23.092100+00:00",
+        "finished_at_utc": "2026-11-15T10:52:52.175255+00:00"
+      },
+      {
+        "repeat": "s2",
+        "scored": 0,
+        "strict_full_pass": 0,
+        "raster_accuracy_mean": null,
+        "development_seconds": null,
+        "status": "running",
+        "phase": "development",
+        "started_at_utc": "2026-11-15T10:52:52.175823+00:00",
+        "finished_at_utc": null
+      }
+    ],
+    "gpt_native": [
+      {
+        "repeat": "s1",
+        "scored": 60,
+        "strict_full_pass": 60,
+        "raster_accuracy_mean": 1.0,
+        "development_seconds": 470.752,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "started_at_utc": "2026-11-15T10:15:23.093696+00:00",
+        "finished_at_utc": "2026-11-15T10:51:54.566026+00:00"
+      },
+      {
+        "repeat": "s2",
+        "scored": 0,
+        "strict_full_pass": 0,
+        "raster_accuracy_mean": null,
+        "development_seconds": null,
+        "status": "running",
+        "phase": "development",
+        "started_at_utc": "2026-11-15T10:51:54.566674+00:00",
+        "finished_at_utc": null
+      }
+    ],
+    "gpt_r2g": [
+      {
+        "repeat": "s1",
+        "scored": 60,
+        "strict_full_pass": 60,
+        "raster_accuracy_mean": 1.0,
+        "development_seconds": 223.586,
+        "status": "complete",
+        "phase": "production_and_scoring",
+        "started_at_utc": "2026-11-15T10:15:23.091540+00:00",
+        "finished_at_utc": "2026-11-15T10:51:11.454186+00:00"
+      },
+      {
+        "repeat": "s2",
+        "scored": 0,
+        "strict_full_pass": 0,
+        "raster_accuracy_mean": null,
+        "development_seconds": null,
+        "status": "running",
+        "phase": "development",
+        "started_at_utc": "2026-11-15T10:51:11.455043+00:00",
+        "finished_at_utc": null
+      }
+    ]
+  }
+}

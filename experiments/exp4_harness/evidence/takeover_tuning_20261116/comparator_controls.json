@@ -1,0 +1,53 @@
+{
+  "passed": true,
+  "controls": [
+    {
+      "case": "adjacent_large_integers",
+      "expected_equal": false,
+      "actual_equal": false,
+      "passed": true
+    },
+    {
+      "case": "float64_precision",
+      "expected_equal": false,
+      "actual_equal": false,
+      "passed": true
+    },
+    {
+      "case": "same_position_nan",
+      "expected_equal": true,
+      "actual_equal": true,
+      "passed": true
+    },
+    {
+      "case": "nan_not_sentinel",
+      "expected_equal": false,
+      "actual_equal": false,
+      "passed": true
+    },
+    {
+      "case": "inf_not_finite",
+      "expected_equal": false,
+      "actual_equal": false,
+      "passed": true
+    },
+    {
+      "case": "dtype",
+      "expected_equal": false,
+      "actual_equal": false,
+      "passed": true
+    },
+    {
+      "case": "list_not_tuple",
+      "expected_equal": false,
+      "actual_equal": false,
+      "passed": true
+    },
+    {
+      "case": "complex_nan_other_component",
+      "expected_equal": false,
+      "actual_equal": false,
+      "passed": true
+    }
+  ]
+}

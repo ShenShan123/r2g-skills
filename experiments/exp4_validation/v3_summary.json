@@ -1,0 +1,334 @@
+{
+ "results": {
+  "perturbed/C03387__vga1__ego1-vga__nangate45__p2": {
+   "builder_accepted": true,
+   "inputs_identical_graphs": 10,
+   "graphs": 10,
+   "byte_identical_graphs": 0,
+   "label_fields_changed": [
+    "gate.y",
+    "global.spatial_y",
+    "global.wl_group_y",
+    "global.y",
+    "pin|cell_arc|pin.edge_y"
+   ],
+   "labels_baseline": {
+    "graph_y": [
+     1.0226442658875092,
+     0.0,
+     0.166412
+    ],
+    "wl_valid": 841,
+    "wl_sum": 5758.375,
+    "gate_valid": 684
+   },
+   "labels_counterfactual": {
+    "graph_y": [
+     4.821037253469686,
+     -1.0,
+     0.116412
+    ],
+    "wl_valid": 841,
+    "wl_sum": 5942.445,
+    "gate_valid": 684
+   },
+   "gate_congestion_changed_fraction": 0.9926900863647461,
+   "wl_changed_fraction": 0.1973840594291687
+  },
+  "perturbed/C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2": {
+   "builder_accepted": true,
+   "inputs_identical_graphs": 10,
+   "graphs": 10,
+   "byte_identical_graphs": 0,
+   "label_fields_changed": [
+    "gate.y",
+    "global.spatial_y",
+    "global.wl_group_y",
+    "global.y",
+    "pin|cell_arc|pin.edge_y"
+   ],
+   "labels_baseline": {
+    "graph_y": [
+     1.3333333333333333,
+     -12.681,
+     -0.357184
+    ],
+    "wl_valid": 1358,
+    "wl_sum": 11212.05,
+    "gate_valid": 1251
+   },
+   "labels_counterfactual": {
+    "graph_y": [
+     5.827160493827161,
+     -13.681,
+     -0.407184
+    ],
+    "wl_valid": 1358,
+    "wl_sum": 11570.34,
+    "gate_valid": 1251
+   },
+   "gate_congestion_changed_fraction": 0.9944044947624207,
+   "wl_changed_fraction": 0.2297496348619461
+  },
+  "perturbed/C01484__multiplier_32_bit__comp__nangate45__p2": {
+   "builder_accepted": true,
+   "inputs_identical_graphs": 10,
+   "graphs": 10,
+   "byte_identical_graphs": 0,
+   "label_fields_changed": [
+    "gate.y",
+    "global.spatial_y",
+    "global.wl_group_y",
+    "global.y",
+    "pin|cell_arc|pin.edge_y"
+   ],
+   "labels_baseline": {
+    "graph_y": [
+     1.8798828125,
+     -214.281,
+     -5.70677
+    ],
+    "wl_valid": 12507,
+    "wl_sum": 131135.465,
+    "gate_valid": 11422
+   },
+   "labels_counterfactual": {
+    "graph_y": [
+     10.150146484375,
+     -215.281,
+     -5.7567699999999995
+    ],
+    "wl_valid": 12507,
+    "wl_sum": 134968.715,
+    "gate_valid": 11422
+   },
+   "gate_congestion_changed_fraction": 0.9992120265960693,
+   "wl_changed_fraction": 0.26928919553756714
+  },
+  "donor/C03387__vga1__ego1-vga__nangate45__p2": {
+   "builder_accepted": true,
+   "inputs_identical_graphs": 10,
+   "graphs": 10,
+   "byte_identical_graphs": 0,
+   "label_fields_changed": [
+    "gate.label_grid_id",
+    "gate.y",
+    "gate.y_task_mask",
+    "gate.y_valid_mask",
+    "global.spatial_grid_index",
+    "global.spatial_shape",
+    "global.spatial_y",
+    "global.spatial_y_valid_mask",
+    "global.wl_group_task_mask",
+    "global.wl_group_valid_mask",
+    "global.wl_group_y",
+    "global.y",
+    "pin|cell_arc|pin.edge_y",
+    "pin|cell_arc|pin.edge_y_task_mask",
+    "pin|cell_arc|pin.edge_y_valid_mask"
+   ],
+   "labels_baseline": {
+    "graph_y": [
+     1.0226442658875092,
+     0.0,
+     0.166412
+    ],
+    "wl_valid": 841,
+    "wl_sum": 5758.375,
+    "gate_valid": 684
+   },
+   "labels_counterfactual": {
+    "graph_y": [
+     1.3333333333333333,
+     -12.681,
+     -0.357184
+    ],
+    "wl_valid": 2,
+    "wl_sum": 9.459999999999999,
+    "gate_valid": 127
+   },
+   "gate_congestion_changed_fraction": 1.0,
+   "wl_changed_fraction": 1.0
+  },
+  "donor/C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2": {
+   "builder_accepted": false,
+   "refusal": [
+    "    assert g['net'].y_task_mask.any()",
+    "           ~~~~~~~~~~~~~~~~~~~~~~~~^^",
+    "AssertionError"
+   ]
+  },
+  "donor/C01484__multiplier_32_bit__comp__nangate45__p2": {
+   "builder_accepted": false,
+   "refusal": [
+    "    assert g['net'].y_task_mask.any()",
+    "           ~~~~~~~~~~~~~~~~~~~~~~~~^^",
+    "AssertionError"
+   ]
+  },
+  "perturbed_inconsistent_dr/C03387__vga1__ego1-vga__nangate45__p2": {
+   "builder_accepted": false,
+   "refusal": [
+    "    assert abs(wire['absolute_difference_um'])<1.01",
+    "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+    "AssertionError"
+   ]
+  },
+  "perturbed_inconsistent_dr/C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2": {
+   "builder_accepted": false,
+   "refusal": [
+    "    assert abs(wire['absolute_difference_um'])<1.01",
+    "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+    "AssertionError"
+   ]
+  },
+  "perturbed_inconsistent_dr/C01484__multiplier_32_bit__comp__nangate45__p2": {
+   "builder_accepted": false,
+   "refusal": [
+    "    assert abs(wire['absolute_difference_um'])<1.01",
+    "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+    "AssertionError"
+   ]
+  }
+ },
+ "dynamic_reads": {
+  "strace_C03387__vga1__ego1-vga__nangate45__p2.txt": {
+   "feature_stages": {
+    "placement": {
+     "pid": "1794216",
+     "design_files_read": [
+      "/data/r2g_n45_pilot500/nangate45_pilot500/C03387__vga1__ego1-vga__nangate45__p2/2_floorplan.def",
+      "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/config.mk"
+     ],
+     "route_stage_files_read": []
+    },
+    "route": {
+     "pid": "1794450",
+     "design_files_read": [
+      "/data/r2g_n45_pilot500/nangate45_pilot500/C03387__vga1__ego1-vga__nangate45__p2/4_cts.def",
+      "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/config.mk"
+     ],
+     "route_stage_files_read": []
+    }
+   },
+   "whole_build_design_files": [
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/1_2_yosys.v",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/2_floorplan.def",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/3_place.def",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/4_cts.def",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/5_route.def",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/config.mk",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/constraint.sdc",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/logs/",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/logs/nangate45",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/logs/nangate45/vga1",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/logs/nangate45/vga1/base",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/logs/nangate45/vga1/base/5_1_grt.log",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/logs/nangate45/vga1/base/5_2_route.json",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/logs/nangate45/vga1/base/6_report.json",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/reports/",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/reports/nangate45",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/reports/nangate45/vga1",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/reports/nangate45/vga1/base",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/reports/nangate45/vga1/base/6_finish.rpt",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/result.json"
+   ],
+   "whole_build_route_files": [
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/5_route.def",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/logs/nangate45/vga1/base/5_1_grt.log",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/logs/nangate45/vga1/base/5_2_route.json",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/logs/nangate45/vga1/base/6_report.json",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/reports/nangate45/vga1/base/6_finish.rpt",
+    "/data/yangao/exp4_validation_20261107/v3/raw_perturbed/C03387__vga1__ego1-vga__nangate45__p2/result.json"
+   ]
+  }
+ },
+ "images": {
+  "perturbed/C01484__multiplier_32_bit__comp__nangate45__p2": {
+   "X": "identical",
+   "cong": "changed: frac=0.989",
+   "ir_drop_mV": "changed: frac=0.638",
+   "x_edges_um": "identical",
+   "y_edges_um": "identical",
+   "X_bytes_identical": true
+  },
+  "perturbed/C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2": {
+   "X": "identical",
+   "cong": "changed: frac=0.970",
+   "ir_drop_mV": "changed: frac=0.830",
+   "x_edges_um": "identical",
+   "y_edges_um": "identical",
+   "X_bytes_identical": true
+  },
+  "perturbed/C03387__vga1__ego1-vga__nangate45__p2": {
+   "X": "identical",
+   "cong": "changed: frac=0.964",
+   "ir_drop_mV": "changed: frac=0.781",
+   "x_edges_um": "identical",
+   "y_edges_um": "identical",
+   "X_bytes_identical": true
+  },
+  "donor/C01484__multiplier_32_bit__comp__nangate45__p2": {
+   "X": "shape (6, 93, 93) -> (6, 32, 32)",
+   "cong": "shape (2, 93, 93) -> (2, 32, 32)",
+   "ir_drop_mV": "shape (93, 93) -> (32, 32)",
+   "x_edges_um": "shape (94,) -> (33,)",
+   "y_edges_um": "shape (94,) -> (33,)",
+   "X_bytes_identical": false
+  },
+  "donor/C03319__football_scoreboard_top__football-scoreboard-fpga__nangate45__p2": {
+   "X": "shape (6, 32, 32) -> (6, 93, 93)",
+   "cong": "shape (2, 32, 32) -> (2, 93, 93)",
+   "ir_drop_mV": "shape (32, 32) -> (93, 93)",
+   "x_edges_um": "shape (33,) -> (94,)",
+   "y_edges_um": "shape (33,) -> (94,)",
+   "X_bytes_identical": false
+  },
+  "donor/C03387__vga1__ego1-vga__nangate45__p2": {
+   "X": "shape (6, 27, 27) -> (6, 32, 32)",
+   "cong": "shape (2, 27, 27) -> (2, 32, 32)",
+   "ir_drop_mV": "shape (27, 27) -> (32, 32)",
+   "x_edges_um": "shape (28,) -> (33,)",
+   "y_edges_um": "shape (28,) -> (33,)",
+   "X_bytes_identical": false
+  }
+ },
+ "static_allowed_reads": {
+  "graph_placement_inputs": [
+   "2_floorplan.def (canonical topology + stage features)",
+   "constraint.sdc (resolved via tclsh against floorplan ports)",
+   "config.mk",
+   "platform Liberty/LEF",
+   "encode_map.csv",
+   "1_2_yosys.v + 2_floorplan.def (wl group readout mapping)"
+  ],
+  "graph_route_inputs": [
+   "4_cts.def (stage features; topology still from 2_floorplan.def)",
+   "constraint.sdc",
+   "config.mk",
+   "platform Liberty/LEF",
+   "encode_map.csv"
+  ],
+  "graph_labels_only": [
+   "5_route.def",
+   "logs/**/5_1_grt.log (GRT-0053)",
+   "logs/**/6_report.json",
+   "reports/**/6_finish.rpt",
+   "logs/**/5_2_route.json",
+   "result.json",
+   "3_place.def, 4_cts.def, 5_route.def (net lineage for group ownership)"
+  ],
+  "image_inputs": [
+   "3_place.def",
+   "constraint.sdc",
+   "platform LEF/Liberty/setRC.tcl",
+   "5_1_grt.odb (GCell grid GEOMETRY only)"
+  ],
+  "image_labels_only": [
+   "5_1_grt.odb (stored GR capacity/usage)",
+   "5_route.def + 6_final.spef (PDNSim IR drop)"
+  ],
+  "source": "read from extract_stage_features.py (worker config strips floorplan/cts/place/route/label keys except the stage key), r2g5.build/label_bundle, upgrade_release/graph_adapter.fixed_graph_mapping, cnn_pilot500 dump_design.py/ir_design.tcl"
+ }
+}
