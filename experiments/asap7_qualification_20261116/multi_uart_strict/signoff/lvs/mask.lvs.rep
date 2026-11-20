@@ -1,0 +1,425 @@
+
+
+
+                  ##################################################
+                  ##                                              ##
+                  ##         C A L I B R E    S Y S T E M         ##
+                  ##                                              ##
+                  ##             L V S   R E P O R T              ##
+                  ##                                              ##
+                  ##################################################
+
+
+
+REPORT FILE NAME:         mask.lvs.rep
+LAYOUT NAME:              mask.lvs.rep.sp ('uart')
+SOURCE NAME:              /proj/workarea/yangao/asap7_qualification_20261116/multi_uart_strict_input/source.cdl ('uart')
+RULE FILE:                run.svrf
+RULE FILE TITLE:          LVS Rule File for ASAP7 PDK
+CREATION TIME:            Mon Nov 16 07:12:10 2026
+CURRENT DIRECTORY:        /proj/workarea/yangao/asap7_qualification_20261116/calibre_runs/multi_uart_strict/lvs
+USER NAME:                yangao
+CALIBRE VERSION:          v2025.1_16.10    Thu Jan 2 11:57:45 PST 2025
+
+
+
+                               OVERALL COMPARISON RESULTS
+
+
+
+                         #       ###################       _   _   
+                        #        #                 #       *   *   
+                   #   #         #     CORRECT     #         |     
+                    # #          #                 #       \___/  
+                     #           ###################               
+
+
+  Warning:  Ambiguity points were found and resolved arbitrarily.
+
+
+**************************************************************************************************************
+                                      CELL  SUMMARY
+**************************************************************************************************************
+
+  Result         Layout                        Source
+  -----------    -----------                   --------------
+  CORRECT        uart                          uart
+
+
+
+**************************************************************************************************************
+                                      LVS PARAMETERS
+**************************************************************************************************************
+
+
+o LVS Setup:
+
+   LVS COMPONENT TYPE PROPERTY            element
+   LVS COMPONENT SUBTYPE PROPERTY         model
+   // LVS PIN NAME PROPERTY
+   LVS POWER NAME                         "vdd!" "VDD!" "VDD"
+   LVS GROUND NAME                        "VSS!" "vss!" "VSS"
+   LVS CELL SUPPLY                        NO
+   LVS RECOGNIZE GATES                    NONE
+   // LVS HCELL REPORT
+   LVS IGNORE PORTS                       NO
+   LVS CHECK PORT NAMES                   YES
+   LVS IGNORE TRIVIAL NAMED PORTS         NO
+   LVS BUILTIN DEVICE PIN SWAP            YES
+   LVS ALL CAPACITOR PINS SWAPPABLE       NO
+   LVS DISCARD PINS BY DEVICE             NO
+   LVS SOFT SUBSTRATE PINS                NO
+   LVS INJECT LOGIC                       YES
+   LVS EXPAND UNBALANCED CELLS            YES
+   LVS FLATTEN INSIDE CELL                NO
+   LVS EXPAND SEED PROMOTIONS             NO
+   LVS PRESERVE PARAMETERIZED CELLS       NO
+   LVS GLOBALS ARE PORTS                  YES
+   LVS RELAX INITIAL CPOINTS              NONE
+   LVS REVERSE WL                         NO
+   // LVS NETLIST FILTER DEVICES          NO
+   // LVS PRESERVE BOX PORTS              NO
+   LVS SPICE PREFER PINS                  NO
+   LVS SPICE SLASH IS SPACE               YES
+   LVS SPICE ALLOW FLOATING PINS          YES
+   // LVS SPICE ALLOW INLINE PARAMETERS     
+   LVS SPICE ALLOW UNQUOTED STRINGS       NO
+   LVS SPICE CONDITIONAL LDD              NO
+   LVS SPICE CULL PRIMITIVE SUBCIRCUITS   NO
+   // LVS SPICE EXCLUDE CELL SOURCE
+   // LVS SPICE EXCLUDE CELL LAYOUT
+   // LVS SPICE IGNORE PARAMETER
+   LVS SPICE IMPLIED MOS AREA             NO
+   // LVS SPICE MULTIPLIER NAME
+   LVS SPICE OVERRIDE GLOBALS             NO
+   LVS SPICE REDEFINE PARAM               NO
+   LVS SPICE REPLICATE DEVICES            NO
+   LVS SPICE SCALE X PARAMETERS           NO
+   LVS SPICE STRICT WL                    NO
+   // LVS SPICE OPTION
+   LVS STRICT SUBTYPES                    NO
+   LVS EXACT SUBTYPES                     NO
+   LAYOUT CASE                            NO
+   SOURCE CASE                            NO
+   LVS COMPARE CASE                       NO
+   LVS COMPARE CASE STRICT                NO
+   LVS DOWNCASE DEVICE                    NO
+   LVS REPORT MAXIMUM                     100
+   LVS PROPERTY RESOLUTION MAXIMUM        1024
+   // LVS SIGNATURE MAXIMUM
+   // LVS FILTER UNUSED OPTION
+   LVS REPORT OPTION                      N
+   LVS REPORT UNITS                       YES
+   LVS SWAPPABLE HCELL PINS               GENERAL
+   // LVS NON USER NAME PORT
+   // LVS NON USER NAME NET
+   // LVS NON USER NAME INSTANCE
+   // LVS IGNORE DEVICE PIN
+   // LVS PREFER NETS FILTER SOURCE
+   // LVS PREFER NETS FILTER LAYOUT
+   LVS PREFER PORT NETS                   NO
+   LVS EXPAND ON ERROR                    NO
+   LVS EXPAND AMBIGUOUSLY HIGH SHORTED HCELLS NO
+   LVS AUGMENT HCELLS                     NONE
+
+   // Reduction
+
+   LVS REDUCE SERIES MOS                  NO
+   LVS REDUCE PARALLEL MOS                YES
+   LVS REDUCE SEMI SERIES MOS             NO
+   LVS REDUCE SPLIT GATES                 YES SEMI ALSO
+   LVS REDUCE PARALLEL BIPOLAR            YES
+   LVS REDUCE SERIES CAPACITORS           YES
+   LVS REDUCE PARALLEL CAPACITORS         YES
+   LVS REDUCE SERIES RESISTORS            YES
+   LVS REDUCE PARALLEL RESISTORS          YES
+   LVS REDUCE PARALLEL DIODES             YES
+   LVS REDUCTION PRIORITY                 PARALLEL
+   
+   LVS SHORT EQUIVALENT NODES             NO
+
+   // Trace Property
+
+   TRACE PROPERTY  mn(nmos_rvt)  l l 0 ABSOLUTE
+   TRACE PROPERTY  mn(nmos_rvt)  w w 0 ABSOLUTE
+   TRACE PROPERTY  mn(nmos_rvt)  nfin nfin 0 ABSOLUTE
+   TRACE PROPERTY  mp(pmos_rvt)  l l 0 ABSOLUTE
+   TRACE PROPERTY  mp(pmos_rvt)  w w 0 ABSOLUTE
+   TRACE PROPERTY  mp(pmos_rvt)  nfin nfin 0 ABSOLUTE
+   TRACE PROPERTY  mn(nmos_sram)  l l 0 ABSOLUTE
+   TRACE PROPERTY  mn(nmos_sram)  w w 0 ABSOLUTE
+   TRACE PROPERTY  mn(nmos_sram)  nfin nfin 0 ABSOLUTE
+   TRACE PROPERTY  mp(pmos_sram)  l l 0 ABSOLUTE
+   TRACE PROPERTY  mp(pmos_sram)  w w 0 ABSOLUTE
+   TRACE PROPERTY  mp(pmos_sram)  nfin nfin 0 ABSOLUTE
+   TRACE PROPERTY  mn(nmos_lvt)  l l 0 ABSOLUTE
+   TRACE PROPERTY  mn(nmos_lvt)  w w 0 ABSOLUTE
+   TRACE PROPERTY  mn(nmos_lvt)  nfin nfin 0 ABSOLUTE
+   TRACE PROPERTY  mp(pmos_lvt)  l l 0 ABSOLUTE
+   TRACE PROPERTY  mp(pmos_lvt)  w w 0 ABSOLUTE
+   TRACE PROPERTY  mp(pmos_lvt)  nfin nfin 0 ABSOLUTE
+   TRACE PROPERTY  mn(nmos_slvt)  l l 0 ABSOLUTE
+   TRACE PROPERTY  mn(nmos_slvt)  w w 0 ABSOLUTE
+   TRACE PROPERTY  mn(nmos_slvt)  nfin nfin 0 ABSOLUTE
+   TRACE PROPERTY  mp(pmos_slvt)  l l 0 ABSOLUTE
+   TRACE PROPERTY  mp(pmos_slvt)  w w 0 ABSOLUTE
+   TRACE PROPERTY  mp(pmos_slvt)  nfin nfin 0 ABSOLUTE
+
+
+
+                   CELL COMPARISON RESULTS ( TOP LEVEL )
+
+
+
+                         #       ###################       _   _   
+                        #        #                 #       *   *   
+                   #   #         #     CORRECT     #         |     
+                    # #          #                 #       \___/  
+                     #           ###################               
+
+
+  Warning:  Ambiguity points were found and resolved arbitrarily.
+
+LAYOUT CELL NAME:         uart
+SOURCE CELL NAME:         uart
+
+--------------------------------------------------------------------------------------------------------------
+
+INITIAL NUMBERS OF OBJECTS
+--------------------------
+
+                Layout    Source         Component Type
+                ------    ------         --------------
+ Ports:             46        46
+
+ Nets:            4105      4105
+
+ Instances:       6517      6517         MN (4 pins)
+                  6482      6482         MP (4 pins)
+                ------    ------
+ Total Inst:     12999     12999
+
+
+NUMBERS OF OBJECTS AFTER TRANSFORMATION
+---------------------------------------
+
+                Layout    Source         Component Type
+                ------    ------         --------------
+ Ports:             46        46
+
+ Nets:            2803      2803
+
+ Instances:        706       706         MN (4 pins)
+                   706       706         MP (4 pins)
+                    84        84         _invb (6 pins)
+                   744       744         _invv (4 pins)
+                    47        47         _invx2v (4 pins)
+                    11        11         _invx3v (4 pins)
+                     2         2         _invx4v (4 pins)
+                    53        53         _nand2b (7 pins)
+                    97        97         _nand2v (5 pins)
+                    41        41         _nand3v (6 pins)
+                    21        21         _nand4v (7 pins)
+                     3         3         _nand5v (8 pins)
+                    71        71         _nor2b (7 pins)
+                    63        63         _nor2v (5 pins)
+                    32        32         _nor3v (6 pins)
+                    13        13         _nor4v (7 pins)
+                     5         5         _nor5v (8 pins)
+                    51        51         _pdw2v (4 pins)
+                     1         1         _pmp2b (5 pins)
+                    93        93         _pup2v (4 pins)
+                     7         7         _pup3v (5 pins)
+                   325       325         _sdw2v (4 pins)
+                     7         7         _sdw3v (5 pins)
+                   282       282         _sup2v (4 pins)
+                ------    ------
+ Total Inst:      3465      3465
+
+
+
+**************************************************************************************************************
+                               INFORMATION AND WARNINGS
+**************************************************************************************************************
+
+
+                  Matched    Matched    Unmatched    Unmatched    Component
+                   Layout     Source       Layout       Source    Type
+                  -------    -------    ---------    ---------    ---------
+   Ports:              46         46            0            0
+
+   Nets:             2803       2803            0            0
+
+   Instances:         706        706            0            0    MN(NMOS_RVT)
+                      706        706            0            0    MP(PMOS_RVT)
+                       84         84            0            0    _invb
+                      744        744            0            0    _invv
+                       47         47            0            0    _invx2v
+                       11         11            0            0    _invx3v
+                        2          2            0            0    _invx4v
+                       53         53            0            0    _nand2b
+                       97         97            0            0    _nand2v
+                       41         41            0            0    _nand3v
+                       21         21            0            0    _nand4v
+                        3          3            0            0    _nand5v
+                       71         71            0            0    _nor2b
+                       63         63            0            0    _nor2v
+                       32         32            0            0    _nor3v
+                       13         13            0            0    _nor4v
+                        5          5            0            0    _nor5v
+                       51         51            0            0    _pdw2v
+                        1          1            0            0    _pmp2b
+                       93         93            0            0    _pup2v
+                        7          7            0            0    _pup3v
+                      325        325            0            0    _sdw2v
+                        7          7            0            0    _sdw3v
+                      282        282            0            0    _sup2v
+                  -------    -------    ---------    ---------
+   Total Inst:       3465       3465            0            0
+
+
+o Statistics:
+
+   7966 layout mos transistors were reduced to 1777.  42 connecting nets were deleted.
+     6105 mos transistors were deleted by parallel reduction.
+     84 mos transistors and 42 connecting nets were deleted by split-gate reduction.
+   7966 source mos transistors were reduced to 1777.  42 connecting nets were deleted.
+     6105 mos transistors were deleted by parallel reduction.
+     84 mos transistors and 42 connecting nets were deleted by split-gate reduction.
+
+   105 nets were matched arbitrarily.
+
+
+o Initial Correspondence Points:
+
+   Ports:        VDD VSS TX_BUSY RST PRESCALE[1] S_AXIS_TREADY S_AXIS_TDATA[7] S_AXIS_TDATA[5]
+                 PRESCALE[7] PRESCALE[10] PRESCALE[8] CLK RXD RX_BUSY M_AXIS_TREADY
+                 M_AXIS_TDATA[4] RX_OVERRUN_ERROR M_AXIS_TDATA[2] M_AXIS_TDATA[1]
+                 M_AXIS_TDATA[0] PRESCALE[4] S_AXIS_TDATA[6] S_AXIS_TDATA[4] PRESCALE[9]
+                 S_AXIS_TDATA[0] S_AXIS_TDATA[3] PRESCALE[12] PRESCALE[14] M_AXIS_TDATA[6]
+                 M_AXIS_TDATA[5] RX_FRAME_ERROR S_AXIS_TDATA[1] M_AXIS_TDATA[3] PRESCALE[3]
+                 PRESCALE[5] PRESCALE[2] PRESCALE[0] S_AXIS_TVALID PRESCALE[11] TXD PRESCALE[6]
+                 PRESCALE[15] PRESCALE[13] S_AXIS_TDATA[2] M_AXIS_TDATA[7] M_AXIS_TVALID
+
+
+o Ambiguity Resolution Points:
+
+      (Each one of the following objects belongs to a group of indistinguishable objects.
+       The listed objects were matched arbitrarily by the Ambiguity Resolution feature of LVS.
+       Arbitrary matching may be prevented by assigning names to these objects or to adjacent nets).
+
+       Layout                                                    Source
+       ------                                                    ------
+
+                                     Nets
+                                     ----
+
+       36                                                        Xclkload3/N_M16_d
+       39                                                        Xclkload4/N_M8_d
+       18                                                        Xclkload4/N_M4_d
+       27                                                        Xclkload4/N_M16_d
+       11                                                        Xclkload3/N_M4_d
+       X3329/X1/4                                                XFILLER_34_2/N_M0_g
+       X3337/X1/4                                                XFILLER_34_176/N_M0_g
+       X3334/X1/4                                                XFILLER_35_47/N_M0_g
+       X3336/X1/4                                                XFILLER_33_167/N_M0_g
+       X3335/X1/4                                                XFILLER_29_185/N_M0_g
+       X3341/X1/4                                                XFILLER_31_48/N_M0_g
+       X3338/X1/4                                                XFILLER_29_252/N_M0_g
+       X3339/X1/4                                                XFILLER_30_18/N_M0_g
+       X3333/X1/4                                                XFILLER_30_37/N_M0_g
+       X3331/X1/4                                                XFILLER_30_69/N_M0_g
+       X3332/X1/4                                                XFILLER_30_252/N_M0_g
+       X3340/X1/4                                                XFILLER_33_44/N_M0_g
+       X3330/X1/4                                                XFILLER_33_21/N_M0_g
+       X3328/X1/4                                                XFILLER_29_2/N_M0_g
+       X3272/X1/4                                                XFILLER_43_210/N_M0_g
+       X3262/4                                                   XFILLER_43_152/N_M0_g
+       X3261/4                                                   XFILLER_43_60/N_M0_g
+       X3260/4                                                   XFILLER_42_167/N_M0_g
+       X3259/4                                                   XFILLER_41_252/N_M0_g
+       X3258/4                                                   XFILLER_47_146/N_M0_g
+       X3257/4                                                   XFILLER_47_193/N_M0_g
+       X3256/4                                                   XFILLER_48_119/N_M0_g
+       X3255/4                                                   XFILLER_48_130/N_M0_g
+       X3254/4                                                   XFILLER_48_147/N_M0_g
+       X3273/X1/4                                                XFILLER_48_249/N_M0_g
+       X3274/X1/4                                                XFILLER_45_191/N_M0_g
+       X3287/X1/4                                                XFILLER_45_126/N_M0_g
+       X3286/X1/4                                                XFILLER_45_101/N_M0_g
+       X3285/X1/4                                                XFILLER_49_158/N_M0_g
+       X3284/X1/4                                                XFILLER_44_96/N_M0_g
+       X3283/X1/4                                                XFILLER_44_82/N_M0_g
+       X3282/X1/4                                                XFILLER_38_154/N_M0_g
+       X3281/X1/4                                                XFILLER_38_115/N_M0_g
+       X3280/X1/4                                                XFILLER_37_71/N_M0_g
+       X3279/X1/4                                                XFILLER_36_179/N_M0_g
+       X3278/X1/4                                                XFILLER_38_251/N_M0_g
+       X3277/X1/4                                                XFILLER_51_90/N_M0_g
+       X3276/X1/4                                                XFILLER_40_252/N_M0_g
+       X3275/X1/4                                                XFILLER_40_169/N_M0_g
+       X3253/4                                                   XFILLER_40_61/N_M0_g
+       X3252/4                                                   XFILLER_39_146/N_M0_g
+       X3236/4                                                   XFILLER_39_96/N_M0_g
+       X3235/4                                                   XFILLER_39_67/N_M0_g
+       X3234/4                                                   XFILLER_27_93/N_M0_g
+       X3233/4                                                   XFILLER_19_211/N_M0_g
+       X3232/4                                                   XFILLER_20_18/N_M0_g
+       X3237/4                                                   XFILLER_8_199/N_M0_g
+       X3238/4                                                   XFILLER_20_30/N_M0_g
+       X3239/4                                                   XFILLER_20_47/N_M0_g
+       X3251/4                                                   XFILLER_20_67/N_M0_g
+       X3250/4                                                   XFILLER_8_38/N_M0_g
+       X3249/4                                                   XFILLER_20_123/N_M0_g
+       X3248/4                                                   XFILLER_7_194/N_M0_g
+       X3247/4                                                   XFILLER_7_179/N_M0_g
+       X3246/4                                                   XFILLER_7_164/N_M0_g
+       X3245/4                                                   XFILLER_20_250/N_M0_g
+       X3244/4                                                   XFILLER_7_46/N_M0_g
+       X3243/4                                                   XFILLER_6_155/N_M0_g
+       X3242/4                                                   XFILLER_21_140/N_M0_g
+       X3241/4                                                   XFILLER_6_102/N_M0_g
+       X3240/4                                                   XFILLER_6_46/N_M0_g
+       X3288/X1/4                                                XFILLER_5_249/N_M0_g
+       X3309/X1/4                                                XFILLER_5_178/N_M0_g
+       X3305/X1/4                                                XFILLER_9_161/N_M0_g
+       X3318/X1/4                                                XFILLER_9_177/N_M0_g
+       X3304/X1/4                                                XFILLER_10_38/N_M0_g
+       X3303/X1/4                                                XFILLER_15_70/N_M0_g
+       X3302/X1/4                                                XFILLER_13_158/N_M0_g
+       X3319/X1/4                                                XFILLER_16_10/N_M0_g
+       X3320/X1/4                                                XFILLER_12_252/N_M0_g
+       X3301/X1/4                                                XFILLER_12_232/N_M0_g
+       X3300/X1/4                                                XFILLER_16_182/N_M0_g
+       X3299/X1/4                                                XFILLER_12_165/N_M0_g
+       X3313/X1/4                                                XFILLER_16_198/N_M0_g
+       X3298/X1/4                                                XFILLER_16_214/N_M0_g
+       X3306/X1/4                                                XFILLER_12_65/N_M0_g
+       X3317/X1/4                                                XFILLER_16_250/N_M0_g
+       X3312/X1/4                                                XFILLER_17_40/N_M0_g
+       X3314/X1/4                                                XFILLER_17_250/N_M0_g
+       X3311/X1/4                                                XFILLER_18_172/N_M0_g
+       X3315/X1/4                                                XFILLER_18_240/N_M0_g
+       X3310/X1/4                                                XFILLER_11_71/N_M0_g
+       X3316/X1/4                                                XFILLER_19_16/N_M0_g
+       X3308/X1/4                                                XFILLER_10_252/N_M0_g
+       X3307/X1/4                                                XFILLER_10_202/N_M0_g
+       X3321/X1/4                                                XFILLER_22_145/N_M0_g
+       X3327/X1/4                                                XFILLER_14_159/N_M0_g
+       X3289/X1/4                                                XFILLER_2_252/N_M0_g
+       X3326/X1/4                                                XFILLER_24_138/N_M0_g
+       X3325/X1/4                                                XFILLER_51_251/N_M0_g
+       X3324/X1/4                                                XFILLER_24_68/N_M0_g
+       X3290/X1/4                                                XFILLER_4_115/N_M0_g
+       X3291/X1/4                                                XFILLER_2_46/N_M0_g
+       X3323/X1/4                                                XFILLER_4_128/N_M0_g
+       X3292/X1/4                                                XFILLER_4_166/N_M0_g
+
+
+
+**************************************************************************************************************
+                                         SUMMARY
+**************************************************************************************************************
+
+Total CPU Time:      0 sec
+Total Elapsed Time:  0 sec

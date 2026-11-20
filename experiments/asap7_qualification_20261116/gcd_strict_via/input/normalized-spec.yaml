@@ -1,0 +1,6 @@
+design: gcd
+platform: asap7
+purpose: fourth-platform qualification, isolated experimental run
+clock_port: clk
+clock_period_ps: 1000
+implementation: stock ORFS gcd, 16-bit operands

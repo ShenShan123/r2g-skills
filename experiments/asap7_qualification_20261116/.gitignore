@@ -1,0 +1,5 @@
+private_rules/
+third_party/
+reference_diagnosis/patched_openroad
+reference_diagnosis/strict_via_build/*.o
+reference_diagnosis/strict_via_build/*.a

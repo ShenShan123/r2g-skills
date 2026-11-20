@@ -1,0 +1,625 @@
+
+-- Executing script file `experiments/asap7_qualification_20261116/multi_uart/formal/state_correspondence/reset_base.ys' --
+
+1. Executing RTLIL frontend.
+Input filename: /home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart/formal/state_correspondence/prepared.il
+
+2. Executing EXPOSE pass (exposing internal signals as outputs).
+New module port: gate/uart_tx_inst.txd_reg
+New module port: gate/uart_tx_inst.s_axis_tready_reg
+New module port: gate/uart_tx_inst.prescale_reg
+New module port: gate/uart_tx_inst.data_reg
+New module port: gate/uart_tx_inst.busy_reg
+New module port: gate/uart_tx_inst.bit_cnt
+New module port: gate/uart_rx_inst.rxd_reg
+New module port: gate/uart_rx_inst.prescale_reg
+New module port: gate/uart_rx_inst.overrun_error_reg
+New module port: gate/uart_rx_inst.m_axis_tvalid_reg
+New module port: gate/uart_rx_inst.m_axis_tdata_reg
+New module port: gate/uart_rx_inst.frame_error_reg
+New module port: gate/uart_rx_inst.data_reg
+New module port: gate/uart_rx_inst.busy_reg
+New module port: gate/uart_rx_inst.bit_cnt
+New module port: gold/uart_rx_inst.m_axis_tdata_reg
+New module port: gold/uart_rx_inst.m_axis_tvalid_reg
+New module port: gold/uart_rx_inst.rxd_reg
+New module port: gold/uart_rx_inst.busy_reg
+New module port: gold/uart_rx_inst.overrun_error_reg
+New module port: gold/uart_rx_inst.frame_error_reg
+New module port: gold/uart_rx_inst.data_reg
+New module port: gold/uart_rx_inst.prescale_reg
+New module port: gold/uart_rx_inst.bit_cnt
+New module port: gold/uart_tx_inst.s_axis_tready_reg
+New module port: gold/uart_tx_inst.txd_reg
+New module port: gold/uart_tx_inst.busy_reg
+New module port: gold/uart_tx_inst.data_reg
+New module port: gold/uart_tx_inst.prescale_reg
+New module port: gold/uart_tx_inst.bit_cnt
+
+3. Executing MITER pass (creating miter circuit).
+Creating miter cell "miter" with gold cell "gold" and gate cell "gate".
+
+3.1. Executing FLATTEN pass (flatten design).
+<suppressed ~2 debug messages>
+
+3.2. Executing OPT_EXPR pass (perform const folding).
+Optimizing module miter.
+
+4. Executing HIERARCHY pass (managing design hierarchy).
+
+4.1. Analyzing design hierarchy..
+Top module:  \miter
+
+4.2. Analyzing design hierarchy..
+Top module:  \miter
+Removing unused module `\gate'.
+Removing unused module `\gold'.
+Removed 2 unused modules.
+
+5. Executing TECHMAP pass (map to technology primitives).
+
+5.1. Executing Verilog-2005 frontend: /home/yangao/r2g_toolchain/OpenROAD-flow-scripts/tools/install/yosys/bin/../share/yosys/techmap.v
+Parsing Verilog input from `/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/tools/install/yosys/bin/../share/yosys/techmap.v' to AST representation.
+Generating RTLIL representation for module `\_90_simplemap_bool_ops'.
+Generating RTLIL representation for module `\_90_simplemap_reduce_ops'.
+Generating RTLIL representation for module `\_90_simplemap_logic_ops'.
+Generating RTLIL representation for module `\_90_simplemap_compare_ops'.
+Generating RTLIL representation for module `\_90_simplemap_various'.
+Generating RTLIL representation for module `\_90_simplemap_registers'.
+Generating RTLIL representation for module `\_90_shift_ops_shr_shl_sshl_sshr'.
+Generating RTLIL representation for module `\_90_shift_shiftx'.
+Generating RTLIL representation for module `\_90_fa'.
+Generating RTLIL representation for module `\_90_lcu_brent_kung'.
+Generating RTLIL representation for module `\_90_alu'.
+Generating RTLIL representation for module `\_90_macc'.
+Generating RTLIL representation for module `\_90_alumacc'.
+Generating RTLIL representation for module `$__div_mod_u'.
+Generating RTLIL representation for module `$__div_mod_trunc'.
+Generating RTLIL representation for module `\_90_div'.
+Generating RTLIL representation for module `\_90_mod'.
+Generating RTLIL representation for module `$__div_mod_floor'.
+Generating RTLIL representation for module `\_90_divfloor'.
+Generating RTLIL representation for module `\_90_modfloor'.
+Generating RTLIL representation for module `\_90_pow'.
+Generating RTLIL representation for module `\_90_pmux'.
+Generating RTLIL representation for module `\_90_demux'.
+Generating RTLIL representation for module `\_90_lut'.
+Generating RTLIL representation for module `$connect'.
+Generating RTLIL representation for module `$input_port'.
+Successfully finished Verilog frontend.
+
+5.2. Continuing TECHMAP pass.
+Using extmapper simplemap for cells of type $not.
+Using extmapper simplemap for cells of type $reduce_and.
+Using extmapper simplemap for cells of type $eqx.
+Running "alumacc" on wrapper $extern:wrap:$sub:Y_WIDTH=32:B_WIDTH=32:A_WIDTH=19:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47.
+Using template $extern:wrap:$sub:Y_WIDTH=32:B_WIDTH=32:A_WIDTH=19:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47 for cells of type $extern:wrap:$sub:Y_WIDTH=32:B_WIDTH=32:A_WIDTH=19:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47.
+Running "alumacc" on wrapper $extern:wrap:$gt:Y_WIDTH=1:B_WIDTH=32:A_WIDTH=4:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47.
+Using template $extern:wrap:$gt:Y_WIDTH=1:B_WIDTH=32:A_WIDTH=4:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47 for cells of type $extern:wrap:$gt:Y_WIDTH=1:B_WIDTH=32:A_WIDTH=4:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47.
+Using extmapper simplemap for cells of type $sdff.
+Using extmapper simplemap for cells of type $sdffe.
+Running "alumacc" on wrapper $extern:wrap:$sub:Y_WIDTH=32:B_WIDTH=32:A_WIDTH=32:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47.
+Using template $extern:wrap:$sub:Y_WIDTH=32:B_WIDTH=32:A_WIDTH=32:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47 for cells of type $extern:wrap:$sub:Y_WIDTH=32:B_WIDTH=32:A_WIDTH=32:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47.
+Using extmapper simplemap for cells of type $eq.
+Running "alumacc" on wrapper $extern:wrap:$sub:Y_WIDTH=32:B_WIDTH=32:A_WIDTH=4:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47.
+Using template $extern:wrap:$sub:Y_WIDTH=32:B_WIDTH=32:A_WIDTH=4:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47 for cells of type $extern:wrap:$sub:Y_WIDTH=32:B_WIDTH=32:A_WIDTH=4:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47.
+Using extmapper simplemap for cells of type $dffe.
+Using extmapper simplemap for cells of type $mux.
+Using extmapper simplemap for cells of type $ne.
+Using extmapper simplemap for cells of type $reduce_or.
+Using extmapper simplemap for cells of type $logic_not.
+Using extmapper simplemap for cells of type $reduce_bool.
+Running "alumacc" on wrapper $extern:wrap:$gt:Y_WIDTH=1:B_WIDTH=32:A_WIDTH=19:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47.
+Using template $extern:wrap:$gt:Y_WIDTH=1:B_WIDTH=32:A_WIDTH=19:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47 for cells of type $extern:wrap:$gt:Y_WIDTH=1:B_WIDTH=32:A_WIDTH=19:B_SIGNED=0:A_SIGNED=0:394426c56d1a028ba8fdd5469b163e04011def47.
+Using extmapper simplemap for cells of type $logic_and.
+Using template $paramod$00d9d1baddc80ebb9ab569b9359cb573b538f9a2\_90_alu for cells of type $alu.
+Using extmapper simplemap for cells of type $or.
+Using template $paramod$a7817265ef3ab2ee43da53bbd8a90f6450d412d9\_90_alu for cells of type $alu.
+Using template $paramod$fbc7873bff55778c0b3173955b7e4bce1d9d6834\_90_alu for cells of type $alu.
+Using extmapper simplemap for cells of type $xor.
+Using template $paramod\_90_fa\WIDTH=32'00000000000000000000000000100000 for cells of type $fa.
+Using template $paramod\_90_lcu_brent_kung\WIDTH=32'00000000000000000000000000100000 for cells of type $lcu.
+Using extmapper simplemap for cells of type $pos.
+Using extmapper simplemap for cells of type $and.
+No more expansions possible.
+<suppressed ~2452 debug messages>
+
+6. Executing OPT_CLEAN pass (remove unused cells and wires).
+Finding unused cells or wires in module \miter..
+Removed 1950 unused cells and 1093 unused wires.
+<suppressed ~1951 debug messages>
+
+7. Executing CHECK pass (checking for obvious problems).
+Checking module miter...
+Found and reported 0 problems.
+
+8. Executing SAT pass (solving SAT problems in the circuit).
+Using SAT solver `minisat`.
+
+Setting up time step 1:
+Import set-constraint for this timestep: \in_rst = 1'1
+Final constraint equation: \in_rst = 1'1
+Imported 5840 cells to SAT database.
+Import set-constraint from init attribute: \gold.uart_tx_inst.bit_cnt = 4'0000
+Import set-constraint from init attribute: \gold.uart_tx_inst.prescale_reg = 19'0000000000000000000
+Import set-constraint from init attribute: \gold.uart_tx_inst.data_reg = 9'000000000
+Import set-constraint from init attribute: \gold.uart_tx_inst.busy_reg = 1'0
+Import set-constraint from init attribute: \gold.uart_tx_inst.txd_reg = 1'1
+Import set-constraint from init attribute: \gold.uart_tx_inst.s_axis_tready_reg = 1'0
+Import set-constraint from init attribute: \gold.uart_rx_inst.bit_cnt = 4'0000
+Import set-constraint from init attribute: \gold.uart_rx_inst.prescale_reg = 19'0000000000000000000
+Import set-constraint from init attribute: \gold.uart_rx_inst.data_reg = 8'00000000
+Import set-constraint from init attribute: \gold.uart_rx_inst.frame_error_reg = 1'0
+Import set-constraint from init attribute: \gold.uart_rx_inst.overrun_error_reg = 1'0
+Import set-constraint from init attribute: \gold.uart_rx_inst.busy_reg = 1'0
+Import set-constraint from init attribute: \gold.uart_rx_inst.rxd_reg = 1'1
+Import set-constraint from init attribute: \gold.uart_rx_inst.m_axis_tvalid_reg = 1'0
+Import set-constraint from init attribute: \gold.uart_rx_inst.m_axis_tdata_reg = 8'00000000
+Final init constraint equation: { \gold.uart_rx_inst.m_axis_tdata_reg \gold.uart_rx_inst.m_axis_tvalid_reg \gold.uart_rx_inst.rxd_reg \gold.uart_rx_inst.busy_reg \gold.uart_rx_inst.overrun_error_reg \gold.uart_rx_inst.frame_error_reg \gold.uart_rx_inst.data_reg \gold.uart_rx_inst.prescale_reg \gold.uart_rx_inst.bit_cnt \gold.uart_tx_inst.s_axis_tready_reg \gold.uart_tx_inst.txd_reg \gold.uart_tx_inst.busy_reg \gold.uart_tx_inst.data_reg \gold.uart_tx_inst.prescale_reg \gold.uart_tx_inst.bit_cnt } = 79'0000000001000000000000000000000000000000000001000000000000000000000000000000000
+
+Setting up time step 2:
+Final constraint equation: { } = { }
+Imported 5840 cells to SAT database.
+Import proof-constraint: \trigger = 1'0
+Final proof equation: \trigger = 1'0
+
+Setting up time step 3:
+Final constraint equation: { } = { }
+Imported 5840 cells to SAT database.
+Import proof-constraint: \trigger = 1'0
+Final proof equation: \trigger = 1'0
+
+Setting up time step 4:
+Final constraint equation: { } = { }
+Imported 5840 cells to SAT database.
+Import proof-constraint: \trigger = 1'0
+Final proof equation: \trigger = 1'0
+Import show expression: \in_clk
+Import show expression: \in_rst
+Import show expression: \in_s_axis_tdata
+Import show expression: \in_s_axis_tvalid
+Import show expression: \in_m_axis_tready
+Import show expression: \in_rxd
+Import show expression: \in_prescale
+Import show expression: \trigger
+Import show expression: \gate_s_axis_tready
+Import show expression: \gold_s_axis_tready
+Import show expression: \gate_m_axis_tdata
+Import show expression: \gold_m_axis_tdata
+Import show expression: \gate_m_axis_tvalid
+Import show expression: \gold_m_axis_tvalid
+Import show expression: \gate_txd
+Import show expression: \gold_txd
+Import show expression: \gate_tx_busy
+Import show expression: \gold_tx_busy
+Import show expression: \gate_rx_busy
+Import show expression: \gold_rx_busy
+Import show expression: \gate_rx_overrun_error
+Import show expression: \gold_rx_overrun_error
+Import show expression: \gate_rx_frame_error
+Import show expression: \gold_rx_frame_error
+Import show expression: \gate_uart_tx_inst.bit_cnt
+Import show expression: \gold_uart_tx_inst.bit_cnt
+Import show expression: \gate_uart_tx_inst.prescale_reg
+Import show expression: \gold_uart_tx_inst.prescale_reg
+Import show expression: \gate_uart_tx_inst.data_reg
+Import show expression: \gold_uart_tx_inst.data_reg
+Import show expression: \gate_uart_tx_inst.busy_reg
+Import show expression: \gold_uart_tx_inst.busy_reg
+Import show expression: \gate_uart_tx_inst.txd_reg
+Import show expression: \gold_uart_tx_inst.txd_reg
+Import show expression: \gate_uart_tx_inst.s_axis_tready_reg
+Import show expression: \gold_uart_tx_inst.s_axis_tready_reg
+Import show expression: \gate_uart_rx_inst.bit_cnt
+Import show expression: \gold_uart_rx_inst.bit_cnt
+Import show expression: \gate_uart_rx_inst.prescale_reg
+Import show expression: \gold_uart_rx_inst.prescale_reg
+Import show expression: \gate_uart_rx_inst.data_reg
+Import show expression: \gold_uart_rx_inst.data_reg
+Import show expression: \gate_uart_rx_inst.frame_error_reg
+Import show expression: \gold_uart_rx_inst.frame_error_reg
+Import show expression: \gate_uart_rx_inst.overrun_error_reg
+Import show expression: \gold_uart_rx_inst.overrun_error_reg
+Import show expression: \gate_uart_rx_inst.busy_reg
+Import show expression: \gold_uart_rx_inst.busy_reg
+Import show expression: \gate_uart_rx_inst.rxd_reg
+Import show expression: \gold_uart_rx_inst.rxd_reg
+Import show expression: \gate_uart_rx_inst.m_axis_tvalid_reg
+Import show expression: \gold_uart_rx_inst.m_axis_tvalid_reg
+Import show expression: \gate_uart_rx_inst.m_axis_tdata_reg
+Import show expression: \gold_uart_rx_inst.m_axis_tdata_reg
+
+Solving problem with 101357 variables and 261966 clauses..
+SAT proof finished - model found: FAIL!
+
+   ______                   ___       ___       _ _            _ _ 
+  (_____ \                 / __)     / __)     (_) |          | | |
+   _____) )___ ___   ___ _| |__    _| |__ _____ _| | _____  __| | |
+  |  ____/ ___) _ \ / _ (_   __)  (_   __|____ | | || ___ |/ _  |_|
+  | |   | |  | |_| | |_| || |       | |  / ___ | | || ____( (_| |_ 
+  |_|   |_|   \___/ \___/ |_|       |_|  \_____|_|\_)_____)\____|_|
+
+
+  Time Signal Name                                                          Dec       Hex                    Bin
+  ---- ------------------------------------------------------------ ----------- --------- ----------------------
+  init \gate._0628_.A                                                         1         1                      1
+  init \gate._0717_.A                                                         1         1                      1
+  init \gate._0717_.B                                                         1         1                      1
+  init \gate._1070_.A1                                                        0         0                      0
+  init \gate.uart_rx_inst.bit_cnt[0]$_SDFFE_PP0P_.IQN                         0         0                      0
+  init \gate.uart_rx_inst.bit_cnt[1]$_SDFFE_PP0P_.IQN                         1         1                      1
+  init \gate.uart_rx_inst.bit_cnt[2]$_SDFFE_PP0P_.IQN                         0         0                      0
+  init \gate.uart_rx_inst.bit_cnt[3]$_SDFFE_PP0P_.IQN                         1         1                      1
+  init \gate.uart_rx_inst.busy_reg$_SDFFE_PP0P_.IQN                           0         0                      0
+  init \gate.uart_rx_inst.data_reg[0]$_SDFFCE_PP0P_.IQN                       1         1                      1
+  init \gate.uart_rx_inst.data_reg[1]$_SDFFCE_PP0P_.IQN                       1         1                      1
+  init \gate.uart_rx_inst.data_reg[2]$_SDFFCE_PP0P_.IQN                       1         1                      1
+  init \gate.uart_rx_inst.data_reg[3]$_SDFFCE_PP0P_.IQN                       1         1                      1
+  init \gate.uart_rx_inst.data_reg[4]$_SDFFCE_PP0P_.IQN                       1         1                      1
+  init \gate.uart_rx_inst.data_reg[5]$_SDFFCE_PP0P_.IQN                       1         1                      1
+  init \gate.uart_rx_inst.data_reg[6]$_SDFFCE_PP0P_.IQN                       1         1                      1
+  init \gate.uart_rx_inst.data_reg[7]$_SDFFCE_PP0P_.IQN                       1         1                      1
+  init \gate.uart_rx_inst.frame_error_reg$_SDFF_PP0_.IQN                      0         0                      0
+  init \gate.uart_rx_inst.m_axis_tdata_reg[0]$_SDFFE_PP0P_.IQN                1         1                      1
+  init \gate.uart_rx_inst.m_axis_tdata_reg[1]$_SDFFE_PP0P_.IQN                1         1                      1
+  init \gate.uart_rx_inst.m_axis_tdata_reg[2]$_SDFFE_PP0P_.IQN                1         1                      1
+  init \gate.uart_rx_inst.m_axis_tdata_reg[3]$_SDFFE_PP0P_.IQN                1         1                      1
+  init \gate.uart_rx_inst.m_axis_tdata_reg[4]$_SDFFE_PP0P_.IQN                1         1                      1
+  init \gate.uart_rx_inst.m_axis_tdata_reg[5]$_SDFFE_PP0P_.IQN                1         1                      1
+  init \gate.uart_rx_inst.m_axis_tdata_reg[6]$_SDFFE_PP0P_.IQN                1         1                      1
+  init \gate.uart_rx_inst.m_axis_tdata_reg[7]$_SDFFE_PP0P_.IQN                0         0                      0
+  init \gate.uart_rx_inst.m_axis_tvalid_reg$_SDFF_PP0_.IQN                    0         0                      0
+  init \gate.uart_rx_inst.overrun_error_reg$_SDFF_PP0_.IQN                    0         0                      0
+  init \gate.uart_rx_inst.prescale_reg[0]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[10]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[11]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[12]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[13]$_SDFFE_PP0P_.IQN                   0         0                      0
+  init \gate.uart_rx_inst.prescale_reg[14]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[15]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[16]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[17]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[18]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[1]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[2]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[3]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[4]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[5]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[6]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[7]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[8]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_rx_inst.prescale_reg[9]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_rx_inst.rxd_reg$_SDFF_PP1_.IQN                              1         1                      1
+  init \gate.uart_tx_inst.bit_cnt[0]$_SDFFE_PP0P_.IQN                         1         1                      1
+  init \gate.uart_tx_inst.bit_cnt[1]$_SDFFE_PP0P_.IQN                         1         1                      1
+  init \gate.uart_tx_inst.bit_cnt[2]$_SDFFE_PP0P_.IQN                         1         1                      1
+  init \gate.uart_tx_inst.bit_cnt[3]$_SDFFE_PP0P_.IQN                         1         1                      1
+  init \gate.uart_tx_inst.busy_reg$_SDFFE_PP0P_.IQN                           0         0                      0
+  init \gate.uart_tx_inst.data_reg[0]$_DFFE_PP_.IQN                           1         1                      1
+  init \gate.uart_tx_inst.data_reg[1]$_DFFE_PP_.IQN                           1         1                      1
+  init \gate.uart_tx_inst.data_reg[2]$_DFFE_PP_.IQN                           1         1                      1
+  init \gate.uart_tx_inst.data_reg[3]$_DFFE_PP_.IQN                           0         0                      0
+  init \gate.uart_tx_inst.data_reg[4]$_DFFE_PP_.IQN                           1         1                      1
+  init \gate.uart_tx_inst.data_reg[5]$_DFFE_PP_.IQN                           1         1                      1
+  init \gate.uart_tx_inst.data_reg[6]$_DFFE_PP_.IQN                           1         1                      1
+  init \gate.uart_tx_inst.data_reg[7]$_DFFE_PP_.IQN                           1         1                      1
+  init \gate.uart_tx_inst.data_reg[8]$_DFFE_PP_.IQN                           1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[0]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[10]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[11]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[12]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[13]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[14]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[15]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[16]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[17]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[18]$_SDFFE_PP0P_.IQN                   1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[1]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[2]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[3]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[4]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[5]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_tx_inst.prescale_reg[7]$_SDFFE_PP0P_.IQN                    1         1                      1
+  init \gate.uart_tx_inst.txd_reg$_SDFFE_PP1P_.IQN                            1         1                      1
+  init \gold.uart_rx_inst.bit_cnt [0]                                         0         0                      0
+  init \gold.uart_rx_inst.bit_cnt [1]                                         0         0                      0
+  init \gold.uart_rx_inst.bit_cnt [2]                                         0         0                      0
+  init \gold.uart_rx_inst.bit_cnt [3]                                         0         0                      0
+  init \gold.uart_rx_inst.busy_reg                                            0         0                      0
+  init \gold.uart_rx_inst.data_reg [0]                                        0         0                      0
+  init \gold.uart_rx_inst.data_reg [1]                                        0         0                      0
+  init \gold.uart_rx_inst.data_reg [2]                                        0         0                      0
+  init \gold.uart_rx_inst.data_reg [3]                                        0         0                      0
+  init \gold.uart_rx_inst.data_reg [4]                                        0         0                      0
+  init \gold.uart_rx_inst.data_reg [5]                                        0         0                      0
+  init \gold.uart_rx_inst.data_reg [6]                                        0         0                      0
+  init \gold.uart_rx_inst.data_reg [7]                                        0         0                      0
+  init \gold.uart_rx_inst.frame_error_reg                                     0         0                      0
+  init \gold.uart_rx_inst.m_axis_tdata_reg [0]                                0         0                      0
+  init \gold.uart_rx_inst.m_axis_tdata_reg [1]                                0         0                      0
+  init \gold.uart_rx_inst.m_axis_tdata_reg [2]                                0         0                      0
+  init \gold.uart_rx_inst.m_axis_tdata_reg [3]                                0         0                      0
+  init \gold.uart_rx_inst.m_axis_tdata_reg [4]                                0         0                      0
+  init \gold.uart_rx_inst.m_axis_tdata_reg [5]                                0         0                      0
+  init \gold.uart_rx_inst.m_axis_tdata_reg [6]                                0         0                      0
+  init \gold.uart_rx_inst.m_axis_tdata_reg [7]                                0         0                      0
+  init \gold.uart_rx_inst.m_axis_tvalid_reg                                   0         0                      0
+  init \gold.uart_rx_inst.overrun_error_reg                                   0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [0]                                    0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [10]                                   0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [11]                                   0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [12]                                   0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [13]                                   0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [14]                                   0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [15]                                   0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [16]                                   0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [17]                                   0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [18]                                   0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [1]                                    0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [2]                                    0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [3]                                    0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [4]                                    0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [5]                                    0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [6]                                    0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [7]                                    0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [8]                                    0         0                      0
+  init \gold.uart_rx_inst.prescale_reg [9]                                    0         0                      0
+  init \gold.uart_rx_inst.rxd_reg                                             1         1                      1
+  init \gold.uart_tx_inst.bit_cnt [0]                                         0         0                      0
+  init \gold.uart_tx_inst.bit_cnt [1]                                         0         0                      0
+  init \gold.uart_tx_inst.bit_cnt [2]                                         0         0                      0
+  init \gold.uart_tx_inst.bit_cnt [3]                                         0         0                      0
+  init \gold.uart_tx_inst.busy_reg                                            0         0                      0
+  init \gold.uart_tx_inst.data_reg [0]                                        0         0                      0
+  init \gold.uart_tx_inst.data_reg [1]                                        0         0                      0
+  init \gold.uart_tx_inst.data_reg [2]                                        0         0                      0
+  init \gold.uart_tx_inst.data_reg [3]                                        0         0                      0
+  init \gold.uart_tx_inst.data_reg [4]                                        0         0                      0
+  init \gold.uart_tx_inst.data_reg [5]                                        0         0                      0
+  init \gold.uart_tx_inst.data_reg [6]                                        0         0                      0
+  init \gold.uart_tx_inst.data_reg [7]                                        0         0                      0
+  init \gold.uart_tx_inst.data_reg [8]                                        0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [0]                                    0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [10]                                   0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [11]                                   0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [12]                                   0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [13]                                   0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [14]                                   0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [15]                                   0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [16]                                   0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [17]                                   0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [18]                                   0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [1]                                    0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [2]                                    0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [3]                                    0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [4]                                    0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [5]                                    0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [6]                                    0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [7]                                    0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [8]                                    0         0                      0
+  init \gold.uart_tx_inst.prescale_reg [9]                                    0         0                      0
+  init \gold.uart_tx_inst.s_axis_tready_reg                                   0         0                      0
+  init \gold.uart_tx_inst.txd_reg                                             1         1                      1
+  ---- ------------------------------------------------------------ ----------- --------- ----------------------
+     1 \gate_m_axis_tdata                                                   128        80               10000000
+     1 \gate_m_axis_tvalid                                                    1         1                      1
+     1 \gate_rx_busy                                                          1         1                      1
+     1 \gate_rx_frame_error                                                   1         1                      1
+     1 \gate_rx_overrun_error                                                 1         1                      1
+     1 \gate_s_axis_tready                                                    1         1                      1
+     1 \gate_tx_busy                                                          1         1                      1
+     1 \gate_txd                                                              0         0                      0
+     1 \gate_uart_rx_inst.bit_cnt                                             5         5                   0101
+     1 \gate_uart_rx_inst.busy_reg                                            1         1                      1
+     1 \gate_uart_rx_inst.data_reg                                            0         0               00000000
+     1 \gate_uart_rx_inst.frame_error_reg                                     1         1                      1
+     1 \gate_uart_rx_inst.m_axis_tdata_reg                                  128        80               10000000
+     1 \gate_uart_rx_inst.m_axis_tvalid_reg                                   1         1                      1
+     1 \gate_uart_rx_inst.overrun_error_reg                                   1         1                      1
+     1 \gate_uart_rx_inst.prescale_reg                                     8192      2000    0000010000000000000
+     1 \gate_uart_rx_inst.rxd_reg                                             0         0                      0
+     1 \gate_uart_tx_inst.bit_cnt                                             0         0                   0000
+     1 \gate_uart_tx_inst.busy_reg                                            1         1                      1
+     1 \gate_uart_tx_inst.data_reg                                            8         8              000001000
+     1 \gate_uart_tx_inst.prescale_reg                                        0         0    0000000000000000000
+     1 \gate_uart_tx_inst.s_axis_tready_reg                                   1         1                      1
+     1 \gate_uart_tx_inst.txd_reg                                             0         0                      0
+     1 \gold_m_axis_tdata                                                     0         0               00000000
+     1 \gold_m_axis_tvalid                                                    0         0                      0
+     1 \gold_rx_busy                                                          0         0                      0
+     1 \gold_rx_frame_error                                                   0         0                      0
+     1 \gold_rx_overrun_error                                                 0         0                      0
+     1 \gold_s_axis_tready                                                    0         0                      0
+     1 \gold_tx_busy                                                          0         0                      0
+     1 \gold_txd                                                              1         1                      1
+     1 \gold_uart_rx_inst.bit_cnt                                             0         0                   0000
+     1 \gold_uart_rx_inst.busy_reg                                            0         0                      0
+     1 \gold_uart_rx_inst.data_reg                                            0         0               00000000
+     1 \gold_uart_rx_inst.frame_error_reg                                     0         0                      0
+     1 \gold_uart_rx_inst.m_axis_tdata_reg                                    0         0               00000000
+     1 \gold_uart_rx_inst.m_axis_tvalid_reg                                   0         0                      0
+     1 \gold_uart_rx_inst.overrun_error_reg                                   0         0                      0
+     1 \gold_uart_rx_inst.prescale_reg                                        0         0    0000000000000000000
+     1 \gold_uart_rx_inst.rxd_reg                                             1         1                      1
+     1 \gold_uart_tx_inst.bit_cnt                                             0         0                   0000
+     1 \gold_uart_tx_inst.busy_reg                                            0         0                      0
+     1 \gold_uart_tx_inst.data_reg                                            0         0              000000000
+     1 \gold_uart_tx_inst.prescale_reg                                        0         0    0000000000000000000
+     1 \gold_uart_tx_inst.s_axis_tready_reg                                   0         0                      0
+     1 \gold_uart_tx_inst.txd_reg                                             1         1                      1
+     1 \in_clk                                                                0         0                      0
+     1 \in_m_axis_tready                                                      1         1                      1
+     1 \in_prescale                                                       27162      6a1a       0110101000011010
+     1 \in_rst                                                                1         1                      1
+     1 \in_rxd                                                                0         0                      0
+     1 \in_s_axis_tdata                                                       0         0               00000000
+     1 \in_s_axis_tvalid                                                      0         0                      0
+     1 \trigger                                                               1         1                      1
+  ---- ------------------------------------------------------------ ----------- --------- ----------------------
+     2 \gate_m_axis_tdata                                                     0         0               00000000
+     2 \gate_m_axis_tvalid                                                    0         0                      0
+     2 \gate_rx_busy                                                          0         0                      0
+     2 \gate_rx_frame_error                                                   0         0                      0
+     2 \gate_rx_overrun_error                                                 0         0                      0
+     2 \gate_s_axis_tready                                                    0         0                      0
+     2 \gate_tx_busy                                                          0         0                      0
+     2 \gate_txd                                                              1         1                      1
+     2 \gate_uart_rx_inst.bit_cnt                                             0         0                   0000
+     2 \gate_uart_rx_inst.busy_reg                                            0         0                      0
+     2 \gate_uart_rx_inst.data_reg                                            0         0               00000000
+     2 \gate_uart_rx_inst.frame_error_reg                                     0         0                      0
+     2 \gate_uart_rx_inst.m_axis_tdata_reg                                    0         0               00000000
+     2 \gate_uart_rx_inst.m_axis_tvalid_reg                                   0         0                      0
+     2 \gate_uart_rx_inst.overrun_error_reg                                   0         0                      0
+     2 \gate_uart_rx_inst.prescale_reg                                        0         0    0000000000000000000
+     2 \gate_uart_rx_inst.rxd_reg                                             1         1                      1
+     2 \gate_uart_tx_inst.bit_cnt                                             0         0                   0000
+     2 \gate_uart_tx_inst.busy_reg                                            0         0                      0
+     2 \gate_uart_tx_inst.data_reg                                            8         8              000001000
+     2 \gate_uart_tx_inst.prescale_reg                                        0         0    0000000000000000000
+     2 \gate_uart_tx_inst.s_axis_tready_reg                                   0         0                      0
+     2 \gate_uart_tx_inst.txd_reg                                             1         1                      1
+     2 \gold_m_axis_tdata                                                     0         0               00000000
+     2 \gold_m_axis_tvalid                                                    0         0                      0
+     2 \gold_rx_busy                                                          0         0                      0
+     2 \gold_rx_frame_error                                                   0         0                      0
+     2 \gold_rx_overrun_error                                                 0         0                      0
+     2 \gold_s_axis_tready                                                    0         0                      0
+     2 \gold_tx_busy                                                          0         0                      0
+     2 \gold_txd                                                              1         1                      1
+     2 \gold_uart_rx_inst.bit_cnt                                             0         0                   0000
+     2 \gold_uart_rx_inst.busy_reg                                            0         0                      0
+     2 \gold_uart_rx_inst.data_reg                                            0         0               00000000
+     2 \gold_uart_rx_inst.frame_error_reg                                     0         0                      0
+     2 \gold_uart_rx_inst.m_axis_tdata_reg                                    0         0               00000000
+     2 \gold_uart_rx_inst.m_axis_tvalid_reg                                   0         0                      0
+     2 \gold_uart_rx_inst.overrun_error_reg                                   0         0                      0
+     2 \gold_uart_rx_inst.prescale_reg                                        0         0    0000000000000000000
+     2 \gold_uart_rx_inst.rxd_reg                                             1         1                      1
+     2 \gold_uart_tx_inst.bit_cnt                                             0         0                   0000
+     2 \gold_uart_tx_inst.busy_reg                                            0         0                      0
+     2 \gold_uart_tx_inst.data_reg                                            0         0              000000000
+     2 \gold_uart_tx_inst.prescale_reg                                        0         0    0000000000000000000
+     2 \gold_uart_tx_inst.s_axis_tready_reg                                   0         0                      0
+     2 \gold_uart_tx_inst.txd_reg                                             1         1                      1
+     2 \in_clk                                                                0         0                      0
+     2 \in_m_axis_tready                                                      0         0                      0
+     2 \in_prescale                                                        1161       489       0000010010001001
+     2 \in_rst                                                                1         1                      1
+     2 \in_rxd                                                                1         1                      1
+     2 \in_s_axis_tdata                                                       0         0               00000000
+     2 \in_s_axis_tvalid                                                      1         1                      1
+     2 \trigger                                                               1         1                      1
+  ---- ------------------------------------------------------------ ----------- --------- ----------------------
+     3 \gate_m_axis_tdata                                                     0         0               00000000
+     3 \gate_m_axis_tvalid                                                    0         0                      0
+     3 \gate_rx_busy                                                          0         0                      0
+     3 \gate_rx_frame_error                                                   0         0                      0
+     3 \gate_rx_overrun_error                                                 0         0                      0
+     3 \gate_s_axis_tready                                                    0         0                      0
+     3 \gate_tx_busy                                                          0         0                      0
+     3 \gate_txd                                                              1         1                      1
+     3 \gate_uart_rx_inst.bit_cnt                                             0         0                   0000
+     3 \gate_uart_rx_inst.busy_reg                                            0         0                      0
+     3 \gate_uart_rx_inst.data_reg                                            0         0               00000000
+     3 \gate_uart_rx_inst.frame_error_reg                                     0         0                      0
+     3 \gate_uart_rx_inst.m_axis_tdata_reg                                    0         0               00000000
+     3 \gate_uart_rx_inst.m_axis_tvalid_reg                                   0         0                      0
+     3 \gate_uart_rx_inst.overrun_error_reg                                   0         0                      0
+     3 \gate_uart_rx_inst.prescale_reg                                        0         0    0000000000000000000
+     3 \gate_uart_rx_inst.rxd_reg                                             1         1                      1
+     3 \gate_uart_tx_inst.bit_cnt                                             0         0                   0000
+     3 \gate_uart_tx_inst.busy_reg                                            0         0                      0
+     3 \gate_uart_tx_inst.data_reg                                            8         8              000001000
+     3 \gate_uart_tx_inst.prescale_reg                                        0         0    0000000000000000000
+     3 \gate_uart_tx_inst.s_axis_tready_reg                                   0         0                      0
+     3 \gate_uart_tx_inst.txd_reg                                             1         1                      1
+     3 \gold_m_axis_tdata                                                     0         0               00000000
+     3 \gold_m_axis_tvalid                                                    0         0                      0
+     3 \gold_rx_busy                                                          0         0                      0
+     3 \gold_rx_frame_error                                                   0         0                      0
+     3 \gold_rx_overrun_error                                                 0         0                      0
+     3 \gold_s_axis_tready                                                    0         0                      0
+     3 \gold_tx_busy                                                          0         0                      0
+     3 \gold_txd                                                              1         1                      1
+     3 \gold_uart_rx_inst.bit_cnt                                             0         0                   0000
+     3 \gold_uart_rx_inst.busy_reg                                            0         0                      0
+     3 \gold_uart_rx_inst.data_reg                                            0         0               00000000
+     3 \gold_uart_rx_inst.frame_error_reg                                     0         0                      0
+     3 \gold_uart_rx_inst.m_axis_tdata_reg                                    0         0               00000000
+     3 \gold_uart_rx_inst.m_axis_tvalid_reg                                   0         0                      0
+     3 \gold_uart_rx_inst.overrun_error_reg                                   0         0                      0
+     3 \gold_uart_rx_inst.prescale_reg                                        0         0    0000000000000000000
+     3 \gold_uart_rx_inst.rxd_reg                                             1         1                      1
+     3 \gold_uart_tx_inst.bit_cnt                                             0         0                   0000
+     3 \gold_uart_tx_inst.busy_reg                                            0         0                      0
+     3 \gold_uart_tx_inst.data_reg                                            0         0              000000000
+     3 \gold_uart_tx_inst.prescale_reg                                        0         0    0000000000000000000
+     3 \gold_uart_tx_inst.s_axis_tready_reg                                   0         0                      0
+     3 \gold_uart_tx_inst.txd_reg                                             1         1                      1
+     3 \in_clk                                                                0         0                      0
+     3 \in_m_axis_tready                                                      0         0                      0
+     3 \in_prescale                                                       16454      4046       0100000001000110
+     3 \in_rst                                                                0         0                      0
+     3 \in_rxd                                                                1         1                      1
+     3 \in_s_axis_tdata                                                       0         0               00000000
+     3 \in_s_axis_tvalid                                                      1         1                      1
+     3 \trigger                                                               1         1                      1
+  ---- ------------------------------------------------------------ ----------- --------- ----------------------
+     4 \gate_m_axis_tdata                                                     0         0               00000000
+     4 \gate_m_axis_tvalid                                                    0         0                      0
+     4 \gate_rx_busy                                                          0         0                      0
+     4 \gate_rx_frame_error                                                   0         0                      0
+     4 \gate_rx_overrun_error                                                 0         0                      0
+     4 \gate_s_axis_tready                                                    1         1                      1
+     4 \gate_tx_busy                                                          1         1                      1
+     4 \gate_txd                                                              0         0                      0
+     4 \gate_uart_rx_inst.bit_cnt                                             0         0                   0000
+     4 \gate_uart_rx_inst.busy_reg                                            0         0                      0
+     4 \gate_uart_rx_inst.data_reg                                            0         0               00000000
+     4 \gate_uart_rx_inst.frame_error_reg                                     0         0                      0
+     4 \gate_uart_rx_inst.m_axis_tdata_reg                                    0         0               00000000
+     4 \gate_uart_rx_inst.m_axis_tvalid_reg                                   0         0                      0
+     4 \gate_uart_rx_inst.overrun_error_reg                                   0         0                      0
+     4 \gate_uart_rx_inst.prescale_reg                                        0         0    0000000000000000000
+     4 \gate_uart_rx_inst.rxd_reg                                             1         1                      1
+     4 \gate_uart_tx_inst.bit_cnt                                             9         9                   1001
+     4 \gate_uart_tx_inst.busy_reg                                            1         1                      1
+     4 \gate_uart_tx_inst.data_reg                                          256       100              100000000
+     4 \gate_uart_tx_inst.prescale_reg                                   131631     2022f    0100000001000101111
+     4 \gate_uart_tx_inst.s_axis_tready_reg                                   1         1                      1
+     4 \gate_uart_tx_inst.txd_reg                                             0         0                      0
+     4 \gold_m_axis_tdata                                                     0         0               00000000
+     4 \gold_m_axis_tvalid                                                    0         0                      0
+     4 \gold_rx_busy                                                          0         0                      0
+     4 \gold_rx_frame_error                                                   0         0                      0
+     4 \gold_rx_overrun_error                                                 0         0                      0
+     4 \gold_s_axis_tready                                                    1         1                      1
+     4 \gold_tx_busy                                                          1         1                      1
+     4 \gold_txd                                                              0         0                      0
+     4 \gold_uart_rx_inst.bit_cnt                                             0         0                   0000
+     4 \gold_uart_rx_inst.busy_reg                                            0         0                      0
+     4 \gold_uart_rx_inst.data_reg                                            0         0               00000000
+     4 \gold_uart_rx_inst.frame_error_reg                                     0         0                      0
+     4 \gold_uart_rx_inst.m_axis_tdata_reg                                    0         0               00000000
+     4 \gold_uart_rx_inst.m_axis_tvalid_reg                                   0         0                      0
+     4 \gold_uart_rx_inst.overrun_error_reg                                   0         0                      0
+     4 \gold_uart_rx_inst.prescale_reg                                        0         0    0000000000000000000
+     4 \gold_uart_rx_inst.rxd_reg                                             1         1                      1
+     4 \gold_uart_tx_inst.bit_cnt                                             9         9                   1001
+     4 \gold_uart_tx_inst.busy_reg                                            1         1                      1
+     4 \gold_uart_tx_inst.data_reg                                          256       100              100000000
+     4 \gold_uart_tx_inst.prescale_reg                                   131631     2022f    0100000001000101111
+     4 \gold_uart_tx_inst.s_axis_tready_reg                                   1         1                      1
+     4 \gold_uart_tx_inst.txd_reg                                             0         0                      0
+     4 \in_clk                                                                0         0                      0
+     4 \in_m_axis_tready                                                      0         0                      0
+     4 \in_prescale                                                           7         7       0000000000000111
+     4 \in_rst                                                                0         0                      0
+     4 \in_rxd                                                                1         1                      1
+     4 \in_s_axis_tdata                                                       0         0               00000000
+     4 \in_s_axis_tvalid                                                      0         0                      0
+     4 \trigger                                                               0         0                      0
+Dumping SAT model to VCD file /home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart/formal/state_correspondence/reset_counterexample.vcd
+
+ERROR: Called with -verify and proof did fail!
