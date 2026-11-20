@@ -1,15 +1,77 @@
-# r2g —— 从 RTL 到签核版图，再到可训练的数据集
+<div align="center">
 
-r2g 是一个开源 EDA 自主 agent：给它一批 Verilog，它在后台跑完综合、布局布线、DRC/LVS 签核；
-遇到失败自己读日志、诊断、选修法、重跑、复核；最后把**签核通过**的设计转成机器学习数据集
-（GNN **图数据集** 或 CNN **图像数据集**），逐项独立校验后交给你。模型由你选择：DeepSeek、通义千问、
-Kimi、智谱 GLM、豆包、OpenAI、Gemini、Claude 或本地 Ollama，配置即用。
+# r2g
 
-![首页](docs/agent/img/home.png)
+**From RTL to a signed-off layout, and on to a training-ready dataset.**
 
-## 一键安装
+An open-source, autonomous EDA agent built on OpenROAD: synthesis, place-and-route, DRC/LVS signoff,
+self-repair, and verified ML datasets from your Verilog.
 
-需要一台 x86_64 Linux 机器（Ubuntu 22.04 及以上、Debian 12 及以上等 glibc ≥ 2.35 的发行版；安装过程不需要 root 权限），系统预先有 Git、curl、CA 证书及带 venv/ensurepip 的 Python 3.10+。三平台安装和小设计验收建议至少准备 80 GB 可用空间，其中包含默认运行磁盘保护要求的 50 GB 余量。下载需要访问 GitHub、Conda 和 Python 软件源；耗时取决于网络和磁盘速度。
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/host-Linux%20x86__64-informational)
+![Python](https://img.shields.io/badge/python-3.10%2B-informational)
+![PDKs](https://img.shields.io/badge/PDKs-Nangate45%20%7C%20SKY130%20%7C%20GF180-success)
+![Tests](https://img.shields.io/badge/tests-2%2C725-success)
+
+**English** · [简体中文](README.zh-CN.md)
+
+<img src="docs/agent/img/home.png" alt="r2g web interface" width="820">
+
+</div>
+
+---
+
+## Contents
+
+- [Highlights](#highlights)
+- [How it works](#how-it-works)
+- [Quick start](#quick-start)
+- [Using r2g](#using-r2g)
+- [Datasets](#datasets)
+- [Why the results can be trusted](#why-the-results-can-be-trusted)
+- [Claude Code skills](#claude-code-skills)
+- [Platform support](#platform-support)
+- [Validation](#validation)
+- [Repository layout](#repository-layout)
+- [Documentation](#documentation)
+- [License](#license)
+
+## Highlights
+
+| | |
+|---|---|
+| **End to end** | Verilog in; synthesis, floorplan, placement, CTS, routing, GDS, DRC, LVS and RCX out, with no hand-holding. |
+| **Self-repairing** | Reads its own logs, diagnoses failures, applies a learned repair recipe, re-runs and re-checks. Every run feeds a knowledge store that makes the next repair better. |
+| **Datasets you can train on** | Signed-off designs become PyTorch Geometric **graph** datasets or GCell **image** datasets, each independently re-verified. |
+| **Your choice of model** | DeepSeek, Qwen, Kimi, GLM, Doubao, OpenAI, Gemini, Claude, or a local Ollama model. Configure it once and it works. |
+| **Three ways in** | A web app, a command line, or Claude Code / any MCP client. |
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["Verilog / RTL<br/>(or a spec)"] --> B["Synthesis<br/>Yosys"]
+    B --> C["Place & route<br/>OpenROAD-flow-scripts"]
+    C --> D["Signoff<br/>DRC · LVS · RCX"]
+    D -- "violations" --> E["Diagnose & repair<br/>learned recipes"]
+    E --> C
+    D -- "clean" --> F["Dataset build<br/>graph or image"]
+    F --> G["Independent<br/>verification"]
+    G --> H["Signed-off GDS<br/>+ verified dataset"]
+    E -. "every run" .-> K[("Knowledge<br/>store")]
+    K -. "next repair" .-> E
+```
+
+The model decides *what to try*; code decides *whether it worked*. A design passes only when the DRC/LVS
+checkers and the dataset verifier say so. No tool the model can call is able to declare a pass.
+
+## Quick start
+
+**Requirements:**
+- an x86_64 Linux host with glibc ≥ 2.35 (Ubuntu 22.04+, Debian 12+, …); no root needed;
+- Git, curl, CA certificates, and Python 3.10+ with `venv`/`ensurepip`;
+- about 80 GB free for all three platforms and the self-test, including the 50 GB runtime disk guard;
+- network access to GitHub, Conda and PyPI.
 
 ```bash
 git clone https://github.com/ShenShan123/r2g-skills.git
@@ -17,112 +79,144 @@ cd r2g-skills
 bash install.sh
 ```
 
-`install.sh` 会依次：检查机器 → 安装 EDA 工具链（下载生成所有 r2g 数据集所用的同一套 OpenROAD、Yosys、
-KLayout 预编译包并校验 sha256，固定版本的 OpenROAD-flow-scripts，以及图数据集用的 PyTorch 环境；
-已安装的依赖会被识别并跳过；SKY130/GF180 PDK 固定到实验使用的包版本并核对包哈希）→ 分别严格验证 nangate45、sky130hd、gf180 平台可用 → 安装 agent →
-把 `r2g` 命令放进 `~/.local/bin` → 让你选择模型并填写 API 密钥（只保存在本机）→ 可选地跑一次自检
-（在每个所选平台上运行内置 counter8，从 RTL 到图数据集）。安装器的成功退出不代表完整语料全部通过；是否执行了物理自检会单独打印。
+The installer:
+1. checks the machine;
+2. installs the pinned toolchain, skipping anything already present:
+   - prebuilt OpenROAD, Yosys and KLayout, the same builds that produced every r2g dataset, each sha256-checked;
+   - pinned OpenROAD-flow-scripts;
+   - the PyTorch environment for graph datasets;
+   - SKY130/GF180 PDKs at the package versions the experiments used, hash-checked;
+3. strictly validates nangate45, sky130hd and gf180;
+4. installs the agent and puts `r2g` on `~/.local/bin`;
+5. asks for a model and API key, which are stored locally only;
+6. optionally runs a self-test: the built-in `counter8` from RTL to dataset on each selected platform.
 
-SystemVerilog 修复使用独立的实验版 Yosys/Slang（OSS CAD Suite 2025-03-29），安装器会自动下载并校验归档和二进制哈希，保存其路径；它不会替换布局布线流程使用的 Yosys。
+A successful install does not mean an entire corpus will pass; the installer reports separately whether the
+physical self-test ran.
 
-常用参数：`--yes`（不逐项确认）、`--prefix DIR`（大文件放哪里）、`--platforms nangate45`（只安装并验证指定平台，多个平台用逗号分隔）、`--skip-toolchain`（工具链已就绪）、
-`--provider deepseek --key-env DEEPSEEK_API_KEY`（不交互地配置模型）。无模型密钥的完整流程验收可以使用 `bash install.sh --yes --prefix /your/install/path --no-config --selftest`。完整说明：`bash install.sh --help`。
+<details>
+<summary><b>Installer options</b></summary>
 
-## 使用
+| Option | Effect |
+|---|---|
+| `--yes` | do not ask before each step |
+| `--prefix DIR` | where the large files go |
+| `--platforms nangate45` | install and validate only these platforms (comma-separated) |
+| `--skip-toolchain` | the toolchain is already in place |
+| `--provider deepseek --key-env DEEPSEEK_API_KEY` | configure the model non-interactively |
+| `--no-config --selftest` | full-flow acceptance without any model key |
 
-**任务在装了 r2g 的那台机器上跑，浏览器只是看和操作的窗口。** r2g 只能装在 Linux 上（工具链是 Linux
-预编译包），所以 Windows / Mac 用户把它装在 Linux 服务器上，自己电脑只开浏览器。
+SystemVerilog repair uses a separate, experimental Yosys + Slang (OSS CAD Suite 2025-03-29). The installer
+downloads it, verifies the archive and binary hashes, and records its path. It never replaces the Yosys used
+by the place-and-route flow. Full help: `bash install.sh --help`.
+</details>
 
-| 装在哪里 | 任务在哪里跑 | 怎么打开网页 |
+## Using r2g
+
+**Jobs run on the machine where r2g is installed; the browser is only a window onto them.** r2g installs on
+Linux only, so on Windows or macOS install it on a Linux server and use your own computer's browser.
+
+| Installed on | Jobs run on | Open the web app |
 |---|---|---|
-| 自己的 Linux 电脑 | 本机 | `r2g ui`，浏览器打开 `http://127.0.0.1:8770` |
-| 服务器（推荐，算力大） | 服务器 | 服务器上 `r2g ui` 常驻，自己电脑转发端口后打开（见下） |
+| Your Linux machine | that machine | `r2g ui`, then open `http://127.0.0.1:8770` |
+| A server *(recommended)* | the server | keep `r2g ui` running there and forward the port (below) |
 
-### 在服务器上使用
+<details>
+<summary><b>Running on a server</b></summary>
 
-1. 服务器上启动服务，并让它一直开着（放进 tmux，或者后台运行）：
+1. Start the service on the server and leave it running (tmux, or in the background):
 
    ```bash
-   nohup r2g ui > ~/r2g_ui.log 2>&1 &      # 默认端口 8770；换端口：r2g ui --port 9000
+   nohup r2g ui > ~/r2g_ui.log 2>&1 &      # default port 8770; change with: r2g ui --port 9000
    ```
 
-2. 在自己电脑上把服务器的端口转发到本机，任选一种：
-   - **VS Code 远程连着服务器**：底部「端口 / PORTS」面板里转发 `8770`，点地球图标打开。最省事。
-   - **SSH 隧道**（Windows PowerShell、Mac、Linux 都一样）：
+2. Forward the port to your computer, either way:
+   - **VS Code Remote:** forward `8770` in the *Ports* panel and click the globe icon.
+   - **SSH tunnel** (same on Windows PowerShell, macOS and Linux):
 
      ```bash
-     ssh -N -L 8888:127.0.0.1:8770 用户名@服务器地址
+     ssh -N -L 8888:127.0.0.1:8770 user@server
      ```
 
-     输入密码后窗口不动是正常的，别关；然后浏览器打开 `http://127.0.0.1:8888`。
-     如果报 `bind [127.0.0.1]:8888: Permission denied`，说明本机这个端口被占用或被系统保留，
-     把 8888 换成别的数字（如 7070）再试；Windows 上可用
-     `netsh interface ipv4 show excludedportrange protocol=tcp` 查看保留端口。
+     A silent window after the password prompt is normal; keep it open and browse to
+     `http://127.0.0.1:8888`. If you get `bind [127.0.0.1]:8888: Permission denied`, the local port is
+     taken or reserved, so use another one (e.g. 7070). On Windows,
+     `netsh interface ipv4 show excludedportrange protocol=tcp` lists reserved ports.
 
-几点说明：
-- 服务只在服务器本机（127.0.0.1）上监听，别人不能直接访问，必须经过 SSH 或 VS Code 转发。
-- 关掉浏览器或断开 SSH 不影响任务；服务重启后，没跑完的设计会自动接着跑。
-- 每个用户的任务、设置、密钥和修复经验库都在自己的 `~/.r2g/` 下，互不影响。
-- 同时运行几个设计、每个用几个核，在「设置 → 算力」里改；网页、命令行、对话共用这个上限。
+Notes:
+- The service listens on the server's `127.0.0.1` only, so it is reachable just through SSH or VS Code forwarding.
+- Closing the browser or the tunnel does not stop jobs. After a restart, unfinished designs resume
+  automatically.
+- Each user's jobs, settings, keys and repair knowledge live in their own `~/.r2g/`.
+- *Settings → Compute* sets how many designs run at once and how many cores each gets. The web app, the CLI
+  and chat share that limit.
+</details>
 
-### 三个页面
+### The web app
 
-- **开始**：五步——选设计（上传一个设计的文件夹；或「批量」：一个文件夹里每个子文件夹一个设计，可上传也可直接填服务器上的路径）
-  → 选平台（Nangate45 / SKY130 / GF180）→ 选数据集类型（图 / 图像）→ 流程参数（默认采用对应平台的经验参数，也可自定义时钟、利用率、die 等）
-  → 开始。不需要配置模型。
-- **任务**：每个设计的进度条（综合 → 布局布线 → 签核 → 修复 → 数据集 → 校验）、失败原因、自动修复记录、
-  版图与日志、数据集下载；批量任务按状态筛选、按失败原因归类，运行中也能下载已完成的部分。
-- **对话**：用一句话说要求，例如“在 GitHub 上找个小的 UART 设计跑一遍”“/data/rtl 下的设计都跑，时钟用 2 ns”
-  “这个任务失败的设计是什么原因”。需要先在「设置」里配置模型（DeepSeek、通义千问、Kimi、GLM、OpenAI、
-  Claude、Gemini 或本地模型）。
-
-| 开始 | 任务 | 对话 |
+| Start | Jobs | Chat |
 |---|---|---|
-| ![开始](docs/agent/img/home.png) | ![任务](docs/agent/img/job.png) | ![对话](docs/agent/img/chat.png) |
+| ![Start](docs/agent/img/home.png) | ![Jobs](docs/agent/img/job.png) | ![Chat](docs/agent/img/chat.png) |
+| Five steps: choose designs (one folder, or a batch with one subfolder per design, uploaded or given as a server path) → platform → dataset type → flow parameters (platform defaults, or your own clock, utilization, die) → start. No model needed. | Per-design progress (synthesis → place & route → signoff → repair → dataset → verification), failure reasons, repair history, layouts and logs, dataset downloads. Filter batches by state, group failures by cause, download finished parts while a batch runs. | Ask in plain language: *"find a small UART on GitHub and run it"*, *"run everything under /data/rtl at 2 ns"*, *"why did the failed designs in this job fail?"*. Needs a model configured in *Settings*. |
 
-命令行与其他客户端：
+### Command line and other clients
 
 ```bash
-r2g config --provider qwen --set-key     # 更换模型
-r2g check-model                          # 测试模型连通与工具调用
-r2g run --example counter8               # 不经过对话，直接跑
-r2g status                               # 查看任务
-r2g chat                                 # 终端里对话
-r2g mcp                                  # 作为 MCP 服务器，接入 Claude Code、Cursor 等客户端
+r2g config --provider qwen --set-key     # switch model
+r2g check-model                          # test connectivity and tool calling
+r2g run --example counter8               # run directly, without chat
+r2g status                               # list jobs
+r2g chat                                 # chat in the terminal
+r2g mcp                                  # serve as an MCP server for Claude Code, Cursor, …
 ```
 
-## 两种数据集
+## Datasets
 
-| | 图数据集（graph） | 图像数据集（image） |
+| | Graph dataset | Image dataset |
 |---|---|---|
-| 形式 | PyTorch Geometric：五种视图（b–f）+ 网表图，`HeteroData` | GCell 网格上的多通道数组（`.npz`，[x][y]）+ 预览图 |
-| 特征 | 单元、线网、引脚的几何与电气特征 | 单元密度、宏单元区域、RUDY、引脚 RUDY、引脚密度 —— **只取自放置后的版图**，不含布线信息 |
-| 标签 | 拥塞、线长、时序、IR drop、RC 寄生参数 | 拥塞、IR drop |
-| 校验 | `tools/verify_graph_dataset.py`（数百项） | `verify_images.py`（17 项，含与图数据集拥塞标签的逐单元对齐） |
+| **Format** | PyTorch Geometric `HeteroData`: five views (b–f) plus the netlist graph | multi-channel GCell arrays (`.npz`, `[x][y]`) plus previews |
+| **Features** | geometric and electrical features of cells, nets and pins | cell density, macro regions, RUDY, pin RUDY, pin density, **from the placed layout only** (no routing information) |
+| **Labels** | congestion, wirelength, timing, IR drop, RC parasitics | congestion, IR drop |
+| **Verification** | `tools/verify_graph_dataset.py`: hundreds of checks | `verify_images.py`: 17 checks, incl. per-cell agreement with the graph dataset's congestion labels |
 
-## 结论为什么可信
+The `def-graph` skill also builds **four-stage causal datasets** (floorplan, placement, CTS and route
+snapshots of one design, as graphs or as images), each limited to what that stage could legally see. See
+[`r2g-skills/def-graph/SKILL.md`](r2g-skills/def-graph/SKILL.md).
 
-- **模型负责判断，代码负责判定。** 通过与否只由 DRC/LVS 和数据集校验器决定；模型调用的工具里没有任何
-  一个能宣布“通过”。检查器崩溃或超时不算通过。
-- **只收签核通过的设计。** 数据集构建前有签核门，版图与报告按内容摘要绑定，换了版图旧报告就失效。
-- **每个数据集都经过独立复算。** 校验程序不复用生成代码，自行解析 DEF/LEF/SPEF 重新计算并比对。
-- **失败分得清。** agent 区分“你的 RTL 有问题”和“工具/流程问题”，并引用真实的报错码。
+## Why the results can be trusted
 
-当前版本支持 **nangate45**（45 nm）平台；sky130hd、gf180 正在适配。设计文档：
-[`docs/agent/AGENT_DESIGN.md`](docs/agent/AGENT_DESIGN.md)。
+- **The model judges; code decides.** Only DRC/LVS and the dataset verifier decide a pass. A crashed or
+  timed-out checker is never a pass.
+- **Only signed-off designs become data.** A signoff gate guards dataset construction. Layouts and reports are
+  bound by content digest, so a changed layout invalidates its old reports.
+- **Every dataset is recomputed independently.** The verifier shares no code with the generator. It re-parses
+  DEF/LEF/SPEF itself and compares.
+- **Failures are classified honestly.** The agent separates "your RTL is wrong" from "the tool or flow
+  failed", and cites the real error codes.
 
----
+Design document: [`docs/agent/AGENT_DESIGN.md`](docs/agent/AGENT_DESIGN.md).
 
-# 作为 Claude Code 技能使用
+## Claude Code skills
 
+The engine under the agent ships as four [Claude Code](https://claude.com/claude-code) skills. You can use
+them directly: ask Claude *"set up the EDA tools"*, then *"synthesize this UART at 100 MHz on nangate45"*.
 
-A Claude Code skill that drives an open-source RTL-to-GDS flow — from natural-language spec (or existing RTL) through synthesis, place-and-route, and full signoff (DRC, LVS, RCX) — using Yosys, OpenROAD-flow-scripts, KLayout, and OpenRCX.
+| Skill | What it does |
+|---|---|
+| [`eda-install`](r2g-skills/eda-install/SKILL.md) | Detects the machine, then installs and verifies the toolchain (no-sudo path by default) |
+| [`rtl-acquire`](r2g-skills/rtl-acquire/SKILL.md) | Discovers and screens RTL at corpus scale; synthesis-only netlist graphs; promotes candidates to full-flow projects |
+| [`signoff-loop`](r2g-skills/signoff-loop/SKILL.md) | RTL → GDS with full signoff, plus the self-improving repair loop |
+| [`def-graph`](r2g-skills/def-graph/SKILL.md) | Builds PyG graph and image datasets from signed-off DEF/LEF/SPEF |
 
-Install the `r2g-skills` skills (`eda-install` to set up the toolchain, `rtl-acquire` to grow an RTL corpus at scale, `signoff-loop` for RTL→GDS + signoff, `def-graph` for graph datasets), then ask Claude: *"set up the EDA tools"* followed by *"synthesize this UART at 100 MHz on nangate45"* — it handles everything from provisioning to GDSII. Recent changes: see [CHANGELOG.md](CHANGELOG.md).
+```bash
+bash r2g-skills/install.sh --user          # all four skills into ~/.claude/skills/
+```
 
----
+Then restart Claude Code or run `/reload`. Other modes: `--project .` (scoped to one project), `--link`
+(symlink, so edits apply without reinstalling), `--force` (overwrite) and `--uninstall`.
 
-## Prerequisites
+<details>
+<summary><b>Prerequisites</b></summary>
 
 | Tool | Required | Purpose |
 |------|----------|---------|
@@ -135,121 +229,44 @@ Install the `r2g-skills` skills (`eda-install` to set up the toolchain, `rtl-acq
 | Magic + Netgen | optional | sky130 DRC / LVS |
 | OpenSTA | optional | standalone STA |
 | sky130A PDK | optional | sky130 signoff |
-| torch + torch_geometric + pandas | optional | PyG graph datasets (`run_graphs.sh`; venv on /proj, `R2G_GRAPH_PYTHON`) |
+| torch + torch_geometric + pandas | optional | PyG graph datasets (`run_graphs.sh`, `R2G_GRAPH_PYTHON`) |
+</details>
 
----
+<details>
+<summary><b>Configuring the toolchain</b></summary>
 
-## Install the skill
+The skills autodetect every tool on first use. Nothing needs to be sourced or exported if your tools are in
+standard locations. The quickest route is to let `eda-install` detect and provision everything:
 
 ```bash
-git clone https://github.com/ShenShan123/r2g-skills.git
-cd r2g-skills
-bash r2g-skills/install.sh --user   # installs eda-install + rtl-acquire + signoff-loop + def-graph into ~/.claude/skills/
+bash r2g-skills/bootstrap.sh --dry-run     # detect tools, PDK and torch venv; print a plan; install nothing
 ```
 
-Restart Claude Code (or run `/reload`) after install.
+Without root it chooses a **no-sudo path**: prebuilt conda `litex-hub` binaries, plus a torch venv on a large
+volume, never a full `$HOME`. Drop `--dry-run` to install the missing tiers and generate
+`references/env.local.sh`; add `--prefix /big/volume` to choose where the PDK and venv go.
 
-**Other options:**
+**Path A: a shared EDA server.** If `/opt/openroad_tools_env.sh` exists, it is sourced automatically.
+
+**Path B: build ORFS from source** (about 30 min on 8 cores):
 
 ```bash
-bash r2g-skills/install.sh --user            # global — available in every Claude Code session (default)
-bash r2g-skills/install.sh --project .       # local  — scoped to the current project directory
-bash r2g-skills/install.sh --link --user     # symlink — edits are picked up without reinstalling
-bash r2g-skills/install.sh --force --user    # overwrite an existing install
-bash r2g-skills/install.sh --uninstall       # remove all sub-skills
+sudo apt install build-essential cmake git python3 python3-pip iverilog klayout tcl-dev libboost-dev flex bison
+git clone --recursive https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts ~/OpenROAD-flow-scripts
+cd ~/OpenROAD-flow-scripts && sudo ./etc/DependencyInstaller.sh && ./build_openroad.sh --local
+echo 'export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"' >> ~/.claude/skills/signoff-loop/references/env.local.sh
 ```
 
-**Installing from the skill collection directory alone** (no full repo clone needed):
+**Path C: OSS CAD Suite plus a separate OpenROAD binary:**
 
 ```bash
-cd r2g-skills
-./install.sh --user
-```
-
----
-
-## Configure the OpenROAD toolchain
-
-The skill autodetects every tool on first use. No `source` or `export` is required if your tools land in standard locations. Use `check_env.sh` to see exactly what was found (see [Verify](#verify-the-setup)).
-
-**Quick start — let the `eda-install` skill detect your machine and provision the toolchain:**
-
-```bash
-bash r2g-skills/bootstrap.sh --dry-run     # detect tools + PDK + torch venv → per-tier plan, install nothing
-```
-
-This is a shim to the dedicated **`eda-install`** sub-skill (`r2g-skills/eda-install/bootstrap.sh`) —
-in a Claude Code session you can just say *"set up the EDA tools"*. It reports what's present vs
-missing and, without root, automatically selects a **no-sudo path** (pre-built conda `litex-hub`
-binaries + a torch venv on a big volume — never a full `$HOME`). Drop `--dry-run` to install the
-missing tiers and auto-generate `references/env.local.sh`; add `--prefix /big/volume` to steer where
-the PDK and venv land. The manual paths below remain available if you prefer to install by hand.
-
-Choose the path that matches your situation.
-
----
-
-### Path A — Shared EDA server with a pre-built toolchain (fastest)
-
-If `/opt/openroad_tools_env.sh` exists (e.g. a shared EDA workstation), the skill sources it automatically. Jump straight to [Verify](#verify-the-setup).
-
----
-
-### Path B — Build ORFS from source (recommended for a clean Linux install)
-
-OpenROAD-flow-scripts builds its own `openroad` and `yosys`, so one clone gives you the whole flow.
-
-**1. System packages** (run once as root — Debian / Ubuntu):
-
-```bash
-sudo apt update
-sudo apt install build-essential cmake git python3 python3-pip \
-     iverilog klayout tcl-dev libboost-dev flex bison
-```
-
-For RHEL / Fedora / CentOS, replace `apt` with `dnf` / `yum` and adjust package names accordingly.
-
-**2. Clone and build ORFS** (~30 min on 8 cores):
-
-```bash
-git clone --recursive https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts \
-    ~/OpenROAD-flow-scripts
-cd ~/OpenROAD-flow-scripts
-sudo ./etc/DependencyInstaller.sh   # installs remaining build deps
-./build_openroad.sh --local         # builds openroad + yosys under tools/install/
-```
-
-After the build, the skill autodetects both binaries from `$ORFS_ROOT/tools/install/` if you set `ORFS_ROOT`. Do that in `env.local.sh` (one line):
-
-```bash
-cp ~/.claude/skills/signoff-loop/references/env.local.sh.template \
-   ~/.claude/skills/signoff-loop/references/env.local.sh
-
-# Add this one line to env.local.sh:
-echo 'export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"' \
-  >> ~/.claude/skills/signoff-loop/references/env.local.sh
-```
-
----
-
-### Path C — OSS-CAD-Suite + separate OpenROAD binary
-
-OSS-CAD-Suite provides pre-built Yosys, iverilog, and Verilator. Pair it with a pre-built OpenROAD binary (from the OpenROAD releases page or your distro).
-
-```bash
-# Download OSS-CAD-Suite (check https://github.com/YosysHQ/oss-cad-suite-build for latest tag)
 curl -LO https://github.com/YosysHQ/oss-cad-suite-build/releases/latest/download/oss-cad-suite-linux-x64.tgz
-tar -xf oss-cad-suite-linux-x64.tgz -C "$HOME"        # extracts to ~/oss-cad-suite
-
-# Install OpenROAD binary (Debian / Ubuntu)
+tar -xf oss-cad-suite-linux-x64.tgz -C "$HOME"
 sudo apt install openroad
-
-# Clone ORFS for the flow Makefile (no build needed here)
-git clone --recursive https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts \
-    ~/OpenROAD-flow-scripts
+git clone --recursive https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts ~/OpenROAD-flow-scripts
 ```
 
-Then set all paths in `env.local.sh`:
+Then set the paths in `env.local.sh`:
 
 ```bash
 export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"
@@ -261,554 +278,223 @@ export OPENROAD_EXE="/usr/bin/openroad"
 export KLAYOUT_CMD="/usr/bin/klayout"
 ```
 
----
+**`env.local.sh`.** It lives at `~/.claude/skills/signoff-loop/references/env.local.sh`; copy it from
+`env.local.sh.template`. Every key is optional; set only what autodetection gets wrong. To keep the file
+anywhere else, export `R2G_ENV_FILE=/path/to/your-env.sh`.
 
-### `env.local.sh` — full reference
-
-The file lives at `~/.claude/skills/signoff-loop/references/env.local.sh`. Copy it from the template and edit:
-
-```bash
-cp ~/.claude/skills/signoff-loop/references/env.local.sh.template \
-   ~/.claude/skills/signoff-loop/references/env.local.sh
-```
-
-All keys are optional — uncomment only the lines that the autodetect gets wrong.
-
-```bash
-# ── ORFS checkout ─────────────────────────────────────────────────────────────
-# Required. Must contain flow/Makefile. Set this and everything else is found.
-export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"
-
-# ── Required tool binaries ────────────────────────────────────────────────────
-# Autodetected from $ORFS_ROOT/tools/install/, $PATH, and well-known paths.
-# Uncomment only if autodetect picks the wrong binary.
-# export OPENROAD_EXE="$ORFS_ROOT/tools/install/OpenROAD/bin/openroad"
-# export YOSYS_EXE="$ORFS_ROOT/tools/install/yosys/bin/yosys"
-# export IVERILOG_EXE="/usr/bin/iverilog"
-# export VVP_EXE="/usr/bin/vvp"
-
-# ── Optional tool binaries ────────────────────────────────────────────────────
-# export VERILATOR_EXE="/usr/local/bin/verilator"
-# export KLAYOUT_CMD="/usr/bin/klayout"
-# export MAGIC_EXE="/usr/bin/magic"
-# export NETGEN_EXE="/usr/bin/netgen-lvs"
-# export STA_EXE="/usr/local/bin/opensta"
-
-# ── PDK root (sky130 DRC/LVS with Magic / Netgen only) ────────────────────────
-# export PDK_ROOT="$HOME/pdks"     # must contain sky130A/
-```
-
-The file is sourced automatically by every flow script. Alternatively, point to a file anywhere on disk:
-
-```bash
-export R2G_ENV_FILE=/path/to/your-env.sh   # add to ~/.bashrc or ~/.zshrc
-```
-
-**Autodetected locations** (checked in order if the variable is not set):
-
-| Variable | Checked paths (first hit wins) |
-|----------|-------------------------------|
-| `ORFS_ROOT` | `$HOME/OpenROAD-flow-scripts`, `/opt/OpenROAD-flow-scripts`, `/opt/EDA4AI/OpenROAD-flow-scripts`, sibling of skill dir |
+| Variable | Checked in order (first hit wins) |
+|----------|-----------------------------------|
+| `ORFS_ROOT` | `$HOME/OpenROAD-flow-scripts`, `/opt/OpenROAD-flow-scripts`, `/opt/EDA4AI/OpenROAD-flow-scripts`, sibling of the skill dir |
 | `OPENROAD_EXE` | `$ORFS_ROOT/tools/install/OpenROAD/bin/openroad`, `/usr/local/bin/openroad`, `/usr/bin/openroad` |
 | `YOSYS_EXE` | `$ORFS_ROOT/tools/install/yosys/bin/yosys`, `/opt/pdk_klayout_openroad/oss-cad-suite/bin/yosys`, `/usr/local/bin/yosys`, `/usr/bin/yosys` |
-| `IVERILOG_EXE` | `/opt/pdk_klayout_openroad/oss-cad-suite/bin/iverilog`, `/usr/bin/iverilog` |
-| `VVP_EXE` | `/opt/pdk_klayout_openroad/oss-cad-suite/bin/vvp`, `/usr/bin/vvp` |
+| `IVERILOG_EXE` / `VVP_EXE` | `/opt/pdk_klayout_openroad/oss-cad-suite/bin/…`, `/usr/bin/…` |
 | `KLAYOUT_CMD` | `/usr/local/bin/klayout`, `/usr/bin/klayout` |
 | `MAGIC_EXE` | `/usr/local/bin/magic`, `/usr/bin/magic` |
 | `NETGEN_EXE` | `netgen-lvs` or `netgen` on `$PATH`, `/usr/bin/netgen-lvs`, `/usr/local/bin/netgen` |
 | `STA_EXE` | `sta` or `opensta` on `$PATH`, `/usr/local/bin/opensta`, `/usr/bin/opensta` |
 | `PDK_ROOT` | `/opt/pdks`, `$HOME/pdks`, `/usr/local/share/pdks` |
 
----
-
-### Installing the signoff toolchain without sudo (Miniconda)
-
-If `iverilog`/`vvp`, `magic`, `netgen`, or the sky130A PDK are missing and you do not have
-root, install them at user level from the [litex-hub](https://anaconda.org/litex-hub) channel:
+**Signoff tools without sudo (Miniconda):**
 
 ```bash
-# 1. Miniconda (user-level, no sudo)
 curl -sL -o /tmp/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 bash /tmp/miniconda.sh -b -p "$HOME/miniconda3"
-
-# 2. Tools — note --override-channels (the conda 'defaults' channel now requires
-#    interactive Terms-of-Service acceptance and will abort a non-interactive create).
-"$HOME/miniconda3/bin/conda" create -y -n eda --override-channels \
-    -c litex-hub -c conda-forge  magic netgen iverilog
-
-# 3. sky130A PDK (~8GB extracted; put it on a volume with space, NOT a full $HOME).
-#    The package installs the tree under <prefix>/share/pdk/sky130A. If $HOME is small,
-#    extract the cached tarball to a big volume instead and point PDK_ROOT there:
-"$HOME/miniconda3/bin/conda" install -y -n eda --override-channels \
-    -c litex-hub -c conda-forge  open_pdks.sky130a
+# --override-channels: the conda 'defaults' channel requires interactive ToS acceptance
+"$HOME/miniconda3/bin/conda" create -y -n eda --override-channels -c litex-hub -c conda-forge magic netgen iverilog
+"$HOME/miniconda3/bin/conda" install -y -n eda --override-channels -c litex-hub -c conda-forge open_pdks.sky130a  # ~8 GB
 ```
 
-Then pin the paths in `references/env.local.sh`:
+Then point `IVERILOG_EXE`, `VVP_EXE`, `MAGIC_EXE`, `NETGEN_EXE` and `PDK_ROOT` at
+`$HOME/miniconda3/envs/eda/{bin,share/pdk}`. Avoid `volare` behind a SOCKS proxy: it needs `socksio`, and
+unauthenticated GitHub listing is rate-limited.
 
-```bash
-_eda="$HOME/miniconda3/envs/eda/bin"
-export IVERILOG_EXE="$_eda/iverilog"
-export VVP_EXE="$_eda/vvp"
-export MAGIC_EXE="$_eda/magic"
-export NETGEN_EXE="$_eda/netgen"
-export PDK_ROOT="$HOME/miniconda3/envs/eda/share/pdk"   # or wherever sky130A/ lives
-```
-
-(Avoid `volare` for the PDK behind a SOCKS proxy: its `httpx` client needs the `socksio`
-package and the GitHub release API rate-limits unauthenticated listing — the conda
-`open_pdks.sky130a` package sidesteps both.)
-
----
-
-### Verify the setup
+**Verify the setup:**
 
 ```bash
 bash ~/.claude/skills/signoff-loop/scripts/flow/check_env.sh
 ```
 
-Expected output when all required tools are found:
-
-```
-[ORFS]
-ok   ORFS_ROOT      /home/you/OpenROAD-flow-scripts
-ok   FLOW_DIR       /home/you/OpenROAD-flow-scripts/flow
-skip PDK_ROOT       (optional, not found)
-skip SKY130A_DIR    (optional, not found)
-
-[required tools]
-ok   OPENROAD_EXE   /home/you/OpenROAD-flow-scripts/tools/install/OpenROAD/bin/openroad
-ok   YOSYS_EXE      /home/you/OpenROAD-flow-scripts/tools/install/yosys/bin/yosys
-ok   IVERILOG_EXE   /usr/bin/iverilog
-ok   VVP_EXE        /usr/bin/vvp
-ok   python3        /usr/bin/python3
-
-[optional tools]
-ok   KLAYOUT_CMD    /usr/bin/klayout
-skip VERILATOR_EXE  (optional, not found)
-skip MAGIC_EXE      (optional, not found)
-skip NETGEN_EXE     (optional, not found)
-skip STA_EXE        (optional, not found)
-skip gtkwave        (optional, not found)
-
-[platforms]
-ok    nangate45
-ok    sky130hd
-ok    sky130hs
-ok    asap7
-ok    gf180
-ok    ihp-sg13g2
-```
-
-**All required lines must show `ok` before running a flow.** Optional `skip` lines are fine — nangate45 (the default platform) only needs the required tools and KLayout.
-
-Common fixes:
+Every *required* line must read `ok` before a flow runs; optional `skip` lines are fine. nangate45 needs only
+the required tools plus KLayout.
 
 | Symptom | Fix |
 |---------|-----|
-| `MISS ORFS_ROOT` | Set `ORFS_ROOT` in `env.local.sh` pointing to your ORFS clone |
-| `MISS OPENROAD_EXE` | Add `OPENROAD_EXE` to `env.local.sh`, or run `build_openroad.sh --local` first |
-| `MISS YOSYS_EXE` | Same as OpenROAD — built together by `build_openroad.sh` |
-| `MISS IVERILOG_EXE` | `sudo apt install iverilog` (or set `IVERILOG_EXE` in `env.local.sh`) |
-| `MISS python3` | `sudo apt install python3` |
-| Platforms list empty | `ORFS_ROOT` set but `flow/platforms/` not present — check ORFS clone is complete |
+| `MISS ORFS_ROOT` | set `ORFS_ROOT` in `env.local.sh` |
+| `MISS OPENROAD_EXE` / `MISS YOSYS_EXE` | set the path, or run `build_openroad.sh --local` first |
+| `MISS IVERILOG_EXE` | `sudo apt install iverilog`, or set `IVERILOG_EXE` |
+| Platform list empty | `ORFS_ROOT` is set but `flow/platforms/` is missing; check the ORFS clone |
+</details>
 
----
-
-## First use
-
-With tools verified, open any Claude Code session and ask something like:
-
-> *"Take this RTL through to GDS on nangate45"*
-> *"Synthesize this UART at 100 MHz"*
-> *"Run DRC and LVS on my design"*
-> *"Generate a simple arbiter and produce a GDS"*
-
-Claude matches these requests to the `signoff-loop` skill and drives every stage — spec normalization, RTL generation, lint, simulation, synthesis, place-and-route, timing gate, and signoff. Optional ML dataset extraction (label/feature CSVs and training-ready PyG graphs) from the signed-off result is handled by the companion `def-graph` skill — which refuses to build a dataset on a design that is not signed off (the automatic signoff gate; `R2G_SIGNOFF_GATE=warn` overrides with the reasons recorded in the manifest). Corpus-scale RTL acquisition and synth-only netlist graphs are the `rtl-acquire` skill; its `scripts/promote/promote_candidates.py` promotes a synth-proven candidate into a ready-to-run signoff-loop full-flow project in one command.
-
-The skill works from **existing RTL** (drop your file into `rtl/design.v`) or from a **natural-language spec** (Claude writes the RTL for you).
-
----
-
-## EDA Flow
-
-End-to-end pipeline from a natural-language spec (or existing RTL) to a fully signed-off GDSII:
-
-```mermaid
-flowchart TD
-    A["Spec (natural language)\nor existing RTL"] --> B["normalize_spec.py\n→ normalized-spec.yaml"]
-    B --> C["init_project.py\n→ project dir (rtl/ tb/ constraints/)"]
-    C --> D["run_lint.sh\nrun_sim.sh\nrun_synth.sh"]
-    D --> E["run_orfs.sh\nsynth → floorplan → place → CTS → route → finish"]
-    E --> RouteOK{"Route\nstage OK?"}
-    RouteOK -- "fail / timeout" --> ER["extract_route.py → route.json\nroute_relief: lower CORE_UTIL, re-run"]
-    ER --> E
-    RouteOK -- "pass" --> S["run_drc.sh  run_lvs.sh  run_rcx.sh"]
-    S --> R["reports/\ndrc.json  lvs.json  rcx.json  ppa.json"]
-    R --> OK{"Signoff\nclean?"}
-    OK -- "violations" --> F["fix_signoff.sh\nbaseline DRC/LVS if no report (never skip a check)\n→ diagnose → apply strategy → re-run (≤3 iter)"]
-    F --> S
-    OK -- "clean" --> G["GDSII ✓  full signoff"]
-```
-
-Key scripts involved:
-
-| Stage | Script | Output |
-|-------|--------|--------|
-| Normalize | `scripts/project/normalize_spec.py` | `input/normalized-spec.yaml` |
-| Init | `scripts/project/init_project.py` | project directory scaffold |
-| Lint / Sim / Synth | `scripts/flow/run_{lint,sim,synth}.sh` | `lint/` `sim/` `synth/` |
-| Place & Route | `scripts/flow/run_orfs.sh` | `backend/RUN_*/results/6_final.{gds,odb}` |
-| Route abort check | `scripts/extract/extract_route.py` | `reports/route.json` |
-| Signoff | `scripts/flow/run_{drc,lvs,rcx}.sh` | `reports/{drc,lvs,rcx}.json` |
-| PPA extract | `scripts/extract/extract_ppa.py` | `reports/ppa.json` |
-| Timing gate | `scripts/reports/check_timing.py` | pass / minor-fix / escalate |
-| Signoff fix | `scripts/flow/fix_signoff.sh` | `reports/fix_log.jsonl` |
-| Dataset labels (Y) | `scripts/flow/run_labels.sh` | `labels/*.csv` (congestion · wirelength · timing · irdrop · RC parasitics from SPEF) + `reports/labels_stats.json` |
-| Dataset features (X) | `scripts/flow/run_features.sh` | `features/*.csv` + `reports/features_stats.json` |
-| PyG graph datasets | `scripts/flow/run_graphs.sh` | `dataset/{b..f}_graph.pt` (`HeteroData` by default; `R2G_GRAPH_KIND=homo` for the flat format), `netlist_graph.pt`, `graph_manifest.json` |
-
-Signoff robustness + provenance (2026-07-24, failure-patterns #55): every signoff checker
-(KLayout DRC, KLayout LVS, Netgen LVS incl. its Magic extraction, the advisory Magic DRC) runs
-under a bounded process-group supervisor (`scripts/flow/_bounded_run.sh`) — own session, output
-straight to the run log, TERM→grace→KILL of the whole tree on timeout, so no orphaned tool can
-outlive its script or hang a campaign. Repair/resume runs are digest-complete: `run_orfs.sh`
-records per-stage artifact digests (`stage_artifact_manifest.jsonl`), a `FROM_STAGE` resume
-stops before mutating anything unless every reused stage's bytes match a recorded parent digest
-(`resume_lineage.py`), and the def-graph signoff gate independently re-verifies the chain —
-blocking graph publication on any null, mismatched, foreign, or cyclic lineage.
-
----
-
-## Closed Learning Loop & `engineer_loop`
-
-**Every run teaches the skill.** Two memory databases record all experience; `engineer_loop.py`
-drives the full cycle unattended.
-
-### Two memory databases
-
-| Database | Role | Tracked in git |
-|----------|------|---------------|
-| `knowledge/knowledge.sqlite` | What *resulted* — `runs`, `failure_events`, `run_violations`, `fix_events`, `fix_trajectories`, `symptoms`, `lessons`, `config_lineage`, `ab_trials`, `recipe_status` | **yes** (ships pre-trained) |
-| `knowledge/journal.sqlite` | What was *done* and why — the comprehensive decision + telemetry ledger: `actions` (`tool_invoke`, `config_knob_delta`, `stage_rerun`, `ab_launch`, `promote`/`demote`, `escalate` — symptom- and trial-linked), `log_summaries`, `tool_bugs` | no (local evidence) |
-
-> The journal is **operator forensics only** — best-effort writes, gitignored, and read by **no** learner. `knowledge.sqlite` stays the sole learner input and the only honesty-gate source (the firewall). Decision-journaling (A/B launches, promotions/demotions, escalations, stage reruns, with `symptom_id`/`parent_action_id` linkage) lets `observe.py trace` answer "what was tried for symptom X, and how did it resolve?" forward of the change.
-
-### Autonomous campaign driver
-
-`scripts/loop/engineer_loop.py` drives the wheel unattended: pull design → flow → signoff fix →
-ingest → learn → A/B gate → promote/demote → escalate unknowns.
-
-```mermaid
-flowchart TD
-    L["campaign.jsonl ledger\n(resumable JSONL — last-state-wins)"]
-    L --> EL["engineer_loop.py run"]
-
-    EL --> FL["run_orfs.sh + run_drc.sh\n+ run_lvs.sh + run_rcx.sh"]
-    FL --> FX["fix_signoff.sh\nbaseline DRC/LVS if no report (never skip)\ndiagnose → apply → re-run, ≤3 iter"]
-    FX --> IN["ingest_run.py"]
-    IN --> KDB[("knowledge.sqlite\nruns · failure_events\nfix_events · ab_trials\n— sole learner input + honesty gate")]
-    IN --> JDB[("journal.sqlite — operator forensics\nactions: tool_invoke · config_knob_delta\nab_launch · promote/demote · escalate · stage_rerun\nlog_summaries · tool_bugs (best-effort, no learner reads it)")]
-
-    KDB --> LH["learn_heuristics.py\n→ heuristics.json"]
-    LH --> RL["recipe_lifecycle.diff_and_enqueue\n(new/changed recipe → candidate)"]
-
-    RL --> ABD["ab-drain\narm A (control)  vs  arm B (ranked strategy)\nk=2 repeats — LCB verdict  (Win 2)"]
-    ABD --> V{"Verdict"}
-    V -- "win" --> PR["recipe: candidate → promoted\n(live ranking via suggest_config.py)"]
-    V -- "loss / inconclusive" --> SH["recipe: → shadow (inert)"]
-
-    PR --> SC["suggest_config.py\n(Win 5: presynth KNN + promoted recipes)"]
-    SC --> EL
-
-    EL --> ESC{"Unknown symptom /\ncatalog exhausted?"}
-    ESC -- yes --> EQ["escalations queue"]
-    EQ --> AT["agent tier\nauthor shadow strategy + predicates"]
-    AT --> RL
-
-    %% decision-journaling (Tiers A/B, 2026-06-17) — best-effort side-writes, symptom/trial linked
-    FX -. "config_knob_delta · stage_rerun\n(symptom_id, parent chain)" .-> JDB
-    ABD -. "ab_launch (per arm)" .-> JDB
-    V -. "promote / demote (trial_id)" .-> JDB
-    EQ -. "escalate (symptom_id)" .-> JDB
-```
-
-### Recipe lifecycle states
-
-```
-shadow  ──(Gate A: learner enqueues)──►  candidate  ──(A/B win)──►  promoted
-                                                     ◄──(A/B loss)── shadow
-```
-
-Gate A fires automatically every time `learn_heuristics.learn()` runs (batch or loop).
-Gate B (seeding the dense-reward gradient) is an operator procedure — see `references/engineer-loop.md`.
-
-### Loop-closure correctness (2026-06-24 audit)
-
-An adversarial audit found the loop was **DEGRADED**: it recorded fixes and ran A/B trials but
-**never promoted a nangate45 recipe** (`promoted` flat at 2, both sky130hd, across 8 waves). Root
-cause: A/B arm dirs inherited the subject's *clean* `reports/`, so `process_one` marked each arm
-clean **before the fixer ran** — both arms did byte-identical work and the verdict was wall-clock
-noise. Eight fixes (TDD, two adversarial review rounds) closed it; the first **nangate45 promotion
-ever** (`antenna_diode_repair`, a robust cost win) followed live. Key invariants now enforced:
-
-- A/B arm copytree excludes `reports/`; a signoff `ab_arm` always runs `_run_fix` (arms genuinely diverge).
-- The success-tie cost tiebreak is **variance-aware** (no win/loss flips on jitter; `se==0` = maximal confidence).
-- Incomplete arms **escalate** instead of ingesting junk `orfs_status='unknown'` rows that poison verdicts.
-- FLW-0024 die-resize recoveries are recorded as `fix_events` (visible to learning).
-- `design_class` size band is stable across re-ingest (no candidate respawn).
-
-Known follow-ups: the A/B arm router exercises only **DRC/LVS + route** recipes — **timing/place**
-recipes (period_relax, core_util) are inert in A/B until the router is extended. Full detail:
-`references/failure-patterns.md` ("Learning-Loop Closure Failures") and
-`docs/superpowers/plans/r2g-loop-closure-audit-2026-06-23.md`.
-
-### Paper-absorption wins (branch `feat/paper-absorption`)
-
-Six capability improvements derived from published AI-EDA literature, all A/B-gated:
-
-| Win | Feature | Default |
-|-----|---------|---------|
-| **Win 1** | `outcome_score` — dense reward with Violation-Reduction Rate term; replaces pass/fail binary | on |
-| **Win 2** | Variance-aware (LCB, k=2) A/B verdict — one lucky run cannot promote a recipe | on |
-| **Win 3** | r2g-bench held-out checkpoint — `eval_heuristics.py bench` measures recipe quality on unseen designs | on |
-| **Win 4** | Vision-assisted DRC diagnosis — screenshot → Claude analysis → targeted fix | `R2G_VISION_DRC=1` |
-| **Win 5** | Pre-synthesis KNN retrieval — `suggest_config.py` finds the k nearest neighbours by pre-route features | on |
-| **Win 6** | Backend-aware synthesis retune — shadow recipe that lowers synth effort when route congests | shadow |
-
-**Route relief (route-abort as a first-class signal):** `extract_route.py` gives the fix loop
-visibility into detailed-route stage failures (congestion abort, wall-clock timeout). The
-`route_relief` strategy lowers `CORE_UTILIZATION`, re-runs from floorplan, and clears the
-congestion that would otherwise produce a silent backend abort. Validated on 18/25 sky130hd
-route-congestion designs (route-fails 33→15 across the corpus).
-
-CLI buttons:
-
-```bash
-# Fire A/B trials for pending candidates (drain the Gate A queue)
-python3 scripts/loop/engineer_loop.py ab-drain \
-    --ledger design_cases/_batch/ab.jsonl [--n-designs 2]
-
-# Parallel A/B arm flows (cap NUM_CORES so N×cores ≈ host cores)
-R2G_AB_WORKERS=4 python3 scripts/loop/engineer_loop.py ab-drain ...
-
-# Force a grandfathered recipe into candidate for explicit re-validation
-python3 scripts/loop/engineer_loop.py ab-enqueue \
-    --symptom <sid> --design-class crypto/small \
-    --platform sky130hd --strategy density_relief
-```
-
----
-
-## Repository layout
-
-```
-agent-r2g/
-├── r2g-skills/                        # ★ The skill collection — install into ~/.claude/skills/
-│   ├── install.sh                     #   Installs all three sub-skills (symlink/copy)
-│   ├── bootstrap.sh                   #   Shim → eda-install/bootstrap.sh (one-command setup)
-│   ├── eda-install/                   # SKILL 0 — detect + install + verify the EDA toolchain
-│   │   ├── SKILL.md                   #     detect → plan → install → pin env.local.sh → verify
-│   │   ├── bootstrap.sh               #     Orchestrator (--dry-run plans; --yes installs; no-sudo default)
-│   │   └── scripts/{setup,flow}/      #     detect_env.sh · write_env_local.sh · _env.sh · check_env.sh
-│   ├── signoff-loop/                  # SKILL 1 — RTL→GDS flow + signoff + self-improvement loop
-│   │   ├── SKILL.md                   #   Claude Code entry point (metadata + workflow)
-│   │   ├── scripts/
-│   │   │   ├── flow/                  #   Stage runners: lint/sim/synth/orfs/drc/lvs/rcx + _env.sh
-│   │   │   │   ├── fix_signoff.sh     #     Diagnose → apply strategy → re-run loop (≤3 iter)
-│   │   │   │   └── orfs_hooks/        #     Tcl sourced into ORFS stages (PRE/POST_<STAGE>_TCL)
-│   │   │   ├── extract/               #   Parse tool output → JSON (extract_ppa/drc/lvs/rcx/route)
-│   │   │   │   ├── report_io.py       #     Shared JSON writer for the signoff extractors
-│   │   │   │   └── presynth.py        #     Pre-synthesis KNN feature extractor (Win 5)
-│   │   │   ├── project/               #   init / normalize / validate
-│   │   │   ├── reports/               #   Timing gate, diagnosis, Fmax search, history
-│   │   │   └── dashboard/             #   GDS preview + multi-project HTML dashboard
-│   │   ├── knowledge/                 #   Cross-run memory (ships pre-trained, tracked in git)
-│   │   │   ├── knowledge.sqlite       #     runs · failure_events · fix_events · ab_trials · …
-│   │   │   ├── heuristics.json        #     Learned per-symptom repair recipes (Tier-3)
-│   │   │   ├── ingest_run.py · learn_heuristics.py · ab_runner.py · suggest_config.py
-│   │   │   └── escalations.py         #     Open escalation records for the agent tier
-│   │   ├── references/                #   Failure patterns, engineer-loop runbook, PPA guide, …
-│   │   ├── assets/                    #   config.mk / constraint.sdc templates + platform rule decks
-│   │   └── tests/                     #   pytest suite (signoff-loop)
-│   └── def-graph/                     # SKILL 2 — graph datasets from signed-off DEF/LEF/SPEF
-│       ├── SKILL.md                   #   Labels → features → PyG graphs (b–f, HeteroData default)
-│       ├── scripts/
-│       │   ├── flow/                  #   run_labels/run_features/run_graphs + resolve_platform_paths + _env.sh
-│       │   └── extract/
-│       │       ├── techlib/           #     Per-platform tech/LEF/liberty/DEF parser
-│       │       ├── labels/            #     Y: congestion · wirelength · timing · irdrop · RC parasitics
-│       │       ├── features/          #     X: nodes_* · edges_* · metadata
-│       │       └── graph/             #     PyG b–f variants + netlist graph (run_graphs.sh)
-│       ├── references/                #   graph-dataset · feature-extraction · label-extraction
-│       └── tests/                     #   pytest suite (def-graph)
-├── .claude-plugin/plugin.json         #   Claude Code plugin manifest (name: r2g-skills)
-├── tools/                             #   Batch orchestration helpers (not part of skill install)
-│   ├── setup_rtl_designs.py           #     Scaffold design_cases/ from an RTL catalog
-│   ├── batch_orfs_only.sh · batch_flow.sh · fix_orfs_failures.py
-│   ├── mk_sky130_project.py           #     Source project → sky130hd materializer
-│   └── verify_graph_dataset.py        #     Independent dataset verifier (def-graph)
-└── CLAUDE.md                          #   Project instructions for this repo
-```
-
-Everything under `r2g-skills/` is what gets installed (as three skills, `eda-install` + `signoff-loop` + `def-graph`). Everything outside it (`tools/`, `rtl_designs*/`, `design_cases/`) is workspace used to validate the skills at scale.
-
----
-
-## Manual CLI usage
-
-The scripts work directly without Claude Code. Example for an existing counter RTL:
+<details>
+<summary><b>Using the scripts without Claude Code</b></summary>
 
 ```bash
 SKILL=~/.claude/skills/signoff-loop
 PROJ=design_cases/my_counter
 
-# Scaffold
-python3 $SKILL/scripts/project/init_project.py my_counter
-cp my_counter.v  $PROJ/rtl/design.v
-cp tb_counter.v  $PROJ/tb/testbench.v
-cp $SKILL/assets/config-template.mk       $PROJ/constraints/config.mk
-cp $SKILL/assets/constraint-template.sdc  $PROJ/constraints/constraint.sdc
-# edit DESIGN_NAME, VERILOG_FILES, clk_port_name to match your RTL
+python3 $SKILL/scripts/project/init_project.py my_counter          # scaffold
+cp my_counter.v $PROJ/rtl/design.v; cp tb_counter.v $PROJ/tb/testbench.v
+cp $SKILL/assets/config-template.mk $PROJ/constraints/config.mk
+cp $SKILL/assets/constraint-template.sdc $PROJ/constraints/constraint.sdc   # edit DESIGN_NAME, VERILOG_FILES, clock port
 
-# Frontend
-bash    $SKILL/scripts/flow/run_lint.sh  $PROJ/rtl/design.v  $PROJ/lint/lint.log
-bash    $SKILL/scripts/flow/run_sim.sh   $PROJ/rtl/design.v  $PROJ/tb/testbench.v  $PROJ/sim
-bash    $SKILL/scripts/flow/run_synth.sh $PROJ/rtl/design.v  my_counter  $PROJ/synth
+bash $SKILL/scripts/flow/run_lint.sh  $PROJ/rtl/design.v $PROJ/lint/lint.log            # frontend
+bash $SKILL/scripts/flow/run_sim.sh   $PROJ/rtl/design.v $PROJ/tb/testbench.v $PROJ/sim
+bash $SKILL/scripts/flow/run_synth.sh $PROJ/rtl/design.v my_counter $PROJ/synth
 
-# Backend (place & route → GDS)
-bash    $SKILL/scripts/flow/run_orfs.sh  $PROJ  nangate45
+bash $SKILL/scripts/flow/run_orfs.sh $PROJ nangate45                                    # place & route → GDS
 
-# Timing gate — auto-fixes minor violations; stops for moderate/severe
-python3 $SKILL/scripts/extract/extract_ppa.py   $PROJ  $PROJ/reports/ppa.json
-python3 $SKILL/scripts/reports/check_timing.py  $PROJ
+python3 $SKILL/scripts/extract/extract_ppa.py  $PROJ $PROJ/reports/ppa.json            # timing gate
+python3 $SKILL/scripts/reports/check_timing.py $PROJ
+python3 $SKILL/scripts/reports/fmax_search.py  $PROJ nangate45                          # optional Fmax search
 
-# (optional) Fmax search — fastest closing period via cheap place-stage probes
-# Reports a predicted-signoff proxy in $PROJ/reports/fmax_search.json (--verify confirms with one full flow)
-python3 $SKILL/scripts/reports/fmax_search.py   $PROJ  nangate45
+bash $SKILL/scripts/flow/run_drc.sh $PROJ nangate45                                     # signoff
+bash $SKILL/scripts/flow/run_lvs.sh $PROJ nangate45
+bash $SKILL/scripts/flow/run_rcx.sh $PROJ nangate45
 
-# Signoff
-bash    $SKILL/scripts/flow/run_drc.sh  $PROJ  nangate45
-bash    $SKILL/scripts/flow/run_lvs.sh  $PROJ  nangate45
-bash    $SKILL/scripts/flow/run_rcx.sh  $PROJ  nangate45
-
-# (optional) ML dataset: label/feature CSVs + training-ready PyG graphs
-# run_graphs.sh auto-runs the labels/features stages when their CSVs are stale.
-# Needs a torch venv (install on /proj, never $HOME):
-#   python3 -m venv /proj/<you>/pyenvs/r2g-graph
-#   .../pip install torch --index-url https://download.pytorch.org/whl/cpu
-#   .../pip install torch_geometric pandas
-R2G_GRAPH_PYTHON=/proj/<you>/pyenvs/r2g-graph/bin/python \
-bash    $SKILL/scripts/flow/run_graphs.sh  $PROJ  nangate45
-# -> $PROJ/dataset/{b..f}_graph.pt (HeteroData by default; R2G_GRAPH_KIND=homo|both),
-#    netlist_graph.pt, graph_manifest.json
+R2G_GRAPH_PYTHON=/path/to/venv/bin/python \
+bash ~/.claude/skills/def-graph/scripts/flow/run_graphs.sh $PROJ nangate45              # dataset
+# -> dataset/{b..f}_graph.pt (HeteroData; R2G_GRAPH_KIND=homo|both), netlist_graph.pt, graph_manifest.json
 ```
 
-A worked example: `r2g-skills/signoff-loop/assets/examples/simple-arbiter/`.
+A worked example is in `r2g-skills/signoff-loop/assets/examples/simple-arbiter/`.
 
----
+| Stage | Script | Output |
+|-------|--------|--------|
+| Normalize / init | `scripts/project/{normalize_spec,init_project}.py` | `input/normalized-spec.yaml`, project scaffold |
+| Lint / sim / synth | `scripts/flow/run_{lint,sim,synth}.sh` | `lint/` `sim/` `synth/` |
+| Place & route | `scripts/flow/run_orfs.sh` | `backend/RUN_*/results/6_final.{gds,odb}` |
+| Route abort check | `scripts/extract/extract_route.py` | `reports/route.json` |
+| Signoff | `scripts/flow/run_{drc,lvs,rcx}.sh` | `reports/{drc,lvs,rcx}.json` |
+| PPA / timing gate | `extract_ppa.py`, `check_timing.py` | `reports/ppa.json`; pass / minor-fix / escalate |
+| Signoff repair | `scripts/flow/fix_signoff.sh` | `reports/fix_log.jsonl` |
+| Labels / features / graphs | `def-graph/scripts/flow/run_{labels,features,graphs}.sh` | `labels/`, `features/`, `dataset/` |
 
-## Batch mode
+Every signoff checker runs under a bounded process-group supervisor (`_bounded_run.sh`), so a hung tool can't
+outlive its script. Each stage's artefacts are recorded by digest, so a resumed run reuses only stages whose
+bytes match their recorded parent. The dataset signoff gate re-verifies that chain before it publishes.
+</details>
 
-`tools/` drives the skill across hundreds of designs in parallel. It is **not** installed with the skill — clone the full repo to use it.
+<details>
+<summary><b>Batch mode</b></summary>
+
+`tools/` drives the skills across hundreds of designs in parallel. It is not installed with the skills;
+clone the repository to use it.
 
 ```bash
-# 1. Scaffold design_cases/ from an RTL catalog in rtl_designs/
-python3 tools/setup_rtl_designs.py
-
-# 2. Run ORFS across all projects (8-way parallel, 2 h per-stage timeout)
-bash tools/batch_orfs_only.sh 8 7200
-
-# 3. Classify failures and rewrite config.mk automatically
-#    Reads the sweep's own results file (design_cases/_batch/orfs_results.jsonl)
-python3 tools/fix_orfs_failures.py
-# ...or point it at a different sweep:
-python3 tools/fix_orfs_failures.py --results /path/to/orfs_results.jsonl
-
-# 4. Retry failures
-DESIGNS_LIST=failed.txt bash tools/batch_orfs_only.sh 8 7200
+python3 tools/setup_rtl_designs.py                       # scaffold design_cases/ from an RTL catalog
+bash tools/batch_orfs_only.sh 8 7200                     # ORFS on every project: 8-way, 2 h per-stage timeout
+python3 tools/fix_orfs_failures.py                       # classify failures and rewrite config.mk
+DESIGNS_LIST=failed.txt bash tools/batch_orfs_only.sh 8 7200   # retry
 ```
 
-`fix_orfs_failures.py` handles six failure patterns: wrong top module, `SYNTH_MEMORY_MAX_BITS` overflow, IO pin overflow, place density overflow, PDN strap width, and stage timeout. Full catalog: `r2g-skills/signoff-loop/references/failure-patterns.md`.
+`fix_orfs_failures.py` handles six failure patterns:
+- wrong top module;
+- `SYNTH_MEMORY_MAX_BITS` overflow;
+- IO pin overflow;
+- place-density overflow;
+- PDN strap width;
+- stage timeout.
 
-It classifies straight from step 2's `orfs_results.jsonl`, so run a sweep first — with no results file it exits non-zero and tells you so rather than silently doing nothing. (Until 2026-07-25 it only read `/tmp/fail_categories.json`, a file nothing in this repo writes, which made the command above a no-op; see failure-patterns.md #57.)
+Its structural gate fingerprints a design and rejects RTL edits that hollow it out. The exit code is the
+verdict: 0 = preserved, 2 = reject, 3 = flag, 1 = error.
+</details>
 
-**Structural gate.** RTL-level failures route to a detect-and-dump handler that also runs the anti-hollowing-out check — it fingerprints the design on the first iteration and, on every later one, verifies the edit still describes the same design instead of one gutted until the tool stopped complaining. **The exit code is the verdict**, so it composes:
+<details>
+<summary><b>The closed learning loop</b></summary>
 
-```bash
-# 0 = structure preserved · 2 = REJECT (revert) · 3 = flag · 1 = error/no baseline
-python3 tools/fix_orfs_failures.py --rtl-verify <case> || git checkout -- design_cases/<case>/rtl
-python3 tools/fix_orfs_failures.py --rtl-error  <case>   # dump context; also exits 2 on a reject
+Every run teaches the skill. There are two memory databases with distinct roles:
+
+| Database | Role | In git |
+|---|---|---|
+| `knowledge/knowledge.sqlite` | what *resulted*: runs, failure events, violations, fix trajectories, symptoms, lessons, A/B trials, recipe status | **yes**, shipped pre-trained |
+| `knowledge/journal.sqlite` | what was *done* and why: every action, log summary and tool bug | no; local forensics, read by no learner |
+
+`scripts/loop/engineer_loop.py` drives the whole cycle unattended: flow → signoff repair → ingest → learn →
+A/B trial → promote or demote → escalate unknowns. A recipe moves `shadow → candidate → promoted` only on a
+variance-aware A/B win over *k* repeats, and an inconclusive verdict never demotes. Repair experience is keyed
+by symptom signature, not by platform, so a fix learned on nangate45 can transfer to sky130hd.
+
+```mermaid
+flowchart TD
+    EL["engineer_loop.py"] --> FL["flow + signoff"]
+    FL --> FX["fix_signoff.sh<br/>diagnose → apply → re-run"]
+    FX --> IN["ingest_run.py"]
+    IN --> KDB[("knowledge.sqlite")]
+    KDB --> LH["learn_heuristics.py"]
+    LH --> AB["A/B arms<br/>control vs recipe"]
+    AB --> V{"verdict"}
+    V -- "win" --> PR["promoted"]
+    V -- "loss" --> SH["shadow"]
+    PR --> EL
 ```
 
----
+Details: [`signoff-loop/knowledge/README.md`](r2g-skills/signoff-loop/knowledge/README.md) and
+[`references/engineer-loop.md`](r2g-skills/signoff-loop/references/engineer-loop.md).
+</details>
 
 ## Platform support
 
-| Platform | KLayout DRC | KLayout LVS | Magic DRC | Netgen LVS | OpenRCX |
-|----------|-------------|-------------|-----------|------------|---------|
-| `nangate45` | yes | yes | — | — | yes |
-| `sky130hd` | yes | yes | yes | yes | yes |
-| `sky130hs` | yes | yes | yes | yes | yes |
-| `gf180` | yes | yes | — | — | yes |
-| `ihp-sg13g2` | yes | yes | — | — | yes |
+| Platform | KLayout DRC | KLayout LVS | Magic DRC | Netgen LVS | OpenRCX | Agent / web app |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| `nangate45` | ✓ | ✓ | — | — | ✓ | ✓ |
+| `sky130hd` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `sky130hs` | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| `gf180` | ✓ | ✓ | — | — | ✓ | ✓ |
+| `ihp-sg13g2` | ✓ | ✓ | — | — | ✓ | — |
 
-**`asap7` is not supported in this version.** `run_orfs.sh` refuses it with exit 65 and the
-capability probe reports tier `unsupported`: its community KLayout deck has an irreducible
-false-violation floor, it has no LVS deck, and the authoritative Calibre deck is not
-installed — so it can never reach a clean verdict, and a platform that can never read clean
-can never promote a recipe. Set `R2G_ALLOW_UNSUPPORTED_PLATFORM=1` to experiment anyway
-(results are NOT sign-off quality).
+- **SKY130.** Netgen LVS is the production path; antenna-diode designs and port-to-port feedthroughs are
+  handled automatically or with a stage hook.
+- **Platforms without LVS rules.** LVS reports `skipped` rather than failing.
+- **ASAP7** is not supported by the default flow (`run_orfs.sh` refuses it): no open deck can reach a clean
+  verdict. A separate qualification with the official Calibre decks is documented in
+  [`experiments/asap7_qualification_20261116/`](experiments/asap7_qualification_20261116/REPORT.md).
 
-LVS gracefully skips for platforms without `.lylvs` rules (reports `status: "skipped"`).
+## Validation
 
-On sky130, **Netgen LVS is the production path** (the bundled KLayout sky130 rule cannot
-reconcile flat-transistor extraction). `run_netgen_lvs.sh` handles antenna-diode designs
-automatically (Magic's diode X-subcircuit → D-device normalization) and classifies any
-mismatch (`top_pin_mismatch` / `netgen_topology` / `generic`). Designs with port-to-port
-`assign` feedthroughs additionally need the `buffer_port_feedthroughs.tcl` stage hook in
-config.mk — see `r2g-skills/signoff-loop/SKILL.md` ("Netgen LVS") and
-`references/failure-patterns.md` ("sky130 LVS").
+- **Tests:** 2,725 collected across the four skills (as of 2026-11-20): signoff-loop 1,624, def-graph 669,
+  rtl-acquire 367, eda-install 65. They include synthetic corner cases that drive the real extractors and
+  check all five graph views against hand-derived ground truth. Every verifier check is proven to fail on a
+  deliberate corruption.
+- **nangate45 corpus (682 designs, 2026-06):**
+  - ORFS place & route: 476 of 495 designs from the original batch.
+  - LVS: 607 of 674 clean (90%); most of the rest are known tool limits, not layout errors.
+  - DRC: honest verdicts on 675 of 682.
+  - RCX: 681 of 682.
+  - A curated 70-design subset passes 100%.
+- **sky130hd campaign (2026-06):**
+  - 174 of the first 176 designs fully signed off.
+  - `route_relief` cleared 18 of 25 route-congestion failures.
 
----
+## Repository layout
 
-## Validated scale
+```
+r2g-skills/
+├── install.sh            # one-command installer for the agent and toolchain
+├── agent/                # the r2g agent: CLI, web server, MCP server, model adapters
+├── webui/                # web app source (built into agent/r2g_agent/web/dist)
+├── r2g-skills/           # the four Claude Code skills (installed into ~/.claude/skills/)
+│   ├── eda-install/      #   detect → install → verify the toolchain
+│   ├── rtl-acquire/      #   corpus-scale RTL acquisition, synthesis-only netlist graphs
+│   ├── signoff-loop/     #   RTL → GDS, signoff, the repair loop and knowledge store
+│   └── def-graph/        #   graph and image datasets from signed-off layouts
+├── tools/                # batch orchestration and the independent dataset verifier
+├── experiments/          # experiment runners, protocols and evidence for the paper
+├── docs/                 # agent design notes and screenshots
+└── tests/                # repository-level tests
+```
 
-The skills have been validated on **682 RTL designs** spanning ICCAD benchmarks, RISC-V cores, BOOM/Chipyard, VTR, zipcpu, verilog-ethernet, wb2axip, and more. The test suite covers **1,390 tests** (pytest, as of 2026-07-16; run per-skill — `signoff-loop` 878, `def-graph` 420, `rtl-acquire` 63, `eda-install` 29), including an end-to-end synthetic corner-case suite that drives the real feature/label/graph extractors and asserts all five PyG graph views (b–f) against hand-derived ground truth. The five views are emitted as `HeteroData` by default (per-type node stores + `(src,relation,dst)` edge stores; `R2G_GRAPH_KIND=homo` for the legacy flat tensors); the verified homogeneous form remains the internal source of truth and the verifier reconstructs it independently to certify the conversion. The graph datasets carry a dedicated ground-truth harness (`tools/verify_graph_dataset.py --batch`) that verifies correctness across three dimensions — **topology** (all five views: node/edge counts, folding, block-positional order, fwd/rev edge interleaving — or hetero per-store alignment + reverse-relation symmetry), **feature statistics** (independent column re-derivation + stats-gate honesty + categorical vocab coverage), and **labels ↔ sign-off reports** (DRC/LVS clean-provenance gate, `ppa.json` geometry, the timing↔SDC clock-period transform, and RC/`C_total` vs an independent SPEF re-parse; an opt-in `--signoff-recheck` re-runs OpenROAD PDNSim to independently re-derive the IR-drop label). Every check is negative-control-tested — proven to fail on a deliberate corruption.
+## Documentation
 
-**ORFS backend (place & route → GDS):** 476 / 495 designs from the original `rtl_designs/` batch pass (96.2%); 19 remaining have understood root causes (megadesign synthesis budgets, missing netlists, zero-logic stubs).
-
-| Pass | Outcome | Cumulative |
-|------|---------|------------|
-| Initial ORFS sweep | 402 / 495 pass | 81.2% |
-| `fix_orfs_failures.py` + retries | +59 rescued | 93.1% |
-| Long-tail (timeouts, macros, includes) | +15 rescued | **96.2%** (476 / 495) |
-
-**Signoff (682-design corpus, 2026-06-03):**
-
-| Check | Clean | Rate | Notes |
-|-------|------:|-----:|-------|
-| LVS | 607 / 674 | **90%** | 15 `fail` are KLayout-0.30.7 symmetric-matcher limits (layout correct, tool can't prove it); only 2 genuine defects (both wb2axip); 44 `incomplete` are comparer bugs or extraction timeouts, not layout errors |
-| DRC | 675 / 682 honest-verdict | **99%** coverage | `clean_beol` (BEOL-only pass) counts as clean; 7 stuck designs are verified-intractable (≥465K cells, CONTACT-op hang) |
-| RCX | 681 / 682 | **99.85%** | 1 intractable (boom_smallseboom) |
-
-A curated 70-design subset (7 families including macro designs) achieves **100% ORFS + LVS + RCX pass rate**.
-
-**sky130hd campaign (450 designs, ongoing as of 2026-06-17):**
-
-| Wave | Designs done | Pass | Notes |
-|------|------------:|-----:|-------|
-| Wave 1 (50 designs, 2026-06-11) | 50 | 50 | All signoff-clean; 13 LVS residuals root-caused and fixed (8 antenna-diode X→D; 5 port-feedthrough hook) |
-| Waves 2–5 (126 more, 2026-06-13) | 176 | 174 | 2 genuine route-congestion intractables (AES/DES on 5-layer sky130hd at min util) |
-| Route-relief campaign (2026-06-17) | 25 route-fail | **18 cleared** | `route_relief` strategy (lower CORE_UTIL) cleared 18/25 route-congestion designs; route-fail count 33→15 across corpus |
-
-274 sky130hd candidates remain queued in the resumable ledger (`tools/sky130_campaign.py status`).
-
-**Knowledge store health (live, 2026-06-17):** `fail`-rows == `orfs-fail`-events (51/51 honesty
-check); `ab_trials` non-empty (Gate A + Gate B both fired end-to-end); `density_relief` and
-`route_relief` recipes both `candidate → promoted` via real A/B verdicts.
-
----
+| Topic | Where |
+|---|---|
+| Agent design | [`docs/agent/AGENT_DESIGN.md`](docs/agent/AGENT_DESIGN.md) |
+| Flow, signoff and repair | [`r2g-skills/signoff-loop/SKILL.md`](r2g-skills/signoff-loop/SKILL.md) |
+| Known failures and fixes | [`signoff-loop/references/failure-patterns.md`](r2g-skills/signoff-loop/references/failure-patterns.md) |
+| What each platform checks | [`signoff-loop/references/signoff-contract.md`](r2g-skills/signoff-loop/references/signoff-contract.md) |
+| Datasets: views, tensors, labels | [`def-graph/references/graph-dataset.md`](r2g-skills/def-graph/references/graph-dataset.md) |
+| Four-stage datasets | [`def-graph/references/four-stage-dataset.md`](r2g-skills/def-graph/references/four-stage-dataset.md) |
+| Changes | [`CHANGELOG.md`](CHANGELOG.md) |
 
 ## License
 
-See `LICENSE`.
+[MIT](LICENSE) © 2026 Shenshan
