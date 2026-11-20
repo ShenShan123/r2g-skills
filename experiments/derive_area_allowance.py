@@ -44,14 +44,19 @@ def metrics(rd: Path) -> dict:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default=str(D / "spec/area_allowance.json"))
+    ap.add_argument("--platforms", default=",".join(PLATS))
+    ap.add_argument("--spec-dir", default=str(D / "spec"),
+                    help="where spec_<platform>.json lives (ASAP7: its own baseline dir)")
+    ap.add_argument("--preflight-root", default=str(D / "_preflight"),
+                    help="<root>/<platform>/runs holds the preflight run dirs")
     ap.add_argument("--min-samples", type=int, default=4,
                     help="refuse to emit an allowance from fewer binding designs")
     args = ap.parse_args(argv)
 
     res, report = {}, {}
-    for plat in PLATS:
-        spec = json.load(open(D / ("spec/spec_%s.json" % plat)))
-        root = D / "_preflight" / plat / "runs"
+    for plat in args.platforms.split(","):
+        spec = json.load(open(Path(args.spec_dir) / ("spec_%s.json" % plat)))
+        root = Path(args.preflight_root) / plat / "runs"
         if not root.is_dir():
             print("%-10s 没有预检产出，跳过" % plat)
             continue

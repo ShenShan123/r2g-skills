@@ -114,6 +114,64 @@ class DiskGuard:
         return True
 
 
+def _cgroup_dir() -> Path | None:
+    """The cgroup-v2 directory holding the user's processes (203: user-<uid>.slice carries memory.max)."""
+    try:
+        rel = Path("/proc/self/cgroup").read_text().strip().split("::", 1)[1]
+    except (OSError, IndexError):
+        return None
+    p = Path("/sys/fs/cgroup") / rel.lstrip("/")
+    while p != Path("/sys/fs/cgroup") and not (p / "memory.max").is_file():
+        p = p.parent
+    if (p / "memory.max").is_file() and (p / "memory.max").read_text().strip() == "max":
+        uid = os.getuid()                                     # session scope has no limit; the user slice does
+        cand = Path(f"/sys/fs/cgroup/user.slice/user-{uid}.slice")
+        if (cand / "memory.max").is_file():
+            p = cand
+    return p if (p / "memory.stat").is_file() else None
+
+
+class MemGuard:
+    """Hold back new designs while the cgroup's anonymous memory is above --mem-pause-gb (2026-11-16).
+
+    On 203 the user slice is capped (memory.max 300 GiB); the ASAP7 pilot's 18 workers filled it with a few
+    very large designs and every OpenROAD stage then died with 'Signal 11' (allocation failure under the cap),
+    i.e. results that describe the machine, not the design. Admission is the only lever this driver has --
+    a running flow cannot be shrunk -- so it pauses dispatch, leaving headroom for the flows already running.
+    Anonymous memory is the measure: page cache is reclaimable and would read as full on any busy host."""
+
+    def __init__(self, pause_gb: float, log) -> None:
+        self.pause_gb, self.log, self._paused = pause_gb, log, False
+        self.cg = _cgroup_dir() if pause_gb > 0 else None
+        if pause_gb > 0:
+            log(f"memory guard: pause dispatch above {pause_gb:.0f} GB anon in {self.cg}")
+
+    def anon_gb(self) -> float | None:
+        if self.cg is None:
+            return None
+        try:
+            for line in (self.cg / "memory.stat").read_text().splitlines():
+                if line.startswith("anon "):
+                    return int(line.split()[1]) / 2**30
+        except OSError:
+            return None
+        return None
+
+    def may_dispatch(self) -> bool:
+        gb = self.anon_gb()
+        if gb is None:
+            return True
+        if gb > self.pause_gb:
+            if not self._paused:
+                self.log(f"paused: {gb:.0f} GB anon above --mem-pause-gb {self.pause_gb:.0f}")
+                self._paused = True
+            return False
+        if self._paused:
+            self.log(f"resumed: {gb:.0f} GB anon")
+            self._paused = False
+        return True
+
+
 # A fixed list of clock-port spellings cannot cover 2,453 unrelated
 # repositories: a first pass matched none in 32% of designs, and an unmatched
 # clock becomes a virtual clock, which constrains no path and reports WNS 0.
@@ -201,6 +259,16 @@ def write_config(design_dir: Path, meta: dict, work: Path, platform: str,
     if _tap_tcl and Path(_tap_tcl).is_file():
         shutil.copy(_tap_tcl, work / "tapcell_override.tcl")
         cfg.append("export TAPCELL_TCL = /work/tapcell_override.tcl")
+    # Extra files the container must see (2026-11-16, ASAP7 apparatus: technology LEF, pin-access LEF,
+    # PDN script). R2G_STAGE_FILES="name=/abs/src;name2=/abs/src2" copies each source to /work/<name>, so an
+    # R2G_EXTRA_MK line can point at /work/<name>. Unset = no change.
+    for _item in os.environ.get("R2G_STAGE_FILES", "").split(";"):
+        if "=" in _item:
+            _name, _src = (x.strip() for x in _item.split("=", 1))
+            if _name and "/" not in _name and Path(_src).is_file():
+                shutil.copy(_src, work / _name)
+            else:
+                raise SystemExit(f"R2G_STAGE_FILES entry not usable: {_item!r}")
     # Arbitrary extra make assignments, newline-separated. Platform defaults
     # use `?=`, so a design-config export overrides them -- which is how a
     # one-off knob (SKIP_ANTENNA_REPAIR_POST_DRT, SYNTH_HDL_FRONTEND, ...) gets
@@ -248,6 +316,24 @@ def last_stage(work: Path) -> str:
 NUM = r"(-?[0-9]+\.?[0-9]*)"
 
 
+def _kill_group(proc) -> None:
+    """Stop the whole flow process group (a native make tree outlives a killed bash otherwise)."""
+    import signal
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(proc.pid, sig)
+        except ProcessLookupError:
+            break
+        try:
+            proc.wait(timeout=30)
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    if proc.poll() is None:
+        proc.kill()
+        proc.wait()
+
+
 def _kill_container(name: str) -> None:
     """Stop the container itself, not just the client that started it.
 
@@ -255,7 +341,10 @@ def _kill_container(name: str) -> None:
     the design's openroad keeps all its threads busy while the worker slot has
     already moved on. Every abort path must come through here.
     """
-    subprocess.run(["podman", "rm", "-f", name], capture_output=True, check=False)
+    try:
+        subprocess.run(["podman", "rm", "-f", name], capture_output=True, check=False)
+    except FileNotFoundError:          # native mode: no container runtime on this host
+        pass
 
 
 def read_metrics(work: Path, res: Result) -> None:
@@ -386,17 +475,31 @@ def _run_one_once(design_dir: Path, meta: dict, platform: str, period: str,
         # A stale container under this name can only be a leak from an earlier
         # attempt (the tag is unique per design/platform/period), so clearing it
         # first makes the runner self-healing rather than failing on the name.
-        subprocess.run(["podman", "rm", "-f", tag],
-                       capture_output=True, check=False)
-        cmd = ["podman", "run", "--rm", "--name", tag,
-               "-v", f"{work}:/work:Z",
-               "-v", f"{args.package}:{args.package}:ro,Z",
-               "-e", f"NUM_CORES={args.cores_per_design}",
-               "-e", f"OMP_NUM_THREADS={args.cores_per_design}",
-               args.image, "bash", "-lc",
-               "cd $ORFS_ROOT/flow && make DESIGN_CONFIG=/work/config.mk WORK_HOME=/work"]
+        env = None
+        if args.native_orfs:
+            # Native ORFS (2026-11-16, 203 has no container runtime): same make invocation, the config's
+            # container paths (/work/...) rewritten to the real work directory, and a clean environment so a
+            # host tool script cannot override the checkout's own OpenROAD/Yosys (failure-patterns #29b).
+            cfg_path = work / "config.mk"
+            cfg_path.write_text(cfg_path.read_text().replace("/work/", f"{work}/"))
+            cmd = ["bash", "-c", f"cd {args.native_orfs}/flow && make DESIGN_CONFIG={work}/config.mk "
+                                 f"WORK_HOME={work} {args.make_target}"]
+            env = {"PATH": "/usr/bin:/bin", "HOME": os.environ.get("HOME", "/tmp"), "LANG": "C.UTF-8",
+                   "NUM_CORES": str(args.cores_per_design), "OMP_NUM_THREADS": str(args.cores_per_design),
+                   "LD_LIBRARY_PATH": args.native_ld_library_path}
+        else:
+            subprocess.run(["podman", "rm", "-f", tag],
+                           capture_output=True, check=False)
+            cmd = ["podman", "run", "--rm", "--name", tag,
+                   "-v", f"{work}:/work:Z",
+                   "-v", f"{args.package}:{args.package}:ro,Z",
+                   "-e", f"NUM_CORES={args.cores_per_design}",
+                   "-e", f"OMP_NUM_THREADS={args.cores_per_design}",
+                   args.image, "bash", "-lc",
+                   "cd $ORFS_ROOT/flow && make DESIGN_CONFIG=/work/config.mk WORK_HOME=/work "
+                   + args.make_target]
         proc = subprocess.Popen(cmd, stdout=open(work / "flow.log", "w"),
-                                stderr=subprocess.STDOUT, start_new_session=True)
+                                stderr=subprocess.STDOUT, start_new_session=True, env=env)
         quota = args.max_design_gb * 1e9
         deadline = time.time() + args.timeout
         while proc.poll() is None:
@@ -404,7 +507,7 @@ def _run_one_once(design_dir: Path, meta: dict, platform: str, period: str,
             size = dir_bytes(work)
             res.peak_disk_bytes = max(res.peak_disk_bytes, size)
             if size > quota:
-                proc.kill(); proc.wait()
+                _kill_group(proc)
                 _kill_container(tag)
                 res.status, res.failure_class = "fail", "oversize"
                 res.message = f"work tree passed {args.max_design_gb} GB"
@@ -412,7 +515,7 @@ def _run_one_once(design_dir: Path, meta: dict, platform: str, period: str,
                 read_metrics(work, res)
                 return res
             if time.time() > deadline:
-                proc.kill(); proc.wait()
+                _kill_group(proc)
                 _kill_container(tag)
                 res.status, res.failure_class = "fail", "timeout"
                 # Which stage it was stuck in and how big the design had become
@@ -429,7 +532,7 @@ def _run_one_once(design_dir: Path, meta: dict, platform: str, period: str,
                     pass
                 return res
             if guard.stop.is_set():
-                proc.kill(); proc.wait()
+                _kill_group(proc)
                 _kill_container(tag)
                 res.status, res.failure_class = "fail", "aborted_disk"
                 return res
@@ -444,7 +547,7 @@ def _run_one_once(design_dir: Path, meta: dict, platform: str, period: str,
             res.log_tail = text[-4000:]
             res.pdn_insufficient = "PDN-0185" in text
             return res
-        res.status, res.stage = "pass", "final"
+        res.status, res.stage = "pass", (args.make_target or "final")
         # Closing timing is a separate question from the flow completing, and the
         # funnel needs them apart: a design that routed but missed its target is
         # a repair candidate, not a build failure.
@@ -512,10 +615,22 @@ def main() -> None:
     ap.add_argument("--pause-gb", type=float, default=2000)
     ap.add_argument("--stop-gb", type=float, default=800)
     ap.add_argument("--max-design-gb", type=float, default=30)
+    ap.add_argument("--make-target", default="",
+                    help="ORFS make target; empty = the whole flow. 'synth' = the size-only pass the frozen spec "
+                         "reads (synth_stat.txt) for designs the pilot did not reach")
+    ap.add_argument("--mem-pause-gb", type=float, default=0,
+                    help="pause dispatching new designs while the user cgroup's anonymous memory exceeds this "
+                         "(0 = off); 203's user slice is capped at 300 GiB")
+    ap.add_argument("--dispatch-gap-s", type=float, default=0,
+                    help="minimum seconds between two design launches, so the memory guard sees each launch")
     ap.add_argument("--pdn-core-floor-um", type=float, default=32.0,
                     help="retry a PDN-0185 abort with an explicit square core "
                          "of this many um per side; 0 disables the fallback")
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--native-orfs", default="",
+                    help="run ORFS from this checkout on the host instead of in the container image")
+    ap.add_argument("--native-ld-library-path", default="",
+                    help="LD_LIBRARY_PATH for the native OpenROAD (203: the libpython3.11 directory)")
     args = ap.parse_args()
 
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
@@ -551,11 +666,20 @@ def main() -> None:
                 jobs.append((ddir, meta, plat.strip(), period))
 
     guard = DiskGuard(Path(args.scratch), args.pause_gb, args.stop_gb, log)
-    ver = subprocess.run(["podman", "run", "--rm", args.image, "bash", "-lc",
-                          "openroad -version; yosys -V | head -1; klayout -v"],
-                         capture_output=True, text=True, timeout=300)
+    if args.native_orfs:
+        ins = Path(args.native_orfs) / "tools/install"
+        ver = subprocess.run(["bash", "-c", f"{ins}/OpenROAD/bin/openroad -version; "
+                              f"{ins}/yosys/bin/yosys -V | head -1; klayout -v; "
+                              f"git -C {args.native_orfs} rev-parse HEAD"],
+                             capture_output=True, text=True, timeout=300,
+                             env={"PATH": "/usr/bin:/bin", "LD_LIBRARY_PATH": args.native_ld_library_path})
+    else:
+        ver = subprocess.run(["podman", "run", "--rm", args.image, "bash", "-lc",
+                              "openroad -version; yosys -V | head -1; klayout -v"],
+                             capture_output=True, text=True, timeout=300)
     (out / "toolchain.json").write_text(json.dumps(
-        {"image": args.image, "versions": ver.stdout.strip().splitlines(),
+        {"image": args.image if not args.native_orfs else None, "native_orfs": args.native_orfs or None,
+         "versions": ver.stdout.strip().splitlines(),
          "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
          "config": vars(args)}, indent=1) + "\n")
     for line in ver.stdout.strip().splitlines():
@@ -565,17 +689,25 @@ def main() -> None:
 
     qlock = threading.Lock()
     done: list[Result] = []
+    mem = MemGuard(args.mem_pause_gb, log)
+    last_launch = [0.0]
 
     def worker() -> None:
         while not guard.stop.is_set():
-            while not guard.may_dispatch():
+            while True:
                 if guard.stop.is_set():
                     return
+                if guard.may_dispatch() and mem.may_dispatch():
+                    with qlock:
+                        if time.monotonic() - last_launch[0] >= args.dispatch_gap_s:
+                            if not jobs:
+                                return
+                            job = jobs.pop(0)
+                            last_launch[0] = time.monotonic()
+                            break
+                    time.sleep(1)
+                    continue
                 time.sleep(30)
-            with qlock:
-                if not jobs:
-                    return
-                job = jobs.pop(0)
             r = run_one(*job, args, guard, log)
             with qlock:
                 done.append(r)

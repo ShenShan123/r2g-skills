@@ -50,6 +50,10 @@ PERIOD_NS = {
     "nangate45": [(100, 0.5), (1000, 1.0), (5000, 1.6), (None, 3.0)],
     "gf180":     [(100, 2.2), (1000, 5.0), (5000, 9.0), (None, 16.0)],
     "sky130hd":  [(100, 1.8), (1000, 3.6), (5000, 6.5), (None, 16.0)],
+    # ASAP7 (2026-11-16): the 1249-design dev pilot at 1000 ps, 20% utilization, achievable period =
+    # 1000 ps - worst slack over the 234 designs with a constrained path, p95 per class rounded up:
+    # 298 / 465 / 955 / 1927 ps. Values are TRUE ns; orfs_spec.py writes the SDC in ASAP7's ps.
+    "asap7":     [(100, 0.3), (1000, 0.5), (5000, 1.0), (None, 2.0)],
 }
 # "Utilization - flat 40%" and "PDN core floor - baseline policy"
 # 0.50, matching BASELINE_PARAMETERS.md. The anchor is OpenLane's own sky130
@@ -67,7 +71,10 @@ UTILIZATION = 0.50
 # die is known before the flow starts and both arms get the same one. A design
 # small enough to be floored runs at far below the 50% target by construction;
 # that is accepted (it is a property of the design, not a spec error).
-PDN_FLOOR_UM = {"nangate45": 32.0, "gf180": 110.0, "sky130hd": 32.0}
+PDN_FLOOR_UM = {"nangate45": 32.0, "gf180": 110.0, "sky130hd": 32.0,
+                # ASAP7: the pilot's PDN-0185 fallback core, which rescued all 92 pilot designs that hit it
+                # (the m1m2m3 PDN apparatus). Proven, not a measured minimum.
+                "asap7": 10.0}
 
 # IO positions per um of PERIMETER, for the pin floor below. NOT fitted:
 # place_pins keeps two tracks between pins, so k = 1/(2 * pin-layer pitch).
@@ -89,10 +96,16 @@ PDN_FLOOR_UM = {"nangate45": 32.0, "gf180": 110.0, "sky130hd": 32.0}
 # derivation was right but left NO margin, so a pin-floored die sat exactly at
 # the edge. 0.885 keeps the ~1% margin nangate45 (need_side * 1.01) and
 # sky130hd (0.90 against a measured 0.912) carry.
-IO_POS_PER_UM = {"nangate45": 1.80, "gf180": 0.885, "sky130hd": 0.90}
+IO_POS_PER_UM = {"nangate45": 1.80, "gf180": 0.885, "sky130hd": 0.90,
+                 # ASAP7: pins on M4/M5 (pitch 0.048) derive 10.4; the one PPL-0024 refusal in the pilot
+                 # (C00953 axi_wrap on 203: 428 pins, 408 positions / 45.30 um) measures 9.01 -> 8.9 with the ~1% margin.
+                 "asap7": 8.9}
 CORE_INSET_UM = 2.0
 PILOT_ROOT = {"nangate45": "n45_full", "gf180": "gf180_full",
-              "sky130hd": "full_out"}
+              "sky130hd": "full_out",
+              # one root assembled from both servers' pilot + synth-only runs (sizes and pin counts only):
+              # experiments/asap7_qualification_20261116/pilot/build_pilot_index.py
+              "asap7": "asap7_pilot_all"}
 
 
 def period_for(platform: str, cells: int) -> float:
@@ -132,7 +145,10 @@ def period_for(platform: str, cells: int) -> float:
 # die from superseded values with no error. Same shape as every other defect in
 # this project's catalog: a fallback that quietly substitutes a worse value.
 # So the fallback now (a) holds the measured numbers and (b) says so on stderr.
-AREA_ALLOWANCE_DEFAULT = {"nangate45": 1.021, "gf180": 1.144, "sky130hd": 1.190}
+AREA_ALLOWANCE_DEFAULT = {"nangate45": 1.021, "gf180": 1.144, "sky130hd": 1.190,
+                          # ASAP7 PROVISIONAL (2026-11-16): pilot final/synth instance area, median of 177
+                          # non-PDN-floored designs at 1000 ps. Replaced by the preflight measurement.
+                          "asap7": 1.10}
 ALLOWANCE_FILE = Path("/proj/workarea/yangao/spec/area_allowance.json")
 _warned: set[str] = set()
 
@@ -167,6 +183,13 @@ def pin_counts(pilot_dir: Path) -> dict:
     count is known is equivalent to having run it from the start.
     """
     pins = {}
+    # An assembled pilot root (ASAP7) carries the DEF's PINS count as pins.json instead of the DEF itself.
+    for f in glob.glob(str(pilot_dir / "runs" / "*" / "pins.json")):
+        short = "__".join(os.path.basename(os.path.dirname(f)).split("__")[:-2])
+        try:
+            pins[short] = (int(json.loads(Path(f).read_text())["pins"]), "pilot_def")
+        except (OSError, ValueError, KeyError):
+            pass
     for f in glob.glob(str(pilot_dir / "runs" / "*" / "6_final.def")):
         short = "__".join(os.path.basename(os.path.dirname(f)).split("__")[:-2])
         if short in pins:
@@ -305,7 +328,10 @@ def pin_required_core(platform: str, npins: int) -> float:
 # depend on them) lost C00148, C00832, C02939 and C03807 to GPL-0301 -- two of
 # them the same designs sky130hd lost. With the term 203 entries move (115 dev),
 # die only, all four among them.
-PORT_BUFFER_UM2 = {"sky130hd": 10.0096, "gf180": 42.336}
+PORT_BUFFER_UM2 = {"sky130hd": 10.0096, "gf180": 42.336,
+                   # ASAP7: buffer_ports puts one BUFx2_ASAP7_75t_R (0.27 x 0.27 um) on every port
+                   # (C00415: 99 of them).
+                   "asap7": 0.0729}
 
 
 def die_for(platform: str, cell_area_um2: float,
@@ -410,6 +436,7 @@ def build(platform: str, pilot_dir: Path) -> tuple[dict, dict]:
 
 
 def main(argv=None) -> int:
+    global ALLOWANCE_FILE
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--pilot-root", default="/proj/workarea/yangao",
                     help="directory holding n45_full / gf180_full / full_out")
@@ -427,7 +454,10 @@ def main(argv=None) -> int:
                     help="runs dir whose PPL-0024 refusals correct that design's die "
                          "from its own measured positions/perimeter (repeatable)")
     ap.add_argument("--platforms", default="nangate45,gf180,sky130hd")
+    ap.add_argument("--allowance-file", default="/proj/workarea/yangao/spec/area_allowance.json",
+                    help="area_allowance.json to read (ASAP7 keeps its own beside its spec)")
     args = ap.parse_args(argv)
+    ALLOWANCE_FILE = Path(args.allowance_file)
     EXTRA_PIN_LOG_ROOTS.extend(args.extra_pin_log_root)
     load_baseline_sizes(args.baseline_size_root)
     load_baseline_sizes(args.repair_size_root, REPAIR_SIZES)
