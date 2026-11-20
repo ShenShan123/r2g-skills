@@ -1,0 +1,44 @@
+{
+  "status": "PASS",
+  "method": "Exact transistor graph isomorphism after strictly parallel MOS aggregation. Ports fixed; gate/bulk fixed; source/drain swappable. All model/L/W/nfin values exact.",
+  "original_sha256": "9e1d5496adae938db7125f43579caf19a95355f8d52a266a156fdd7a47692505",
+  "reference_sha256": "1e449135e51d61bce62407136a95be2fec8979b5ff426f05331a5f97a9e1e69e",
+  "scope": "Proves that the replacement sequential transistor reference preserves the original CDL network. Separate Liberty formal LEC proves RTL/netlist logic, and does not directly validate transistor sequential semantics.",
+  "sequential_cell_types": 1,
+  "sequential_instances": 35,
+  "cells": [
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "instances": 35,
+      "status": "PASS",
+      "original_mos": 24,
+      "official_pex_mos": 24,
+      "original_merged_mos": 24,
+      "official_pex_merged_mos": 24,
+      "port_identity_fixed": [
+        "CLK",
+        "D",
+        "QN",
+        "VDD",
+        "VSS"
+      ],
+      "internal_node_mapping_original_to_pex": {
+        "PD3": "N_M4_D",
+        "PD5": "N_M8_D",
+        "SH": "N_M7_D",
+        "MS": "N_M5_G",
+        "MH": "N_M3_D",
+        "SS": "N_M9_G",
+        "CLKB": "N_M1_D",
+        "CLKN": "N_M0_S",
+        "PD1": "N_M2_D",
+        "PD2": "N_M16_D",
+        "PD4": "N_M20_D",
+        "PU1": "N_M14_D"
+      },
+      "model_L_W_nfin_gate_bulk_connectivity_exact": true,
+      "negative_control_changed_output_gate": "REJECTED",
+      "negative_control_doubled_width": "REJECTED"
+    }
+  ]
+}

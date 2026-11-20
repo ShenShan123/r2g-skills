@@ -1,0 +1,266 @@
+{
+  "result": "PASS",
+  "source": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32_input/drc.gds",
+  "source_sha256": "fd382cb9160913a2ec0ee2e91bb1312a8e4f99038fbc6cda9783b2133ff6e416",
+  "flattened_gds": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32_flattened_input/drc.gds",
+  "flattened_sha256": "c3b2a0e7b0ecca8e4e3497e680f4dcab7074b2146a0572e6ad25abd8bbef67b6",
+  "dbu_um": 0.00025,
+  "cells": 1,
+  "top": "TOPCELL",
+  "operation": "Hierarchy flatten only; zero scale/offset; all drawing layers identical by exact Region XOR after output reload. Text is not included in polygon XOR.",
+  "layers": [
+    {
+      "layer": 1,
+      "datatype": 0,
+      "original_polygons": 33071,
+      "flattened_polygons": 33071,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 1,
+      "datatype": 251,
+      "original_polygons": 0,
+      "flattened_polygons": 0,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 2,
+      "datatype": 0,
+      "original_polygons": 330710,
+      "flattened_polygons": 330710,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 3,
+      "datatype": 251,
+      "original_polygons": 0,
+      "flattened_polygons": 0,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 7,
+      "datatype": 0,
+      "original_polygons": 334888,
+      "flattened_polygons": 334888,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 10,
+      "datatype": 0,
+      "original_polygons": 128254,
+      "flattened_polygons": 128254,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 11,
+      "datatype": 0,
+      "original_polygons": 66306,
+      "flattened_polygons": 66306,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 12,
+      "datatype": 0,
+      "original_polygons": 33071,
+      "flattened_polygons": 33071,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 13,
+      "datatype": 0,
+      "original_polygons": 33071,
+      "flattened_polygons": 33071,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 16,
+      "datatype": 0,
+      "original_polygons": 150865,
+      "flattened_polygons": 150865,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 17,
+      "datatype": 0,
+      "original_polygons": 369150,
+      "flattened_polygons": 369150,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 18,
+      "datatype": 0,
+      "original_polygons": 891552,
+      "flattened_polygons": 891552,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 19,
+      "datatype": 0,
+      "original_polygons": 209028,
+      "flattened_polygons": 209028,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 19,
+      "datatype": 251,
+      "original_polygons": 0,
+      "flattened_polygons": 0,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 20,
+      "datatype": 0,
+      "original_polygons": 176299,
+      "flattened_polygons": 176299,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 20,
+      "datatype": 251,
+      "original_polygons": 0,
+      "flattened_polygons": 0,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 21,
+      "datatype": 0,
+      "original_polygons": 553971,
+      "flattened_polygons": 553971,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 25,
+      "datatype": 0,
+      "original_polygons": 70791,
+      "flattened_polygons": 70791,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 30,
+      "datatype": 0,
+      "original_polygons": 126513,
+      "flattened_polygons": 126513,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 30,
+      "datatype": 2,
+      "original_polygons": 0,
+      "flattened_polygons": 0,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 30,
+      "datatype": 251,
+      "original_polygons": 26,
+      "flattened_polygons": 26,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 35,
+      "datatype": 0,
+      "original_polygons": 10529,
+      "flattened_polygons": 10529,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 40,
+      "datatype": 0,
+      "original_polygons": 19180,
+      "flattened_polygons": 19180,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 40,
+      "datatype": 2,
+      "original_polygons": 0,
+      "flattened_polygons": 0,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 40,
+      "datatype": 251,
+      "original_polygons": 96,
+      "flattened_polygons": 96,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 45,
+      "datatype": 0,
+      "original_polygons": 1392,
+      "flattened_polygons": 1392,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 50,
+      "datatype": 0,
+      "original_polygons": 3656,
+      "flattened_polygons": 3656,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 50,
+      "datatype": 2,
+      "original_polygons": 0,
+      "flattened_polygons": 0,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 50,
+      "datatype": 251,
+      "original_polygons": 10,
+      "flattened_polygons": 10,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 55,
+      "datatype": 0,
+      "original_polygons": 759,
+      "flattened_polygons": 759,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 60,
+      "datatype": 0,
+      "original_polygons": 1939,
+      "flattened_polygons": 1939,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 65,
+      "datatype": 0,
+      "original_polygons": 426,
+      "flattened_polygons": 426,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 70,
+      "datatype": 0,
+      "original_polygons": 677,
+      "flattened_polygons": 677,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 88,
+      "datatype": 0,
+      "original_polygons": 376080,
+      "flattened_polygons": 376080,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 100,
+      "datatype": 0,
+      "original_polygons": 33071,
+      "flattened_polygons": 33071,
+      "xor_polygons": 0
+    },
+    {
+      "layer": 235,
+      "datatype": 0,
+      "original_polygons": 1,
+      "flattened_polygons": 1,
+      "xor_polygons": 0
+    }
+  ],
+  "elapsed_s": 29.305922148749232
+}

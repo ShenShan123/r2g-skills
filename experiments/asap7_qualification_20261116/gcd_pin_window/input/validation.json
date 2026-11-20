@@ -1,0 +1,8 @@
+{
+  "valid": true,
+  "errors": [],
+  "warnings": [],
+  "design_name": "gcd",
+  "platform": "asap7",
+  "num_verilog_files": 1
+}

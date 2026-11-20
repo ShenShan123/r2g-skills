@@ -1,0 +1,5 @@
+{
+  "design_name": "aes_cipher_top",
+  "platform": "asap7",
+  "purpose": "Independent full AES128 qualification"
+}

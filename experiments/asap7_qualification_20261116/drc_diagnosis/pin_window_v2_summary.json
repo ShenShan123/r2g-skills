@@ -1,0 +1,108 @@
+{
+  "project": "gcd_pin_window_v2",
+  "variant": "asap7_pin_window_v2_20261116",
+  "backend_run": "RUN_2026-11-16_06-00-47_2002719_0f7f",
+  "drc": {
+    "process_exit": 0,
+    "wall_s": 4.48102512024343,
+    "gds_sha256": "e7ad24172bb1032f5b2d7000cec244fcbe3f68519d84c1245764f284a2bfb3c2",
+    "deck_sha256": "1929e51ea03ae87296483fce6aa5755ab54049dbca159927d916dc4373924765",
+    "offsets": [
+      "0",
+      "0",
+      "0",
+      "0"
+    ],
+    "flat": true,
+    "property_limit": null,
+    "result": "clean",
+    "rulechecks": 334,
+    "results": 0,
+    "expanded_results": 0,
+    "violations": {}
+  },
+  "lvs": {
+    "process_exit": 0,
+    "wall_s": 7.042464934289455,
+    "gds_sha256": "c641f8a099e2b3b9a529f876785be9734ef019bb8bc34c7096f18c99564bf79b",
+    "deck_sha256": "3b5a5a3b07de5c46798ae4c820816742591001d96f0ab85e58a5a3d06476ad4b",
+    "offsets": [
+      "0",
+      "0",
+      "0",
+      "0"
+    ],
+    "flat": false,
+    "property_limit": 1024,
+    "result": "CORRECT",
+    "source_sha256": "05489cdf3ccb175b780e489b5a9845e50d57e49e21006622a2028c8348f73c9a"
+  },
+  "ppa": {
+    "source": "experiments/asap7_qualification_20261116/gcd_pin_window_v2/backend/RUN_2026-11-16_06-00-47_2002719_0f7f/logs/6_report.json",
+    "time_unit_native": "ps",
+    "liberty_time_unit": "1ps",
+    "clock_period_ns": 1.0,
+    "setup_worst_slack_ps": 438.514,
+    "setup_worst_slack_ns": 0.438514,
+    "hold_worst_slack_ps": 41.2595,
+    "setup_tns_ps": 0,
+    "hold_tns_ps": 0,
+    "stdcell_area_um2": 47.9245,
+    "stdcell_area_definition": "ORFS stdcell area, includes tap cells, excludes filler cells",
+    "stdcell_count": 499,
+    "all_instance_count": 1402,
+    "core_area_um2": 197.122,
+    "die_area_um2": 262.44,
+    "power_W": 0.000309148,
+    "power_definition": "OpenSTA estimate from final parasitics; not measured silicon power",
+    "report_corner": "RVT FF"
+  },
+  "resources": {
+    "orfs_stage_table_elapsed_sum_s": 53,
+    "orfs_stage_table_peak_memory_MB": 1079,
+    "elapsed_definition": "Sum of rounded per-stage ORFS elapsed entries; not independently measured end-to-end wall time"
+  },
+  "geometry": {
+    "unchanged": true,
+    "original": {
+      "non_text_records": 13744,
+      "sha256": "a36a123448f21b1ed71046bb956df77221620eb8575d9fc2063d312648de015e"
+    },
+    "lvs": {
+      "non_text_records": 13744,
+      "sha256": "a36a123448f21b1ed71046bb956df77221620eb8575d9fc2063d312648de015e"
+    },
+    "drc": {
+      "non_text_records": 13744,
+      "sha256": "a36a123448f21b1ed71046bb956df77221620eb8575d9fc2063d312648de015e"
+    },
+    "normalization": "top cell name only; text excluded"
+  },
+  "sc_lef_union": {
+    "cells_checked": 212,
+    "native_m1_pin_plus_obs_union_unchanged": true,
+    "mismatched_cells": []
+  },
+  "constraints": {
+    "official_decks_modified": false,
+    "rule_exclusions": [],
+    "production_platform_files_modified": false,
+    "lvs_property_limit_note": "Independent verification at property_limit=1024 is CORRECT; original 100000 result preserved."
+  },
+  "lvs_initial_property100000": {
+    "process_exit": 0,
+    "wall_s": 5.987352415919304,
+    "gds_sha256": "c641f8a099e2b3b9a529f876785be9734ef019bb8bc34c7096f18c99564bf79b",
+    "deck_sha256": "3b5a5a3b07de5c46798ae4c820816742591001d96f0ab85e58a5a3d06476ad4b",
+    "offsets": [
+      "0",
+      "0",
+      "0",
+      "0"
+    ],
+    "flat": false,
+    "property_limit": 100000,
+    "result": "CORRECT",
+    "source_sha256": "05489cdf3ccb175b780e489b5a9845e50d57e49e21006622a2028c8348f73c9a"
+  }
+}

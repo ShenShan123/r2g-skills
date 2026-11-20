@@ -1,0 +1,18 @@
+{
+  "source": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/flow/platforms/asap7/gds/asap7sc7p5t_28_R_220121a.gds",
+  "top": "INVx1_ASAP7_75t_R",
+  "source_dbu_um": 0.00025,
+  "source_bbox_um": "(0,-0.022;0.206,0.292)",
+  "variants": [
+    {
+      "path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/inv_smoke/inv_1x.gds",
+      "scale": 1,
+      "bbox_um": "(0,-0.022;0.206,0.292)"
+    },
+    {
+      "path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/inv_smoke/inv_4x.gds",
+      "scale": 4,
+      "bbox_um": "(0,-0.088;0.824,1.168)"
+    }
+  ]
+}

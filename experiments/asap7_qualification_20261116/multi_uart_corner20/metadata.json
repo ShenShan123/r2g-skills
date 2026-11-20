@@ -1,0 +1,6 @@
+{
+  "design_name": "multi_uart_corner20",
+  "top_module": "uart",
+  "platform": "asap7",
+  "experimental": true
+}

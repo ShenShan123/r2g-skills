@@ -1,0 +1,15 @@
+--- a/src/drt/src/pa/FlexPA_acc_point.cpp
++++ b/src/drt/src/pa/FlexPA_acc_point.cpp
+@@ -832,7 +832,11 @@
+     max_ext = std::max(max_ext, box.xMax() - gtl::xh(r));
+     max_ext = std::max(max_ext, gtl::xl(r) - box.xMin());
+   }
+-  if (!is_side_bound) {
++  // An explicit via-in-pin constraint also applies at cell side boundaries.
++  const bool strict_via_in_pin
++      = layer_num >= router_cfg_->VIAINPIN_BOTTOMLAYERNUM
++        && layer_num <= router_cfg_->VIAINPIN_TOPLAYERNUM;
++  if (!is_side_bound || strict_via_in_pin) {
+     if (int_rects.size() > 1) {
+       int_rects.clear();
+       intersection.get_rectangles(int_rects,

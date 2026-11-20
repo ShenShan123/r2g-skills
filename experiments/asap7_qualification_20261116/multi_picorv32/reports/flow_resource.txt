@@ -1,0 +1,23 @@
+	Command being timed: "env PATH=/usr/bin:/bin:/home/yangao/.local/bin:/home/yangao/.local/bin:/usr/local/xyce/bin:/opt/synopsys/SCL2018/scl/2018.06/linux64/bin:/opt/synopsys/vcs2018/vcs/O-2018.09-SP2/bin:/opt/synopsys/vcs2018/vcs/O-2018.09-SP2/gui/dve/bin:/opt/OpenROAD/oss-cad-suite/bin:/opt/OpenROAD/oss-cad-suite/py3bin:/opt/OpenROAD/2_convert_verilog_tool/sv2v-Linux:/opt/OpenROAD/2_convert_verilog_tool/vhd2vl-master/src:/opt/OpenROAD/oss-cad-suite/bin:/usr/local/cuda/bin:/opt/miniconda3/bin:/home/yangao/.codex/tmp/arg0/codex-arg0Pu9HMQ:/home/yangao/.vscode-server/cli/servers/Stable-69047191fc427f2f92828279aae1d90d8eeda7ab/server/bin/remote-cli:/home/yangao/.local/bin:/home/yangao/.npm-global/bin:/home/yangao/.npm-global/bin:/home/yangao/.local/bin:/usr/local/xyce/bin:/opt/synopsys/SCL2018/scl/2018.06/linux64/bin:/opt/synopsys/vcs2018/vcs/O-2018.09-SP2/bin:/opt/synopsys/vcs2018/vcs/O-2018.09-SP2/gui/dve/bin:/opt/OpenROAD/oss-cad-suite/bin:/opt/OpenROAD/oss-cad-suite/py3bin:/opt/OpenROAD/2_convert_verilog_tool/sv2v-Linux:/opt/OpenROAD/2_convert_verilog_tool/vhd2vl-master/src:/opt/OpenROAD/oss-cad-suite/bin:/usr/local/cuda/bin:/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/usr/local/cuda-13/bin:/home/yangao/.vscode-server/extensions/openai.chatgpt-26.51002.51308-linux-x64/bin/linux-x86_64:/usr/local/cuda-13/bin R2G_ALLOW_UNSUPPORTED_PLATFORM=1 ORFS_MAX_CPUS=4 ORFS_TIMEOUT=1800 bash r2g-skills/signoff-loop/scripts/flow/run_orfs.sh experiments/asap7_qualification_20261116/multi_picorv32 asap7 multi_picorv32_20261116"
+	User time (seconds): 1441.95
+	System time (seconds): 33.39
+	Percent of CPU this job got: 283%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 8:40.91
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 2411072
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1
+	Minor (reclaiming a frame) page faults: 14790302
+	Voluntary context switches: 404383
+	Involuntary context switches: 3834
+	Swaps: 0
+	File system inputs: 264
+	File system outputs: 1638288
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

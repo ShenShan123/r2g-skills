@@ -1,0 +1,3012 @@
+{
+  "original_sha256": "a9b3ecbc7196557681c5e6ab10623b1f81e9a25e5bf0498b083d657e57a997f0",
+  "upstream_pex_sha256": "81042fd651c9175d5ef3748f46c903b8143c569dfb0a29d0b591a1bfcd0a02c8",
+  "output_sha256": "1e449135e51d61bce62407136a95be2fec8979b5ff426f05331a5f97a9e1e69e",
+  "source_commit": "e5bd25da72cd297b8c0ec6f77600e0cbaa1124d0",
+  "source_url": "https://github.com/The-OpenROAD-Project/asap7sc7p5t_28/blob/e5bd25da72cd297b8c0ec6f77600e0cbaa1124d0/CDL/xAct3D_extracted/asap7sc7p5t_28_R.sp",
+  "cells_derived": 209,
+  "physical_zero_transistor_cells_retained": [
+    "filler_asap7_75t_r",
+    "fillerxp5_asap7_75t_r",
+    "tapcell_asap7_75t_r"
+  ],
+  "referenced_transistors": 3826,
+  "tested_design_extraction_used_as_reference": false,
+  "cells": [
+    {
+      "cell": "A2O1A1Ixp33_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 89,
+      "capacitors_omitted": 58,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "A2O1A1O1Ixp25_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 86,
+      "capacitors_omitted": 43,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "C",
+        "D",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AND2x2_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 101,
+      "capacitors_omitted": 73,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AND2x4_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 162,
+      "capacitors_omitted": 105,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AND2x6_ASAP7_75t_R",
+      "transistors": 20,
+      "resistors_contracted": 192,
+      "capacitors_omitted": 126,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AND3x1_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 102,
+      "capacitors_omitted": 79,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AND3x2_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 116,
+      "capacitors_omitted": 92,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AND3x4_ASAP7_75t_R",
+      "transistors": 17,
+      "resistors_contracted": 213,
+      "capacitors_omitted": 154,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AND4x1_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 112,
+      "capacitors_omitted": 92,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AND4x2_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 121,
+      "capacitors_omitted": 97,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AND5x1_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 129,
+      "capacitors_omitted": 107,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AND5x2_ASAP7_75t_R",
+      "transistors": 19,
+      "resistors_contracted": 283,
+      "capacitors_omitted": 197,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO211x2_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 180,
+      "capacitors_omitted": 105,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO21x1_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 84,
+      "capacitors_omitted": 59,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO21x2_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 104,
+      "capacitors_omitted": 68,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO221x1_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 131,
+      "capacitors_omitted": 79,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO221x2_ASAP7_75t_R",
+      "transistors": 14,
+      "resistors_contracted": 148,
+      "capacitors_omitted": 84,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO222x2_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 163,
+      "capacitors_omitted": 97,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C1",
+        "C2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO22x1_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 117,
+      "capacitors_omitted": 75,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO22x2_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 134,
+      "capacitors_omitted": 77,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO31x2_ASAP7_75t_R",
+      "transistors": 19,
+      "resistors_contracted": 208,
+      "capacitors_omitted": 105,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO322x2_ASAP7_75t_R",
+      "transistors": 18,
+      "resistors_contracted": 215,
+      "capacitors_omitted": 124,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "C1",
+        "C2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO32x1_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 125,
+      "capacitors_omitted": 78,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO32x2_ASAP7_75t_R",
+      "transistors": 14,
+      "resistors_contracted": 140,
+      "capacitors_omitted": 94,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO331x1_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 147,
+      "capacitors_omitted": 89,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO331x2_ASAP7_75t_R",
+      "transistors": 18,
+      "resistors_contracted": 159,
+      "capacitors_omitted": 97,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO332x1_ASAP7_75t_R",
+      "transistors": 18,
+      "resistors_contracted": 161,
+      "capacitors_omitted": 103,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO332x2_ASAP7_75t_R",
+      "transistors": 20,
+      "resistors_contracted": 173,
+      "capacitors_omitted": 111,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO333x1_ASAP7_75t_R",
+      "transistors": 20,
+      "resistors_contracted": 175,
+      "capacitors_omitted": 114,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "C3",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO333x2_ASAP7_75t_R",
+      "transistors": 22,
+      "resistors_contracted": 200,
+      "capacitors_omitted": 123,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "C3",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AO33x2_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 161,
+      "capacitors_omitted": 100,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI211x1_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 129,
+      "capacitors_omitted": 61,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI211xp5_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 89,
+      "capacitors_omitted": 53,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI21x1_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 136,
+      "capacitors_omitted": 90,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI21xp33_ASAP7_75t_R",
+      "transistors": 6,
+      "resistors_contracted": 65,
+      "capacitors_omitted": 38,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI21xp5_ASAP7_75t_R",
+      "transistors": 6,
+      "resistors_contracted": 58,
+      "capacitors_omitted": 35,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI221x1_ASAP7_75t_R",
+      "transistors": 15,
+      "resistors_contracted": 163,
+      "capacitors_omitted": 70,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI221xp5_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 92,
+      "capacitors_omitted": 49,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI222xp33_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 112,
+      "capacitors_omitted": 62,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C1",
+        "C2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI22x1_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 161,
+      "capacitors_omitted": 100,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI22xp33_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 74,
+      "capacitors_omitted": 42,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI22xp5_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 82,
+      "capacitors_omitted": 47,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI311xp33_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 78,
+      "capacitors_omitted": 53,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI31xp33_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 62,
+      "capacitors_omitted": 42,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI31xp67_ASAP7_75t_R",
+      "transistors": 15,
+      "resistors_contracted": 144,
+      "capacitors_omitted": 78,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI321xp33_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 94,
+      "capacitors_omitted": 65,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI322xp5_ASAP7_75t_R",
+      "transistors": 14,
+      "resistors_contracted": 106,
+      "capacitors_omitted": 70,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "C1",
+        "C2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI32xp33_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 107,
+      "capacitors_omitted": 60,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI331xp33_ASAP7_75t_R",
+      "transistors": 14,
+      "resistors_contracted": 111,
+      "capacitors_omitted": 59,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI332xp33_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 125,
+      "capacitors_omitted": 71,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI333xp33_ASAP7_75t_R",
+      "transistors": 18,
+      "resistors_contracted": 143,
+      "capacitors_omitted": 85,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "C3",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "AOI33xp33_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 103,
+      "capacitors_omitted": 58,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "BUFx10_ASAP7_75t_R",
+      "transistors": 24,
+      "resistors_contracted": 246,
+      "capacitors_omitted": 119,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "BUFx12_ASAP7_75t_R",
+      "transistors": 28,
+      "resistors_contracted": 280,
+      "capacitors_omitted": 142,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "BUFx12f_ASAP7_75t_R",
+      "transistors": 32,
+      "resistors_contracted": 249,
+      "capacitors_omitted": 139,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "BUFx16f_ASAP7_75t_R",
+      "transistors": 40,
+      "resistors_contracted": 386,
+      "capacitors_omitted": 180,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "BUFx24_ASAP7_75t_R",
+      "transistors": 56,
+      "resistors_contracted": 538,
+      "capacitors_omitted": 232,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "BUFx2_ASAP7_75t_R",
+      "transistors": 6,
+      "resistors_contracted": 84,
+      "capacitors_omitted": 58,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "BUFx3_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 102,
+      "capacitors_omitted": 72,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "BUFx4_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 114,
+      "capacitors_omitted": 82,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "BUFx4f_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 136,
+      "capacitors_omitted": 78,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "BUFx5_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 132,
+      "capacitors_omitted": 91,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "BUFx6f_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 167,
+      "capacitors_omitted": 85,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "BUFx8_ASAP7_75t_R",
+      "transistors": 20,
+      "resistors_contracted": 207,
+      "capacitors_omitted": 103,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "CKINVDCx10_ASAP7_75t_R",
+      "transistors": 44,
+      "resistors_contracted": 488,
+      "capacitors_omitted": 342,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "CKINVDCx11_ASAP7_75t_R",
+      "transistors": 48,
+      "resistors_contracted": 542,
+      "capacitors_omitted": 380,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "CKINVDCx12_ASAP7_75t_R",
+      "transistors": 48,
+      "resistors_contracted": 533,
+      "capacitors_omitted": 373,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "CKINVDCx14_ASAP7_75t_R",
+      "transistors": 52,
+      "resistors_contracted": 575,
+      "capacitors_omitted": 402,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "CKINVDCx16_ASAP7_75t_R",
+      "transistors": 56,
+      "resistors_contracted": 615,
+      "capacitors_omitted": 430,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "CKINVDCx20_ASAP7_75t_R",
+      "transistors": 72,
+      "resistors_contracted": 790,
+      "capacitors_omitted": 579,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "CKINVDCx5p33_ASAP7_75t_R",
+      "transistors": 40,
+      "resistors_contracted": 450,
+      "capacitors_omitted": 329,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "CKINVDCx6p67_ASAP7_75t_R",
+      "transistors": 44,
+      "resistors_contracted": 493,
+      "capacitors_omitted": 345,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "CKINVDCx8_ASAP7_75t_R",
+      "transistors": 40,
+      "resistors_contracted": 446,
+      "capacitors_omitted": 326,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "CKINVDCx9p33_ASAP7_75t_R",
+      "transistors": 52,
+      "resistors_contracted": 582,
+      "capacitors_omitted": 408,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "DECAPx10_ASAP7_75t_R",
+      "transistors": 20,
+      "resistors_contracted": 196,
+      "capacitors_omitted": 91,
+      "port_order_preserved": [
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DECAPx1_ASAP7_75t_R",
+      "transistors": 2,
+      "resistors_contracted": 32,
+      "capacitors_omitted": 14,
+      "port_order_preserved": [
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DECAPx2_ASAP7_75t_R",
+      "transistors": 4,
+      "resistors_contracted": 59,
+      "capacitors_omitted": 29,
+      "port_order_preserved": [
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DECAPx2b_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 69,
+      "capacitors_omitted": 38,
+      "port_order_preserved": [
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DECAPx4_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 94,
+      "capacitors_omitted": 48,
+      "port_order_preserved": [
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DECAPx6_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 127,
+      "capacitors_omitted": 63,
+      "port_order_preserved": [
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DFFASRHQNx1_ASAP7_75t_R",
+      "transistors": 33,
+      "resistors_contracted": 530,
+      "capacitors_omitted": 588,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "RESETn",
+        "SETn",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "transistors": 24,
+      "resistors_contracted": 386,
+      "capacitors_omitted": 400,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DFFHQNx2_ASAP7_75t_R",
+      "transistors": 26,
+      "resistors_contracted": 405,
+      "capacitors_omitted": 407,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DFFHQNx3_ASAP7_75t_R",
+      "transistors": 28,
+      "resistors_contracted": 419,
+      "capacitors_omitted": 416,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DFFHQx4_ASAP7_75t_R",
+      "transistors": 34,
+      "resistors_contracted": 478,
+      "capacitors_omitted": 454,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "Q",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DFFLQNx1_ASAP7_75t_R",
+      "transistors": 24,
+      "resistors_contracted": 386,
+      "capacitors_omitted": 404,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DFFLQNx2_ASAP7_75t_R",
+      "transistors": 26,
+      "resistors_contracted": 402,
+      "capacitors_omitted": 412,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DFFLQNx3_ASAP7_75t_R",
+      "transistors": 28,
+      "resistors_contracted": 421,
+      "capacitors_omitted": 419,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DFFLQx4_ASAP7_75t_R",
+      "transistors": 34,
+      "resistors_contracted": 479,
+      "capacitors_omitted": 460,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "Q",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DHLx1_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 274,
+      "capacitors_omitted": 257,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "Q",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DHLx2_ASAP7_75t_R",
+      "transistors": 18,
+      "resistors_contracted": 300,
+      "capacitors_omitted": 268,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "Q",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DHLx3_ASAP7_75t_R",
+      "transistors": 20,
+      "resistors_contracted": 327,
+      "capacitors_omitted": 292,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "Q",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DLLx1_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 265,
+      "capacitors_omitted": 258,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "Q",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DLLx2_ASAP7_75t_R",
+      "transistors": 18,
+      "resistors_contracted": 294,
+      "capacitors_omitted": 273,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "Q",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "DLLx3_ASAP7_75t_R",
+      "transistors": 20,
+      "resistors_contracted": 305,
+      "capacitors_omitted": 275,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "Q",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "FAx1_ASAP7_75t_R",
+      "transistors": 24,
+      "resistors_contracted": 317,
+      "capacitors_omitted": 332,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "CI",
+        "CON",
+        "SN",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "HAxp5_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 128,
+      "capacitors_omitted": 96,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "CON",
+        "SN",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "HB1xp67_ASAP7_75t_R",
+      "transistors": 4,
+      "resistors_contracted": 81,
+      "capacitors_omitted": 46,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "HB2xp67_ASAP7_75t_R",
+      "transistors": 6,
+      "resistors_contracted": 85,
+      "capacitors_omitted": 55,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "HB3xp67_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 96,
+      "capacitors_omitted": 65,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "HB4xp67_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 107,
+      "capacitors_omitted": 74,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "ICGx1_ASAP7_75t_R",
+      "transistors": 26,
+      "resistors_contracted": 370,
+      "capacitors_omitted": 352,
+      "port_order_preserved": [
+        "CLK",
+        "ENA",
+        "GCLK",
+        "SE",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "ICGx2_ASAP7_75t_R",
+      "transistors": 28,
+      "resistors_contracted": 390,
+      "capacitors_omitted": 357,
+      "port_order_preserved": [
+        "CLK",
+        "ENA",
+        "GCLK",
+        "SE",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "ICGx2p67DC_ASAP7_75t_R",
+      "transistors": 82,
+      "resistors_contracted": 1024,
+      "capacitors_omitted": 1021,
+      "port_order_preserved": [
+        "CLK",
+        "ENA",
+        "GCLK",
+        "SE",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "ICGx3_ASAP7_75t_R",
+      "transistors": 30,
+      "resistors_contracted": 407,
+      "capacitors_omitted": 368,
+      "port_order_preserved": [
+        "CLK",
+        "ENA",
+        "GCLK",
+        "SE",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "ICGx4DC_ASAP7_75t_R",
+      "transistors": 82,
+      "resistors_contracted": 1024,
+      "capacitors_omitted": 1019,
+      "port_order_preserved": [
+        "CLK",
+        "ENA",
+        "GCLK",
+        "SE",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "ICGx4_ASAP7_75t_R",
+      "transistors": 32,
+      "resistors_contracted": 417,
+      "capacitors_omitted": 376,
+      "port_order_preserved": [
+        "CLK",
+        "ENA",
+        "GCLK",
+        "SE",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "ICGx5_ASAP7_75t_R",
+      "transistors": 34,
+      "resistors_contracted": 434,
+      "capacitors_omitted": 386,
+      "port_order_preserved": [
+        "CLK",
+        "ENA",
+        "GCLK",
+        "SE",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "ICGx5p33DC_ASAP7_75t_R",
+      "transistors": 82,
+      "resistors_contracted": 1024,
+      "capacitors_omitted": 1017,
+      "port_order_preserved": [
+        "CLK",
+        "ENA",
+        "GCLK",
+        "SE",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "ICGx6p67DC_ASAP7_75t_R",
+      "transistors": 82,
+      "resistors_contracted": 1022,
+      "capacitors_omitted": 1015,
+      "port_order_preserved": [
+        "CLK",
+        "ENA",
+        "GCLK",
+        "SE",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "ICGx8DC_ASAP7_75t_R",
+      "transistors": 82,
+      "resistors_contracted": 1020,
+      "capacitors_omitted": 1016,
+      "port_order_preserved": [
+        "CLK",
+        "ENA",
+        "GCLK",
+        "SE",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "INVx11_ASAP7_75t_R",
+      "transistors": 22,
+      "resistors_contracted": 175,
+      "capacitors_omitted": 93,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "INVx13_ASAP7_75t_R",
+      "transistors": 26,
+      "resistors_contracted": 203,
+      "capacitors_omitted": 103,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "transistors": 2,
+      "resistors_contracted": 36,
+      "capacitors_omitted": 18,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "INVx2_ASAP7_75t_R",
+      "transistors": 4,
+      "resistors_contracted": 49,
+      "capacitors_omitted": 23,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "INVx3_ASAP7_75t_R",
+      "transistors": 6,
+      "resistors_contracted": 65,
+      "capacitors_omitted": 33,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "INVx4_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 76,
+      "capacitors_omitted": 38,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "INVx5_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 93,
+      "capacitors_omitted": 51,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "INVx6_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 102,
+      "capacitors_omitted": 54,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "INVx8_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 130,
+      "capacitors_omitted": 65,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "INVxp33_ASAP7_75t_R",
+      "transistors": 2,
+      "resistors_contracted": 33,
+      "capacitors_omitted": 16,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "INVxp67_ASAP7_75t_R",
+      "transistors": 2,
+      "resistors_contracted": 34,
+      "capacitors_omitted": 16,
+      "port_order_preserved": [
+        "A",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "MAJIxp5_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 125,
+      "capacitors_omitted": 110,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "MAJx2_ASAP7_75t_R",
+      "transistors": 14,
+      "resistors_contracted": 173,
+      "capacitors_omitted": 151,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "MAJx3_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 186,
+      "capacitors_omitted": 156,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NAND2x1_ASAP7_75t_R",
+      "transistors": 6,
+      "resistors_contracted": 87,
+      "capacitors_omitted": 57,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NAND2x1p5_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 127,
+      "capacitors_omitted": 88,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NAND2x2_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 180,
+      "capacitors_omitted": 155,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NAND2xp33_ASAP7_75t_R",
+      "transistors": 4,
+      "resistors_contracted": 54,
+      "capacitors_omitted": 39,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NAND2xp5_ASAP7_75t_R",
+      "transistors": 4,
+      "resistors_contracted": 58,
+      "capacitors_omitted": 38,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NAND2xp67_ASAP7_75t_R",
+      "transistors": 6,
+      "resistors_contracted": 100,
+      "capacitors_omitted": 57,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NAND3x1_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 154,
+      "capacitors_omitted": 121,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NAND3x2_ASAP7_75t_R",
+      "transistors": 24,
+      "resistors_contracted": 315,
+      "capacitors_omitted": 261,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NAND3xp33_ASAP7_75t_R",
+      "transistors": 6,
+      "resistors_contracted": 61,
+      "capacitors_omitted": 42,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NAND4xp25_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 84,
+      "capacitors_omitted": 60,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NAND4xp75_ASAP7_75t_R",
+      "transistors": 24,
+      "resistors_contracted": 253,
+      "capacitors_omitted": 197,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NAND5xp2_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 97,
+      "capacitors_omitted": 73,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NOR2x1_ASAP7_75t_R",
+      "transistors": 6,
+      "resistors_contracted": 100,
+      "capacitors_omitted": 73,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NOR2x1p5_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 141,
+      "capacitors_omitted": 99,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NOR2x2_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 177,
+      "capacitors_omitted": 159,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NOR2xp33_ASAP7_75t_R",
+      "transistors": 4,
+      "resistors_contracted": 56,
+      "capacitors_omitted": 39,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NOR2xp67_ASAP7_75t_R",
+      "transistors": 6,
+      "resistors_contracted": 101,
+      "capacitors_omitted": 74,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NOR3x1_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 164,
+      "capacitors_omitted": 127,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NOR3x2_ASAP7_75t_R",
+      "transistors": 24,
+      "resistors_contracted": 313,
+      "capacitors_omitted": 262,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NOR3xp33_ASAP7_75t_R",
+      "transistors": 6,
+      "resistors_contracted": 61,
+      "capacitors_omitted": 42,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NOR4xp25_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 84,
+      "capacitors_omitted": 60,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NOR4xp75_ASAP7_75t_R",
+      "transistors": 24,
+      "resistors_contracted": 256,
+      "capacitors_omitted": 197,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "NOR5xp2_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 97,
+      "capacitors_omitted": 73,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "O2A1O1Ixp33_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 85,
+      "capacitors_omitted": 56,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "O2A1O1Ixp5_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 103,
+      "capacitors_omitted": 67,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OA211x2_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 132,
+      "capacitors_omitted": 91,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OA21x2_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 113,
+      "capacitors_omitted": 74,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OA221x2_ASAP7_75t_R",
+      "transistors": 19,
+      "resistors_contracted": 203,
+      "capacitors_omitted": 116,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OA222x2_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 166,
+      "capacitors_omitted": 97,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C1",
+        "C2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OA22x2_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 117,
+      "capacitors_omitted": 69,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OA31x2_ASAP7_75t_R",
+      "transistors": 15,
+      "resistors_contracted": 187,
+      "capacitors_omitted": 111,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OA331x1_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 149,
+      "capacitors_omitted": 85,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OA331x2_ASAP7_75t_R",
+      "transistors": 18,
+      "resistors_contracted": 161,
+      "capacitors_omitted": 96,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OA332x1_ASAP7_75t_R",
+      "transistors": 18,
+      "resistors_contracted": 164,
+      "capacitors_omitted": 103,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OA332x2_ASAP7_75t_R",
+      "transistors": 20,
+      "resistors_contracted": 175,
+      "capacitors_omitted": 111,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OA333x1_ASAP7_75t_R",
+      "transistors": 20,
+      "resistors_contracted": 184,
+      "capacitors_omitted": 112,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "C3",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OA333x2_ASAP7_75t_R",
+      "transistors": 22,
+      "resistors_contracted": 196,
+      "capacitors_omitted": 118,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "C3",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OA33x2_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 157,
+      "capacitors_omitted": 99,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI211xp5_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 88,
+      "capacitors_omitted": 53,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI21x1_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 127,
+      "capacitors_omitted": 81,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI21xp33_ASAP7_75t_R",
+      "transistors": 6,
+      "resistors_contracted": 66,
+      "capacitors_omitted": 36,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI21xp5_ASAP7_75t_R",
+      "transistors": 6,
+      "resistors_contracted": 66,
+      "capacitors_omitted": 34,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI221xp5_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 92,
+      "capacitors_omitted": 49,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI222xp33_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 120,
+      "capacitors_omitted": 65,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C1",
+        "C2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI22x1_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 160,
+      "capacitors_omitted": 100,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI22xp33_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 68,
+      "capacitors_omitted": 41,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI22xp5_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 71,
+      "capacitors_omitted": 42,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI311xp33_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 78,
+      "capacitors_omitted": 53,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "C1",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI31xp33_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 63,
+      "capacitors_omitted": 42,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI31xp67_ASAP7_75t_R",
+      "transistors": 15,
+      "resistors_contracted": 138,
+      "capacitors_omitted": 63,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI321xp33_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 94,
+      "capacitors_omitted": 64,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI322xp33_ASAP7_75t_R",
+      "transistors": 14,
+      "resistors_contracted": 107,
+      "capacitors_omitted": 70,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "C1",
+        "C2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI32xp33_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 96,
+      "capacitors_omitted": 53,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI331xp33_ASAP7_75t_R",
+      "transistors": 14,
+      "resistors_contracted": 109,
+      "capacitors_omitted": 59,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI332xp33_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 125,
+      "capacitors_omitted": 71,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI333xp33_ASAP7_75t_R",
+      "transistors": 18,
+      "resistors_contracted": 143,
+      "capacitors_omitted": 85,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "C1",
+        "C2",
+        "C3",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OAI33xp33_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 102,
+      "capacitors_omitted": 58,
+      "port_order_preserved": [
+        "A1",
+        "A2",
+        "A3",
+        "B1",
+        "B2",
+        "B3",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OR2x2_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 113,
+      "capacitors_omitted": 80,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OR2x4_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 146,
+      "capacitors_omitted": 102,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OR2x6_ASAP7_75t_R",
+      "transistors": 20,
+      "resistors_contracted": 192,
+      "capacitors_omitted": 138,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OR3x1_ASAP7_75t_R",
+      "transistors": 8,
+      "resistors_contracted": 103,
+      "capacitors_omitted": 78,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OR3x2_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 116,
+      "capacitors_omitted": 90,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OR3x4_ASAP7_75t_R",
+      "transistors": 14,
+      "resistors_contracted": 151,
+      "capacitors_omitted": 114,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OR4x1_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 109,
+      "capacitors_omitted": 83,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OR4x2_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 119,
+      "capacitors_omitted": 97,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OR5x1_ASAP7_75t_R",
+      "transistors": 12,
+      "resistors_contracted": 129,
+      "capacitors_omitted": 107,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "OR5x2_ASAP7_75t_R",
+      "transistors": 14,
+      "resistors_contracted": 144,
+      "capacitors_omitted": 111,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "SDFHx1_ASAP7_75t_R",
+      "transistors": 32,
+      "resistors_contracted": 518,
+      "capacitors_omitted": 531,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "SE",
+        "SI",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "SDFHx2_ASAP7_75t_R",
+      "transistors": 34,
+      "resistors_contracted": 519,
+      "capacitors_omitted": 537,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "SE",
+        "SI",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "SDFHx3_ASAP7_75t_R",
+      "transistors": 36,
+      "resistors_contracted": 536,
+      "capacitors_omitted": 545,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "SE",
+        "SI",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "SDFHx4_ASAP7_75t_R",
+      "transistors": 38,
+      "resistors_contracted": 520,
+      "capacitors_omitted": 539,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "SE",
+        "SI",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "SDFLx1_ASAP7_75t_R",
+      "transistors": 32,
+      "resistors_contracted": 503,
+      "capacitors_omitted": 518,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "SE",
+        "SI",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "SDFLx2_ASAP7_75t_R",
+      "transistors": 34,
+      "resistors_contracted": 518,
+      "capacitors_omitted": 521,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "SE",
+        "SI",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "SDFLx3_ASAP7_75t_R",
+      "transistors": 36,
+      "resistors_contracted": 535,
+      "capacitors_omitted": 526,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "SE",
+        "SI",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "SDFLx4_ASAP7_75t_R",
+      "transistors": 38,
+      "resistors_contracted": 523,
+      "capacitors_omitted": 546,
+      "port_order_preserved": [
+        "CLK",
+        "D",
+        "QN",
+        "SE",
+        "SI",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "TBUFx1_ASAP7_75t_R",
+      "transistors": 13,
+      "resistors_contracted": 232,
+      "capacitors_omitted": 321,
+      "port_order_preserved": [
+        "A",
+        "EN",
+        "VDD",
+        "VSS",
+        "Z"
+      ]
+    },
+    {
+      "cell": "TIEHIx1_ASAP7_75t_R",
+      "transistors": 2,
+      "resistors_contracted": 37,
+      "capacitors_omitted": 22,
+      "port_order_preserved": [
+        "H",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "TIELOx1_ASAP7_75t_R",
+      "transistors": 2,
+      "resistors_contracted": 38,
+      "capacitors_omitted": 22,
+      "port_order_preserved": [
+        "L",
+        "VDD",
+        "VSS"
+      ]
+    },
+    {
+      "cell": "XNOR2x1_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 199,
+      "capacitors_omitted": 150,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "XNOR2x2_ASAP7_75t_R",
+      "transistors": 14,
+      "resistors_contracted": 173,
+      "capacitors_omitted": 141,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "XNOR2xp5_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 117,
+      "capacitors_omitted": 84,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "XOR2x1_ASAP7_75t_R",
+      "transistors": 16,
+      "resistors_contracted": 196,
+      "capacitors_omitted": 149,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "XOR2x2_ASAP7_75t_R",
+      "transistors": 14,
+      "resistors_contracted": 176,
+      "capacitors_omitted": 144,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    },
+    {
+      "cell": "XOR2xp5_ASAP7_75t_R",
+      "transistors": 10,
+      "resistors_contracted": 126,
+      "capacitors_omitted": 97,
+      "port_order_preserved": [
+        "A",
+        "B",
+        "VDD",
+        "VSS",
+        "Y"
+      ]
+    }
+  ]
+}

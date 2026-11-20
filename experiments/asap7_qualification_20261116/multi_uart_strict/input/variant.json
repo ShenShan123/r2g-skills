@@ -1,0 +1,14 @@
+{
+  "source": "multi_uart",
+  "changed": [
+    "isolated strict via-in-pin OpenROAD binary (pending root confirmation)"
+  ],
+  "held_constant": [
+    "die/core 16.2/15.12",
+    "asymmetric tech LEF",
+    "edge pin window SC_LEF",
+    "PDN",
+    "clock1000ps"
+  ],
+  "no_drc_rule_change": true
+}

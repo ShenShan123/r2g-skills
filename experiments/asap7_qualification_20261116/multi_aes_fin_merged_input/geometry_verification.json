@@ -1,0 +1,308 @@
+{
+  "result": "PASS: mask geometry equivalence; not a DRC verdict",
+  "project": "multi_aes",
+  "source": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_aes_input/drc.gds",
+  "source_sha256": "093d951ba11c1a75947d726030e4ea5b6dd6348ecf811075e879d15ec32fab38",
+  "normalized_gds": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_aes_fin_merged_input/drc.gds",
+  "normalized_sha256": "9a3dabeb43c7e7267fd6dbe52f67d4f24909c77d3533d98f87351b59447926b5",
+  "dbu_um": 0.00025,
+  "cells": 1,
+  "top": "TOPCELL",
+  "operations": [
+    "Flatten hierarchy without scale/offset",
+    "Exact FIN(2/0) polygon union; no vertices moved, no mask area added/deleted"
+  ],
+  "fin": {
+    "layer": 2,
+    "datatype": 0,
+    "before_polygons": 336590,
+    "after_polygons": 2320,
+    "before_xlength_dbu_counts": {
+      "4752": 44950,
+      "2160": 22190,
+      "432": 43050,
+      "1296": 84370,
+      "3024": 15010,
+      "864": 17170,
+      "648": 4260,
+      "2376": 9050,
+      "1512": 16060,
+      "1728": 17320,
+      "1944": 2600,
+      "2592": 1780,
+      "3456": 120,
+      "6480": 460,
+      "4320": 5790,
+      "216": 48390,
+      "1080": 3920,
+      "3240": 80,
+      "5184": 20
+    },
+    "after_xlength_dbu_counts": {
+      "250560": 2320
+    }
+  },
+  "all_drawing_layers_xor_empty": true,
+  "layers": [
+    {
+      "layer": 1,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 33659,
+      "after_polygons": 33659
+    },
+    {
+      "layer": 1,
+      "datatype": 251,
+      "xor_polygons": 0,
+      "before_polygons": 0,
+      "after_polygons": 0
+    },
+    {
+      "layer": 2,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 336590,
+      "after_polygons": 2320
+    },
+    {
+      "layer": 3,
+      "datatype": 251,
+      "xor_polygons": 0,
+      "before_polygons": 0,
+      "after_polygons": 0
+    },
+    {
+      "layer": 7,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 277882,
+      "after_polygons": 277882
+    },
+    {
+      "layer": 10,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 128450,
+      "after_polygons": 128450
+    },
+    {
+      "layer": 11,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 59081,
+      "after_polygons": 59081
+    },
+    {
+      "layer": 12,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 33659,
+      "after_polygons": 33659
+    },
+    {
+      "layer": 13,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 33659,
+      "after_polygons": 33659
+    },
+    {
+      "layer": 16,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 148985,
+      "after_polygons": 148985
+    },
+    {
+      "layer": 17,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 313297,
+      "after_polygons": 313297
+    },
+    {
+      "layer": 18,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 742112,
+      "after_polygons": 742112
+    },
+    {
+      "layer": 19,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 220750,
+      "after_polygons": 220750
+    },
+    {
+      "layer": 19,
+      "datatype": 251,
+      "xor_polygons": 0,
+      "before_polygons": 0,
+      "after_polygons": 0
+    },
+    {
+      "layer": 20,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 211544,
+      "after_polygons": 211544
+    },
+    {
+      "layer": 20,
+      "datatype": 251,
+      "xor_polygons": 0,
+      "before_polygons": 0,
+      "after_polygons": 0
+    },
+    {
+      "layer": 21,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 462234,
+      "after_polygons": 462234
+    },
+    {
+      "layer": 25,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 84872,
+      "after_polygons": 84872
+    },
+    {
+      "layer": 30,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 164128,
+      "after_polygons": 164128
+    },
+    {
+      "layer": 30,
+      "datatype": 2,
+      "xor_polygons": 0,
+      "before_polygons": 0,
+      "after_polygons": 0
+    },
+    {
+      "layer": 30,
+      "datatype": 251,
+      "xor_polygons": 0,
+      "before_polygons": 24,
+      "after_polygons": 24
+    },
+    {
+      "layer": 35,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 19280,
+      "after_polygons": 19280
+    },
+    {
+      "layer": 40,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 34054,
+      "after_polygons": 34054
+    },
+    {
+      "layer": 40,
+      "datatype": 2,
+      "xor_polygons": 0,
+      "before_polygons": 0,
+      "after_polygons": 0
+    },
+    {
+      "layer": 40,
+      "datatype": 251,
+      "xor_polygons": 0,
+      "before_polygons": 154,
+      "after_polygons": 154
+    },
+    {
+      "layer": 45,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 1883,
+      "after_polygons": 1883
+    },
+    {
+      "layer": 50,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 3664,
+      "after_polygons": 3664
+    },
+    {
+      "layer": 50,
+      "datatype": 2,
+      "xor_polygons": 0,
+      "before_polygons": 0,
+      "after_polygons": 0
+    },
+    {
+      "layer": 50,
+      "datatype": 251,
+      "xor_polygons": 0,
+      "before_polygons": 234,
+      "after_polygons": 234
+    },
+    {
+      "layer": 55,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 326,
+      "after_polygons": 326
+    },
+    {
+      "layer": 60,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 908,
+      "after_polygons": 908
+    },
+    {
+      "layer": 65,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 231,
+      "after_polygons": 231
+    },
+    {
+      "layer": 70,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 370,
+      "after_polygons": 370
+    },
+    {
+      "layer": 88,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 318021,
+      "after_polygons": 318021
+    },
+    {
+      "layer": 100,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 33659,
+      "after_polygons": 33659
+    },
+    {
+      "layer": 235,
+      "datatype": 0,
+      "xor_polygons": 0,
+      "before_polygons": 1,
+      "after_polygons": 1
+    }
+  ],
+  "elapsed_s": 28.663180543109775,
+  "official_basis": {
+    "document": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/reference_diagnosis/asap7_drm_201207a.pdf",
+    "document_sha256": "0091ea9ecc54f1331428821e1a7356ec4a7a13d49c2924a60305c11587c478e9",
+    "page_18": "When running hierarchical DRC, ensure that the FIN layer polygons have equal length along the x-axis.",
+    "page_19_note": "GATE equal y-length condition also noted; this candidate does not merge or modify GATE."
+  },
+  "scope": "No DRC rule edited/excluded. Polygon XOR excludes text, preserves all drawing mask geometry; actual DRC verdict must be separately obtained."
+}

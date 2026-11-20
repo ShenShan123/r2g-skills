@@ -1,0 +1,70 @@
+{
+  "design": "uart",
+  "status": "DRC_REPAIR_REQUIRED",
+  "rtl_source": "ORFS designs/src/uart; unmodified, MIT license retained",
+  "flow_complete": true,
+  "flow_run": "RUN_2026-11-16_06-30-17_2035355_4d23",
+  "clock_period_ns": 1,
+  "setup_worst_slack_ns": 0.710612,
+  "hold_worst_slack_ns": 0.0381014,
+  "logic_cells": 626,
+  "sequential_cells": 79,
+  "die_area_um2": 262.44,
+  "core_area_um2": 197.122,
+  "stdcell_area_um2": 80.5545,
+  "utilization": 0.408654,
+  "power_estimate_mw": 0.649972,
+  "rtl_simulation": "PASS",
+  "final_gate_simulation": "PASS",
+  "formal": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart/formal/final_verification/verification.json",
+  "reference_audit": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart/reports/reference_validation.json",
+  "drc": {
+    "process_exit": 0,
+    "wall_s": 5.5737367402762175,
+    "gds_sha256": "c7231dfe783ef1fc57d3185d975a4c01bbf91c74c933749a3bf8c9e3ad7fbe35",
+    "deck_sha256": "1929e51ea03ae87296483fce6aa5755ab54049dbca159927d916dc4373924765",
+    "offsets": [
+      "0",
+      "0",
+      "0",
+      "0"
+    ],
+    "flat": true,
+    "property_limit": null,
+    "result": "violations",
+    "rulechecks": 334,
+    "results": 10,
+    "expanded_results": 10,
+    "violations": {
+      "V0.M1.AUX.3": [
+        2,
+        2
+      ],
+      "M1.S.6": [
+        8,
+        8
+      ]
+    }
+  },
+  "lvs": {
+    "process_exit": 0,
+    "wall_s": 6.075109384953976,
+    "gds_sha256": "ecd4aff0007a4e8dc56b707b5f250de6de5ba9acdc79126fc5a68d4580b274b0",
+    "deck_sha256": "3b5a5a3b07de5c46798ae4c820816742591001d96f0ab85e58a5a3d06476ad4b",
+    "offsets": [
+      "0",
+      "0",
+      "0",
+      "0"
+    ],
+    "flat": false,
+    "property_limit": 1024,
+    "result": "CORRECT",
+    "source_sha256": "274c9d145fb3f3ec13a3c89b670520d2d870f90fb43fe8a0e299ebd3fca3e3bb"
+  },
+  "final_qualified_project": "multi_uart_strict",
+  "resource_summary": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart/reports/tool_resource_summary.json",
+  "eda_tool_elapsed_sum_s": 65.77,
+  "eda_cpu_sum_s": 98.61,
+  "peak_rss_mib": 1117.11328125
+}

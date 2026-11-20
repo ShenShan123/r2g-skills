@@ -1,0 +1,8 @@
+read_rtlil /home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart/formal/final_verification/masked_prepared.il
+expose -shared gold/w:uart_* gate/w:uart_*
+miter -equiv -make_outputs -flatten gold gate miter
+hierarchy -top miter
+techmap
+opt_clean
+check -assert
+sat -seq 4 -set-at 1 in_rst 1 -prove trigger 0 -prove-skip 1 -verify -timeout 90 -show-ports -dump_vcd /home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart/formal/final_verification/reset_counterexample.vcd

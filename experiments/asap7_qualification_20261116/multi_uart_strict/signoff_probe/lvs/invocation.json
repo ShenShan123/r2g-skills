@@ -1,0 +1,16 @@
+{
+  "process_exit": 0,
+  "wall_s": 6.15788746997714,
+  "gds_sha256": "7ceaea805fd1095f3d9eda72a1f554a72d4cc18b6f1c8943148bc617d6bcf212",
+  "deck_sha256": "3b5a5a3b07de5c46798ae4c820816742591001d96f0ab85e58a5a3d06476ad4b",
+  "offsets": [
+    "0",
+    "0",
+    "0",
+    "0"
+  ],
+  "flat": false,
+  "property_limit": 1024,
+  "result": "CORRECT",
+  "source_sha256": "274c9d145fb3f3ec13a3c89b670520d2d870f90fb43fe8a0e299ebd3fca3e3bb"
+}

@@ -1,0 +1,8 @@
+{
+  "original_gds": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/gcd_pdn3/backend/RUN_2026-11-16_05-44-40_1976760_68c8/results/6_final.gds",
+  "original_sha256": "dd8f4a1ac55a6d32d45e815b47a47ac5c41c7708e08a305c493560017bcd81d3",
+  "geometry_scale": 1,
+  "top_level_pin_labels_copied": 56,
+  "drc_top_name": "TOPCELL",
+  "lvs_top_name": "gcd"
+}

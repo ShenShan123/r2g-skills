@@ -1,0 +1,2641 @@
+{
+  "project": "multi_picorv32",
+  "source": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32_input/drc.gds",
+  "source_sha256": "fd382cb9160913a2ec0ee2e91bb1312a8e4f99038fbc6cda9783b2133ff6e416",
+  "dbu_um": 0.00025,
+  "cells": 79,
+  "top_direct_reference_records": 158313,
+  "top_array_records": 0,
+  "top_expanded_instances": 158313,
+  "top_direct_active_shapes": 0,
+  "raw": {
+    "polygons": 66306,
+    "bbox_dbu": "(4504,4428;282344,281772)",
+    "area_um2_sum": 1386.738198,
+    "bbox_width_dbu_counts": {
+      "64": 1546,
+      "280": 9830,
+      "496": 12773,
+      "512": 8,
+      "712": 2795,
+      "928": 12049,
+      "1144": 3066,
+      "1360": 8357,
+      "1792": 324,
+      "2008": 10,
+      "2224": 15292,
+      "2656": 10,
+      "3088": 30,
+      "4384": 24,
+      "6112": 192
+    },
+    "bbox_height_dbu_counts": {
+      "108": 4793,
+      "216": 3587,
+      "324": 57926
+    },
+    "vertex_count_distribution": {
+      "4": 60506,
+      "6": 4353,
+      "8": 1445,
+      "16": 2
+    },
+    "nonrectangular_count": 5800,
+    "holes": 0,
+    "nonrectangular_examples": [
+      "(262624,143208;262624,143316;262192,143316;262192,143532;263120,143532;263120,143208)",
+      "(142744,148068;142744,148284;143176,148284;143176,148392;143672,148392;143672,148068)",
+      "(199552,142668;199552,142884;199984,142884;199984,142992;200480,142992;200480,142668)",
+      "(177736,142668;177736,142884;177952,142884;177952,142992;178880,142992;178880,142884;179096,142884;179096,142668)",
+      "(269536,142668;269536,142884;269752,142884;269752,142992;270680,142992;270680,142884;270896,142884;270896,142668)",
+      "(65848,143208;65848,143424;65480,143424;65480,143316;64984,143316;64984,143532;66344,143532;66344,143208)",
+      "(144040,227448;144040,227664;143672,227664;143672,227556;143176,227556;143176,227772;144536,227772;144536,227448)",
+      "(142744,65448;142744,65664;142376,65664;142376,65556;141880,65556;141880,65772;143240,65772;143240,65448)"
+    ],
+    "distinct_polygon_area_count": 32,
+    "distinct_bottom_y": 1019,
+    "distinct_top_y": 1019,
+    "top_y_multiplicity": [
+      [
+        164052,
+        176
+      ],
+      [
+        133812,
+        171
+      ],
+      [
+        121932,
+        169
+      ],
+      [
+        114372,
+        169
+      ],
+      [
+        175932,
+        168
+      ],
+      [
+        131652,
+        167
+      ],
+      [
+        103572,
+        167
+      ],
+      [
+        191052,
+        167
+      ]
+    ]
+  },
+  "union": {
+    "polygons": 66306,
+    "bbox_dbu": "(4504,4428;282344,281772)",
+    "area_um2_sum": 1386.738198,
+    "bbox_width_dbu_counts": {
+      "64": 1546,
+      "280": 9830,
+      "496": 12773,
+      "512": 8,
+      "712": 2795,
+      "928": 12049,
+      "1144": 3066,
+      "1360": 8357,
+      "1792": 324,
+      "2008": 10,
+      "2224": 15292,
+      "2656": 10,
+      "3088": 30,
+      "4384": 24,
+      "6112": 192
+    },
+    "bbox_height_dbu_counts": {
+      "108": 4793,
+      "216": 3587,
+      "324": 57926
+    },
+    "vertex_count_distribution": {
+      "4": 60506,
+      "6": 4353,
+      "8": 1445,
+      "16": 2
+    },
+    "nonrectangular_count": 5800,
+    "holes": 0,
+    "nonrectangular_examples": [
+      "(142960,61668;142960,61992;143456,61992;143456,61776;143672,61776;143672,61668)",
+      "(143392,62208;143392,62532;144752,62532;144752,62424;143672,62424;143672,62208)",
+      "(142312,63828;142312,64044;142808,64044;142808,63936;143176,63936;143176,64152;143672,64152;143672,63828)",
+      "(143392,78408;143392,78624;143024,78624;143024,78516;142528,78516;142528,78732;143888,78732;143888,78408)",
+      "(142744,78948;142744,79164;143240,79164;143240,79056;143608,79056;143608,79272;144104,79272;144104,78948)",
+      "(142312,113508;142312,113832;142592,113832;142592,113724;143672,113724;143672,113508)",
+      "(142312,114048;142312,114372;143672,114372;143672,114156;143240,114156;143240,114048)",
+      "(143392,121068;143392,121392;144320,121392;144320,121284;144752,121284;144752,121068)"
+    ],
+    "distinct_polygon_area_count": 32,
+    "distinct_bottom_y": 1019,
+    "distinct_top_y": 1019,
+    "top_y_multiplicity": [
+      [
+        164052,
+        176
+      ],
+      [
+        133812,
+        171
+      ],
+      [
+        114372,
+        169
+      ],
+      [
+        121932,
+        169
+      ],
+      [
+        175932,
+        168
+      ],
+      [
+        191052,
+        167
+      ],
+      [
+        103572,
+        167
+      ],
+      [
+        131652,
+        167
+      ]
+    ]
+  },
+  "raw_union_xor_empty": true,
+  "cells_with_active": [
+    {
+      "cell": "DECAPx10_ASAP7_75t_R",
+      "top_instances": 7646,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;4568,972)",
+        "area_um2_sum": 0.090072,
+        "bbox_width_dbu_counts": {
+          "2224": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "DECAPx4_ASAP7_75t_R",
+      "top_instances": 1142,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1976,972)",
+        "area_um2_sum": 0.037584000000000006,
+        "bbox_width_dbu_counts": {
+          "928": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "DECAPx6_ASAP7_75t_R",
+      "top_instances": 1634,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;2840,972)",
+        "area_um2_sum": 0.05508,
+        "bbox_width_dbu_counts": {
+          "1360": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "DECAPx2_ASAP7_75t_R",
+      "top_instances": 1917,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1112,972)",
+        "area_um2_sum": 0.020088,
+        "bbox_width_dbu_counts": {
+          "496": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "DECAPx1_ASAP7_75t_R",
+      "top_instances": 1377,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;680,972)",
+        "area_um2_sum": 0.01134,
+        "bbox_width_dbu_counts": {
+          "280": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "TAPCELL_ASAP7_75t_R",
+      "top_instances": 773,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;248,972)",
+        "area_um2_sum": 0.002592,
+        "bbox_width_dbu_counts": {
+          "64": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "top_instances": 975,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;464,972)",
+        "area_um2_sum": 0.01134,
+        "bbox_width_dbu_counts": {
+          "280": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "NOR2x1_ASAP7_75t_R",
+      "top_instances": 227,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1112,972)",
+        "area_um2_sum": 0.028836000000000004,
+        "bbox_width_dbu_counts": {
+          "496": 1,
+          "928": 1
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AND2x2_ASAP7_75t_R",
+      "top_instances": 268,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1112,972)",
+        "area_um2_sum": 0.034668,
+        "bbox_width_dbu_counts": {
+          "928": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 1,
+          "6": 1
+        },
+        "nonrectangular_count": 1,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(616,648;616,756;184,756;184,972;1112,972;1112,648)"
+        ],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AO21x1_ASAP7_75t_R",
+      "top_instances": 806,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1112,972)",
+        "area_um2_sum": 0.037584000000000006,
+        "bbox_width_dbu_counts": {
+          "928": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "OR2x2_ASAP7_75t_R",
+      "top_instances": 118,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1112,972)",
+        "area_um2_sum": 0.034668,
+        "bbox_width_dbu_counts": {
+          "928": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 1,
+          "6": 1
+        },
+        "nonrectangular_count": 1,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(184,108;184,324;616,324;616,432;1112,432;1112,108)"
+        ],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "NAND2x1_ASAP7_75t_R",
+      "top_instances": 1760,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1112,972)",
+        "area_um2_sum": 0.028836000000000004,
+        "bbox_width_dbu_counts": {
+          "496": 1,
+          "928": 1
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AO211x2_ASAP7_75t_R",
+      "top_instances": 8,
+      "active": {
+        "polygons": 7,
+        "bbox_dbu": "(184,108;3272,972)",
+        "area_um2_sum": 0.07560000000000001,
+        "bbox_width_dbu_counts": {
+          "280": 2,
+          "496": 3,
+          "512": 1,
+          "1360": 1
+        },
+        "bbox_height_dbu_counts": {
+          "216": 2,
+          "324": 5
+        },
+        "vertex_count_distribution": {
+          "4": 7
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 4,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 3,
+        "top_y_multiplicity": [
+          [
+            972,
+            3
+          ],
+          [
+            432,
+            2
+          ],
+          [
+            324,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AOI21x1_ASAP7_75t_R",
+      "top_instances": 212,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1544,972)",
+        "area_um2_sum": 0.052164,
+        "bbox_width_dbu_counts": {
+          "1360": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 1,
+          "8": 1
+        },
+        "nonrectangular_count": 1,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(184,108;184,324;400,324;400,432;1328,432;1328,324;1544,324;1544,108)"
+        ],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AND3x1_ASAP7_75t_R",
+      "top_instances": 428,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1112,972)",
+        "area_um2_sum": 0.037584000000000006,
+        "bbox_width_dbu_counts": {
+          "928": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "OA21x2_ASAP7_75t_R",
+      "top_instances": 1253,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1328,972)",
+        "area_um2_sum": 0.046332000000000005,
+        "bbox_width_dbu_counts": {
+          "1144": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "OA211x2_ASAP7_75t_R",
+      "top_instances": 1233,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1544,972)",
+        "area_um2_sum": 0.04676400000000001,
+        "bbox_width_dbu_counts": {
+          "1360": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 1,
+          "8": 1
+        },
+        "nonrectangular_count": 1,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(1048,648;1048,864;680,864;680,756;184,756;184,972;1544,972;1544,648)"
+        ],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AND4x1_ASAP7_75t_R",
+      "top_instances": 38,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1328,972)",
+        "area_um2_sum": 0.046332000000000005,
+        "bbox_width_dbu_counts": {
+          "1144": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "OAI21x1_ASAP7_75t_R",
+      "top_instances": 137,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1544,972)",
+        "area_um2_sum": 0.05508,
+        "bbox_width_dbu_counts": {
+          "1360": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AOI211x1_ASAP7_75t_R",
+      "top_instances": 9,
+      "active": {
+        "polygons": 4,
+        "bbox_dbu": "(184,108;2408,972)",
+        "area_um2_sum": 0.05767200000000001,
+        "bbox_width_dbu_counts": {
+          "496": 2,
+          "928": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 4
+        },
+        "vertex_count_distribution": {
+          "4": 4
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            2
+          ],
+          [
+            432,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AND5x1_ASAP7_75t_R",
+      "top_instances": 16,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1544,972)",
+        "area_um2_sum": 0.04779,
+        "bbox_width_dbu_counts": {
+          "1360": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 1,
+          "6": 1
+        },
+        "nonrectangular_count": 1,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(1264,648;1264,756;184,756;184,972;1544,972;1544,648)"
+        ],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "OR3x1_ASAP7_75t_R",
+      "top_instances": 847,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1112,972)",
+        "area_um2_sum": 0.037584000000000006,
+        "bbox_width_dbu_counts": {
+          "928": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "OA31x2_ASAP7_75t_R",
+      "top_instances": 10,
+      "active": {
+        "polygons": 7,
+        "bbox_dbu": "(184,108;3056,972)",
+        "area_um2_sum": 0.07322400000000001,
+        "bbox_width_dbu_counts": {
+          "280": 2,
+          "496": 3,
+          "712": 1,
+          "928": 1
+        },
+        "bbox_height_dbu_counts": {
+          "324": 7
+        },
+        "vertex_count_distribution": {
+          "4": 6,
+          "6": 1
+        },
+        "nonrectangular_count": 1,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(1480,648;1480,972;2192,972;2192,756;1976,756;1976,648)"
+        ],
+        "distinct_polygon_area_count": 4,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            4
+          ],
+          [
+            972,
+            3
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "OR4x1_ASAP7_75t_R",
+      "top_instances": 106,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1328,972)",
+        "area_um2_sum": 0.046332000000000005,
+        "bbox_width_dbu_counts": {
+          "1144": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "XOR2x2_ASAP7_75t_R",
+      "top_instances": 141,
+      "active": {
+        "polygons": 4,
+        "bbox_dbu": "(184,108;2192,972)",
+        "area_um2_sum": 0.063504,
+        "bbox_width_dbu_counts": {
+          "712": 2,
+          "928": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 4
+        },
+        "vertex_count_distribution": {
+          "4": 3,
+          "6": 1
+        },
+        "nonrectangular_count": 1,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(1696,648;1696,756;1264,756;1264,972;2192,972;2192,648)"
+        ],
+        "distinct_polygon_area_count": 3,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            2
+          ],
+          [
+            432,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "NAND3x1_ASAP7_75t_R",
+      "top_instances": 7,
+      "active": {
+        "polygons": 3,
+        "bbox_dbu": "(184,108;2192,972)",
+        "area_um2_sum": 0.056375999999999996,
+        "bbox_width_dbu_counts": {
+          "280": 1,
+          "496": 1,
+          "2008": 1
+        },
+        "bbox_height_dbu_counts": {
+          "324": 3
+        },
+        "vertex_count_distribution": {
+          "4": 3
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 3,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            2
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AO221x1_ASAP7_75t_R",
+      "top_instances": 125,
+      "active": {
+        "polygons": 4,
+        "bbox_dbu": "(184,108;1976,972)",
+        "area_um2_sum": 0.04995,
+        "bbox_width_dbu_counts": {
+          "280": 2,
+          "1144": 2
+        },
+        "bbox_height_dbu_counts": {
+          "216": 1,
+          "324": 3
+        },
+        "vertex_count_distribution": {
+          "4": 4
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 3,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 3,
+        "top_y_multiplicity": [
+          [
+            972,
+            2
+          ],
+          [
+            432,
+            1
+          ],
+          [
+            324,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AO31x2_ASAP7_75t_R",
+      "top_instances": 5,
+      "active": {
+        "polygons": 6,
+        "bbox_dbu": "(184,108;3272,972)",
+        "area_um2_sum": 0.089424,
+        "bbox_width_dbu_counts": {
+          "496": 2,
+          "712": 1,
+          "928": 3
+        },
+        "bbox_height_dbu_counts": {
+          "324": 6
+        },
+        "vertex_count_distribution": {
+          "4": 5,
+          "6": 1
+        },
+        "nonrectangular_count": 1,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(184,108;184,432;680,432;680,324;896,324;896,108)"
+        ],
+        "distinct_polygon_area_count": 3,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            3
+          ],
+          [
+            972,
+            3
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "OAI22x1_ASAP7_75t_R",
+      "top_instances": 106,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1976,972)",
+        "area_um2_sum": 0.07257600000000002,
+        "bbox_width_dbu_counts": {
+          "1792": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "OR5x1_ASAP7_75t_R",
+      "top_instances": 49,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1544,972)",
+        "area_um2_sum": 0.04779,
+        "bbox_width_dbu_counts": {
+          "1360": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 1,
+          "6": 1
+        },
+        "nonrectangular_count": 1,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(184,108;184,324;1264,324;1264,432;1544,432;1544,108)"
+        ],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "XNOR2x2_ASAP7_75t_R",
+      "top_instances": 87,
+      "active": {
+        "polygons": 4,
+        "bbox_dbu": "(184,108;2192,972)",
+        "area_um2_sum": 0.063504,
+        "bbox_width_dbu_counts": {
+          "712": 2,
+          "928": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 4
+        },
+        "vertex_count_distribution": {
+          "4": 3,
+          "6": 1
+        },
+        "nonrectangular_count": 1,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(1264,108;1264,324;1696,324;1696,432;2192,432;2192,108)"
+        ],
+        "distinct_polygon_area_count": 3,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            2
+          ],
+          [
+            972,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "OA222x2_ASAP7_75t_R",
+      "top_instances": 60,
+      "active": {
+        "polygons": 4,
+        "bbox_dbu": "(184,108;2408,972)",
+        "area_um2_sum": 0.07516800000000001,
+        "bbox_width_dbu_counts": {
+          "928": 4
+        },
+        "bbox_height_dbu_counts": {
+          "324": 4
+        },
+        "vertex_count_distribution": {
+          "4": 4
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            2
+          ],
+          [
+            432,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AO22x1_ASAP7_75t_R",
+      "top_instances": 24,
+      "active": {
+        "polygons": 4,
+        "bbox_dbu": "(184,108;1760,972)",
+        "area_um2_sum": 0.036396000000000005,
+        "bbox_width_dbu_counts": {
+          "280": 2,
+          "928": 2
+        },
+        "bbox_height_dbu_counts": {
+          "216": 2,
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 4
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 3,
+        "distinct_top_y": 3,
+        "top_y_multiplicity": [
+          [
+            972,
+            2
+          ],
+          [
+            324,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AO32x1_ASAP7_75t_R",
+      "top_instances": 70,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1544,972)",
+        "area_um2_sum": 0.044874000000000004,
+        "bbox_width_dbu_counts": {
+          "1360": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "6": 2
+        },
+        "nonrectangular_count": 2,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(184,108;184,432;1112,432;1112,324;1544,324;1544,108)",
+          "(184,648;184,972;1544,972;1544,756;464,756;464,648)"
+        ],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AOI22x1_ASAP7_75t_R",
+      "top_instances": 13,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1976,972)",
+        "area_um2_sum": 0.07257600000000002,
+        "bbox_width_dbu_counts": {
+          "1792": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "OA22x2_ASAP7_75t_R",
+      "top_instances": 10,
+      "active": {
+        "polygons": 4,
+        "bbox_dbu": "(184,108;1976,972)",
+        "area_um2_sum": 0.05767200000000001,
+        "bbox_width_dbu_counts": {
+          "496": 2,
+          "928": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 4
+        },
+        "vertex_count_distribution": {
+          "4": 4
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            2
+          ],
+          [
+            972,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "OA221x2_ASAP7_75t_R",
+      "top_instances": 1,
+      "active": {
+        "polygons": 6,
+        "bbox_dbu": "(184,108;3272,972)",
+        "area_um2_sum": 0.089424,
+        "bbox_width_dbu_counts": {
+          "280": 2,
+          "496": 1,
+          "712": 1,
+          "1360": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 6
+        },
+        "vertex_count_distribution": {
+          "4": 5,
+          "6": 1
+        },
+        "nonrectangular_count": 1,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(2776,648;2776,972;3056,972;3056,756;2840,756;2840,648)"
+        ],
+        "distinct_polygon_area_count": 5,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            4
+          ],
+          [
+            432,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "NOR3x1_ASAP7_75t_R",
+      "top_instances": 3,
+      "active": {
+        "polygons": 3,
+        "bbox_dbu": "(184,108;2192,972)",
+        "area_um2_sum": 0.056375999999999996,
+        "bbox_width_dbu_counts": {
+          "280": 1,
+          "496": 1,
+          "2008": 1
+        },
+        "bbox_height_dbu_counts": {
+          "324": 3
+        },
+        "vertex_count_distribution": {
+          "4": 3
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 3,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            2
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AO222x2_ASAP7_75t_R",
+      "top_instances": 16,
+      "active": {
+        "polygons": 4,
+        "bbox_dbu": "(184,108;2408,972)",
+        "area_um2_sum": 0.07516800000000001,
+        "bbox_width_dbu_counts": {
+          "928": 4
+        },
+        "bbox_height_dbu_counts": {
+          "324": 4
+        },
+        "vertex_count_distribution": {
+          "4": 4
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            2
+          ],
+          [
+            432,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "INVx2_ASAP7_75t_R",
+      "top_instances": 2,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;680,972)",
+        "area_um2_sum": 0.020088,
+        "bbox_width_dbu_counts": {
+          "496": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "INVx3_ASAP7_75t_R",
+      "top_instances": 15,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;896,972)",
+        "area_um2_sum": 0.028836000000000004,
+        "bbox_width_dbu_counts": {
+          "712": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "OR3x2_ASAP7_75t_R",
+      "top_instances": 8,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1328,972)",
+        "area_um2_sum": 0.046332000000000005,
+        "bbox_width_dbu_counts": {
+          "1144": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AND2x4_ASAP7_75t_R",
+      "top_instances": 3,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1976,972)",
+        "area_um2_sum": 0.066744,
+        "bbox_width_dbu_counts": {
+          "1792": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 1,
+          "6": 1
+        },
+        "nonrectangular_count": 1,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(1048,648;1048,756;184,756;184,972;1976,972;1976,648)"
+        ],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AND5x2_ASAP7_75t_R",
+      "top_instances": 1,
+      "active": {
+        "polygons": 10,
+        "bbox_dbu": "(184,108;4136,972)",
+        "area_um2_sum": 0.096066,
+        "bbox_width_dbu_counts": {
+          "280": 5,
+          "496": 3,
+          "928": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 10
+        },
+        "vertex_count_distribution": {
+          "4": 10
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 3,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            6
+          ],
+          [
+            432,
+            4
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "NAND2x2_ASAP7_75t_R",
+      "top_instances": 15,
+      "active": {
+        "polygons": 3,
+        "bbox_dbu": "(184,108;1976,972)",
+        "area_um2_sum": 0.056375999999999996,
+        "bbox_width_dbu_counts": {
+          "496": 2,
+          "1792": 1
+        },
+        "bbox_height_dbu_counts": {
+          "324": 3
+        },
+        "vertex_count_distribution": {
+          "4": 3
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            2
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "NOR2x2_ASAP7_75t_R",
+      "top_instances": 1,
+      "active": {
+        "polygons": 3,
+        "bbox_dbu": "(184,108;1976,972)",
+        "area_um2_sum": 0.056375999999999996,
+        "bbox_width_dbu_counts": {
+          "496": 2,
+          "1792": 1
+        },
+        "bbox_height_dbu_counts": {
+          "324": 3
+        },
+        "vertex_count_distribution": {
+          "4": 3
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            2
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AND4x2_ASAP7_75t_R",
+      "top_instances": 3,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1544,972)",
+        "area_um2_sum": 0.05508,
+        "bbox_width_dbu_counts": {
+          "1360": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AND3x2_ASAP7_75t_R",
+      "top_instances": 2,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1328,972)",
+        "area_um2_sum": 0.046332000000000005,
+        "bbox_width_dbu_counts": {
+          "1144": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "AO33x2_ASAP7_75t_R",
+      "top_instances": 3,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1976,972)",
+        "area_um2_sum": 0.06382800000000001,
+        "bbox_width_dbu_counts": {
+          "1792": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 1,
+          "6": 1
+        },
+        "nonrectangular_count": 1,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(184,648;184,972;1976,972;1976,756;680,756;680,648)"
+        ],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "FAx1_ASAP7_75t_R",
+      "top_instances": 5,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;2840,972)",
+        "area_um2_sum": 0.107568,
+        "bbox_width_dbu_counts": {
+          "2656": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "HAxp5_ASAP7_75t_R",
+      "top_instances": 202,
+      "active": {
+        "polygons": 4,
+        "bbox_dbu": "(184,108;1760,972)",
+        "area_um2_sum": 0.045576,
+        "bbox_width_dbu_counts": {
+          "496": 2,
+          "712": 2
+        },
+        "bbox_height_dbu_counts": {
+          "216": 1,
+          "324": 3
+        },
+        "vertex_count_distribution": {
+          "4": 4
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 3,
+        "distinct_bottom_y": 3,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            2
+          ],
+          [
+            972,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "DFFHQNx3_ASAP7_75t_R",
+      "top_instances": 6,
+      "active": {
+        "polygons": 10,
+        "bbox_dbu": "(184,108;4568,972)",
+        "area_um2_sum": 0.08532000000000001,
+        "bbox_width_dbu_counts": {
+          "280": 1,
+          "496": 4,
+          "712": 3,
+          "928": 1,
+          "1360": 1
+        },
+        "bbox_height_dbu_counts": {
+          "108": 3,
+          "216": 2,
+          "324": 5
+        },
+        "vertex_count_distribution": {
+          "4": 8,
+          "6": 2
+        },
+        "nonrectangular_count": 2,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(1048,648;1048,972;1760,972;1760,864;1544,864;1544,648)",
+          "(1480,108;1480,432;1760,432;1760,216;2840,216;2840,108)"
+        ],
+        "distinct_polygon_area_count": 7,
+        "distinct_bottom_y": 4,
+        "distinct_top_y": 4,
+        "top_y_multiplicity": [
+          [
+            972,
+            5
+          ],
+          [
+            432,
+            3
+          ],
+          [
+            324,
+            1
+          ],
+          [
+            216,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "DFFHQNx2_ASAP7_75t_R",
+      "top_instances": 4,
+      "active": {
+        "polygons": 10,
+        "bbox_dbu": "(184,108;4352,972)",
+        "area_um2_sum": 0.076572,
+        "bbox_width_dbu_counts": {
+          "280": 1,
+          "496": 6,
+          "712": 1,
+          "928": 1,
+          "1360": 1
+        },
+        "bbox_height_dbu_counts": {
+          "108": 3,
+          "216": 2,
+          "324": 5
+        },
+        "vertex_count_distribution": {
+          "4": 8,
+          "6": 2
+        },
+        "nonrectangular_count": 2,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(1048,648;1048,972;1760,972;1760,864;1544,864;1544,648)",
+          "(1480,108;1480,432;1760,432;1760,216;2840,216;2840,108)"
+        ],
+        "distinct_polygon_area_count": 7,
+        "distinct_bottom_y": 4,
+        "distinct_top_y": 4,
+        "top_y_multiplicity": [
+          [
+            972,
+            5
+          ],
+          [
+            432,
+            3
+          ],
+          [
+            324,
+            1
+          ],
+          [
+            216,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "top_instances": 1587,
+      "active": {
+        "polygons": 10,
+        "bbox_dbu": "(184,108;4136,972)",
+        "area_um2_sum": 0.067824,
+        "bbox_width_dbu_counts": {
+          "280": 3,
+          "496": 4,
+          "712": 1,
+          "928": 1,
+          "1360": 1
+        },
+        "bbox_height_dbu_counts": {
+          "108": 3,
+          "216": 2,
+          "324": 5
+        },
+        "vertex_count_distribution": {
+          "4": 8,
+          "6": 2
+        },
+        "nonrectangular_count": 2,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(1048,648;1048,972;1760,972;1760,864;1544,864;1544,648)",
+          "(1480,108;1480,432;1760,432;1760,216;2840,216;2840,108)"
+        ],
+        "distinct_polygon_area_count": 6,
+        "distinct_bottom_y": 4,
+        "distinct_top_y": 4,
+        "top_y_multiplicity": [
+          [
+            972,
+            5
+          ],
+          [
+            432,
+            3
+          ],
+          [
+            324,
+            1
+          ],
+          [
+            216,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "TIELOx1_ASAP7_75t_R",
+      "top_instances": 2,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;464,972)",
+        "area_um2_sum": 0.00567,
+        "bbox_width_dbu_counts": {
+          "280": 2
+        },
+        "bbox_height_dbu_counts": {
+          "108": 1,
+          "216": 1
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 2,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            324,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "BUFx16f_ASAP7_75t_R",
+      "top_instances": 10,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;4568,972)",
+        "area_um2_sum": 0.177552,
+        "bbox_width_dbu_counts": {
+          "4384": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "BUFx24_ASAP7_75t_R",
+      "top_instances": 95,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;6296,972)",
+        "area_um2_sum": 0.247536,
+        "bbox_width_dbu_counts": {
+          "6112": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "CKINVDCx16_ASAP7_75t_R",
+      "top_instances": 1,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;6296,972)",
+        "area_um2_sum": 0.247536,
+        "bbox_width_dbu_counts": {
+          "6112": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "INVx5_ASAP7_75t_R",
+      "top_instances": 1,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1328,972)",
+        "area_um2_sum": 0.046332000000000005,
+        "bbox_width_dbu_counts": {
+          "1144": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "BUFx4f_ASAP7_75t_R",
+      "top_instances": 19,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1544,972)",
+        "area_um2_sum": 0.049248,
+        "bbox_width_dbu_counts": {
+          "1360": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "6": 2
+        },
+        "nonrectangular_count": 2,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(400,648;400,864;184,864;184,972;1544,972;1544,648)",
+          "(184,108;184,216;400,216;400,432;1544,432;1544,108)"
+        ],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "CKINVDCx5p33_ASAP7_75t_R",
+      "top_instances": 1,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;4568,972)",
+        "area_um2_sum": 0.155952,
+        "bbox_width_dbu_counts": {
+          "4384": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "16": 2
+        },
+        "nonrectangular_count": 2,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(184,108;184,324;616,324;616,432;1544,432;1544,324;1912,324;1912,432;2840,432;2840,324;3208,324;3208,432;4136,432;4136,324;4568,324;4568,108)",
+          "(616,648;616,756;184,756;184,972;4568,972;4568,756;4136,756;4136,648;3208,648;3208,756;2840,756;2840,648;1912,648;1912,756;1544,756;1544,648)"
+        ],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "BUFx2_ASAP7_75t_R",
+      "top_instances": 140,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;896,972)",
+        "area_um2_sum": 0.026136,
+        "bbox_width_dbu_counts": {
+          "712": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "6": 2
+        },
+        "nonrectangular_count": 2,
+        "holes": 0,
+        "nonrectangular_examples": [
+          "(184,108;184,324;384,324;384,432;896,432;896,108)",
+          "(384,648;384,756;184,756;184,972;896,972;896,648)"
+        ],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "INVx6_ASAP7_75t_R",
+      "top_instances": 2,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1544,972)",
+        "area_um2_sum": 0.05508,
+        "bbox_width_dbu_counts": {
+          "1360": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "BUFx12_ASAP7_75t_R",
+      "top_instances": 15,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;3272,972)",
+        "area_um2_sum": 0.125064,
+        "bbox_width_dbu_counts": {
+          "3088": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "INVx8_ASAP7_75t_R",
+      "top_instances": 1,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1976,972)",
+        "area_um2_sum": 0.07257600000000002,
+        "bbox_width_dbu_counts": {
+          "1792": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "CKINVDCx8_ASAP7_75t_R",
+      "top_instances": 1,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;4568,972)",
+        "area_um2_sum": 0.177552,
+        "bbox_width_dbu_counts": {
+          "4384": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "BUFx3_ASAP7_75t_R",
+      "top_instances": 187,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1112,972)",
+        "area_um2_sum": 0.037584000000000006,
+        "bbox_width_dbu_counts": {
+          "928": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            432,
+            1
+          ],
+          [
+            972,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "cell": "BUFx6f_ASAP7_75t_R",
+      "top_instances": 28,
+      "active": {
+        "polygons": 2,
+        "bbox_dbu": "(184,108;1976,972)",
+        "area_um2_sum": 0.07257600000000002,
+        "bbox_width_dbu_counts": {
+          "1792": 2
+        },
+        "bbox_height_dbu_counts": {
+          "324": 2
+        },
+        "vertex_count_distribution": {
+          "4": 2
+        },
+        "nonrectangular_count": 0,
+        "holes": 0,
+        "nonrectangular_examples": [],
+        "distinct_polygon_area_count": 1,
+        "distinct_bottom_y": 2,
+        "distinct_top_y": 2,
+        "top_y_multiplicity": [
+          [
+            972,
+            1
+          ],
+          [
+            432,
+            1
+          ]
+        ]
+      }
+    }
+  ],
+  "elapsed_s": 2.294558860361576
+}

@@ -1,0 +1,109 @@
+{
+  "created_gmt8": "2026-11-16T23:38:15.062987+08:00",
+  "platform": "asap7",
+  "design": "gcd",
+  "project": "gcd_pin_window_v2",
+  "evidence": "calibre_evidence/gcd_pin_window_v2",
+  "lvs_evidence": "calibre_evidence/gcd_pin_window_v2_property1024/lvs",
+  "result_scope": "single 16-bit GCD smoke design",
+  "default_platform_enabled": false,
+  "qualified_dual_clean": true,
+  "archive_sha256": "611ff719c688655bf5c5095945ecf22b78c18e5d129e8d8671f645f1a5d76574",
+  "flow": {
+    "status": "complete",
+    "clock_period_ns": 1.0,
+    "setup_wns_ns": 0.438514,
+    "setup_tns_ns": 0.0,
+    "hold_wns_ns": 0.041259500000000005,
+    "stdcell_area_um2": 47.9245,
+    "die_area_um2": 262.44,
+    "timed_stage_elapsed_sum_s": 65.48,
+    "timed_stage_count": 19,
+    "peak_rss_kib": 1105472,
+    "resource_note": "Sum of explicit Elapsed time log lines; excludes wrapper overhead. Peak RSS is maximum, not sum."
+  },
+  "drc": {
+    "process_exit": 0,
+    "wall_s": 4.48102512024343,
+    "gds_sha256": "e7ad24172bb1032f5b2d7000cec244fcbe3f68519d84c1245764f284a2bfb3c2",
+    "deck_sha256": "1929e51ea03ae87296483fce6aa5755ab54049dbca159927d916dc4373924765",
+    "offsets": [
+      "0",
+      "0",
+      "0",
+      "0"
+    ],
+    "flat": true,
+    "property_limit": null,
+    "result": "clean",
+    "rulechecks": 334,
+    "results": 0,
+    "expanded_results": 0,
+    "violations": {},
+    "max_rss_kib": 104104,
+    "result_limit": "ALL",
+    "rules_excluded": []
+  },
+  "lvs": {
+    "process_exit": 0,
+    "wall_s": 7.042464934289455,
+    "gds_sha256": "c641f8a099e2b3b9a529f876785be9734ef019bb8bc34c7096f18c99564bf79b",
+    "deck_sha256": "3b5a5a3b07de5c46798ae4c820816742591001d96f0ab85e58a5a3d06476ad4b",
+    "offsets": [
+      "0",
+      "0",
+      "0",
+      "0"
+    ],
+    "flat": false,
+    "property_limit": 1024,
+    "result": "CORRECT",
+    "source_sha256": "05489cdf3ccb175b780e489b5a9845e50d57e49e21006622a2028c8348f73c9a",
+    "max_rss_kib": 144664,
+    "initial_counts_layout_source": {
+      "ports": [
+        56,
+        56
+      ],
+      "nets": [
+        2939,
+        2939
+      ],
+      "total_inst": [
+        12463,
+        12463
+      ]
+    },
+    "after_transformation_counts_layout_source": {
+      "ports": [
+        56,
+        56
+      ],
+      "nets": [
+        2239,
+        2239
+      ],
+      "total_inst": [
+        2602,
+        2602
+      ]
+    },
+    "warnings": [
+      "Ambiguity points were found and resolved arbitrarily.",
+      "Ambiguity points were found and resolved arbitrarily."
+    ],
+    "logic_blackboxes": 0,
+    "reference_from_tested_layout": false
+  },
+  "geometry_verification": "gcd_pin_window_v2_input/geometry_verification.json",
+  "formal_verification": "lvs_diagnosis/formal/gcd_pin_window_v2/RUN_2026-11-16_06-00-47_2002719_0f7f/verification.json",
+  "adaptation_sha256": {
+    "TECH_LEF": "c1cc22f0895272b4c0ffd914aec670f4916b38bffcaa9fbcf96155ca3b611e64",
+    "SC_LEF": "f26bfe2b12d36dc3034d4af5b2574e1a66ac2639e80138cb14cd1e467ac807b7",
+    "PDN_TCL": "6b65d4a7978f4e8383148e47a1cd3c3091c5aee1299ff5ff83d404626c1074b8"
+  },
+  "limitations": [
+    "One small design does not qualify every design or library corner.",
+    "Calibre xACT RCX and large-design power integrity are not qualified."
+  ]
+}

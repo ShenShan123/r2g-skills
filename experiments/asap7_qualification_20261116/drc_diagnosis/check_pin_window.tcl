@@ -1,0 +1,3 @@
+read_lef /home/yangao/r2g-skills/experiments/asap7_qualification_20261116/drc_diagnosis/asap7_tech_asym_v1_m4_only_candidate.lef
+read_lef /home/yangao/r2g-skills/experiments/asap7_qualification_20261116/drc_diagnosis/asap7sc7p5t_R_pin_window_candidate.lef
+exit

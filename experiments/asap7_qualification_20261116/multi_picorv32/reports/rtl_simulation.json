@@ -1,0 +1,37 @@
+{
+  "result": "PASS",
+  "scope": "bounded program simulation, not exhaustive ISA verification or formal equivalence; gate uses zero-delay Liberty functional models",
+  "commands": [
+    {
+      "cmd": [
+        "iverilog",
+        "-g2012",
+        "-s",
+        "picorv32_tb",
+        "-o",
+        "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/reports/rtl_sim",
+        "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/rtl/picorv32.v",
+        "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/rtl/picorv32_demo.v",
+        "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/tb/picorv32_tb.v"
+      ],
+      "returncode": 0,
+      "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/reports/rtl_sim_compile.log"
+    },
+    {
+      "cmd": [
+        "vvp",
+        "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/reports/rtl_sim"
+      ],
+      "returncode": 0,
+      "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/reports/rtl_sim.log"
+    }
+  ],
+  "inputs": {
+    "rtl/picorv32.v": "12143d9357d574e637f5d4421ff9522a9ae450626c8477bb4da1033c38c5f9fb",
+    "rtl/picorv32_demo.v": "07377acdf03e3146d0d8903650ae11198b712f2a06dfadd9ee399c6cc6f7618f",
+    "tb/picorv32_tb.v": "9f1a8ba4d6812940814388788692694c9ac9920b0564e6617d0428410af64791",
+    "tb/program.hex": "a8416b926750891d2a0fcb3a07fa75636ab439c18ab150dbc4286a952b27753e"
+  },
+  "signature_words_per_mode": 9,
+  "memory_latency_modes": 3
+}

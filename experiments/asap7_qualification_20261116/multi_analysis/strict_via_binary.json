@@ -1,0 +1,14 @@
+{
+  "status": "built",
+  "elapsed_s": 782.175645403564,
+  "patch": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/reference_diagnosis/strict_via_in_pin.patch",
+  "object_sha256": "edb6391ac3381b0435744de0b4f9dc051f707fb8ff8f02151149c7f9e84a7c62",
+  "patched_binary_sha256": "89886cb61fa37ef9e57092565368be576db0e0a135b7e26d0b36bd3ac343257a",
+  "production_binary_sha256": "6454121a552fc8625fa27f474dfc699f2d82a10a8959238168f2c2249988fd48",
+  "shared_source_and_build_objects_modified": false,
+  "production_install_modified": false,
+  "lto_workers": 4,
+  "gpu_enabled": false,
+  "scratch_directory": "/tmp/r2g-asap7-strict-via-zxqdn4wj",
+  "version": "26Q3-318-g6b9d7fb806"
+}

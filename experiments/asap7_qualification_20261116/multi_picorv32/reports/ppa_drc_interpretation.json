@@ -1,0 +1,11 @@
+{
+  "generic_ppa_value": 2,
+  "selected_report": "experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/reports_orfs/5_route_drc.rpt-5.rpt",
+  "selected_report_sha256": "2817cbfc78c6c7c3933f9c123c437d024ca195393a5dbdf14b95bdd5dd6687cc",
+  "parser_pattern": "(\\d+)\\s*violation",
+  "incorrect_match": "2\nviolation",
+  "actual_final_router_report": "experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/reports_orfs/5_route_drc.rpt",
+  "actual_final_router_report_bytes": 0,
+  "final_router_log_count": 0,
+  "signoff_authority": "Official Calibre full flat DRC; generic PPA DRC field is not used."
+}

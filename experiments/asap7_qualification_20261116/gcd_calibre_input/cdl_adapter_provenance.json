@@ -1,0 +1,11 @@
+{
+  "physical_zero_transistor_instances_omitted": {
+    "TAPCELL_ASAP7_75t_R": 104,
+    "FILLER_ASAP7_75t_R": 139,
+    "FILLERxp5_ASAP7_75t_R": 161
+  },
+  "active_logic_instances_omitted": 0,
+  "decap_instances_retained": 612,
+  "reason": "Physical welltap/filler cells have zero MOS in extracted GDS. Active logic, decaps and bulk connectivity remain checked.",
+  "sha256": "9e1d5496adae938db7125f43579caf19a95355f8d52a266a156fdd7a47692505"
+}

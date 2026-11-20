@@ -1,0 +1,10 @@
+{
+  "orfs_dbu": 0.00025,
+  "official_dbu": 0.00025,
+  "only_orfs": [],
+  "only_official": [
+    "TBUFx1_ASAP7_75t_R"
+  ],
+  "different_geometry": [],
+  "different_texts": []
+}

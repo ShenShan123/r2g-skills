@@ -1,0 +1,9 @@
+{
+  "source": "/home/yangao/r2g-skills/design_cases/api_repair_cost_verified8_20261028/nangate45/runtime/workspace/10280857-6ec84a/picorv32_axi__10280857-6ec84a/rtl/examples/attosoc/picorv32.v",
+  "sha256": "12143d9357d574e637f5d4421ff9522a9ae450626c8477bb4da1033c38c5f9fb",
+  "copied_unmodified": true,
+  "license": "ISC notice preserved in RTL",
+  "top": "picorv32_demo",
+  "parameters": "All PicoRV32 defaults: RV32I, 32 registers, dual-port register file, 64-bit counters; no C/M, IRQ, or PCPI; reset PC 0",
+  "external_sram_macros": 0
+}

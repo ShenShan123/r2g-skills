@@ -1,0 +1,16 @@
+{
+  "unchanged": true,
+  "original": {
+    "non_text_records": 350437,
+    "sha256": "2ccb3315bc55395b8540b6a50ba5b0e7137102dc93164cc1895a9eb47df1cd9a"
+  },
+  "lvs": {
+    "non_text_records": 350437,
+    "sha256": "2ccb3315bc55395b8540b6a50ba5b0e7137102dc93164cc1895a9eb47df1cd9a"
+  },
+  "drc": {
+    "non_text_records": 350437,
+    "sha256": "2ccb3315bc55395b8540b6a50ba5b0e7137102dc93164cc1895a9eb47df1cd9a"
+  },
+  "normalization": "top cell name only; text excluded"
+}

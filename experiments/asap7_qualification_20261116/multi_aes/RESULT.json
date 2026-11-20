@@ -1,0 +1,964 @@
+{
+  "design": "aes_cipher_top",
+  "description": "Full AES128 encryption core including key expansion",
+  "status": "PHYSICAL_FLOW_AND_LVS_PASS; FULL_DRC_INCOMPLETE; FORMAL_NOT_PROVED",
+  "project": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_aes",
+  "run": "RUN_2026-11-16_06-29-18_2033585_0242",
+  "logic_blackboxes": [],
+  "rtl_functional": {
+    "result": "PASS",
+    "vectors": 35,
+    "reference": "NIST FIPS197 C.1 and OpenSSL AES128 ECB",
+    "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_aes/reports/rtl_sim.log"
+  },
+  "gate_functional_and_formal": {
+    "netlist": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/results/6_final.v",
+    "vectors": 35,
+    "gate_delay_model": "zero delay",
+    "gate_compile_exit": 0,
+    "gate_sim_exit": 0,
+    "gate_sim_pass": true,
+    "formal_exit": 124,
+    "formal_status": "NOT PROVED",
+    "formal_attempts": [
+      {
+        "config": "tb/final.eqy",
+        "result": "strategy unsupported until Sbox ROM memory_map",
+        "exit": 1,
+        "wall_s": 57.466128828004
+      },
+      {
+        "config": "tb/final_mapped.eqy",
+        "result": "4-step induction not proved; stopped before rerunning with explicit observation points",
+        "exit": 1
+      },
+      {
+        "config": "tb/final_observed.eqy",
+        "result": "time limit 600 seconds; full equivalence NOT PROVED",
+        "exit": 124
+      }
+    ],
+    "formal_scope": "RTL and final netlist pass 35 vectors separately. EQY attempts did not produce a complete unbounded equivalence proof; no input assumptions or rule exclusions added.",
+    "formal_last_attempt": {
+      "partition_proofs_recorded": 2,
+      "unproven_partition_messages": 21,
+      "log": "reports/formal_observed.log",
+      "time_limit_s": 600
+    }
+  },
+  "drc": {
+    "status": "INCOMPLETE_TIMEOUT",
+    "clean": null,
+    "violation_count": null,
+    "attempted_official_rule_checks": 334,
+    "rule_exclusions": [],
+    "maximum_results": "ALL",
+    "timeout_s_per_attempt": 600,
+    "interpretation": "No completed DRC report; no clean or violation verdict can be inferred.",
+    "attempts": [
+      {
+        "name": "multi_aes",
+        "evidence_directory": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_aes/drc",
+        "process_exit": 124,
+        "wall_s": 600.0136178396642,
+        "gds_sha256": "093d951ba11c1a75947d726030e4ea5b6dd6348ecf811075e879d15ec32fab38",
+        "deck_sha256": "1929e51ea03ae87296483fce6aa5755ab54049dbca159927d916dc4373924765",
+        "offsets": [
+          "0",
+          "0",
+          "0",
+          "0"
+        ],
+        "flat": true,
+        "property_limit": null,
+        "result": "execution_failed",
+        "last_operation_progress": [
+          86,
+          1010
+        ],
+        "completed_drc_report_present": false
+      },
+      {
+        "name": "multi_aes_flattened_turbo",
+        "evidence_directory": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_aes_flattened_turbo/drc",
+        "process_exit": 124,
+        "wall_s": 600.0188935082406,
+        "gds_sha256": "2055fa36afb389649fef5360a07aaf304d02740c98f385a3f15b398a8282aa90",
+        "deck_sha256": "1929e51ea03ae87296483fce6aa5755ab54049dbca159927d916dc4373924765",
+        "offsets": [
+          "0",
+          "0",
+          "0",
+          "0"
+        ],
+        "flat": false,
+        "property_limit": null,
+        "result": "execution_failed",
+        "last_operation_progress": [
+          86,
+          1010
+        ],
+        "completed_drc_report_present": false
+      },
+      {
+        "name": "multi_aes_fin_merged",
+        "evidence_directory": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_aes_fin_merged/drc",
+        "process_exit": 124,
+        "wall_s": 600.0165069885552,
+        "gds_sha256": "9a3dabeb43c7e7267fd6dbe52f67d4f24909c77d3533d98f87351b59447926b5",
+        "deck_sha256": "1929e51ea03ae87296483fce6aa5755ab54049dbca159927d916dc4373924765",
+        "offsets": [
+          "0",
+          "0",
+          "0",
+          "0"
+        ],
+        "flat": false,
+        "property_limit": null,
+        "result": "execution_failed",
+        "last_operation_progress": [
+          86,
+          1010
+        ],
+        "completed_drc_report_present": false
+      },
+      {
+        "name": "multi_aes_feol_merged",
+        "evidence_directory": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_aes_feol_merged/drc",
+        "process_exit": 124,
+        "wall_s": 600.0159738194197,
+        "gds_sha256": "6d34c7386d816bbadfdc426678a6023be4035d95860c95086b601f8ce788c12d",
+        "deck_sha256": "1929e51ea03ae87296483fce6aa5755ab54049dbca159927d916dc4373924765",
+        "offsets": [
+          "0",
+          "0",
+          "0",
+          "0"
+        ],
+        "flat": false,
+        "property_limit": null,
+        "result": "execution_failed",
+        "last_operation_progress": [
+          86,
+          1010
+        ],
+        "completed_drc_report_present": false
+      },
+      {
+        "name": "multi_aes_feol_hier",
+        "evidence_directory": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_aes_feol_hier/drc",
+        "process_exit": 124,
+        "wall_s": 600.0149071626365,
+        "gds_sha256": "a4902c41772ddd6c868632523c6e3f5faa0e85502c317c20d0947b08259f76ed",
+        "deck_sha256": "1929e51ea03ae87296483fce6aa5755ab54049dbca159927d916dc4373924765",
+        "offsets": [
+          "0",
+          "0",
+          "0",
+          "0"
+        ],
+        "flat": false,
+        "property_limit": null,
+        "result": "execution_failed",
+        "last_operation_progress": [
+          86,
+          1010
+        ],
+        "completed_drc_report_present": false
+      }
+    ]
+  },
+  "lvs": {
+    "process_exit": 0,
+    "wall_s": 16.08428073115647,
+    "gds_sha256": "72db727efb08d10f3d634950e4da561f64325f8e96ffa26c0479b29e82713df0",
+    "deck_sha256": "3b5a5a3b07de5c46798ae4c820816742591001d96f0ab85e58a5a3d06476ad4b",
+    "offsets": [
+      "0",
+      "0",
+      "0",
+      "0"
+    ],
+    "flat": false,
+    "property_limit": 65536,
+    "result": "CORRECT",
+    "source_sha256": "ec2b0009c509a713c1bb9416a264f0ab60feec4398d7f2888a8573ed2f90e86f",
+    "evidence_directory": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_aes_property65536/lvs",
+    "property_resolution_exceeded_warning": false
+  },
+  "reference_validation": {
+    "status": "PASS",
+    "project": "multi_aes",
+    "top": "aes_cipher_top",
+    "source_sha256": "ec2b0009c509a713c1bb9416a264f0ab60feec4398d7f2888a8573ed2f90e86f",
+    "original_cdl_sha256": "9e1d5496adae938db7125f43579caf19a95355f8d52a266a156fdd7a47692505",
+    "official_pex_reference_sha256": "1e449135e51d61bce62407136a95be2fec8979b5ff426f05331a5f97a9e1e69e",
+    "zero_device_instances_omitted": {
+      "FILLERxp5_ASAP7_75t_R": 4839,
+      "FILLER_ASAP7_75t_R": 3607,
+      "TAPCELL_ASAP7_75t_R": 698
+    },
+    "empty_reference_cells_also_empty_in_actual_extraction": true,
+    "all_other_instance_connections_and_top_ports_unchanged": true,
+    "mos_before": 264619,
+    "mos_after": 264619,
+    "all_mos_D_G_S_B_model_L_W_nfin_unchanged": true,
+    "expanded_mos_sha256": "1ad417a45f61f93490763f8bb03bedf52b4823d1e604c3a77cf82fa9e15c127d",
+    "combinational": {
+      "cell_types": 62,
+      "instances": 12729,
+      "vectors": 848,
+      "cells": [
+        {
+          "cell": "AND2x2_ASAP7_75t_R",
+          "instances": 1144,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "AND2x4_ASAP7_75t_R",
+          "instances": 17,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "AND3x1_ASAP7_75t_R",
+          "instances": 593,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "AND3x2_ASAP7_75t_R",
+          "instances": 7,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "AND4x1_ASAP7_75t_R",
+          "instances": 281,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "AND4x2_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "AND5x1_ASAP7_75t_R",
+          "instances": 91,
+          "exhaustive_vectors": 32
+        },
+        {
+          "cell": "AND5x2_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 32
+        },
+        {
+          "cell": "AO211x2_ASAP7_75t_R",
+          "instances": 2,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "AO21x1_ASAP7_75t_R",
+          "instances": 2140,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "AO221x1_ASAP7_75t_R",
+          "instances": 658,
+          "exhaustive_vectors": 32
+        },
+        {
+          "cell": "AO222x2_ASAP7_75t_R",
+          "instances": 45,
+          "exhaustive_vectors": 64
+        },
+        {
+          "cell": "AO22x1_ASAP7_75t_R",
+          "instances": 225,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "AO31x2_ASAP7_75t_R",
+          "instances": 8,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "AO32x1_ASAP7_75t_R",
+          "instances": 521,
+          "exhaustive_vectors": 32
+        },
+        {
+          "cell": "AO33x2_ASAP7_75t_R",
+          "instances": 14,
+          "exhaustive_vectors": 64
+        },
+        {
+          "cell": "AOI211x1_ASAP7_75t_R",
+          "instances": 58,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "AOI21x1_ASAP7_75t_R",
+          "instances": 206,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "AOI221x1_ASAP7_75t_R",
+          "instances": 30,
+          "exhaustive_vectors": 32
+        },
+        {
+          "cell": "AOI22x1_ASAP7_75t_R",
+          "instances": 78,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "BUFx12_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "BUFx16f_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "BUFx24_ASAP7_75t_R",
+          "instances": 46,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "BUFx2_ASAP7_75t_R",
+          "instances": 388,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "BUFx3_ASAP7_75t_R",
+          "instances": 214,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "BUFx6f_ASAP7_75t_R",
+          "instances": 9,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "BUFx8_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "CKINVDCx5p33_ASAP7_75t_R",
+          "instances": 3,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "CKINVDCx6p67_ASAP7_75t_R",
+          "instances": 2,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "HAxp5_ASAP7_75t_R",
+          "instances": 2,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "INVx13_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "INVx1_ASAP7_75t_R",
+          "instances": 426,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "INVx2_ASAP7_75t_R",
+          "instances": 13,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "INVx3_ASAP7_75t_R",
+          "instances": 4,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "INVx5_ASAP7_75t_R",
+          "instances": 3,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "INVx6_ASAP7_75t_R",
+          "instances": 6,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "INVx8_ASAP7_75t_R",
+          "instances": 7,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "MAJx2_ASAP7_75t_R",
+          "instances": 33,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "NAND2x1_ASAP7_75t_R",
+          "instances": 941,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "NAND2x2_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "NAND3x1_ASAP7_75t_R",
+          "instances": 31,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "NAND3x2_ASAP7_75t_R",
+          "instances": 3,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "NOR2x1_ASAP7_75t_R",
+          "instances": 248,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "NOR3x1_ASAP7_75t_R",
+          "instances": 75,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "NOR3x2_ASAP7_75t_R",
+          "instances": 14,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "OA211x2_ASAP7_75t_R",
+          "instances": 643,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "OA21x2_ASAP7_75t_R",
+          "instances": 1060,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "OA221x2_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 32
+        },
+        {
+          "cell": "OA222x2_ASAP7_75t_R",
+          "instances": 15,
+          "exhaustive_vectors": 64
+        },
+        {
+          "cell": "OA22x2_ASAP7_75t_R",
+          "instances": 35,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "OA31x2_ASAP7_75t_R",
+          "instances": 7,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "OA33x2_ASAP7_75t_R",
+          "instances": 19,
+          "exhaustive_vectors": 64
+        },
+        {
+          "cell": "OAI21x1_ASAP7_75t_R",
+          "instances": 218,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "OAI22x1_ASAP7_75t_R",
+          "instances": 52,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "OR2x2_ASAP7_75t_R",
+          "instances": 131,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "OR3x1_ASAP7_75t_R",
+          "instances": 796,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "OR3x2_ASAP7_75t_R",
+          "instances": 4,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "OR4x1_ASAP7_75t_R",
+          "instances": 251,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "OR5x1_ASAP7_75t_R",
+          "instances": 46,
+          "exhaustive_vectors": 32
+        },
+        {
+          "cell": "XNOR2x1_ASAP7_75t_R",
+          "instances": 59,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "XNOR2x2_ASAP7_75t_R",
+          "instances": 505,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "XOR2x2_ASAP7_75t_R",
+          "instances": 294,
+          "exhaustive_vectors": 4
+        }
+      ],
+      "method": "Exhaustive static CMOS function: original CDL, official PEX and vendor Verilog"
+    },
+    "sequential": {
+      "cell_types": 2,
+      "instances": 562,
+      "cells": [
+        {
+          "cell": "DFFHQNx1_ASAP7_75t_R",
+          "instances": 561,
+          "exact_transistor_graph_match": true
+        },
+        {
+          "cell": "DFFHQNx3_ASAP7_75t_R",
+          "instances": 1,
+          "exact_transistor_graph_match": true
+        }
+      ],
+      "method": "Exact transistor graph isomorphism, ports/gate/bulk/model/L/W/nfin fixed; S/D swappable"
+    },
+    "decaps": [
+      {
+        "cell": "DECAPx10_ASAP7_75t_R",
+        "instances": 4490
+      },
+      {
+        "cell": "DECAPx1_ASAP7_75t_R",
+        "instances": 1704
+      },
+      {
+        "cell": "DECAPx2_ASAP7_75t_R",
+        "instances": 2230
+      },
+      {
+        "cell": "DECAPx4_ASAP7_75t_R",
+        "instances": 1329
+      },
+      {
+        "cell": "DECAPx6_ASAP7_75t_R",
+        "instances": 1471
+      }
+    ],
+    "scope": "Reference integrity and cell function; separate top-level functional validation is required."
+  },
+  "original_geometry": {
+    "unchanged": true,
+    "original": {
+      "non_text_records": 350437,
+      "sha256": "2ccb3315bc55395b8540b6a50ba5b0e7137102dc93164cc1895a9eb47df1cd9a"
+    },
+    "lvs": {
+      "non_text_records": 350437,
+      "sha256": "2ccb3315bc55395b8540b6a50ba5b0e7137102dc93164cc1895a9eb47df1cd9a"
+    },
+    "drc": {
+      "non_text_records": 350437,
+      "sha256": "2ccb3315bc55395b8540b6a50ba5b0e7137102dc93164cc1895a9eb47df1cd9a"
+    },
+    "normalization": "top cell name only; text excluded"
+  },
+  "last_drc_geometry": {
+    "result": "PASS: geometric equivalence, not a DRC verdict",
+    "project": "multi_aes",
+    "source": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_aes_input/drc.gds",
+    "normalized_gds": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_aes_feol_hier_input/drc.gds",
+    "source_sha256": "093d951ba11c1a75947d726030e4ea5b6dd6348ecf811075e879d15ec32fab38",
+    "normalized_sha256": "a4902c41772ddd6c868632523c6e3f5faa0e85502c317c20d0947b08259f76ed",
+    "all_drawing_layers_xor_empty": true,
+    "layers": [
+      {
+        "layer": 1,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 1,
+        "datatype": 251,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 2,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 3,
+        "datatype": 251,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 7,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 10,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 11,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 12,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 13,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 16,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 17,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 18,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 19,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 19,
+        "datatype": 251,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 20,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 20,
+        "datatype": 251,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 21,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 25,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 30,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 30,
+        "datatype": 2,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 30,
+        "datatype": 251,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 35,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 40,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 40,
+        "datatype": 2,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 40,
+        "datatype": 251,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 45,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 50,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 50,
+        "datatype": 2,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 50,
+        "datatype": 251,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 55,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 60,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 65,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 70,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 88,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 100,
+        "datatype": 0,
+        "xor_polygons": 0
+      },
+      {
+        "layer": 235,
+        "datatype": 0,
+        "xor_polygons": 0
+      }
+    ],
+    "instances_and_transforms_unchanged": true,
+    "cell_count_before": 81,
+    "cell_count_after": 81,
+    "dbu_um": 0.00025,
+    "normalization": {
+      "FIN": {
+        "source_polygons": 336590,
+        "top_union_polygons": 2320,
+        "equal_length_axis": "width",
+        "length_dbu_counts": {
+          "250560": 2320
+        }
+      },
+      "GATE": {
+        "source_polygons": 277882,
+        "top_union_polygons": 1160,
+        "equal_length_axis": "height",
+        "length_dbu_counts": {
+          "250600": 1160
+        }
+      }
+    },
+    "operation": "Remove FIN/GATE shapes from all cells and insert their exact union at TOPCELL; no other layer or instance modified.",
+    "official_basis": "ASAP7 DRM 201207a printed pages 18 and 20: FIN equal x length and GATE not cut by GCUT equal y length for hierarchical DRC.",
+    "elapsed_s": 33.68151730392128,
+    "source_count_note": "Raw polygon counts verified independently by multi_aes/measure_feol.py; GDS, XOR checks, cell hierarchy and GDS hashes unchanged."
+  },
+  "ppa": {
+    "clock_period_ns": 1.0,
+    "source_time_unit": "ps",
+    "corner": "RVT FF",
+    "setup_worst_slack_ps": 352.094,
+    "setup_worst_slack_ns": 0.352094,
+    "hold_worst_slack_ps": 32.8625,
+    "setup_tns_ps": 0,
+    "hold_tns_ps": 0,
+    "stdcell_area_um2": 1519.34,
+    "stdcell_count": 13989,
+    "all_instance_count": 33659,
+    "die_area_um2": 4199.04,
+    "core_area_um2": 3923.77,
+    "core_utilization": 0.38721433723179494,
+    "sta_estimated_power_W": 0.0501289,
+    "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/6_report.json",
+    "power_scope": "OpenSTA library estimate, not measured silicon or vector-driven power"
+  },
+  "flow_resources": {
+    "orfs_stage_elapsed_sum_s": 863.83,
+    "orfs_stage_elapsed_records": 19,
+    "peak_rss_mib": 2514.63671875,
+    "peak_rss_kib": 2574988,
+    "requested_cores": 4,
+    "outer_wall_s": 882.1,
+    "outer_user_cpu_s": 2733.69,
+    "outer_system_cpu_s": 32.36,
+    "outer_source": "experiments/asap7_qualification_20261116/multi_aes/reports/flow_time.txt",
+    "stages": [
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/1_1_yosys_canonicalize.log",
+        "elapsed_s": 0.96,
+        "user_cpu_s": 0.92,
+        "system_cpu_s": 0.04,
+        "peak_rss_kib": 82688
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/1_2_yosys.log",
+        "elapsed_s": 50.58,
+        "user_cpu_s": 50.54,
+        "system_cpu_s": 0.5,
+        "peak_rss_kib": 155316
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/1_synth.log",
+        "elapsed_s": 1.92,
+        "user_cpu_s": 1.8,
+        "system_cpu_s": 0.12,
+        "peak_rss_kib": 217664
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/2_1_floorplan.log",
+        "elapsed_s": 5.12,
+        "user_cpu_s": 6.0,
+        "system_cpu_s": 0.37,
+        "peak_rss_kib": 257792
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/2_2_floorplan_macro.log",
+        "elapsed_s": 1.71,
+        "user_cpu_s": 1.61,
+        "system_cpu_s": 0.1,
+        "peak_rss_kib": 204288
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/2_3_floorplan_tapcell.log",
+        "elapsed_s": 1.65,
+        "user_cpu_s": 1.55,
+        "system_cpu_s": 0.1,
+        "peak_rss_kib": 200640
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/2_4_floorplan_pdn.log",
+        "elapsed_s": 1.73,
+        "user_cpu_s": 1.62,
+        "system_cpu_s": 0.11,
+        "peak_rss_kib": 211584
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/3_1_place_gp_skip_io.log",
+        "elapsed_s": 5.24,
+        "user_cpu_s": 15.24,
+        "system_cpu_s": 0.18,
+        "peak_rss_kib": 230616
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/3_2_place_iop.log",
+        "elapsed_s": 1.72,
+        "user_cpu_s": 1.61,
+        "system_cpu_s": 0.11,
+        "peak_rss_kib": 210368
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/3_3_place_gp.log",
+        "elapsed_s": 31.87,
+        "user_cpu_s": 50.66,
+        "system_cpu_s": 1.79,
+        "peak_rss_kib": 545628
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/3_4_place_resized.log",
+        "elapsed_s": 10.65,
+        "user_cpu_s": 14.81,
+        "system_cpu_s": 0.63,
+        "peak_rss_kib": 262088
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/3_5_place_dp.log",
+        "elapsed_s": 14.34,
+        "user_cpu_s": 18.29,
+        "system_cpu_s": 0.52,
+        "peak_rss_kib": 281832
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/4_1_cts.log",
+        "elapsed_s": 15.37,
+        "user_cpu_s": 22.78,
+        "system_cpu_s": 1.03,
+        "peak_rss_kib": 393924
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/5_1_grt.log",
+        "elapsed_s": 52.06,
+        "user_cpu_s": 139.06,
+        "system_cpu_s": 1.94,
+        "peak_rss_kib": 548024
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/5_2_route.log",
+        "elapsed_s": 641.23,
+        "user_cpu_s": 2363.91,
+        "system_cpu_s": 16.32,
+        "peak_rss_kib": 2574988
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/5_3_fillcell.log",
+        "elapsed_s": 1.97,
+        "user_cpu_s": 1.84,
+        "system_cpu_s": 0.13,
+        "peak_rss_kib": 257792
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/6_1_fill.log",
+        "elapsed_s": 1.73,
+        "user_cpu_s": 1.6,
+        "system_cpu_s": 0.13,
+        "peak_rss_kib": 227392
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/6_1_merge.log",
+        "elapsed_s": 3.16,
+        "user_cpu_s": 2.8,
+        "system_cpu_s": 0.36,
+        "peak_rss_kib": 531256
+      },
+      {
+        "source": "experiments/asap7_qualification_20261116/multi_aes/backend/RUN_2026-11-16_06-29-18_2033585_0242/logs/6_report.log",
+        "elapsed_s": 20.82,
+        "user_cpu_s": 26.4,
+        "system_cpu_s": 0.99,
+        "peak_rss_kib": 543848
+      }
+    ]
+  }
+}

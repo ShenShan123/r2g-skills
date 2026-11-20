@@ -1,0 +1,377 @@
+{
+  "status": "PASS",
+  "project": "multi_aes",
+  "top": "aes_cipher_top",
+  "source_sha256": "ec2b0009c509a713c1bb9416a264f0ab60feec4398d7f2888a8573ed2f90e86f",
+  "original_cdl_sha256": "9e1d5496adae938db7125f43579caf19a95355f8d52a266a156fdd7a47692505",
+  "official_pex_reference_sha256": "1e449135e51d61bce62407136a95be2fec8979b5ff426f05331a5f97a9e1e69e",
+  "zero_device_instances_omitted": {
+    "FILLERxp5_ASAP7_75t_R": 4839,
+    "FILLER_ASAP7_75t_R": 3607,
+    "TAPCELL_ASAP7_75t_R": 698
+  },
+  "empty_reference_cells_also_empty_in_actual_extraction": true,
+  "all_other_instance_connections_and_top_ports_unchanged": true,
+  "mos_before": 264619,
+  "mos_after": 264619,
+  "all_mos_D_G_S_B_model_L_W_nfin_unchanged": true,
+  "expanded_mos_sha256": "1ad417a45f61f93490763f8bb03bedf52b4823d1e604c3a77cf82fa9e15c127d",
+  "combinational": {
+    "cell_types": 62,
+    "instances": 12729,
+    "vectors": 848,
+    "cells": [
+      {
+        "cell": "AND2x2_ASAP7_75t_R",
+        "instances": 1144,
+        "exhaustive_vectors": 4
+      },
+      {
+        "cell": "AND2x4_ASAP7_75t_R",
+        "instances": 17,
+        "exhaustive_vectors": 4
+      },
+      {
+        "cell": "AND3x1_ASAP7_75t_R",
+        "instances": 593,
+        "exhaustive_vectors": 8
+      },
+      {
+        "cell": "AND3x2_ASAP7_75t_R",
+        "instances": 7,
+        "exhaustive_vectors": 8
+      },
+      {
+        "cell": "AND4x1_ASAP7_75t_R",
+        "instances": 281,
+        "exhaustive_vectors": 16
+      },
+      {
+        "cell": "AND4x2_ASAP7_75t_R",
+        "instances": 1,
+        "exhaustive_vectors": 16
+      },
+      {
+        "cell": "AND5x1_ASAP7_75t_R",
+        "instances": 91,
+        "exhaustive_vectors": 32
+      },
+      {
+        "cell": "AND5x2_ASAP7_75t_R",
+        "instances": 1,
+        "exhaustive_vectors": 32
+      },
+      {
+        "cell": "AO211x2_ASAP7_75t_R",
+        "instances": 2,
+        "exhaustive_vectors": 16
+      },
+      {
+        "cell": "AO21x1_ASAP7_75t_R",
+        "instances": 2140,
+        "exhaustive_vectors": 8
+      },
+      {
+        "cell": "AO221x1_ASAP7_75t_R",
+        "instances": 658,
+        "exhaustive_vectors": 32
+      },
+      {
+        "cell": "AO222x2_ASAP7_75t_R",
+        "instances": 45,
+        "exhaustive_vectors": 64
+      },
+      {
+        "cell": "AO22x1_ASAP7_75t_R",
+        "instances": 225,
+        "exhaustive_vectors": 16
+      },
+      {
+        "cell": "AO31x2_ASAP7_75t_R",
+        "instances": 8,
+        "exhaustive_vectors": 16
+      },
+      {
+        "cell": "AO32x1_ASAP7_75t_R",
+        "instances": 521,
+        "exhaustive_vectors": 32
+      },
+      {
+        "cell": "AO33x2_ASAP7_75t_R",
+        "instances": 14,
+        "exhaustive_vectors": 64
+      },
+      {
+        "cell": "AOI211x1_ASAP7_75t_R",
+        "instances": 58,
+        "exhaustive_vectors": 16
+      },
+      {
+        "cell": "AOI21x1_ASAP7_75t_R",
+        "instances": 206,
+        "exhaustive_vectors": 8
+      },
+      {
+        "cell": "AOI221x1_ASAP7_75t_R",
+        "instances": 30,
+        "exhaustive_vectors": 32
+      },
+      {
+        "cell": "AOI22x1_ASAP7_75t_R",
+        "instances": 78,
+        "exhaustive_vectors": 16
+      },
+      {
+        "cell": "BUFx12_ASAP7_75t_R",
+        "instances": 1,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "BUFx16f_ASAP7_75t_R",
+        "instances": 1,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "BUFx24_ASAP7_75t_R",
+        "instances": 46,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "BUFx2_ASAP7_75t_R",
+        "instances": 388,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "BUFx3_ASAP7_75t_R",
+        "instances": 214,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "BUFx6f_ASAP7_75t_R",
+        "instances": 9,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "BUFx8_ASAP7_75t_R",
+        "instances": 1,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "CKINVDCx5p33_ASAP7_75t_R",
+        "instances": 3,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "CKINVDCx6p67_ASAP7_75t_R",
+        "instances": 2,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "HAxp5_ASAP7_75t_R",
+        "instances": 2,
+        "exhaustive_vectors": 4
+      },
+      {
+        "cell": "INVx13_ASAP7_75t_R",
+        "instances": 1,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "INVx1_ASAP7_75t_R",
+        "instances": 426,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "INVx2_ASAP7_75t_R",
+        "instances": 13,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "INVx3_ASAP7_75t_R",
+        "instances": 4,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "INVx5_ASAP7_75t_R",
+        "instances": 3,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "INVx6_ASAP7_75t_R",
+        "instances": 6,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "INVx8_ASAP7_75t_R",
+        "instances": 7,
+        "exhaustive_vectors": 2
+      },
+      {
+        "cell": "MAJx2_ASAP7_75t_R",
+        "instances": 33,
+        "exhaustive_vectors": 8
+      },
+      {
+        "cell": "NAND2x1_ASAP7_75t_R",
+        "instances": 941,
+        "exhaustive_vectors": 4
+      },
+      {
+        "cell": "NAND2x2_ASAP7_75t_R",
+        "instances": 1,
+        "exhaustive_vectors": 4
+      },
+      {
+        "cell": "NAND3x1_ASAP7_75t_R",
+        "instances": 31,
+        "exhaustive_vectors": 8
+      },
+      {
+        "cell": "NAND3x2_ASAP7_75t_R",
+        "instances": 3,
+        "exhaustive_vectors": 8
+      },
+      {
+        "cell": "NOR2x1_ASAP7_75t_R",
+        "instances": 248,
+        "exhaustive_vectors": 4
+      },
+      {
+        "cell": "NOR3x1_ASAP7_75t_R",
+        "instances": 75,
+        "exhaustive_vectors": 8
+      },
+      {
+        "cell": "NOR3x2_ASAP7_75t_R",
+        "instances": 14,
+        "exhaustive_vectors": 8
+      },
+      {
+        "cell": "OA211x2_ASAP7_75t_R",
+        "instances": 643,
+        "exhaustive_vectors": 16
+      },
+      {
+        "cell": "OA21x2_ASAP7_75t_R",
+        "instances": 1060,
+        "exhaustive_vectors": 8
+      },
+      {
+        "cell": "OA221x2_ASAP7_75t_R",
+        "instances": 1,
+        "exhaustive_vectors": 32
+      },
+      {
+        "cell": "OA222x2_ASAP7_75t_R",
+        "instances": 15,
+        "exhaustive_vectors": 64
+      },
+      {
+        "cell": "OA22x2_ASAP7_75t_R",
+        "instances": 35,
+        "exhaustive_vectors": 16
+      },
+      {
+        "cell": "OA31x2_ASAP7_75t_R",
+        "instances": 7,
+        "exhaustive_vectors": 16
+      },
+      {
+        "cell": "OA33x2_ASAP7_75t_R",
+        "instances": 19,
+        "exhaustive_vectors": 64
+      },
+      {
+        "cell": "OAI21x1_ASAP7_75t_R",
+        "instances": 218,
+        "exhaustive_vectors": 8
+      },
+      {
+        "cell": "OAI22x1_ASAP7_75t_R",
+        "instances": 52,
+        "exhaustive_vectors": 16
+      },
+      {
+        "cell": "OR2x2_ASAP7_75t_R",
+        "instances": 131,
+        "exhaustive_vectors": 4
+      },
+      {
+        "cell": "OR3x1_ASAP7_75t_R",
+        "instances": 796,
+        "exhaustive_vectors": 8
+      },
+      {
+        "cell": "OR3x2_ASAP7_75t_R",
+        "instances": 4,
+        "exhaustive_vectors": 8
+      },
+      {
+        "cell": "OR4x1_ASAP7_75t_R",
+        "instances": 251,
+        "exhaustive_vectors": 16
+      },
+      {
+        "cell": "OR5x1_ASAP7_75t_R",
+        "instances": 46,
+        "exhaustive_vectors": 32
+      },
+      {
+        "cell": "XNOR2x1_ASAP7_75t_R",
+        "instances": 59,
+        "exhaustive_vectors": 4
+      },
+      {
+        "cell": "XNOR2x2_ASAP7_75t_R",
+        "instances": 505,
+        "exhaustive_vectors": 4
+      },
+      {
+        "cell": "XOR2x2_ASAP7_75t_R",
+        "instances": 294,
+        "exhaustive_vectors": 4
+      }
+    ],
+    "method": "Exhaustive static CMOS function: original CDL, official PEX and vendor Verilog"
+  },
+  "sequential": {
+    "cell_types": 2,
+    "instances": 562,
+    "cells": [
+      {
+        "cell": "DFFHQNx1_ASAP7_75t_R",
+        "instances": 561,
+        "exact_transistor_graph_match": true
+      },
+      {
+        "cell": "DFFHQNx3_ASAP7_75t_R",
+        "instances": 1,
+        "exact_transistor_graph_match": true
+      }
+    ],
+    "method": "Exact transistor graph isomorphism, ports/gate/bulk/model/L/W/nfin fixed; S/D swappable"
+  },
+  "decaps": [
+    {
+      "cell": "DECAPx10_ASAP7_75t_R",
+      "instances": 4490
+    },
+    {
+      "cell": "DECAPx1_ASAP7_75t_R",
+      "instances": 1704
+    },
+    {
+      "cell": "DECAPx2_ASAP7_75t_R",
+      "instances": 2230
+    },
+    {
+      "cell": "DECAPx4_ASAP7_75t_R",
+      "instances": 1329
+    },
+    {
+      "cell": "DECAPx6_ASAP7_75t_R",
+      "instances": 1471
+    }
+  ],
+  "scope": "Reference integrity and cell function; separate top-level functional validation is required."
+}

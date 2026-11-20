@@ -1,0 +1,14 @@
+{
+  "gold": {
+    "existing_cells_unchanged": 107,
+    "direct_connections_unchanged": 26,
+    "primitive_graph_sha256_after_undoing_wire_rename": "972dcde88c8c44ff24f3ca8950744448a69509d214deca57c270fa844e0d0a3d",
+    "added_observation_cells": 4
+  },
+  "gate": {
+    "existing_cells_unchanged": 2078,
+    "direct_connections_unchanged": 1759,
+    "primitive_graph_sha256_after_undoing_wire_rename": "1f70974f73996f32ebb0594b00a750a381fbf32cfd08cdc68a0d3fd7d309fa8b",
+    "added_observation_cells": 4
+  }
+}

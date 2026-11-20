@@ -1,0 +1,106 @@
+{
+  "status": "PASS",
+  "project": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/gcd_pin_window_v2",
+  "backend_run": "RUN_2026-11-16_06-00-47_2002719_0f7f",
+  "method": "Yosys RTL versus post-route Verilog using original pinned Liberty logic; induction plus reset/first-request base",
+  "tool": "Yosys 0.64 (git sha1 8449dd470, g++ 11.4.0-1ubuntu1~22.04.3 -fPIC -O3) [the-openroad-project/yosys]",
+  "rtl": {
+    "path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/gcd_pin_window_v2/rtl/gcd.v",
+    "bytes": 18788,
+    "sha256": "5009f224876d39e5e77e59ee1528cb0d2a03697251f0971b77cf3e8b0426dd3e"
+  },
+  "post_route_netlist": {
+    "path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/gcd_pin_window_v2/backend/RUN_2026-11-16_06-00-47_2002719_0f7f/results/6_final.v",
+    "bytes": 39084,
+    "sha256": "6fc38a664316dfb6dd7df09fc2a47847179887404de3f9bc0f71e74293017a0b"
+  },
+  "liberties": [
+    {
+      "path": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/flow/platforms/asap7/lib/NLDM/asap7sc7p5t_AO_RVT_FF_nldm_211120.lib.gz",
+      "bytes": 4256548,
+      "sha256": "9e3848d247f9bbc8d405ee55617af98797b6d5be9a1af02988ec5d59ca9dad99"
+    },
+    {
+      "path": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/flow/platforms/asap7/lib/NLDM/asap7sc7p5t_INVBUF_RVT_FF_nldm_220122.lib.gz",
+      "bytes": 69351,
+      "sha256": "e0c65688e6067ee485b0693651298636ae9ef5a0512154bcd4b7c4914d1a0ac6"
+    },
+    {
+      "path": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/flow/platforms/asap7/lib/NLDM/asap7sc7p5t_OA_RVT_FF_nldm_211120.lib.gz",
+      "bytes": 3829689,
+      "sha256": "cc9651e9235bcd29bba0737b7ba7a8afddde7462df3ff48d3870c22d05c86fb3"
+    },
+    {
+      "path": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/flow/platforms/asap7/lib/NLDM/asap7sc7p5t_SIMPLE_RVT_FF_nldm_211120.lib.gz",
+      "bytes": 317193,
+      "sha256": "0c93d44fcc6a30182d71031997771ea3fc0d09235201e9252f71daf48a1c7a38"
+    },
+    {
+      "path": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/flow/platforms/asap7/lib/NLDM/asap7sc7p5t_SEQ_RVT_FF_nldm_220123.lib",
+      "bytes": 1510915,
+      "sha256": "d9b6e75c8720cdd450cff15178528502cc8df34c5ab6b0ffb53fc99d664b5302"
+    }
+  ],
+  "logical_standard_cell_instances": 395,
+  "induction": {
+    "status": "PASS",
+    "depth": 4,
+    "proven_output_bits": 18,
+    "unproven_output_bits": 0
+  },
+  "base_case": {
+    "status": "PASS",
+    "initial_register_states": "arbitrary",
+    "reset_high_step": 1,
+    "first_request_step": 2,
+    "output_equality_steps": [
+      3,
+      4,
+      5,
+      6
+    ],
+    "other_inputs": "unconstrained, including all request data and subsequent control inputs"
+  },
+  "negative_control": {
+    "status": "EXPECTED_FAIL",
+    "mutation": "Invert only the final resp_val output buffer in an isolated copy",
+    "counterexample": {
+      "path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/lvs_diagnosis/formal/gcd_pin_window_v2/RUN_2026-11-16_06-00-47_2002719_0f7f/mutant_counterexample.vcd",
+      "bytes": 5379,
+      "sha256": "b019950d9fad10c94524220e6067be8d341401c685ec5c6829107a68ae5d64ef"
+    }
+  },
+  "limits": [
+    "Synchronous two-state digital semantics; no physical delays or analog behavior.",
+    "First request initializes the 32 unreset datapath registers; earlier arbitrary resp_msg values are outside the claim.",
+    "Liberty proof does not directly establish PEX sequential transistor semantics; independent MOS topology comparison is required."
+  ],
+  "stage_seconds": {
+    "induction": 2.97,
+    "reset_base": 2.169,
+    "negative_prepare": 0.616,
+    "negative_base": 0.315
+  },
+  "logs": {
+    "equiv": {
+      "path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/lvs_diagnosis/formal/gcd_pin_window_v2/RUN_2026-11-16_06-00-47_2002719_0f7f/equiv.log",
+      "bytes": 70302,
+      "sha256": "5ac0a553280fdfa14eb8bf56f4e70398603b7493415d38e1b80496b75e007b1c"
+    },
+    "reset_base": {
+      "path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/lvs_diagnosis/formal/gcd_pin_window_v2/RUN_2026-11-16_06-00-47_2002719_0f7f/reset_base.log",
+      "bytes": 7579,
+      "sha256": "f6e471a8c09a215b00a403ca7531595d97dbe8482aa51447a2d8c7f60187b91d"
+    },
+    "mutant_prepare": {
+      "path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/lvs_diagnosis/formal/gcd_pin_window_v2/RUN_2026-11-16_06-00-47_2002719_0f7f/mutant_prepare.log",
+      "bytes": 56849,
+      "sha256": "cc75039ce50c1c7f48fcffc9c2f9180fa3a47b01a08207d9ddb93bc8e4128246"
+    },
+    "mutant_base": {
+      "path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/lvs_diagnosis/formal/gcd_pin_window_v2/RUN_2026-11-16_06-00-47_2002719_0f7f/mutant_base.log",
+      "bytes": 24103,
+      "sha256": "999fa4ce895b99560e7de287f16cd996405a00c40d1ec572d81a3163716b84f3"
+    }
+  }
+}

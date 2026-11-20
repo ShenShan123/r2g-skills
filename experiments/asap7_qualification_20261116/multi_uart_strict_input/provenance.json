@@ -1,0 +1,8 @@
+{
+  "original_gds": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart_strict/backend/RUN_2026-11-16_06-56-00_2069286_0c13/results/6_final.gds",
+  "original_sha256": "041a08fe7fc48800a3f1d4001ed79e6bda6a9d5463507e2a7d5e61344716730a",
+  "geometry_scale": 1,
+  "top_level_pin_labels_copied": 46,
+  "drc_top_name": "TOPCELL",
+  "lvs_top_name": "uart"
+}

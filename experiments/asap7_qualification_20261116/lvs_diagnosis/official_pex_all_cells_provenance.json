@@ -1,0 +1,366 @@
+{
+  "source_url": "https://github.com/The-OpenROAD-Project/asap7sc7p5t_28/blob/e5bd25da72cd297b8c0ec6f77600e0cbaa1124d0/CDL/xAct3D_extracted/asap7sc7p5t_28_R.sp",
+  "source_sha256": "81042fd651c9175d5ef3748f46c903b8143c569dfb0a29d0b591a1bfcd0a02c8",
+  "original_sha256": "9e1d5496adae938db7125f43579caf19a95355f8d52a266a156fdd7a47692505",
+  "candidate_sha256": "14af313893b3b1fd108567f33541ce058edc508c0aefe2c874966cadea3d0222",
+  "cell_types_referenced": 44,
+  "design_instance_count": 1007,
+  "original_top_level_cdl_unchanged": true,
+  "tested_design_extraction_used_as_reference": false,
+  "method": "Contract only published parasitic R connectivity, omit parasitic C, retain every published MOS and model/L/W/nfin. Preserve original named cell port order.",
+  "total_referenced_transistors_with_instances": 12427,
+  "cells": [
+    {
+      "cell": "AND2x2_ASAP7_75t_R",
+      "instances": 28,
+      "transistors_retained": 8,
+      "parasitic_resistors_contracted": 101,
+      "parasitic_capacitors_omitted": 73,
+      "top_level_cell_pin_order_preserved": ".SUBCKT AND2x2_ASAP7_75t_R A B VDD VSS Y"
+    },
+    {
+      "cell": "AND2x4_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 16,
+      "parasitic_resistors_contracted": 162,
+      "parasitic_capacitors_omitted": 105,
+      "top_level_cell_pin_order_preserved": ".SUBCKT AND2x4_ASAP7_75t_R A B VDD VSS Y"
+    },
+    {
+      "cell": "AND3x1_ASAP7_75t_R",
+      "instances": 23,
+      "transistors_retained": 8,
+      "parasitic_resistors_contracted": 102,
+      "parasitic_capacitors_omitted": 79,
+      "top_level_cell_pin_order_preserved": ".SUBCKT AND3x1_ASAP7_75t_R A B C VDD VSS Y"
+    },
+    {
+      "cell": "AND4x1_ASAP7_75t_R",
+      "instances": 3,
+      "transistors_retained": 10,
+      "parasitic_resistors_contracted": 112,
+      "parasitic_capacitors_omitted": 92,
+      "top_level_cell_pin_order_preserved": ".SUBCKT AND4x1_ASAP7_75t_R A B C D VDD VSS Y"
+    },
+    {
+      "cell": "AND5x1_ASAP7_75t_R",
+      "instances": 2,
+      "transistors_retained": 12,
+      "parasitic_resistors_contracted": 129,
+      "parasitic_capacitors_omitted": 107,
+      "top_level_cell_pin_order_preserved": ".SUBCKT AND5x1_ASAP7_75t_R A B C D E VDD VSS Y"
+    },
+    {
+      "cell": "AO21x1_ASAP7_75t_R",
+      "instances": 17,
+      "transistors_retained": 8,
+      "parasitic_resistors_contracted": 84,
+      "parasitic_capacitors_omitted": 59,
+      "top_level_cell_pin_order_preserved": ".SUBCKT AO21x1_ASAP7_75t_R A1 A2 B VDD VSS Y"
+    },
+    {
+      "cell": "AO221x1_ASAP7_75t_R",
+      "instances": 20,
+      "transistors_retained": 12,
+      "parasitic_resistors_contracted": 131,
+      "parasitic_capacitors_omitted": 79,
+      "top_level_cell_pin_order_preserved": ".SUBCKT AO221x1_ASAP7_75t_R A1 A2 B1 B2 C VDD VSS Y"
+    },
+    {
+      "cell": "AO221x2_ASAP7_75t_R",
+      "instances": 8,
+      "transistors_retained": 14,
+      "parasitic_resistors_contracted": 148,
+      "parasitic_capacitors_omitted": 84,
+      "top_level_cell_pin_order_preserved": ".SUBCKT AO221x2_ASAP7_75t_R A1 A2 B1 B2 C VDD VSS Y"
+    },
+    {
+      "cell": "AO22x1_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 10,
+      "parasitic_resistors_contracted": 117,
+      "parasitic_capacitors_omitted": 75,
+      "top_level_cell_pin_order_preserved": ".SUBCKT AO22x1_ASAP7_75t_R A1 A2 B1 B2 VDD VSS Y"
+    },
+    {
+      "cell": "AO32x1_ASAP7_75t_R",
+      "instances": 2,
+      "transistors_retained": 12,
+      "parasitic_resistors_contracted": 125,
+      "parasitic_capacitors_omitted": 78,
+      "top_level_cell_pin_order_preserved": ".SUBCKT AO32x1_ASAP7_75t_R A1 A2 A3 B1 B2 VDD VSS Y"
+    },
+    {
+      "cell": "AOI21x1_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 12,
+      "parasitic_resistors_contracted": 136,
+      "parasitic_capacitors_omitted": 90,
+      "top_level_cell_pin_order_preserved": ".SUBCKT AOI21x1_ASAP7_75t_R A1 A2 B VDD VSS Y"
+    },
+    {
+      "cell": "AOI221x1_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 15,
+      "parasitic_resistors_contracted": 163,
+      "parasitic_capacitors_omitted": 70,
+      "top_level_cell_pin_order_preserved": ".SUBCKT AOI221x1_ASAP7_75t_R A1 A2 B1 B2 C VDD VSS Y"
+    },
+    {
+      "cell": "AOI22x1_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 16,
+      "parasitic_resistors_contracted": 161,
+      "parasitic_capacitors_omitted": 100,
+      "top_level_cell_pin_order_preserved": ".SUBCKT AOI22x1_ASAP7_75t_R A1 A2 B1 B2 VDD VSS Y"
+    },
+    {
+      "cell": "BUFx12_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 28,
+      "parasitic_resistors_contracted": 280,
+      "parasitic_capacitors_omitted": 142,
+      "top_level_cell_pin_order_preserved": ".SUBCKT BUFx12_ASAP7_75t_R A VDD VSS Y"
+    },
+    {
+      "cell": "BUFx2_ASAP7_75t_R",
+      "instances": 55,
+      "transistors_retained": 6,
+      "parasitic_resistors_contracted": 84,
+      "parasitic_capacitors_omitted": 58,
+      "top_level_cell_pin_order_preserved": ".SUBCKT BUFx2_ASAP7_75t_R A VDD VSS Y"
+    },
+    {
+      "cell": "BUFx3_ASAP7_75t_R",
+      "instances": 2,
+      "transistors_retained": 8,
+      "parasitic_resistors_contracted": 102,
+      "parasitic_capacitors_omitted": 72,
+      "top_level_cell_pin_order_preserved": ".SUBCKT BUFx3_ASAP7_75t_R A VDD VSS Y"
+    },
+    {
+      "cell": "BUFx4_ASAP7_75t_R",
+      "instances": 5,
+      "transistors_retained": 10,
+      "parasitic_resistors_contracted": 114,
+      "parasitic_capacitors_omitted": 82,
+      "top_level_cell_pin_order_preserved": ".SUBCKT BUFx4_ASAP7_75t_R A VDD VSS Y"
+    },
+    {
+      "cell": "DECAPx10_ASAP7_75t_R",
+      "instances": 335,
+      "transistors_retained": 20,
+      "parasitic_resistors_contracted": 196,
+      "parasitic_capacitors_omitted": 91,
+      "top_level_cell_pin_order_preserved": ".SUBCKT DECAPx10_ASAP7_75t_R VDD VSS"
+    },
+    {
+      "cell": "DECAPx1_ASAP7_75t_R",
+      "instances": 53,
+      "transistors_retained": 2,
+      "parasitic_resistors_contracted": 32,
+      "parasitic_capacitors_omitted": 14,
+      "top_level_cell_pin_order_preserved": ".SUBCKT DECAPx1_ASAP7_75t_R VDD VSS"
+    },
+    {
+      "cell": "DECAPx2_ASAP7_75t_R",
+      "instances": 88,
+      "transistors_retained": 4,
+      "parasitic_resistors_contracted": 59,
+      "parasitic_capacitors_omitted": 29,
+      "top_level_cell_pin_order_preserved": ".SUBCKT DECAPx2_ASAP7_75t_R VDD VSS"
+    },
+    {
+      "cell": "DECAPx4_ASAP7_75t_R",
+      "instances": 55,
+      "transistors_retained": 8,
+      "parasitic_resistors_contracted": 94,
+      "parasitic_capacitors_omitted": 48,
+      "top_level_cell_pin_order_preserved": ".SUBCKT DECAPx4_ASAP7_75t_R VDD VSS"
+    },
+    {
+      "cell": "DECAPx6_ASAP7_75t_R",
+      "instances": 81,
+      "transistors_retained": 12,
+      "parasitic_resistors_contracted": 127,
+      "parasitic_capacitors_omitted": 63,
+      "top_level_cell_pin_order_preserved": ".SUBCKT DECAPx6_ASAP7_75t_R VDD VSS"
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "instances": 35,
+      "transistors_retained": 24,
+      "parasitic_resistors_contracted": 386,
+      "parasitic_capacitors_omitted": 400,
+      "top_level_cell_pin_order_preserved": ".SUBCKT DFFHQNx1_ASAP7_75t_R CLK D QN VDD VSS"
+    },
+    {
+      "cell": "FAx1_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 24,
+      "parasitic_resistors_contracted": 317,
+      "parasitic_capacitors_omitted": 332,
+      "top_level_cell_pin_order_preserved": ".SUBCKT FAx1_ASAP7_75t_R A B CI CON SN VDD VSS"
+    },
+    {
+      "cell": "HAxp5_ASAP7_75t_R",
+      "instances": 19,
+      "transistors_retained": 10,
+      "parasitic_resistors_contracted": 128,
+      "parasitic_capacitors_omitted": 96,
+      "top_level_cell_pin_order_preserved": ".SUBCKT HAxp5_ASAP7_75t_R A B CON SN VDD VSS"
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "instances": 48,
+      "transistors_retained": 2,
+      "parasitic_resistors_contracted": 36,
+      "parasitic_capacitors_omitted": 18,
+      "top_level_cell_pin_order_preserved": ".SUBCKT INVx1_ASAP7_75t_R A VDD VSS Y"
+    },
+    {
+      "cell": "INVx2_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 4,
+      "parasitic_resistors_contracted": 49,
+      "parasitic_capacitors_omitted": 23,
+      "top_level_cell_pin_order_preserved": ".SUBCKT INVx2_ASAP7_75t_R A VDD VSS Y"
+    },
+    {
+      "cell": "NAND2x1_ASAP7_75t_R",
+      "instances": 4,
+      "transistors_retained": 6,
+      "parasitic_resistors_contracted": 87,
+      "parasitic_capacitors_omitted": 57,
+      "top_level_cell_pin_order_preserved": ".SUBCKT NAND2x1_ASAP7_75t_R A B VDD VSS Y"
+    },
+    {
+      "cell": "NOR2x1_ASAP7_75t_R",
+      "instances": 6,
+      "transistors_retained": 6,
+      "parasitic_resistors_contracted": 100,
+      "parasitic_capacitors_omitted": 73,
+      "top_level_cell_pin_order_preserved": ".SUBCKT NOR2x1_ASAP7_75t_R A B VDD VSS Y"
+    },
+    {
+      "cell": "NOR3x1_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 12,
+      "parasitic_resistors_contracted": 164,
+      "parasitic_capacitors_omitted": 127,
+      "top_level_cell_pin_order_preserved": ".SUBCKT NOR3x1_ASAP7_75t_R A B C VDD VSS Y"
+    },
+    {
+      "cell": "OA211x2_ASAP7_75t_R",
+      "instances": 12,
+      "transistors_retained": 12,
+      "parasitic_resistors_contracted": 132,
+      "parasitic_capacitors_omitted": 91,
+      "top_level_cell_pin_order_preserved": ".SUBCKT OA211x2_ASAP7_75t_R A1 A2 B C VDD VSS Y"
+    },
+    {
+      "cell": "OA21x2_ASAP7_75t_R",
+      "instances": 42,
+      "transistors_retained": 10,
+      "parasitic_resistors_contracted": 113,
+      "parasitic_capacitors_omitted": 74,
+      "top_level_cell_pin_order_preserved": ".SUBCKT OA21x2_ASAP7_75t_R A1 A2 B VDD VSS Y"
+    },
+    {
+      "cell": "OA31x2_ASAP7_75t_R",
+      "instances": 2,
+      "transistors_retained": 15,
+      "parasitic_resistors_contracted": 187,
+      "parasitic_capacitors_omitted": 111,
+      "top_level_cell_pin_order_preserved": ".SUBCKT OA31x2_ASAP7_75t_R A1 A2 A3 B1 VDD VSS Y"
+    },
+    {
+      "cell": "OAI21x1_ASAP7_75t_R",
+      "instances": 10,
+      "transistors_retained": 12,
+      "parasitic_resistors_contracted": 127,
+      "parasitic_capacitors_omitted": 81,
+      "top_level_cell_pin_order_preserved": ".SUBCKT OAI21x1_ASAP7_75t_R A1 A2 B VDD VSS Y"
+    },
+    {
+      "cell": "OAI22x1_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 16,
+      "parasitic_resistors_contracted": 160,
+      "parasitic_capacitors_omitted": 100,
+      "top_level_cell_pin_order_preserved": ".SUBCKT OAI22x1_ASAP7_75t_R A1 A2 B1 B2 VDD VSS Y"
+    },
+    {
+      "cell": "OR2x2_ASAP7_75t_R",
+      "instances": 9,
+      "transistors_retained": 8,
+      "parasitic_resistors_contracted": 113,
+      "parasitic_capacitors_omitted": 80,
+      "top_level_cell_pin_order_preserved": ".SUBCKT OR2x2_ASAP7_75t_R A B VDD VSS Y"
+    },
+    {
+      "cell": "OR2x4_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 12,
+      "parasitic_resistors_contracted": 146,
+      "parasitic_capacitors_omitted": 102,
+      "top_level_cell_pin_order_preserved": ".SUBCKT OR2x4_ASAP7_75t_R A B VDD VSS Y"
+    },
+    {
+      "cell": "OR3x1_ASAP7_75t_R",
+      "instances": 14,
+      "transistors_retained": 8,
+      "parasitic_resistors_contracted": 103,
+      "parasitic_capacitors_omitted": 78,
+      "top_level_cell_pin_order_preserved": ".SUBCKT OR3x1_ASAP7_75t_R A B C VDD VSS Y"
+    },
+    {
+      "cell": "OR3x2_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 10,
+      "parasitic_resistors_contracted": 116,
+      "parasitic_capacitors_omitted": 90,
+      "top_level_cell_pin_order_preserved": ".SUBCKT OR3x2_ASAP7_75t_R A B C VDD VSS Y"
+    },
+    {
+      "cell": "OR3x4_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 14,
+      "parasitic_resistors_contracted": 151,
+      "parasitic_capacitors_omitted": 114,
+      "top_level_cell_pin_order_preserved": ".SUBCKT OR3x4_ASAP7_75t_R A B C VDD VSS Y"
+    },
+    {
+      "cell": "OR4x1_ASAP7_75t_R",
+      "instances": 2,
+      "transistors_retained": 10,
+      "parasitic_resistors_contracted": 109,
+      "parasitic_capacitors_omitted": 83,
+      "top_level_cell_pin_order_preserved": ".SUBCKT OR4x1_ASAP7_75t_R A B C D VDD VSS Y"
+    },
+    {
+      "cell": "OR5x1_ASAP7_75t_R",
+      "instances": 1,
+      "transistors_retained": 12,
+      "parasitic_resistors_contracted": 129,
+      "parasitic_capacitors_omitted": 107,
+      "top_level_cell_pin_order_preserved": ".SUBCKT OR5x1_ASAP7_75t_R A B C D E VDD VSS Y"
+    },
+    {
+      "cell": "XNOR2x2_ASAP7_75t_R",
+      "instances": 6,
+      "transistors_retained": 14,
+      "parasitic_resistors_contracted": 173,
+      "parasitic_capacitors_omitted": 141,
+      "top_level_cell_pin_order_preserved": ".SUBCKT XNOR2x2_ASAP7_75t_R A B VDD VSS Y"
+    },
+    {
+      "cell": "XOR2x2_ASAP7_75t_R",
+      "instances": 7,
+      "transistors_retained": 14,
+      "parasitic_resistors_contracted": 176,
+      "parasitic_capacitors_omitted": 144,
+      "top_level_cell_pin_order_preserved": ".SUBCKT XOR2x2_ASAP7_75t_R A B VDD VSS Y"
+    }
+  ]
+}

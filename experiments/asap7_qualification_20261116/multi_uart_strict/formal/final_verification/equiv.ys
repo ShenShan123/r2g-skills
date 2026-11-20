@@ -1,0 +1,9 @@
+read_rtlil /home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart_strict/formal/final_verification/masked_prepared.il
+equiv_make gold gate equiv
+hierarchy -top equiv
+opt_clean
+techmap
+opt_clean
+equiv_simple -seq 4
+equiv_induct -seq 4
+equiv_status -assert

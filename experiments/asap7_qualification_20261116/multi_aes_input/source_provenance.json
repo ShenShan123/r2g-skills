@@ -1,0 +1,12 @@
+{
+  "library": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/lvs_diagnosis/asap7_R_official_pex_full.cdl",
+  "library_sha256": "1e449135e51d61bce62407136a95be2fec8979b5ff426f05331a5f97a9e1e69e",
+  "source_sha256": "ec2b0009c509a713c1bb9416a264f0ab60feec4398d7f2888a8573ed2f90e86f",
+  "zero_device_physical_instances_omitted": {
+    "FILLERxp5_ASAP7_75t_R": 4839,
+    "FILLER_ASAP7_75t_R": 3607,
+    "TAPCELL_ASAP7_75t_R": 698
+  },
+  "logic_blackboxes": 0,
+  "reference_from_tested_layout": false
+}

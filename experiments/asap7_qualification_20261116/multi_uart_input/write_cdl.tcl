@@ -1,0 +1,2 @@
+read_db {/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart/backend/RUN_2026-11-16_06-30-17_2035355_4d23/results/6_final.odb}
+write_cdl -include_fillers -masters {/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/lvs_diagnosis/asap7_R_official_pex_full.cdl} {/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart_input/design_with_physical.cdl}

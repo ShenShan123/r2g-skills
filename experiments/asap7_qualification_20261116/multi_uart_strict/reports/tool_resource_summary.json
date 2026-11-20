@@ -1,0 +1,124 @@
+{
+  "record_count": 19,
+  "eda_stage_elapsed_sum_s": 70.28,
+  "cpu_sum_s": 101.67,
+  "peak_rss_mib": 1112.8828125,
+  "source": "backend_driver.log",
+  "definition": "Sum of 19 exact elapsed records from tool invocations. Excludes wrapper bookkeeping and external Calibre; not end-to-end wall-clock time.",
+  "records": [
+    {
+      "elapsed_s": 0.92,
+      "user_cpu_s": 0.89,
+      "sys_cpu_s": 0.03,
+      "peak_rss_kib": 82688
+    },
+    {
+      "elapsed_s": 3.37,
+      "user_cpu_s": 3.15,
+      "sys_cpu_s": 0.22,
+      "peak_rss_kib": 148352
+    },
+    {
+      "elapsed_s": 1.62,
+      "user_cpu_s": 1.52,
+      "sys_cpu_s": 0.09,
+      "peak_rss_kib": 186048
+    },
+    {
+      "elapsed_s": 1.82,
+      "user_cpu_s": 1.69,
+      "sys_cpu_s": 0.15,
+      "peak_rss_kib": 207392
+    },
+    {
+      "elapsed_s": 1.53,
+      "user_cpu_s": 1.43,
+      "sys_cpu_s": 0.1,
+      "peak_rss_kib": 186048
+    },
+    {
+      "elapsed_s": 1.63,
+      "user_cpu_s": 1.54,
+      "sys_cpu_s": 0.09,
+      "peak_rss_kib": 183616
+    },
+    {
+      "elapsed_s": 1.6,
+      "user_cpu_s": 1.51,
+      "sys_cpu_s": 0.09,
+      "peak_rss_kib": 184832
+    },
+    {
+      "elapsed_s": 1.64,
+      "user_cpu_s": 1.84,
+      "sys_cpu_s": 0.1,
+      "peak_rss_kib": 188480
+    },
+    {
+      "elapsed_s": 1.6,
+      "user_cpu_s": 1.5,
+      "sys_cpu_s": 0.11,
+      "peak_rss_kib": 183616
+    },
+    {
+      "elapsed_s": 2.65,
+      "user_cpu_s": 3.22,
+      "sys_cpu_s": 0.22,
+      "peak_rss_kib": 324672
+    },
+    {
+      "elapsed_s": 2.14,
+      "user_cpu_s": 2.2,
+      "sys_cpu_s": 0.17,
+      "peak_rss_kib": 204848
+    },
+    {
+      "elapsed_s": 2.07,
+      "user_cpu_s": 2.15,
+      "sys_cpu_s": 0.12,
+      "peak_rss_kib": 193344
+    },
+    {
+      "elapsed_s": 4.72,
+      "user_cpu_s": 4.71,
+      "sys_cpu_s": 0.19,
+      "peak_rss_kib": 227676
+    },
+    {
+      "elapsed_s": 5.69,
+      "user_cpu_s": 12.7,
+      "sys_cpu_s": 0.49,
+      "peak_rss_kib": 328708
+    },
+    {
+      "elapsed_s": 29.42,
+      "user_cpu_s": 50.0,
+      "sys_cpu_s": 1.28,
+      "peak_rss_kib": 1139592
+    },
+    {
+      "elapsed_s": 1.62,
+      "user_cpu_s": 1.52,
+      "sys_cpu_s": 0.1,
+      "peak_rss_kib": 190912
+    },
+    {
+      "elapsed_s": 1.62,
+      "user_cpu_s": 1.5,
+      "sys_cpu_s": 0.12,
+      "peak_rss_kib": 186048
+    },
+    {
+      "elapsed_s": 2.41,
+      "user_cpu_s": 2.56,
+      "sys_cpu_s": 0.16,
+      "peak_rss_kib": 204288
+    },
+    {
+      "elapsed_s": 2.21,
+      "user_cpu_s": 1.92,
+      "sys_cpu_s": 0.29,
+      "peak_rss_kib": 464016
+    }
+  ]
+}

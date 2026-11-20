@@ -1,0 +1,67 @@
+{
+  "source_url": "https://github.com/The-OpenROAD-Project/asap7sc7p5t_28/blob/e5bd25da72cd297b8c0ec6f77600e0cbaa1124d0/CDL/xAct3D_extracted/asap7sc7p5t_28_R.sp",
+  "upstream_commit": "e5bd25da72cd297b8c0ec6f77600e0cbaa1124d0",
+  "upstream_pex_sha256": "81042fd651c9175d5ef3748f46c903b8143c569dfb0a29d0b591a1bfcd0a02c8",
+  "input_sha256": "9e1d5496adae938db7125f43579caf19a95355f8d52a266a156fdd7a47692505",
+  "output_sha256": "f97382b6acc55962c08fee6d1ddf20fa24e4c64f161486f7475af60f21825f47",
+  "replaced_cell": "OAI21x1_ASAP7_75t_R",
+  "original_devices": 6,
+  "upstream_transistors_retained": 12,
+  "contracted_parasitic_resistors": 127,
+  "omitted_parasitic_capacitors": 81,
+  "port_order_preserved": ".SUBCKT OAI21x1_ASAP7_75t_R A1 A2 B VDD VSS Y",
+  "tested_layout_extraction_used_to_generate_reference": false,
+  "other_cells_or_top_instances_modified": false,
+  "original_and_candidate_truth_tables_equal": true,
+  "function": "Y = !((A1 | A2) & B)",
+  "truth_table": [
+    {
+      "A1": 0,
+      "A2": 0,
+      "B": 0,
+      "Y": 1
+    },
+    {
+      "A1": 0,
+      "A2": 0,
+      "B": 1,
+      "Y": 1
+    },
+    {
+      "A1": 0,
+      "A2": 1,
+      "B": 0,
+      "Y": 1
+    },
+    {
+      "A1": 0,
+      "A2": 1,
+      "B": 1,
+      "Y": 0
+    },
+    {
+      "A1": 1,
+      "A2": 0,
+      "B": 0,
+      "Y": 1
+    },
+    {
+      "A1": 1,
+      "A2": 0,
+      "B": 1,
+      "Y": 0
+    },
+    {
+      "A1": 1,
+      "A2": 1,
+      "B": 0,
+      "Y": 1
+    },
+    {
+      "A1": 1,
+      "A2": 1,
+      "B": 1,
+      "Y": 0
+    }
+  ]
+}

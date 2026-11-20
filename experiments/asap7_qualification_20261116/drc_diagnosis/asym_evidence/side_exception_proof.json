@@ -1,0 +1,631 @@
+{
+  "count": 48,
+  "side_bound": 48,
+  "added_native_metal": 48,
+  "rows": [
+    {
+      "cell": "AO221x1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.486,
+        0.211,
+        0.504,
+        0.23600000000000002
+      ],
+      "ap_x_um": 0.495,
+      "cell_width_um": 0.54,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.034,
+        1.044,
+        0.059000000000000004
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.034,
+        0.126,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "AO221x1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.486,
+        0.034,
+        0.504,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.495,
+      "cell_width_um": 0.54,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.031,
+        0.126,
+        0.056
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.00019800000000000002
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.214,
+        0.126,
+        0.23900000000000002
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.00019800000000000002
+    },
+    {
+      "cell": "AO32x1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.036000000000000004,
+        0.211,
+        0.054,
+        0.23600000000000002
+      ],
+      "ap_x_um": 0.045,
+      "cell_width_um": 0.432,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "AO221x1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.486,
+        0.034,
+        0.504,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.495,
+      "cell_width_um": 0.54,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.211,
+        1.044,
+        0.23600000000000002
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.031,
+        1.044,
+        0.056
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.00019800000000000002
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.034,
+        0.126,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.211,
+        1.044,
+        0.23600000000000002
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.034,
+        0.126,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.031,
+        0.126,
+        0.056
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.00019800000000000002
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.214,
+        1.044,
+        0.23900000000000002
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.00019800000000000002
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.034,
+        0.126,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.211,
+        1.044,
+        0.23600000000000002
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.211,
+        1.044,
+        0.23600000000000002
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.034,
+        1.044,
+        0.059000000000000004
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.034,
+        1.044,
+        0.059000000000000004
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.034,
+        1.044,
+        0.059000000000000004
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.034,
+        0.126,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.214,
+        1.044,
+        0.23900000000000002
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.00019800000000000002
+    },
+    {
+      "cell": "AND5x1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.378,
+        0.034,
+        0.396,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.387,
+      "cell_width_um": 0.432,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.034,
+        0.126,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.034,
+        0.126,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.034,
+        0.126,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "AND4x1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.324,
+        0.034,
+        0.342,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.333,
+      "cell_width_um": 0.378,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.211,
+        0.126,
+        0.23600000000000002
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "AO221x1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.486,
+        0.031,
+        0.504,
+        0.056
+      ],
+      "ap_x_um": 0.495,
+      "cell_width_um": 0.54,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.00019800000000000002
+    },
+    {
+      "cell": "AO221x1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.486,
+        0.034,
+        0.504,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.495,
+      "cell_width_um": 0.54,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.211,
+        1.044,
+        0.23600000000000002
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.214,
+        1.044,
+        0.23900000000000002
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.00019800000000000002
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.211,
+        1.044,
+        0.23600000000000002
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "AO221x1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.486,
+        0.211,
+        0.504,
+        0.23600000000000002
+      ],
+      "ap_x_um": 0.495,
+      "cell_width_um": 0.54,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.034,
+        0.126,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.034,
+        1.044,
+        0.059000000000000004
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "OAI21x1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.378,
+        0.034,
+        0.396,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.387,
+      "cell_width_um": 0.432,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.034,
+        1.044,
+        0.059000000000000004
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.211,
+        1.044,
+        0.23600000000000002
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "HAxp5_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.432,
+        0.034,
+        0.45,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.441,
+      "cell_width_um": 0.486,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "HAxp5_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.432,
+        0.031,
+        0.45,
+        0.056
+      ],
+      "ap_x_um": 0.441,
+      "cell_width_um": 0.486,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.00019800000000000002
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.034,
+        0.126,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "HAxp5_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.432,
+        0.211,
+        0.45,
+        0.23600000000000002
+      ],
+      "ap_x_um": 0.441,
+      "cell_width_um": 0.486,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.034,
+        0.126,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "INVx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.108,
+        0.031,
+        0.126,
+        0.056
+      ],
+      "ap_x_um": 0.11699999999999999,
+      "cell_width_um": 0.162,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.00019800000000000002
+    },
+    {
+      "cell": "OR4x1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        0.036000000000000004,
+        0.034,
+        0.054,
+        0.059000000000000004
+      ],
+      "ap_x_um": 0.045,
+      "cell_width_um": 0.378,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    },
+    {
+      "cell": "DFFHQNx1_ASAP7_75t_R",
+      "via_m1_local_bbox": [
+        1.026,
+        0.034,
+        1.044,
+        0.059000000000000004
+      ],
+      "ap_x_um": 1.0350000000000001,
+      "cell_width_um": 1.08,
+      "side_bound": true,
+      "via_m1_outside_native_um2": 0.000252
+    }
+  ]
+}

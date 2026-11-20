@@ -1,0 +1,181 @@
+{
+  "status": "PASS",
+  "project": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart_strict",
+  "rtl": [
+    {
+      "path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart_strict/rtl/uart.v",
+      "sha256": "4f91abcd67ff180afadbad06c3b44d33c9f1d69bfaeae3b5696be112efae35c9"
+    },
+    {
+      "path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart_strict/rtl/uart_rx.v",
+      "sha256": "e686104e5ff2d25fa1504e8d08259cef508f2ec9c9e8cfa63364f3fcb39b9f5c"
+    },
+    {
+      "path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart_strict/rtl/uart_tx.v",
+      "sha256": "e9559ddebf124f8fbface06bf7091296baa78c7acab95a36b40a919663349d34"
+    }
+  ],
+  "final_netlist": {
+    "path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_uart_strict/backend/RUN_2026-11-16_06-56-00_2069286_0c13/results/6_final.v",
+    "sha256": "6ee3db1292bc942d6eebb267c1747c519ff1d606badbabb4c822637da14241c8"
+  },
+  "liberty": [
+    {
+      "path": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/flow/platforms/asap7/lib/NLDM/asap7sc7p5t_AO_RVT_FF_nldm_211120.lib.gz",
+      "sha256": "9e3848d247f9bbc8d405ee55617af98797b6d5be9a1af02988ec5d59ca9dad99"
+    },
+    {
+      "path": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/flow/platforms/asap7/lib/NLDM/asap7sc7p5t_INVBUF_RVT_FF_nldm_220122.lib.gz",
+      "sha256": "e0c65688e6067ee485b0693651298636ae9ef5a0512154bcd4b7c4914d1a0ac6"
+    },
+    {
+      "path": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/flow/platforms/asap7/lib/NLDM/asap7sc7p5t_OA_RVT_FF_nldm_211120.lib.gz",
+      "sha256": "cc9651e9235bcd29bba0737b7ba7a8afddde7462df3ff48d3870c22d05c86fb3"
+    },
+    {
+      "path": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/flow/platforms/asap7/lib/NLDM/asap7sc7p5t_SIMPLE_RVT_FF_nldm_211120.lib.gz",
+      "sha256": "0c93d44fcc6a30182d71031997771ea3fc0d09235201e9252f71daf48a1c7a38"
+    },
+    {
+      "path": "/home/yangao/r2g_toolchain/OpenROAD-flow-scripts/flow/platforms/asap7/lib/NLDM/asap7sc7p5t_SEQ_RVT_FF_nldm_220123.lib",
+      "sha256": "d9b6e75c8720cdd450cff15178528502cc8df34c5ab6b0ffb53fc99d664b5302"
+    }
+  ],
+  "induction": {
+    "depth": 2,
+    "proven_points": 81,
+    "unproven_points": 0,
+    "register_bits": 79,
+    "output_bits": 15
+  },
+  "base": {
+    "initial_register_states": "arbitrary; all init attributes removed",
+    "reset_high_step": 1,
+    "other_inputs": "unconstrained at every step",
+    "all_output_and_observed_state_equal_steps": [
+      2,
+      3,
+      4
+    ]
+  },
+  "idle_observations": "Only internal RX/TX data_reg proof observations are zeroed while bit_cnt=0; real circuitry and all output functions unchanged.",
+  "negative_control": "TX output buffer inverted: SAT counterexample, expected failure",
+  "seconds": {
+    "preparation": 0.716,
+    "induction": 7.078,
+    "reset_base": 0.816,
+    "negative_control": 0.716
+  },
+  "state_aliases": {
+    "uart_rx_inst.bit_cnt": {
+      "0": "_0089_",
+      "1": "_0090_",
+      "2": "_0001_",
+      "3": "_0045_"
+    },
+    "uart_rx_inst.busy_reg": {
+      "None": "_0050_"
+    },
+    "uart_rx_inst.data_reg": {
+      "0": "_0057_",
+      "1": "_0058_",
+      "2": "_0059_",
+      "3": "_0060_",
+      "4": "_0061_",
+      "5": "_0062_",
+      "6": "_0063_",
+      "7": "_0046_"
+    },
+    "uart_rx_inst.frame_error_reg": {
+      "None": "_0052_"
+    },
+    "uart_rx_inst.m_axis_tdata_reg": {
+      "0": "_0064_",
+      "1": "_0065_",
+      "2": "_0066_",
+      "3": "_0067_",
+      "4": "_0068_",
+      "5": "_0069_",
+      "6": "_0070_",
+      "7": "_0047_"
+    },
+    "uart_rx_inst.m_axis_tvalid_reg": {
+      "None": "_0048_"
+    },
+    "uart_rx_inst.overrun_error_reg": {
+      "None": "_0051_"
+    },
+    "uart_rx_inst.prescale_reg": {
+      "0": "_0079_",
+      "10": "_0004_",
+      "11": "_0005_",
+      "12": "_0006_",
+      "13": "_0007_",
+      "14": "_0008_",
+      "15": "_0009_",
+      "16": "_0010_",
+      "17": "_0011_",
+      "18": "_0012_",
+      "1": "_0080_",
+      "2": "_0013_",
+      "3": "_0014_",
+      "4": "_0015_",
+      "5": "_0016_",
+      "6": "_0017_",
+      "7": "_0018_",
+      "8": "_0019_",
+      "9": "_0020_"
+    },
+    "uart_rx_inst.rxd_reg": {
+      "None": "_0049_"
+    },
+    "uart_tx_inst.bit_cnt": {
+      "0": "_0082_",
+      "1": "_0083_",
+      "2": "_0042_",
+      "3": "_0043_"
+    },
+    "uart_tx_inst.busy_reg": {
+      "None": "_0055_"
+    },
+    "uart_tx_inst.data_reg": {
+      "0": "_0071_",
+      "1": "_0072_",
+      "2": "_0073_",
+      "3": "_0074_",
+      "4": "_0075_",
+      "5": "_0076_",
+      "6": "_0077_",
+      "7": "_0078_",
+      "8": "_0056_"
+    },
+    "uart_tx_inst.prescale_reg": {
+      "0": "_0093_",
+      "10": "_0023_",
+      "11": "_0024_",
+      "12": "_0025_",
+      "13": "_0026_",
+      "14": "_0027_",
+      "15": "_0028_",
+      "16": "_0029_",
+      "17": "_0030_",
+      "18": "_0031_",
+      "1": "_0094_",
+      "2": "_0032_",
+      "3": "_0033_",
+      "4": "_0034_",
+      "5": "_0035_",
+      "6": "_0036_",
+      "7": "_0037_",
+      "8": "_0038_",
+      "9": "_0039_"
+    },
+    "uart_tx_inst.s_axis_tready_reg": {
+      "None": "_0054_"
+    },
+    "uart_tx_inst.txd_reg": {
+      "None": "_0053_"
+    }
+  },
+  "limits": "Synchronous two-state digital Liberty semantics; no analog timing or transistor-level PEX functionality claim."
+}

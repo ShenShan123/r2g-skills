@@ -1,0 +1,948 @@
+{
+  "qualification_status": "incomplete_drc_timeout",
+  "active_jobs": [],
+  "drc_attempts": [
+    {
+      "name": "multi_picorv32",
+      "receipt_path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_picorv32/drc/invocation.json",
+      "receipt": {
+        "process_exit": 124,
+        "wall_s": 600.0123281721026,
+        "gds_sha256": "fd382cb9160913a2ec0ee2e91bb1312a8e4f99038fbc6cda9783b2133ff6e416",
+        "deck_sha256": "1929e51ea03ae87296483fce6aa5755ab54049dbca159927d916dc4373924765",
+        "offsets": [
+          "0",
+          "0",
+          "0",
+          "0"
+        ],
+        "flat": true,
+        "property_limit": null,
+        "result": "execution_failed"
+      },
+      "user_s": 597.01,
+      "system_s": 0.38,
+      "peak_rss_kib": 144656,
+      "last_operation": "86 of 1010, after ACTIVE.FIN.EX.1"
+    },
+    {
+      "name": "multi_picorv32_flattened_hier",
+      "receipt_path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_picorv32_flattened_hier/drc/invocation.json",
+      "receipt": {
+        "process_exit": 124,
+        "wall_s": 600.0129299610853,
+        "gds_sha256": "c3b2a0e7b0ecca8e4e3497e680f4dcab7074b2146a0572e6ad25abd8bbef67b6",
+        "deck_sha256": "1929e51ea03ae87296483fce6aa5755ab54049dbca159927d916dc4373924765",
+        "offsets": [
+          "0",
+          "0",
+          "0",
+          "0"
+        ],
+        "flat": false,
+        "property_limit": null,
+        "result": "execution_failed"
+      },
+      "user_s": 647.9,
+      "system_s": 0.56,
+      "peak_rss_kib": 152564,
+      "last_operation": "86 of 1010, after ACTIVE.FIN.EX.1"
+    },
+    {
+      "name": "multi_picorv32_fin_merged_hier",
+      "receipt_path": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_picorv32_fin_merged_hier/drc/invocation.json",
+      "receipt": {
+        "process_exit": 124,
+        "wall_s": 600.016705095768,
+        "gds_sha256": "60070decd005a5718c0732ac4e05d5b4769a5e5217766d5b6c3fb1f73910c6e4",
+        "deck_sha256": "1929e51ea03ae87296483fce6aa5755ab54049dbca159927d916dc4373924765",
+        "offsets": [
+          "0",
+          "0",
+          "0",
+          "0"
+        ],
+        "flat": false,
+        "property_limit": null,
+        "result": "execution_failed"
+      },
+      "user_s": 649.42,
+      "system_s": 0.58,
+      "peak_rss_kib": 154280,
+      "last_operation": "86 of 1010, after ACTIVE.FIN.EX.1"
+    }
+  ],
+  "final_drc_receipt": null,
+  "project": "multi_picorv32",
+  "top": "picorv32_demo",
+  "platform": "asap7",
+  "run": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc",
+  "clock_period_ps": 1000,
+  "core_utilization_config": 0.3,
+  "placement_density_config": 0.35,
+  "clock_optimization": "fixed target; no Fmax search",
+  "drc_receipt": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_picorv32_fin_merged_hier/drc/invocation.json",
+  "lvs_receipt": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_picorv32_property65536/lvs/invocation.json",
+  "drc_gds": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32_fin_merged_input/drc.gds",
+  "lvs_gds": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32_input/lvs.gds",
+  "source_cdl": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32_input/source.cdl",
+  "drc_geometry_verification": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32_fin_merged_input/geometry_verification.json",
+  "final_gds_adapter_verification": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32_input/geometry_verification.json",
+  "rtl_source": {
+    "source": "/home/yangao/r2g-skills/design_cases/api_repair_cost_verified8_20261028/nangate45/runtime/workspace/10280857-6ec84a/picorv32_axi__10280857-6ec84a/rtl/examples/attosoc/picorv32.v",
+    "sha256": "12143d9357d574e637f5d4421ff9522a9ae450626c8477bb4da1033c38c5f9fb",
+    "copied_unmodified": true,
+    "license": "ISC notice preserved in RTL",
+    "top": "picorv32_demo",
+    "parameters": "All PicoRV32 defaults: RV32I, 32 registers, dual-port register file, 64-bit counters; no C/M, IRQ, or PCPI; reset PC 0",
+    "external_sram_macros": 0
+  },
+  "validation": {
+    "valid": true,
+    "errors": [],
+    "warnings": [],
+    "design_name": "picorv32_demo",
+    "platform": "asap7",
+    "num_verilog_files": 2
+  },
+  "lint": {
+    "result": "PASS",
+    "tool": "Icarus Verilog syntax/elaboration check",
+    "returncode": 0,
+    "command": [
+      "iverilog",
+      "-g2012",
+      "-s",
+      "picorv32_demo",
+      "-t",
+      "null",
+      "experiments/asap7_qualification_20261116/multi_picorv32/rtl/picorv32.v",
+      "experiments/asap7_qualification_20261116/multi_picorv32/rtl/picorv32_demo.v"
+    ],
+    "inputs": {
+      "experiments/asap7_qualification_20261116/multi_picorv32/rtl/picorv32.v": "12143d9357d574e637f5d4421ff9522a9ae450626c8477bb4da1033c38c5f9fb",
+      "experiments/asap7_qualification_20261116/multi_picorv32/rtl/picorv32_demo.v": "07377acdf03e3146d0d8903650ae11198b712f2a06dfadd9ee399c6cc6f7618f"
+    }
+  },
+  "rtl_simulation": {
+    "result": "PASS",
+    "scope": "bounded program simulation, not exhaustive ISA verification or formal equivalence; gate uses zero-delay Liberty functional models",
+    "commands": [
+      {
+        "cmd": [
+          "iverilog",
+          "-g2012",
+          "-s",
+          "picorv32_tb",
+          "-o",
+          "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/reports/rtl_sim",
+          "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/rtl/picorv32.v",
+          "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/rtl/picorv32_demo.v",
+          "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/tb/picorv32_tb.v"
+        ],
+        "returncode": 0,
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/reports/rtl_sim_compile.log"
+      },
+      {
+        "cmd": [
+          "vvp",
+          "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/reports/rtl_sim"
+        ],
+        "returncode": 0,
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/reports/rtl_sim.log"
+      }
+    ],
+    "inputs": {
+      "rtl/picorv32.v": "12143d9357d574e637f5d4421ff9522a9ae450626c8477bb4da1033c38c5f9fb",
+      "rtl/picorv32_demo.v": "07377acdf03e3146d0d8903650ae11198b712f2a06dfadd9ee399c6cc6f7618f",
+      "tb/picorv32_tb.v": "9f1a8ba4d6812940814388788692694c9ac9920b0564e6617d0428410af64791",
+      "tb/program.hex": "a8416b926750891d2a0fcb3a07fa75636ab439c18ab150dbc4286a952b27753e"
+    },
+    "signature_words_per_mode": 9,
+    "memory_latency_modes": 3
+  },
+  "final_netlist_simulation": {
+    "result": "PASS",
+    "scope": "bounded program simulation, not exhaustive ISA verification or formal equivalence; gate uses zero-delay Liberty functional models",
+    "commands": [
+      {
+        "cmd": [
+          "iverilog",
+          "-g2012",
+          "-s",
+          "picorv32_tb",
+          "-o",
+          "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/reports/gate_sim",
+          "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/results/6_final.v",
+          "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/tb/cells_from_liberty.v",
+          "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/tb/picorv32_tb.v"
+        ],
+        "returncode": 0,
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/reports/gate_sim_compile.log"
+      },
+      {
+        "cmd": [
+          "vvp",
+          "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/reports/gate_sim"
+        ],
+        "returncode": 0,
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/reports/gate_sim.log"
+      }
+    ],
+    "inputs": {
+      "backend/RUN_2026-11-16_06-31-44_2038782_62fc/results/6_final.v": "ccd16e503e79014a95d012e95cb8f12adc5895c667a731ea99b4b7f4e1b1c199",
+      "tb/cells_from_liberty.v": "79968950ef263716cb9f0fc5b3cbbf5c377827dc120f3fe77f44d0a69cce9bf5",
+      "tb/picorv32_tb.v": "9f1a8ba4d6812940814388788692694c9ac9920b0564e6617d0428410af64791",
+      "tb/program.hex": "a8416b926750891d2a0fcb3a07fa75636ab439c18ab150dbc4286a952b27753e"
+    },
+    "signature_words_per_mode": 9,
+    "memory_latency_modes": 3
+  },
+  "negative_control": {
+    "result": "PASS: deliberate mutation rejected",
+    "mutation": "Invert final netlist mem_wdata[0] in a separate wrapper; original files unchanged.",
+    "sim_exit": 1,
+    "commands": [
+      [
+        "iverilog",
+        "-g2012",
+        "-s",
+        "picorv32_tb",
+        "-o",
+        "reports/negative_sim",
+        "tb/negative_wdata_bit0.v",
+        "tb/cells_from_liberty.v",
+        "tb/picorv32_tb.v"
+      ],
+      [
+        "vvp",
+        "reports/negative_sim"
+      ]
+    ],
+    "original_netlist_sha256": "ccd16e503e79014a95d012e95cb8f12adc5895c667a731ea99b4b7f4e1b1c199",
+    "mutant_sha256": "ea55730ab7454c4235c0fc36a0301fb406dc89204ac386fe5a7d6ffe0ede1460",
+    "failure": "FATAL: tb/picorv32_tb.v:28: signature address=00000100 actual=00000036 expected=00000037\n       Time: 154000  Scope: picorv32_tb.check_word\n"
+  },
+  "ppa": {
+    "summary": {
+      "area": {},
+      "timing": {
+        "setup_wns": 277.954,
+        "setup_tns": 0,
+        "hold_wns": 30.9057,
+        "hold_tns": 0,
+        "clock_skew_setup": 14.9689,
+        "clock_skew_hold": 17.9861,
+        "setup_violation_count": 0,
+        "hold_violation_count": 0,
+        "max_cap_violations": 0,
+        "max_slew_violations": 0
+      },
+      "power": {
+        "total_power_w": 0.0131487,
+        "internal_power_w": 0.00795959,
+        "switching_power_w": 0.00518807,
+        "leakage_power_w": 1.05752e-06
+      },
+      "drc": {
+        "drc_violations": 2
+      },
+      "timing_staged": {
+        "floorplan_setup_ws": 525.852,
+        "place_setup_ws": 388.556,
+        "finish_setup_ws": 277.954
+      }
+    },
+    "geometry": {
+      "die_area_um2": 5145.62,
+      "core_area_um2": 4826.21,
+      "utilization": 0.306378,
+      "instance_count": 33071,
+      "stdcell_count": 12301,
+      "stdcell_area_um2": 1478.65,
+      "macro_count": 0,
+      "macro_area_um2": 0,
+      "io_count": 108,
+      "rows": 257,
+      "sites": 331016,
+      "clock_buffer_count": 154,
+      "sequential_count": 1597,
+      "warnings": 11,
+      "errors": 0
+    },
+    "run_dir": "experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc",
+    "orfs_status": "complete",
+    "orfs_last_stage": "finish",
+    "orfs_fail_stage": null
+  },
+  "drc": {
+    "process_exit": 124,
+    "wall_s": 600.016705095768,
+    "gds_sha256": "60070decd005a5718c0732ac4e05d5b4769a5e5217766d5b6c3fb1f73910c6e4",
+    "deck_sha256": "1929e51ea03ae87296483fce6aa5755ab54049dbca159927d916dc4373924765",
+    "offsets": [
+      "0",
+      "0",
+      "0",
+      "0"
+    ],
+    "flat": false,
+    "property_limit": null,
+    "result": "execution_failed"
+  },
+  "lvs": {
+    "process_exit": 0,
+    "wall_s": 15.122502075508237,
+    "gds_sha256": "66f1efa5f67fcdd9a4626fc2d88f0e156e7d9443e87044293fda2414b1dedcfc",
+    "deck_sha256": "3b5a5a3b07de5c46798ae4c820816742591001d96f0ab85e58a5a3d06476ad4b",
+    "offsets": [
+      "0",
+      "0",
+      "0",
+      "0"
+    ],
+    "flat": false,
+    "property_limit": 65536,
+    "result": "CORRECT",
+    "source_sha256": "802e6b17b10e1b5f0582c9ef9a5cb8974d8cf4f801289e7da0302858cbee0e2f",
+    "report_warnings": [
+      "Ambiguity points were found and resolved arbitrarily."
+    ],
+    "initial_property1024_evidence": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_picorv32/lvs/invocation.json"
+  },
+  "ppa_drc_note": "Generic extract_ppa selected historical 5_route_drc.rpt-5.rpt and regex misread Layer M2 newline violation as count 2. Final 5_route_drc.rpt is empty and router final count is 0. Use official Calibre result for signoff.",
+  "final_netlist_logic_instances": 11528,
+  "final_netlist_cell_types": [
+    "AND2x2_ASAP7_75t_R",
+    "AND2x4_ASAP7_75t_R",
+    "AND3x1_ASAP7_75t_R",
+    "AND3x2_ASAP7_75t_R",
+    "AND4x1_ASAP7_75t_R",
+    "AND4x2_ASAP7_75t_R",
+    "AND5x1_ASAP7_75t_R",
+    "AND5x2_ASAP7_75t_R",
+    "AO211x2_ASAP7_75t_R",
+    "AO21x1_ASAP7_75t_R",
+    "AO221x1_ASAP7_75t_R",
+    "AO222x2_ASAP7_75t_R",
+    "AO22x1_ASAP7_75t_R",
+    "AO31x2_ASAP7_75t_R",
+    "AO32x1_ASAP7_75t_R",
+    "AO33x2_ASAP7_75t_R",
+    "AOI211x1_ASAP7_75t_R",
+    "AOI21x1_ASAP7_75t_R",
+    "AOI22x1_ASAP7_75t_R",
+    "BUFx12_ASAP7_75t_R",
+    "BUFx16f_ASAP7_75t_R",
+    "BUFx24_ASAP7_75t_R",
+    "BUFx2_ASAP7_75t_R",
+    "BUFx3_ASAP7_75t_R",
+    "BUFx4f_ASAP7_75t_R",
+    "BUFx6f_ASAP7_75t_R",
+    "CKINVDCx16_ASAP7_75t_R",
+    "CKINVDCx5p33_ASAP7_75t_R",
+    "CKINVDCx8_ASAP7_75t_R",
+    "DFFHQNx1_ASAP7_75t_R",
+    "DFFHQNx2_ASAP7_75t_R",
+    "DFFHQNx3_ASAP7_75t_R",
+    "FAx1_ASAP7_75t_R",
+    "HAxp5_ASAP7_75t_R",
+    "INVx1_ASAP7_75t_R",
+    "INVx2_ASAP7_75t_R",
+    "INVx3_ASAP7_75t_R",
+    "INVx5_ASAP7_75t_R",
+    "INVx6_ASAP7_75t_R",
+    "INVx8_ASAP7_75t_R",
+    "NAND2x1_ASAP7_75t_R",
+    "NAND2x2_ASAP7_75t_R",
+    "NAND3x1_ASAP7_75t_R",
+    "NOR2x1_ASAP7_75t_R",
+    "NOR2x2_ASAP7_75t_R",
+    "NOR3x1_ASAP7_75t_R",
+    "OA211x2_ASAP7_75t_R",
+    "OA21x2_ASAP7_75t_R",
+    "OA221x2_ASAP7_75t_R",
+    "OA222x2_ASAP7_75t_R",
+    "OA22x2_ASAP7_75t_R",
+    "OA31x2_ASAP7_75t_R",
+    "OAI21x1_ASAP7_75t_R",
+    "OAI22x1_ASAP7_75t_R",
+    "OR2x2_ASAP7_75t_R",
+    "OR3x1_ASAP7_75t_R",
+    "OR3x2_ASAP7_75t_R",
+    "OR4x1_ASAP7_75t_R",
+    "OR5x1_ASAP7_75t_R",
+    "TIELOx1_ASAP7_75t_R",
+    "XNOR2x2_ASAP7_75t_R",
+    "XOR2x2_ASAP7_75t_R"
+  ],
+  "flow_resource": {
+    "orfs_tool_step_count": 19,
+    "orfs_tool_elapsed_sum_s": 503.51,
+    "orfs_tool_steps": [
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/1_1_yosys_canonicalize.log",
+        "elapsed_s": 1.07,
+        "user_s": 1.01,
+        "system_s": 0.05,
+        "peak_rss_kib": 82688
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/1_2_yosys.log",
+        "elapsed_s": 22.33,
+        "user_s": 17.01,
+        "system_s": 0.3,
+        "peak_rss_kib": 163980
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/1_synth.log",
+        "elapsed_s": 1.81,
+        "user_s": 1.71,
+        "system_s": 0.1,
+        "peak_rss_kib": 214016
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/2_1_floorplan.log",
+        "elapsed_s": 6.1,
+        "user_s": 6.48,
+        "system_s": 0.25,
+        "peak_rss_kib": 244416
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/2_2_floorplan_macro.log",
+        "elapsed_s": 1.7,
+        "user_s": 1.59,
+        "system_s": 0.11,
+        "peak_rss_kib": 203072
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/2_3_floorplan_tapcell.log",
+        "elapsed_s": 1.63,
+        "user_s": 1.53,
+        "system_s": 0.1,
+        "peak_rss_kib": 195776
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/2_4_floorplan_pdn.log",
+        "elapsed_s": 1.82,
+        "user_s": 1.71,
+        "system_s": 0.11,
+        "peak_rss_kib": 203072
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/3_1_place_gp_skip_io.log",
+        "elapsed_s": 4.29,
+        "user_s": 11.86,
+        "system_s": 0.14,
+        "peak_rss_kib": 224272
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/3_2_place_iop.log",
+        "elapsed_s": 1.65,
+        "user_s": 1.55,
+        "system_s": 0.1,
+        "peak_rss_kib": 205504
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/3_3_place_gp.log",
+        "elapsed_s": 26.22,
+        "user_s": 43.22,
+        "system_s": 1.23,
+        "peak_rss_kib": 507752
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/3_4_place_resized.log",
+        "elapsed_s": 13.62,
+        "user_s": 18.65,
+        "system_s": 0.85,
+        "peak_rss_kib": 336980
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/3_5_place_dp.log",
+        "elapsed_s": 13.24,
+        "user_s": 16.34,
+        "system_s": 0.63,
+        "peak_rss_kib": 269952
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/4_1_cts.log",
+        "elapsed_s": 16.09,
+        "user_s": 22.31,
+        "system_s": 0.82,
+        "peak_rss_kib": 296788
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/5_1_grt.log",
+        "elapsed_s": 54.7,
+        "user_s": 138.94,
+        "system_s": 2.09,
+        "peak_rss_kib": 523264
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/5_2_route.log",
+        "elapsed_s": 304.19,
+        "user_s": 1110.96,
+        "system_s": 17.84,
+        "peak_rss_kib": 2411072
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/5_3_fillcell.log",
+        "elapsed_s": 2.04,
+        "user_s": 1.89,
+        "system_s": 0.15,
+        "peak_rss_kib": 255360
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/6_1_fill.log",
+        "elapsed_s": 1.81,
+        "user_s": 1.64,
+        "system_s": 0.18,
+        "peak_rss_kib": 221312
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/6_1_merge.log",
+        "elapsed_s": 3.16,
+        "user_s": 2.82,
+        "system_s": 0.34,
+        "peak_rss_kib": 521592
+      },
+      {
+        "log": "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/logs/6_report.log",
+        "elapsed_s": 26.04,
+        "user_s": 30.18,
+        "system_s": 1.05,
+        "peak_rss_kib": 536160
+      }
+    ],
+    "wrapper_wall_s": 520.91,
+    "peak_rss_mib": 2354.5625,
+    "elapsed": "8:40.91",
+    "user_s": "1441.95",
+    "system_s": "33.39",
+    "peak_rss_kib": "2411072",
+    "exit_status": "0"
+  },
+  "geometry_adapter": {
+    "unchanged": true,
+    "original": {
+      "non_text_records": 282943,
+      "sha256": "4ff3281f8a7657b5a17c574cd032723844d03744eec844765495e5e283f2655f"
+    },
+    "lvs": {
+      "non_text_records": 282943,
+      "sha256": "4ff3281f8a7657b5a17c574cd032723844d03744eec844765495e5e283f2655f"
+    },
+    "drc": {
+      "non_text_records": 282943,
+      "sha256": "4ff3281f8a7657b5a17c574cd032723844d03744eec844765495e5e283f2655f"
+    },
+    "normalization": "top cell name only; text excluded"
+  },
+  "reference_validation": {
+    "status": "PASS",
+    "project": "multi_picorv32",
+    "top": "picorv32_demo",
+    "source_sha256": "802e6b17b10e1b5f0582c9ef9a5cb8974d8cf4f801289e7da0302858cbee0e2f",
+    "original_cdl_sha256": "9e1d5496adae938db7125f43579caf19a95355f8d52a266a156fdd7a47692505",
+    "official_pex_reference_sha256": "1e449135e51d61bce62407136a95be2fec8979b5ff426f05331a5f97a9e1e69e",
+    "zero_device_instances_omitted": {
+      "FILLER_ASAP7_75t_R": 3028,
+      "FILLERxp5_ASAP7_75t_R": 4026,
+      "TAPCELL_ASAP7_75t_R": 773
+    },
+    "empty_reference_cells_also_empty_in_actual_extraction": true,
+    "all_other_instance_connections_and_top_ports_unchanged": true,
+    "mos_before": 319443,
+    "mos_after": 319443,
+    "all_mos_D_G_S_B_model_L_W_nfin_unchanged": true,
+    "expanded_mos_sha256": "dc0a5efb11579f38d0a6419674c878002435c50252575e3be18559dfaaac904f",
+    "combinational": {
+      "cell_types": 59,
+      "instances": 9931,
+      "vectors": 737,
+      "cells": [
+        {
+          "cell": "AND2x2_ASAP7_75t_R",
+          "instances": 268,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "AND2x4_ASAP7_75t_R",
+          "instances": 3,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "AND3x1_ASAP7_75t_R",
+          "instances": 428,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "AND3x2_ASAP7_75t_R",
+          "instances": 2,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "AND4x1_ASAP7_75t_R",
+          "instances": 38,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "AND4x2_ASAP7_75t_R",
+          "instances": 3,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "AND5x1_ASAP7_75t_R",
+          "instances": 16,
+          "exhaustive_vectors": 32
+        },
+        {
+          "cell": "AND5x2_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 32
+        },
+        {
+          "cell": "AO211x2_ASAP7_75t_R",
+          "instances": 8,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "AO21x1_ASAP7_75t_R",
+          "instances": 806,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "AO221x1_ASAP7_75t_R",
+          "instances": 125,
+          "exhaustive_vectors": 32
+        },
+        {
+          "cell": "AO222x2_ASAP7_75t_R",
+          "instances": 16,
+          "exhaustive_vectors": 64
+        },
+        {
+          "cell": "AO22x1_ASAP7_75t_R",
+          "instances": 24,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "AO31x2_ASAP7_75t_R",
+          "instances": 5,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "AO32x1_ASAP7_75t_R",
+          "instances": 70,
+          "exhaustive_vectors": 32
+        },
+        {
+          "cell": "AO33x2_ASAP7_75t_R",
+          "instances": 3,
+          "exhaustive_vectors": 64
+        },
+        {
+          "cell": "AOI211x1_ASAP7_75t_R",
+          "instances": 9,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "AOI21x1_ASAP7_75t_R",
+          "instances": 212,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "AOI22x1_ASAP7_75t_R",
+          "instances": 13,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "BUFx12_ASAP7_75t_R",
+          "instances": 15,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "BUFx16f_ASAP7_75t_R",
+          "instances": 10,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "BUFx24_ASAP7_75t_R",
+          "instances": 95,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "BUFx2_ASAP7_75t_R",
+          "instances": 140,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "BUFx3_ASAP7_75t_R",
+          "instances": 187,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "BUFx4f_ASAP7_75t_R",
+          "instances": 19,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "BUFx6f_ASAP7_75t_R",
+          "instances": 28,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "CKINVDCx16_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "CKINVDCx5p33_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "CKINVDCx8_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "FAx1_ASAP7_75t_R",
+          "instances": 5,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "HAxp5_ASAP7_75t_R",
+          "instances": 202,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "INVx1_ASAP7_75t_R",
+          "instances": 975,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "INVx2_ASAP7_75t_R",
+          "instances": 2,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "INVx3_ASAP7_75t_R",
+          "instances": 15,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "INVx5_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "INVx6_ASAP7_75t_R",
+          "instances": 2,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "INVx8_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 2
+        },
+        {
+          "cell": "NAND2x1_ASAP7_75t_R",
+          "instances": 1760,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "NAND2x2_ASAP7_75t_R",
+          "instances": 15,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "NAND3x1_ASAP7_75t_R",
+          "instances": 7,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "NOR2x1_ASAP7_75t_R",
+          "instances": 227,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "NOR2x2_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "NOR3x1_ASAP7_75t_R",
+          "instances": 3,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "OA211x2_ASAP7_75t_R",
+          "instances": 1233,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "OA21x2_ASAP7_75t_R",
+          "instances": 1253,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "OA221x2_ASAP7_75t_R",
+          "instances": 1,
+          "exhaustive_vectors": 32
+        },
+        {
+          "cell": "OA222x2_ASAP7_75t_R",
+          "instances": 60,
+          "exhaustive_vectors": 64
+        },
+        {
+          "cell": "OA22x2_ASAP7_75t_R",
+          "instances": 10,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "OA31x2_ASAP7_75t_R",
+          "instances": 10,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "OAI21x1_ASAP7_75t_R",
+          "instances": 137,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "OAI22x1_ASAP7_75t_R",
+          "instances": 106,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "OR2x2_ASAP7_75t_R",
+          "instances": 118,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "OR3x1_ASAP7_75t_R",
+          "instances": 847,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "OR3x2_ASAP7_75t_R",
+          "instances": 8,
+          "exhaustive_vectors": 8
+        },
+        {
+          "cell": "OR4x1_ASAP7_75t_R",
+          "instances": 106,
+          "exhaustive_vectors": 16
+        },
+        {
+          "cell": "OR5x1_ASAP7_75t_R",
+          "instances": 49,
+          "exhaustive_vectors": 32
+        },
+        {
+          "cell": "TIELOx1_ASAP7_75t_R",
+          "instances": 2,
+          "exhaustive_vectors": 1
+        },
+        {
+          "cell": "XNOR2x2_ASAP7_75t_R",
+          "instances": 87,
+          "exhaustive_vectors": 4
+        },
+        {
+          "cell": "XOR2x2_ASAP7_75t_R",
+          "instances": 141,
+          "exhaustive_vectors": 4
+        }
+      ],
+      "method": "Exhaustive static CMOS function: original CDL, official PEX and vendor Verilog"
+    },
+    "sequential": {
+      "cell_types": 3,
+      "instances": 1597,
+      "cells": [
+        {
+          "cell": "DFFHQNx1_ASAP7_75t_R",
+          "instances": 1587,
+          "exact_transistor_graph_match": true
+        },
+        {
+          "cell": "DFFHQNx2_ASAP7_75t_R",
+          "instances": 4,
+          "exact_transistor_graph_match": true
+        },
+        {
+          "cell": "DFFHQNx3_ASAP7_75t_R",
+          "instances": 6,
+          "exact_transistor_graph_match": true
+        }
+      ],
+      "method": "Exact transistor graph isomorphism, ports/gate/bulk/model/L/W/nfin fixed; S/D swappable"
+    },
+    "decaps": [
+      {
+        "cell": "DECAPx10_ASAP7_75t_R",
+        "instances": 7646
+      },
+      {
+        "cell": "DECAPx1_ASAP7_75t_R",
+        "instances": 1377
+      },
+      {
+        "cell": "DECAPx2_ASAP7_75t_R",
+        "instances": 1917
+      },
+      {
+        "cell": "DECAPx4_ASAP7_75t_R",
+        "instances": 1142
+      },
+      {
+        "cell": "DECAPx6_ASAP7_75t_R",
+        "instances": 1634
+      }
+    ],
+    "scope": "Reference integrity and cell function; separate top-level functional validation is required."
+  },
+  "limitations": [
+    "Bounded program simulation, not exhaustive ISA verification or formal equivalence.",
+    "Final-netlist simulation uses zero-delay Liberty models; timing is checked independently by STA.",
+    "No external SRAM macro: program/data RAM lives in the testbench.",
+    "Power is the flow tool estimate without program-derived switching annotation."
+  ],
+  "evidence_sha256": {
+    "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/constraints/config.mk": "26a54c9e32b2b33565f4c04ba2b5efbed172797068e4057656d3bf9fbf91501b",
+    "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/constraints/pdn.tcl": "6b65d4a7978f4e8383148e47a1cd3c3091c5aee1299ff5ff83d404626c1074b8",
+    "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/constraints/constraint.sdc": "bbe1731199c8bcf9800f6ad509c0da68c95123e063a9a50884d3a8f857a24846",
+    "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/results/6_final.gds": "0816429160be381b9ecc26902155cf7d9110bf38a9d33700ddb29fc7b5d2c1e4",
+    "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/results/6_final.v": "ccd16e503e79014a95d012e95cb8f12adc5895c667a731ea99b4b7f4e1b1c199",
+    "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/backend/RUN_2026-11-16_06-31-44_2038782_62fc/results/6_final.odb": "e063113002cbd21b1a542df21d042fc0fbdb0a91e45ac25247f374fa293d095f",
+    "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32_input/source.cdl": "802e6b17b10e1b5f0582c9ef9a5cb8974d8cf4f801289e7da0302858cbee0e2f",
+    "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_picorv32_property65536/lvs/mask.lvs.rep": "ccad095f6f4708d5ecae9c4a929665fac28e2eec6a093ba26a3ab8935e9927a6",
+    "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32_fin_merged_input/drc.gds": "60070decd005a5718c0732ac4e05d5b4769a5e5217766d5b6c3fb1f73910c6e4",
+    "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32_fin_merged_input/geometry_verification.json": "8ea04e75aa93e922483f46e0730a24f15c5592aef56ab9cc09b4b94d0563c776",
+    "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_picorv32_fin_merged_hier/drc/invocation.json": "69e70779a0e476588315c162c3456c4ecd1deb2eed9a2dc7ad1729e3b9ffc97a",
+    "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/calibre_evidence/multi_picorv32_property65536/lvs/invocation.json": "af562f582fb9dec090bb4d26e11e01faad79a4cc5b799413ab10e30f988869f2",
+    "/home/yangao/r2g-skills/experiments/asap7_qualification_20261116/multi_picorv32/reports/reference_validation.json": "4d0d384a13075f837c697b7e8deae3975de5a312c97b8d2e1887f471a6da0cf2"
+  },
+  "drc_gcd_control": {
+    "process_exit": 0,
+    "wall_s": 9.519646484404802,
+    "gds_sha256": "39f0b6090a269d2bff91ae9fbff834e8c507b2c8655118cc2eb66b9ee1ab75a6",
+    "deck_sha256": "1929e51ea03ae87296483fce6aa5755ab54049dbca159927d916dc4373924765",
+    "offsets": [
+      "0",
+      "0",
+      "0",
+      "0"
+    ],
+    "flat": false,
+    "property_limit": null,
+    "result": "clean",
+    "rulechecks": 334,
+    "results": 0,
+    "expanded_results": 0,
+    "violations": {}
+  }
+}
