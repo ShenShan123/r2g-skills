@@ -19,6 +19,30 @@ import scheduler
 
 
 class Phase15Tests(unittest.TestCase):
+    def test_bsd2_text_and_provider_agree(self):
+        text = (Path(__file__).parent / "fixtures/bsd2_secworks_license.txt").read_text()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "LICENSE").write_text(text)
+            result = recover_license_evidence.recover(root, "BSD-2-Clause")
+            self.assertEqual(result["identifiers"], ["BSD-2-Clause"])
+            self.assertEqual(result["release_policy"], "PUBLIC_EXPORT_ALLOWED")
+            self.assertEqual(result["license_files"], ["LICENSE"])
+
+    def test_bsd3_non_endorsement_and_real_disagreement(self):
+        text = (Path(__file__).parent / "fixtures/bsd2_secworks_license.txt").read_text()
+        text += ("\nNeither the name of the copyright holder nor the names of its contributors "
+                 "may be used to endorse or promote products derived from this software "
+                 "without specific prior written permission.\n")
+        text = text.replace("may be used", "may\nbe\tused")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "LICENSE").write_text(text)
+            self.assertEqual(recover_license_evidence.recover(root, "BSD-3-Clause")["identifiers"],
+                             ["BSD-3-Clause"])
+            self.assertEqual(recover_license_evidence.recover(root, "BSD-2-Clause")["identifiers"],
+                             ["BSD-2-Clause", "BSD-3-Clause"])
+
     def test_function_ontology_distinguishes_complex_targets(self):
         record = {
             "identity": {"repository_name": "soc"},

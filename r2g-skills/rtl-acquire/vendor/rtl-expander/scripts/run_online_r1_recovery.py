@@ -24,6 +24,20 @@ from corpus_state import CorpusState
 SCHEMA = "rtl_online_r1_recovery_v1"
 
 
+
+def split_percent_defaults() -> tuple[int, int]:
+    """(train, val) percent defaults; RTL_EXPANDER_SPLIT_PERCENTS="T,V" overrides 90,5 for every
+    subprocess of a campaign. Experiment 2 v2 (2026-11-14) sets 100,0: one split, so no cross-split
+    SplitGroup merge (and no test-profile rollover, which needs a campaign consumption contract) can
+    stop a run that consumes no splits."""
+    raw = os.environ.get("RTL_EXPANDER_SPLIT_PERCENTS", "").strip()
+    if not raw:
+        return 90, 5
+    train, val = (int(part) for part in raw.split(","))
+    if train < 0 or val < 0 or train + val > 100:
+        raise ValueError("RTL_EXPANDER_SPLIT_PERCENTS must be T,V with T+V <= 100")
+    return train, val
+
 def sample_key(row: dict) -> str:
     value = "\0".join(str(row.get(key, "")) for key in ("repo_id", "project_key", "top_candidate", "failure_type"))
     return hashlib.sha256(value.encode()).hexdigest()
@@ -87,7 +101,7 @@ def main() -> int:
         with FileLock(corpus / "locks/manifest.lock", blocking=True):
             designs = load_jsonl(corpus / "manifests/all_designs.jsonl", "design_id")
             designs.update(published)
-            assign_families_and_splits(designs, corpus, SimpleNamespace(split_seed="rtl-corpus-v1", train_percent=90, val_percent=5, organization_aware_split=False))
+            assign_families_and_splits(designs, corpus, SimpleNamespace(split_seed="rtl-corpus-v1", train_percent=split_percent_defaults()[0], val_percent=split_percent_defaults()[1], organization_aware_split=False))
             validate_publish_invariants(corpus, designs)
             with CorpusState(corpus) as state:
                 state.apply_incremental(designs=designs.values())

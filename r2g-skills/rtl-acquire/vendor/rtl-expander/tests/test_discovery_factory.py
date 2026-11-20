@@ -243,6 +243,23 @@ class FrontierTests(unittest.TestCase):
             self.assertEqual(unknown["repository_key"], "github:test/unknown")
             self.assertEqual(slow["repository_key"], "github:test/slow")
 
+    def test_max_known_size_cap_skips_large_keeps_unknown_and_leaves_frontier(self):
+        with tempfile.TemporaryDirectory() as directory, frontier.FrontierDB(Path(directory) / "frontier.sqlite") as db:
+            for name, size in (("big", 900 * 1024 * 1024), ("small", 2048), ("unknown", None)):
+                repo = {"url": f"https://github.com/test/{name}", "design_likelihood": 0.9}
+                if size:
+                    repo["size_bytes"] = size
+                db.upsert_repository(repo, "keyword", priority=3.0 if name == "big" else 2.0)
+            cap = 64 * 1024 * 1024
+            got = {db.claim_repository(f"w{i}", max_known_size_bytes=cap)["repository_key"] for i in range(2)}
+            self.assertEqual(got, {"github:test/small", "github:test/unknown"})
+            self.assertIsNone(db.claim_repository("w3", max_known_size_bytes=cap))
+            row = db.connection.execute(
+                "SELECT state,acquisition_status FROM repositories WHERE repository_key='github:test/big'").fetchone()
+            self.assertEqual(tuple(row), ("FRONTIER", "NOT_ACQUIRED"))
+            # without the cap the large repository is still claimable (default behaviour unchanged)
+            self.assertEqual(db.claim_repository("w4")["repository_key"], "github:test/big")
+
     def test_round_global_exploration_cap_is_atomic_and_restart_safe(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "frontier.sqlite"
@@ -1329,3 +1346,33 @@ class AcquisitionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SplitPercentDefaultsTests(unittest.TestCase):
+    """RTL_EXPANDER_SPLIT_PERCENTS (Experiment 2 v2, 2026-11-14): no test split, so no test-profile rollover."""
+
+    def test_env_override_removes_the_test_split(self):
+        import importlib
+        import os as _os
+        import run_expansion_round as rer
+        old = _os.environ.get("RTL_EXPANDER_SPLIT_PERCENTS")
+        try:
+            _os.environ.pop("RTL_EXPANDER_SPLIT_PERCENTS", None)
+            self.assertEqual(rer.split_percent_defaults(), (90, 5))
+            _os.environ["RTL_EXPANDER_SPLIT_PERCENTS"] = "95,5"
+            self.assertEqual(rer.split_percent_defaults(), (95, 5))
+            splits = {rer.deterministic_split("g%d" % i, "rtl-corpus-v1", 95, 5) for i in range(3000)}
+            self.assertEqual(splits, {"train", "val"})
+            self.assertIn("test", {rer.deterministic_split("g%d" % i, "rtl-corpus-v1", 90, 5) for i in range(3000)})
+            _os.environ["RTL_EXPANDER_SPLIT_PERCENTS"] = "100,0"          # Experiment 2: one split only
+            self.assertEqual(rer.split_percent_defaults(), (100, 0))
+            self.assertEqual({rer.deterministic_split("g%d" % i, "rtl-corpus-v1", 100, 0) for i in range(3000)},
+                             {"train"})
+            _os.environ["RTL_EXPANDER_SPLIT_PERCENTS"] = "99,5"
+            with self.assertRaises(ValueError):
+                rer.split_percent_defaults()
+        finally:
+            if old is None:
+                _os.environ.pop("RTL_EXPANDER_SPLIT_PERCENTS", None)
+            else:
+                _os.environ["RTL_EXPANDER_SPLIT_PERCENTS"] = old

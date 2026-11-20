@@ -903,8 +903,10 @@ class FrontierDB:
         min_design_likelihood: float = 0.5, providers: list[str] | None = None,
         exploration: bool = False, precision_policy: bool = False,
         size_lane: str = "any", size_threshold_bytes: int = 64 * 1024 * 1024,
-        round_id: str = "", executor_id: str = "",
+        round_id: str = "", executor_id: str = "", max_known_size_bytes: int = 0,
     ) -> dict[str, Any] | None:
+        """max_known_size_bytes > 0: never claim a repository whose provider-reported size exceeds it
+        (unknown size stays claimable). The repository is left in the frontier, not consumed."""
         with self.immediate() as connection:
             acquisition_lane = "exploration" if exploration else "production"
             if round_id:
@@ -981,6 +983,8 @@ class FrontierDB:
                 size_clause = ""
             else:
                 raise ValueError(f"unsupported acquisition size lane: {size_lane}")
+            if max_known_size_bytes and max_known_size_bytes > 0:
+                size_clause += f" AND {estimated_size}<=?"
             row = connection.execute(
                 f"""SELECT * FROM repositories WHERE state='FRONTIER'
                    AND acquisition_status IN ('NOT_ACQUIRED','RETRY')
@@ -1000,7 +1004,9 @@ class FrontierDB:
                        THEN 1 ELSE 0 END,
                      priority DESC, discovery_score DESC, first_seen LIMIT 1""",
                 (min_priority, min_design_likelihood, *( [requested_tier] if precision_policy else [] ), now, now,
-                 *( [size_threshold_bytes] if size_lane in {"fast", "slow"} else [] ), *(providers or [])),
+                 *( [size_threshold_bytes] if size_lane in {"fast", "slow"} else [] ),
+                 *( [int(max_known_size_bytes)] if max_known_size_bytes and max_known_size_bytes > 0 else [] ),
+                 *(providers or [])),
             ).fetchone()
             if row is None:
                 return None

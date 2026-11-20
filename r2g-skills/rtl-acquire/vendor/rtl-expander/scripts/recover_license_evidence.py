@@ -45,14 +45,24 @@ def normalize_identifier(value: str) -> str | None:
 
 
 def detect_full_text(text: str) -> set[str]:
-    lower = text.lower()
+    lower = " ".join(text.lower().split())
     found: set[str] = set()
     if "permission is hereby granted, free of charge" in lower or ("mit license" in lower and "permission is hereby granted" in lower):
         found.add("MIT")
     if "apache license" in lower and "version 2.0" in lower:
         found.add("Apache-2.0")
-    if "redistribution and use in source and binary forms" in lower:
-        found.add("BSD-3-Clause")
+    if (
+        "redistribution and use in source and binary forms" in lower
+        and "this software is provided by the copyright holders and contributors" in lower
+    ):
+        # The redistribution preamble is shared by BSD-2 and BSD-3. Only
+        # BSD-3 includes the non-endorsement clause; preserve that distinction
+        # when combining full-text evidence with provider SPDX metadata.
+        non_endorsement = (
+            "neither the name of" in lower
+            and "may be used to endorse or promote" in lower
+        )
+        found.add("BSD-3-Clause" if non_endorsement else "BSD-2-Clause")
     if "isc license" in lower or ("permission to use, copy, modify" in lower and "provided as is" in lower):
         found.add("ISC")
     if "gnu affero general public license" in lower:

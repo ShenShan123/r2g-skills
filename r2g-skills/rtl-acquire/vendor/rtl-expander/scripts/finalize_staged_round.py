@@ -47,6 +47,20 @@ CHANGE_SET_SCHEMA = "rtl_round_change_set_v1"
 FINALIZATION_PLAN_SCHEMA = "rtl_finalization_preflight_plan_v1"
 
 
+
+def split_percent_defaults() -> tuple[int, int]:
+    """(train, val) percent defaults; RTL_EXPANDER_SPLIT_PERCENTS="T,V" overrides 90,5 for every
+    subprocess of a campaign. Experiment 2 v2 (2026-11-14) sets 100,0: one split, so no cross-split
+    SplitGroup merge (and no test-profile rollover, which needs a campaign consumption contract) can
+    stop a run that consumes no splits."""
+    raw = os.environ.get("RTL_EXPANDER_SPLIT_PERCENTS", "").strip()
+    if not raw:
+        return 90, 5
+    train, val = (int(part) for part in raw.split(","))
+    if train < 0 or val < 0 or train + val > 100:
+        raise ValueError("RTL_EXPANDER_SPLIT_PERCENTS must be T,V with T+V <= 100")
+    return train, val
+
 def atomic_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}")
@@ -297,8 +311,8 @@ def parse_args() -> argparse.Namespace:
     mode.add_argument("--commit-plan", type=Path)
     parser.add_argument("--finalization-plan-output", type=Path)
     parser.add_argument("--split-seed", default="rtl-corpus-v1")
-    parser.add_argument("--train-percent", type=int, default=90)
-    parser.add_argument("--val-percent", type=int, default=5)
+    parser.add_argument("--train-percent", type=int, default=split_percent_defaults()[0])
+    parser.add_argument("--val-percent", type=int, default=split_percent_defaults()[1])
     parser.add_argument("--organization-aware-split", action="store_true")
     return parser.parse_args()
 

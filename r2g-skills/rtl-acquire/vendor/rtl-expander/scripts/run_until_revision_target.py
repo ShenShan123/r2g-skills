@@ -1113,6 +1113,10 @@ def parse_args() -> argparse.Namespace:
         help="Auto preserves Batch 5 as a sequential baseline and enables bounded parallel acquisition for Batch 6+",
     )
     parser.add_argument("--parallel-acquisition-activation-batch", type=int, default=6)
+    parser.add_argument("--max-known-repo-bytes", type=int, default=0,
+                        help="Passed to acquire_frontier: skip repositories larger than this by provider metadata")
+    parser.add_argument("--large-repository-lane", action=argparse.BooleanOptionalAction, default=True,
+                        help="Retry oversize archives in the 1 GB large-repository lane")
     parser.add_argument("--parallel-acquisition-fast-workers", type=int, default=3)
     parser.add_argument("--parallel-acquisition-unknown-workers", type=int, default=1)
     parser.add_argument("--parallel-acquisition-slow-workers", type=int, default=1)
@@ -1131,6 +1135,14 @@ def acquisition_execution_mode(args: argparse.Namespace) -> str:
     match = re.search(r"_batch(\d+)$", args.factory_round_id)
     batch = int(match.group(1)) if match else 0
     return "bounded_parallel" if batch >= args.parallel_acquisition_activation_batch else "sequential"
+
+
+def acquisition_policy_args(args: argparse.Namespace) -> list[str]:
+    """Per-repository download policy forwarded to every acquire_frontier call."""
+    out = ["--enable-large-repository-lane"] if args.large_repository_lane else []
+    if args.max_known_repo_bytes > 0:
+        out += ["--max-known-repo-bytes", str(args.max_known_repo_bytes)]
+    return out
 
 
 def acquisition_execution_args(args: argparse.Namespace) -> list[str]:
@@ -1365,7 +1377,7 @@ def main() -> int:
                     "--controller-round-id", args.factory_round_id,
                     "--round-started-at", str(start["captured_at"]),
                     "--round-revision-target", str(args.target_new_acquired),
-                    "--enable-large-repository-lane",
+                    *acquisition_policy_args(args),
                     "--exploration-fraction", str(args.exploration_fraction),
                     *acquisition_execution_args(args),
                 ]))
@@ -1429,7 +1441,7 @@ def main() -> int:
                                 "--controller-round-id", args.factory_round_id,
                                 "--round-started-at", str(start["captured_at"]),
                                 "--round-revision-target", str(args.target_new_acquired),
-                                "--enable-large-repository-lane",
+                                *acquisition_policy_args(args),
                                 "--exploration-fraction", str(args.exploration_fraction),
                                 *acquisition_execution_args(args),
                             ],

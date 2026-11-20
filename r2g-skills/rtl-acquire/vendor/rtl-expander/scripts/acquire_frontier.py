@@ -415,6 +415,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-files", type=int, default=200_000)
     parser.add_argument("--network-timeout", type=int, default=30)
     parser.add_argument("--max-repo-seconds", type=int, default=300)
+    parser.add_argument("--max-known-repo-bytes", type=int, default=0,
+                        help="Skip (leave in the frontier) repositories whose provider-reported size exceeds this; "
+                             "0 = no cap. Unknown sizes stay eligible.")
     parser.add_argument("--min-priority", type=float, default=1.0)
     parser.add_argument("--min-design-likelihood", type=float, default=0.5)
     parser.add_argument("--exploration-fraction", type=float, default=0.15,
@@ -682,6 +685,7 @@ def run(args: argparse.Namespace) -> int:
                             size_threshold_bytes=args.parallel_size_threshold_bytes,
                             round_id=args.controller_round_id,
                             executor_id=args.acquisition_executor_id,
+                            max_known_size_bytes=args.max_known_repo_bytes,
                         )
                         if row is not None:
                             break

@@ -27,6 +27,20 @@ from run_expansion_round import (
 FINAL_SCHEMA = "rtl_repair_final_adjudication_v1"
 
 
+
+def split_percent_defaults() -> tuple[int, int]:
+    """(train, val) percent defaults; RTL_EXPANDER_SPLIT_PERCENTS="T,V" overrides 90,5 for every
+    subprocess of a campaign. Experiment 2 v2 (2026-11-14) sets 100,0: one split, so no cross-split
+    SplitGroup merge (and no test-profile rollover, which needs a campaign consumption contract) can
+    stop a run that consumes no splits."""
+    raw = os.environ.get("RTL_EXPANDER_SPLIT_PERCENTS", "").strip()
+    if not raw:
+        return 90, 5
+    train, val = (int(part) for part in raw.split(","))
+    if train < 0 or val < 0 or train + val > 100:
+        raise ValueError("RTL_EXPANDER_SPLIT_PERCENTS must be T,V with T+V <= 100")
+    return train, val
+
 def atomic_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp.{os.getpid()}")
@@ -183,7 +197,7 @@ def main() -> int:
         with FileLock(corpus / "locks/manifest.lock", blocking=True):
             designs = load_jsonl(corpus / "manifests/all_designs.jsonl", "design_id")
             designs.update({record["design_id"]: record for record in published})
-            split_args = SimpleNamespace(split_seed="rtl-corpus-v1", train_percent=90, val_percent=5, organization_aware_split=False)
+            split_args = SimpleNamespace(split_seed="rtl-corpus-v1", train_percent=split_percent_defaults()[0], val_percent=split_percent_defaults()[1], organization_aware_split=False)
             assign_families_and_splits(designs, corpus, split_args)
             validate_publish_invariants(corpus, designs)
             write_manifests(corpus, designs)

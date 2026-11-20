@@ -85,6 +85,11 @@ def main() -> int:
     )
     parser.add_argument("--pipeline-workers", type=int, default=2)
     parser.add_argument("--pipeline-poll-seconds", type=float, default=2.0)
+    parser.add_argument("--max-known-repo-bytes", type=int, default=0,
+                        help="Skip repositories larger than this by provider metadata (0 = no cap)")
+    parser.add_argument("--large-repository-lane", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--acquisition-execution-mode", choices=("auto", "sequential", "bounded_parallel"),
+                        default="auto")
     parser.add_argument(
         "--child-resume-backoff-seconds", type=float, default=30.0,
         help="Backoff before automatically resuming an unambiguously recoverable child round",
@@ -172,6 +177,12 @@ def main() -> int:
             ]
             if not args.pipelined_processing:
                 command.append("--no-pipelined-processing")
+            if args.max_known_repo_bytes > 0:
+                command += ["--max-known-repo-bytes", str(args.max_known_repo_bytes)]
+            if not args.large_repository_lane:
+                command.append("--no-large-repository-lane")
+            if args.acquisition_execution_mode != "auto":
+                command += ["--acquisition-execution-mode", args.acquisition_execution_mode]
             batch = unfinished or {
                 "sequence": sequence, "round_id": round_id, "state": "RUNNING",
                 "revision_target": revision_target, "families_before": before, "started_at": utc_now(),
