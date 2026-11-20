@@ -20,7 +20,8 @@ see routing. The script refuses a feature DEF that carries routed wires.
                  pin bounding box (w, h floored at one GCell step), clipped to
                  the die; integrates to (w+h) per net. Units 1/um.
   pin_rudy       each signal-net pin adds its net's (w+h)/(w*h) to its GCell
-  pin_density    signal-net pins (instance pins + IO pins) per GCell
+  pin_density    signal-net pins (instance pins + IO pins) per GCell, counted over the
+                 nets that have >= 2 placed pins (the same pins RUDY uses)
 
 Labels (targets) come from the post-route label stage:
 
@@ -37,6 +38,13 @@ previews (y axis up, as a layout viewer shows it).
 Usage:
   build_images.py --feature-def 3_place.def --labels-dir labels/ --out-dir images/
                   [--feature-stage place] [--lef ...]   (LEFs default to SC_LEF/ADDITIONAL_LEFS)
+  build_images.py --feature-stage none --labels-dir labels/ --out-dir images/floorplan/
+
+--feature-stage none (2026-11-17, four-stage image dataset): the FLOORPLAN prediction cutoff, which -- exactly like
+the four-stage graph's floorplan snapshot -- may read no layout at all. Every feature channel is written as zeros
+on the shared grid (so all four stages have one shape and one channel set), the labels are the same post-route
+labels, and image_meta.json records `feature_stage: none` and `sources.feature_def: null`. It is a deliberate
+no-spatial-information baseline, not a missing file. run_stage_images.sh drives all four stages.
 """
 import argparse
 import csv
@@ -82,6 +90,11 @@ class Grid:
         self.dbu = dbu
         self.sx, self.sy = sx / dbu, sy / dbu
         self.x0, self.y0, self.x1, self.y1 = x0 / dbu, y0 / dbu, x1 / dbu, y1 / dbu
+        # Binning is done in DBU, not um: a point exactly on a GCell line (e.g. x = 28500 dbu with a
+        # 5700-dbu step) is 14.25 um / 2.85 um = 4.999999... in floating point and floored into the
+        # cell BELOW. failure-patterns.md "Dataset-Extraction Silent-Value Defects" #68.
+        self._step_dbu = (sx, sy)
+        self._origin_dbu = (x0, y0)
 
     def cell_rect(self, i, j):
         """GCell (i, j) clipped to the die, in um."""
@@ -97,12 +110,20 @@ class Grid:
                 a[i, j] = max(0.0, xb - xa) * max(0.0, yb - ya)
         return a
 
+    def bin(self, v_um, axis):
+        """Floor bin of coordinate v (um) on axis 0 (x) or 1 (y), computed in DBU.
+        The um value is converted back to DBU and snapped to 1e-6 DBU first, so float noise from the
+        um round trip can never move a point across a GCell line; a point ON a line belongs to the
+        cell above it (half-open cells [x_i, x_i+1)), as in the DBU-integer definition."""
+        d = round(v_um * self.dbu - self._origin_dbu[axis], 6)
+        return int(d // self._step_dbu[axis])
+
     def index(self, x, y):
         """GCell holding point (x, y) um, or None outside the die."""
         if not (self.x0 <= x <= self.x1 and self.y0 <= y <= self.y1):
             return None
-        i = min(int((x - self.x0) // self.sx), self.nx - 1)
-        j = min(int((y - self.y0) // self.sy), self.ny - 1)
+        i = min(self.bin(x, 0), self.nx - 1)
+        j = min(self.bin(y, 1), self.ny - 1)
         return i, j
 
     def splat(self, arr, rect, value_per_area):
@@ -112,10 +133,10 @@ class Grid:
         xb, yb = min(xb, self.x1), min(yb, self.y1)
         if xb <= xa or yb <= ya:
             return 0.0
-        i0 = max(0, int((xa - self.x0) // self.sx))
-        i1 = min(self.nx - 1, int((xb - self.x0) // self.sx))
-        j0 = max(0, int((ya - self.y0) // self.sy))
-        j1 = min(self.ny - 1, int((yb - self.y0) // self.sy))
+        i0 = max(0, self.bin(xa, 0))
+        i1 = min(self.nx - 1, self.bin(xb, 0))
+        j0 = max(0, self.bin(ya, 1))
+        j1 = min(self.ny - 1, self.bin(yb, 1))
         total = 0.0
         for i in range(i0, i1 + 1):
             gx0 = self.x0 + i * self.sx
@@ -195,12 +216,19 @@ def build_features(def_path, grid, lef_paths):
         f["macro_region"] = np.where(area > 0, mac_area / area, 0.0)
 
     # pin positions per signal net
+    # Only PLACED/FIXED/COVER locations count, the same rule as the occupancy channels above and as the
+    # verifier's reader. A floorplan DEF (the four-stage dataset's placement cutoff) lists every std cell
+    # UNPLACED, which def_parse records as x=None -- the old `"x" not in c` test let those through (2026-11-17).
+    def _placed(rec):
+        return rec is not None and rec.get("x") is not None and rec.get("y") is not None and \
+            rec.get("status", "PLACED") in ("PLACED", "FIXED", "COVER")
+
     def pin_xy(inst, pin):
         if inst == "PIN":
             p = iopins.get(pin)
-            return (p["x"] / dbu, p["y"] / dbu) if p else None
+            return (p["x"] / dbu, p["y"] / dbu) if _placed(p) else None
         c = comps.get(inst)
-        if not c or "x" not in c:
+        if not _placed(c):
             return None
         return lef.pin_abs_pos_um(geom, c["x"] / dbu, c["y"] / dbu, c.get("orient"), c["master"], pin)
 
@@ -294,22 +322,33 @@ def write_png(path, arr):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--feature-def", required=True, help="pre-route DEF (placement by default)")
-    ap.add_argument("--feature-stage", default="place", choices=["floorplan", "place", "cts"])
+    ap.add_argument("--feature-def", default=None, help="pre-route DEF (placement by default)")
+    ap.add_argument("--feature-stage", default="place", choices=["floorplan", "place", "cts", "none"])
     ap.add_argument("--labels-dir", required=True)
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--lef", action="append", default=None, help="cell/macro LEF (repeatable)")
     ap.add_argument("--design", default="")
     a = ap.parse_args(argv)
 
-    assert_pre_route(a.feature_def)
+    no_layout = a.feature_stage == "none"
+    if no_layout and a.feature_def:
+        raise SystemExit("--feature-stage none reads no layout: do not pass --feature-def")
+    if not no_layout and not a.feature_def:
+        raise SystemExit("--feature-def is required unless --feature-stage none")
+    if not no_layout:
+        assert_pre_route(a.feature_def)
     gmeta_path = os.path.join(a.labels_dir, "congestion_grid.json")
     gmeta = json.load(open(gmeta_path))
     grid = Grid(gmeta)
-    lefs = a.lef or lef.cell_lef_paths()
-    if not lefs:
-        raise SystemExit("no cell LEF: set SC_LEF (run via run_images.sh) or pass --lef")
-    feats, fstats = build_features(a.feature_def, grid, lefs)
+    if no_layout:
+        lefs = a.lef or lef.cell_lef_paths()      # not read for features; recorded for the verifier's label join
+        feats = {k: np.zeros((grid.nx, grid.ny)) for k in FEATURES}
+        fstats = {"instances": 0, "note": "no layout read at this cutoff (floorplan prediction stage)"}
+    else:
+        lefs = a.lef or lef.cell_lef_paths()
+        if not lefs:
+            raise SystemExit("no cell LEF: set SC_LEF (run via run_images.sh) or pass --lef")
+        feats, fstats = build_features(a.feature_def, grid, lefs)
     labs, lstats = build_labels(a.labels_dir, grid)
 
     os.makedirs(os.path.join(a.out_dir, "png"), exist_ok=True)
@@ -334,13 +373,15 @@ def main(argv=None):
         "labels": {k: {"unit": UNITS[k], "max": float(labs[k].max()), "sum": float(labs[k].sum())}
                    for k in LABELS},
         "feature_stage": a.feature_stage,
-        "sources": {"feature_def": {"path": os.path.abspath(a.feature_def), "sha256": sha256(a.feature_def)},
+        "sources": {"feature_def": (None if no_layout else
+                                    {"path": os.path.abspath(a.feature_def), "sha256": sha256(a.feature_def)}),
                     "grid": {"path": os.path.abspath(gmeta_path), "sha256": sha256(gmeta_path)},
                     "lefs": lefs},
         "feature_stats": fstats,
         "label_stats": lstats,
-        "leakage_rule": "features read only the %s DEF (checked: no routed wires); labels are post-route"
-                        % a.feature_stage,
+        "leakage_rule": ("features read no layout (all-zero channels); labels are post-route" if no_layout else
+                         "features read only the %s DEF (checked: no routed wires); labels are post-route"
+                         % a.feature_stage),
     }
     json.dump(meta, open(os.path.join(a.out_dir, "image_meta.json"), "w"), indent=1)
     print("images: %dx%d  features=%s  labels=%s  -> %s" % (grid.nx, grid.ny, FEATURES, LABELS, a.out_dir))

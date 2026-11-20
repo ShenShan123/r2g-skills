@@ -93,12 +93,23 @@ if {$odb_file != "" && [file exists $odb_file]} {
         exit 1
     }
     foreach lib $lib_files { read_liberty $lib }
-    read_lef $tech_lef
-    read_lef $macro_lef
-    read_lef $macro_mod_lef
-    if {[file isdirectory $orfs_lef_dir]} {
-        foreach lef [glob -nocomplain -directory $orfs_lef_dir fakeram45_*.lef] {
-            read_lef $lef
+    # The DEF fallback uses the same platform LEFs as feature extraction.
+    # Keep standalone Nangate45 defaults for callers without resolved paths.
+    if {[info exists ::env(TECH_LEF)] && $::env(TECH_LEF) ne ""} {
+        read_lef $::env(TECH_LEF)
+        foreach key {SC_LEF ADDITIONAL_LEFS} {
+            if {[info exists ::env($key)]} {
+                foreach lef $::env($key) { read_lef $lef }
+            }
+        }
+    } else {
+        read_lef $tech_lef
+        read_lef $macro_lef
+        read_lef $macro_mod_lef
+        if {[file isdirectory $orfs_lef_dir]} {
+            foreach lef [glob -nocomplain -directory $orfs_lef_dir fakeram45_*.lef] {
+                read_lef $lef
+            }
         }
     }
     read_def $def_file

@@ -398,6 +398,59 @@ as OpenDB does (identical boxes on all 836 gf180 9t polygon pins).
 contract. Datasets built on gf180 before this change carry shifted pin
 positions and must be rebuilt.
 
+### D15 - Legal input-pin permutations broke base->stage net lineage (label coverage)
+
+`02.build_base_to_stage_lineage` anchored each synthesis endpoint by its literal
+`(inst, pin)`. The resizer / `swap_pins` exchanges the nets of logically
+equivalent inputs (NOR2 `A1`<->`A2`), so each swapped endpoint landed on the other
+net's physical net, both canonical nets became "ambiguous", and their route
+wirelength / ground-cap labels were masked (honest, but on 1,384 nets of six
+pilot500 nangate45 dev designs, up to 12 % of a design). Delta:
+`legal_pin_permutation_remap` (+ `_liberty_function`, `_permutation_is_symmetry`)
+accepts a permutation only when the instance keeps the same multiset of input-net
+names AND every Liberty output function of the stage master is invariant under
+it (exhaustive truth table). The lineage gains an optional `cells` argument (no
+Liberty = upstream behaviour) and a `legal_pin_permutation_endpoints` summary
+count. `resolve_liberty_paths` is factored out of `02.main`, and
+`lineage_liberty_cells` lets `03` (route labels) and `05` (snapshots) pass the
+same cells. Pin FEATURES are unchanged: a swapped pin node still carries the
+geometry of the physical pin with its own name (recorded residue below).
+Tests: `tests/test_r2g2_lineage_pin_permutation.py`.
+
+### D16 - Validator rejected every purely combinational design (robustness)
+
+`checks/validate_four_stage.py` demanded at least one valid internal-pin timing
+label whenever timing was configured. Pin labels are endpoint slacks, so a
+design whose endpoints are all output ports (virtual clock, no registers) has
+only `io_pin` labels and the whole build aborted. `timing_label_presence_error`
+now requires a valid label overall, plus a valid pin label whenever some pin is
+an internal timing endpoint (`is_timing_endpoint` feature). Tests in the same
+file.
+
+### D17 - One-bit vector ports/nets named as scalars (identity, timing-join)
+
+Yosys JSON cannot distinguish `input [0:0] x;` from `input x;` (one bit, offset 0,
+not upto), so `01.yosys_signal_names` named the bit `x`, while OpenROAD/OpenSTA
+call it `x[0]`. The canonical port joined no DEF PIN (NaN position on every
+stage) and no STA point; on pilot500 C02816 24 of 288 timing paths were rejected
+and `03` refused the design at its 0.95 path-alignment gate. `single_bit_vector_names`
+reads the `[k:k]` declarations of the top module from the netlist text and
+`yosys_signal_names` indexes them. Test: `tests/test_r2g2_single_bit_vector.py`.
+
+### D18 - Validator rejected designs whose registers STA never timed (robustness)
+
+D16 still aborted a design with structural internal endpoints (`is_timing_endpoint`,
+e.g. register D pins) when OpenSTA timed none of them. pilot500 C03894 RAM_IO (a
+FABulous tile) has 372 register D pins, but its clock is not among the SDC's clock
+candidates. The virtual clock times only the 201 port-to-port paths, and every D-pin
+slack is INF, so zero valid pin labels is the truth. `report_has_internal_endpoint`
+scans the `Endpoint: <name> (<kind>)` lines of the configured `timing_max_rpt` /
+`timing_min_rpt`; a kind without `port` is internal.
+`timing_label_presence_error(graph, report_internal_endpoints)` waives the
+internal-pin demand only when the reports were read and contain no internal
+endpoint. An unreadable report keeps the strict D16 rule. Tests:
+`tests/test_r2g2_lineage_pin_permutation.py` (D18 block). failure-patterns #71.
+
 ## Routed patch rectangle correction (2026-09-17)
 
 `03.clause_points` previously treated the first two `RECT` offsets as a route
@@ -415,6 +468,10 @@ it. Old graph labels must be re-exported and re-audited, not merely reloaded.
 Reference: [LEF/DEF 5.8 NETS routingPoints](https://coriolis.lip6.fr/doc/lefdef/lefdefref/DEFSyntax.html).
 
 ## Known upstream residue (not changed here)
+
+* D15 residue: a legally swapped input pin keeps the geometry features of the
+  physical pin of the same NAME (not of the pin its canonical net now uses).
+  The label lineage is corrected, the input geometry is not.
 
 * `01.parse_def_logical`, `unique_reference_index`, `vector_reference_names` and
   the `def_pins` bus-recovery block are unreachable in the shipped `main()` for

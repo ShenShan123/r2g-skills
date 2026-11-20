@@ -134,8 +134,9 @@ def test_multi_target_extractor_quarantines_every_target(tmp_path):
 def test_every_run_soft_call_site_declares_its_targets():
     """A call site that forgets its targets silently re-opens the hole."""
     src = open(_RUN_LABELS, encoding="utf-8").read()
+    # a call site is `run_soft ...` or, since the R2G_JOBS parallel label stage, `launch run_soft ...`
     calls = [ln.strip() for ln in src.splitlines()
-             if ln.strip().startswith("run_soft ") and "()" not in ln]
+             if ln.strip().startswith(("run_soft ", "launch run_soft ")) and "()" not in ln]
     assert len(calls) >= 5, f"expected the 5+ extractor call sites, saw {calls}"
     for call in calls:
         assert ".csv" in call, f"run_soft call declares no target CSV: {call}"
@@ -188,3 +189,30 @@ def test_label_health_names_a_missing_file_explicitly(tmp_path):
         assert "extractor failed or never ran" in h["reason"]
     assert not all(h["status"] == "ok" for h in health.values()), \
         "a missing label set must not leave the manifest status 'ok'"
+
+
+@pytest.mark.parametrize("preexisting", [None, {"ir_drop.csv": "Design,Cell,label\nd,c1,0.5\n"}])
+def test_failed_extractor_does_not_abort_the_set_e_orchestrator(tmp_path, preexisting):
+    """run_labels.sh runs under `set -euo pipefail`. run_soft's failure branch ended on
+    `[[ -f "$t.stale" ]] && echo ...`, so on a FIRST-EVER run (nothing to quarantine) the
+    function returned 1 and set -e killed the whole label stage right after the failed
+    extractor: no RC labels, no stats, no provenance, and run_graphs then failed. Seen on gf180,
+    where PDNSim aborts with PSM-0021 (failure-patterns.md #69, 2026-11-07). The other tests drive
+    run_soft without -e, so they could not see it."""
+    labels = tmp_path / "labels"
+    labels.mkdir()
+    for name, body in (preexisting or {}).items():
+        (labels / name).write_text(body, encoding="utf-8")
+    fn = subprocess.run(["awk", "/^run_soft\\(\\)/,/^}$/", _RUN_LABELS],
+                        capture_output=True, text=True, check=True).stdout
+    script = textwrap.dedent(f"""
+        set -euo pipefail
+        LABELS_DIR={labels!s}
+        LABEL_TIMEOUT=30
+        {fn}
+        run_soft irdrop "{labels / 'ir_drop.csv'}" false
+        echo NEXT_EXTRACTOR_RAN
+    """)
+    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, f"run_soft aborted the set -e orchestrator (rc={r.returncode})"
+    assert "NEXT_EXTRACTOR_RAN" in r.stdout

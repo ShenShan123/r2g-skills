@@ -136,6 +136,22 @@ def check(name, ok, detail=""):
     return ok
 
 
+# Declared input scope (2026-11-15). A dataset built from physical artifacts ALONE (final DEF/SPEF/SDC +
+# platform files: no power grid data, no DRC/LVS reports) cannot carry an IR-drop label or a sign-off verdict.
+# `--not-applicable irdrop,signoff` (or R2G_VERIFY_NOT_APPLICABLE) declares that scope: the affected checks are
+# then RECORDED as not applicable -- listed in the output and the JSON, never counted as passed, never hidden --
+# instead of failing. Nothing is relaxed by default, and every other check still runs.
+NOT_APPLICABLE_SCOPES = {"irdrop", "signoff"}
+NA_DECLARED = set()
+NOT_APPLICABLE = []
+
+
+def na(scope, name, reason=""):
+    """Record a check that the declared input scope makes inapplicable (not a pass, not a failure)."""
+    NOT_APPLICABLE.append({"check": name, "scope": scope, "reason": str(reason)[:300]})
+    print(f"  [N/A ] {name} — out of declared scope '{scope}'" + (f": {reason}" if reason else ""))
+
+
 def skip(name, reason=""):
     """Record an honestly-skipped check (an unavailable dependency), NOT a pass.
     Never counted toward passed/failed — a skip that masqueraded as a pass would
@@ -720,9 +736,10 @@ def irdrop_label_ok(ir):
 
 
 def _spef_deesc(name):
-    # DEF convention: strip backslash EXCEPT before bus brackets (independent copy
-    # of the spec that scripts/extract/techlib/spef.py implements).
-    return re.sub(r"\\([^\[\]])", r"\1", name) if "\\" in name else name
+    # DEF convention: strip backslash EXCEPT before bus brackets and a literal-slash
+    # escape '\/' (write_def escapes both; failure-patterns #66, 2026-11-07) --
+    # independent copy of the spec that scripts/extract/techlib/spef.py implements.
+    return re.sub(r"\\([^\[\]/])", r"\1", name) if "\\" in name else name
 
 
 def _find_spef(case):
@@ -876,17 +893,7 @@ def extended_checks(case, design, feat, labs, views, b):
     # Step 5c) still gets the independent raw DEF re-parse rather than a bare
     # os.listdir crash on a missing backend/ dir (2026-07-08; the isdir guard was
     # already applied at the other two os.listdir sites but missed here).
-    def_path = os.environ.get("R2G_DEF") or None
-    if def_path and not os.path.isfile(def_path):
-        def_path = None
-    for r in runs:
-        if def_path:
-            break
-        for sub in ("final", "results"):
-            p = f"{case}/backend/{r}/{sub}/6_final.def"
-            if os.path.isfile(p):
-                def_path = p
-                break
+    def_path = _find_final_def(case)
     if not def_path:
         check("ext: 6_final.def present", False, "no DEF — extended checks skipped")
         return
@@ -971,8 +978,7 @@ def extended_checks(case, design, feat, labs, views, b):
         check("ext.macro pins classified (no type-14 bus fallout)",
               len(mp) > 0 and n14 == 0, f"{n14}/{len(mp)} unclassified")
     # sampled sum_pin_cap_fF: recompute the net load sum for nets w/o io conns
-    spef = any(os.path.isfile(f"{case}/backend/{r}/{sub}/6_final.spef")
-               for r in runs for sub in ("rcx", "results"))
+    spef = bool(_find_spef(case))
     bad_cap = checked_cap = 0
     for net_name, conns in list(dt["nets"].items()):
         if checked_cap >= 25:
@@ -1362,6 +1368,11 @@ def expected_label_series(views, labels_dir, design):
 
     def lab(fname):
         p = os.path.join(labels_dir, fname)
+        if not os.path.isfile(p):
+            # A failed extractor's CSV is quarantined (failure-patterns #52) and the graph stage
+            # leaves that slot all-NaN; expect exactly that instead of crashing the whole case
+            # (failure-patterns #72: every sky130hd/gf180 build whose PDNSim aborted read "0/1").
+            return pd.DataFrame()
         df = pd.read_csv(p)
         if "Design" in df.columns:
             df = df[df["Design"] == design]
@@ -1686,13 +1697,67 @@ def _hetero_symmetry_bad(h, rc=False):
     return bad
 
 
+def graph_kind_is_hetero(man):
+    """R2G_GRAPH_KIND=both ships hetero {v}_graph.pt (the canonical file) AND
+    {v}_graph_homo.pt; both modes carry the HeteroData that hetero_checks reads.
+    The old ``== "hetero"`` false-failed every 'both' build (2026-11-07)."""
+    return man.get("graph_kind") in ("hetero", "both")
+
+
+def both_mode_homo_checks(ds, tensors, man):
+    """In 'both' mode the extra {v}_graph_homo.pt must hold the SAME homogeneous data
+    the verifier reconstructs from the hetero file: node tensors + node_name exactly
+    (block-positional order is part of the contract), and every edge family as a
+    multiset of full rows (endpoints + type + attr + labels). Edge ORDER is not
+    compared: the hetero re-view regroups edges by relation by design
+    (graph_lib.hetero_to_homo docstring), so order carries no information."""
+    if man.get("graph_kind") != "both":
+        return
+
+    def _same(a, b):
+        return (a is None and b is None) or (
+            a is not None and b is not None and a.shape == b.shape
+            and torch.equal(torch.nan_to_num(a.float(), nan=-7.25), torch.nan_to_num(b.float(), nan=-7.25)))
+
+    def _rows(g, idx, cols):
+        ei = getattr(g, idx, None)
+        if ei is None:
+            return None
+        if ei.shape[1] == 0:
+            return []
+        parts = [ei.t().float()]
+        for c in cols:
+            t = getattr(g, c, None)
+            if t is not None:
+                t = t.float()
+                parts.append(torch.nan_to_num(t.reshape(ei.shape[1], -1) if t.dim() == 2 else t.reshape(-1, 1), nan=-7.25))
+        return sorted(map(tuple, torch.cat(parts, dim=1).tolist()))
+
+    for v, ref in tensors.items():
+        path = os.path.join(ds, f"{v}_graph_homo.pt")
+        ok, detail = os.path.isfile(path), "missing"
+        if ok:
+            homo = torch.load(path, map_location="cpu", weights_only=False)
+            bad = [k for k in ("x", "y", "y_raw") if not _same(getattr(ref, k, None), getattr(homo, k, None))]
+            if list(getattr(ref, "node_name", [])) != list(getattr(homo, "node_name", [])):
+                bad.append("node_name")
+            if _rows(ref, "edge_index", ("edge_type", "edge_attr", "edge_y", "edge_y_raw")) != _rows(
+                    homo, "edge_index", ("edge_type", "edge_attr", "edge_y", "edge_y_raw")):
+                bad.append("edge rows")
+            if _rows(ref, "rc_edge_index", ("rc_edge_type", "rc_edge_y", "rc_edge_y_raw")) != _rows(
+                    homo, "rc_edge_index", ("rc_edge_type", "rc_edge_y", "rc_edge_y_raw")):
+                bad.append("rc edge rows")
+            ok, detail = not bad, f"differs: {bad}"
+        check(f"both-mode {v}_graph_homo.pt == homo re-view of {v}_graph.pt (edge multiset)", ok, detail)
+
+
 def hetero_checks(hetero, views, man):
     """GROUP D — the shipped HeteroData structure (the default graph_kind):
     per-view node types + counts, per-type tensor widths, edge relations over
     present node types only, and manifest graph_kind / hetero breakdown parity."""
     gate, net, iopin, pin, egp, epn, ein = views
     exp_counts = {"gate": len(gate), "net": len(net), "iopin": len(iopin), "pin": len(pin)}
-    check("hetero manifest graph_kind == hetero", man.get("graph_kind") == "hetero",
+    check("hetero manifest graph_kind in {hetero, both}", graph_kind_is_hetero(man),
           man.get("graph_kind"))
     for v in ("b", "c", "d", "e", "f"):
         h = hetero[v]
@@ -1900,6 +1965,9 @@ _LABEL_SUMMARY = {   # csv -> (label_col, raw_metric_col == raw block key, stats
 
 
 def _find_final_def(case):
+    override = os.environ.get("R2G_DEF", "")
+    if os.path.isfile(override):
+        return override
     runs = sorted((r for r in os.listdir(case + "/backend") if r.startswith("RUN_")),
                   reverse=True) if os.path.isdir(case + "/backend") else []
     for r in runs:
@@ -2133,8 +2201,15 @@ def _sdc_clock_period(case):
     # updated_clks.sdc=6.2416 -> 76986/76986 in-path labels reported "bad". Clean
     # designs are exposed too (iir/aes_core/bm_sfifo all carry an updated_clks.sdc;
     # they pass only because their newest run also has 6_final.sdc). failure-patterns #25.
-    sdc = (_find_backend_file(case, "results/6_final.sdc")
-           or _find_backend_file(case, "results/updated_clks.sdc"))
+    # An explicit DEF/ODB input uses the final SDC beside that artifact in
+    # run_labels.sh. Use the same source here, before any unrelated backend run.
+    candidates = [os.environ.get("R2G_TIMING_SDC", "")]
+    candidates.extend(os.path.join(os.path.dirname(os.environ[key]), "6_final.sdc")
+                      for key in ("R2G_ODB", "R2G_DEF") if os.environ.get(key))
+    sdc = next((p for p in candidates if os.path.isfile(p)), None)
+    if not sdc:
+        sdc = (_find_backend_file(case, "results/6_final.sdc")
+               or _find_backend_file(case, "results/updated_clks.sdc"))
     if not sdc:
         return None
     periods = []
@@ -2221,9 +2296,14 @@ def signoff_report_checks(case, design, feat, labs, tensors):
           "no reports/{drc,lvs}.json and no signoff gate verdict in the manifest — "
           "sign-off provenance unknown (fail-closed, failure-patterns.md #34)")
     if gate_recorded:
-        check("signoff.gate verdict pass (manifest signoff_health)",
-              sh.get("status") in {"pass", "pass_with_caveats"},
-              f"signoff_health.status={sh.get('status')!r} blockers={sh.get('blockers')}")
+        if "signoff" in NA_DECLARED:
+            na("signoff", "signoff.gate verdict pass (manifest signoff_health)",
+               f"signoff_health.status={sh.get('status')!r} blockers={sh.get('blockers')} "
+               "(sign-off reports are not part of the declared inputs)")
+        else:
+            check("signoff.gate verdict pass (manifest signoff_health)",
+                  sh.get("status") in {"pass", "pass_with_caveats"},
+                  f"signoff_health.status={sh.get('status')!r} blockers={sh.get('blockers')}")
         # The DEF binding must survive into the manifest (agent-logic #5, 2026-07-16):
         # the extractor sub-stages once re-gated WITHOUT --def, overwriting
         # run_graphs.sh's binding=bound verdict (with a def_fingerprint) down to
@@ -2467,6 +2547,7 @@ def _denied_manifest(case):
 def verify_case(case, design=None, json_out=None):
     case = case.rstrip("/")
     SKIPPED.clear()   # per-case; RESULTS is cleared by the batch loop / fresh proc
+    NOT_APPLICABLE.clear()
     feat, labs, ds = case + "/features", case + "/labels", case + "/dataset"
     man_path = ds + "/graph_manifest.json"
     if not os.path.isfile(man_path):
@@ -2498,7 +2579,8 @@ def verify_case(case, design=None, json_out=None):
               f"(blocked_unsigned) ==")
         if json_out:
             with open(json_out, "w") as fh:
-                json.dump({"design": design, "results": RESULTS, "skipped": SKIPPED,
+                json.dump({"design": design, "results": RESULTS, "skipped": SKIPPED, "not_applicable": list(NOT_APPLICABLE),
+                           "declared_not_applicable": sorted(NA_DECLARED),
                            "passed": len(RESULTS) - n_fail, "failed": n_fail}, fh, indent=1)
         return n_fail
 
@@ -2506,11 +2588,22 @@ def verify_case(case, design=None, json_out=None):
     gate, net, iopin, pin, egp, epn, ein = views
     ng, nn, ni, npn = len(gate), len(net), len(iopin), len(pin)
 
-    check("manifest.status ok", man["status"] == "ok", man["status"])
     lh = man.get("label_health", {})
-    check("manifest.label_health all ok",
-          lh and all(v["status"] == "ok" for v in lh.values()),
-          {k: v["status"] for k, v in lh.items()})
+    if "irdrop" in NA_DECLARED:
+        # IR drop is out of the declared scope: its label file may be missing, and ONLY it. Any other
+        # label gap still fails, and so does a status other than ok / ok_with_label_gaps.
+        other = {k: v["status"] for k, v in lh.items() if k != "ir_drop.csv"}
+        na("irdrop", "ir_drop.csv label present",
+           f"ir_drop.csv status={(lh.get('ir_drop.csv') or {}).get('status')!r}")
+        check("manifest.status ok (IR drop out of scope)",
+              man["status"] in {"ok", "ok_with_label_gaps"}, man["status"])
+        check("manifest.label_health all ok (IR drop out of scope)",
+              bool(other) and all(v == "ok" for v in other.values()), other)
+    else:
+        check("manifest.status ok", man["status"] == "ok", man["status"])
+        check("manifest.label_health all ok",
+              lh and all(v["status"] == "ok" for v in lh.values()),
+              {k: v["status"] for k, v in lh.items()})
 
     labels = expected_label_series(views, labs, design)
 
@@ -2682,6 +2775,7 @@ def verify_case(case, design=None, json_out=None):
     # ---- GROUP D: HeteroData structure (default graph_kind) ----
     if is_hetero:
         hetero_checks(hetero_tensors, views, man)
+        both_mode_homo_checks(ds, tensors, man)
 
     # ---- GROUP B: feature column re-derivation + distribution honesty ----
     feature_stat_checks(case, design, feat, labs, tensors)
@@ -2948,10 +3042,13 @@ def verify_case(case, design=None, json_out=None):
 
     n_fail = sum(1 for r in RESULTS if not r["ok"])
     skip_note = f" ({len(SKIPPED)} skipped)" if SKIPPED else ""
-    print(f"== {design}: {len(RESULTS) - n_fail}/{len(RESULTS)} checks passed{skip_note} ==")
+    na_note = (f", {len(NOT_APPLICABLE)} not applicable (declared scope: {','.join(sorted(NA_DECLARED))})"
+               if NOT_APPLICABLE else "")
+    print(f"== {design}: {len(RESULTS) - n_fail}/{len(RESULTS)} checks passed{skip_note}{na_note} ==")
     if json_out:
         with open(json_out, "w") as fh:
-            json.dump({"design": design, "results": RESULTS, "skipped": SKIPPED,
+            json.dump({"design": design, "results": RESULTS, "skipped": SKIPPED, "not_applicable": list(NOT_APPLICABLE),
+                           "declared_not_applicable": sorted(NA_DECLARED),
                        "passed": len(RESULTS) - n_fail, "failed": n_fail}, fh, indent=1)
     return n_fail
 
@@ -2971,6 +3068,10 @@ def main():
     ap.add_argument("--json", default=None)
     ap.add_argument("--batch", default=None, metavar="ROOT",
                     help="verify every ROOT subdir containing dataset/graph_manifest.json")
+    ap.add_argument("--not-applicable", default=os.environ.get("R2G_VERIFY_NOT_APPLICABLE", ""),
+                    metavar="SCOPES",
+                    help="comma list of input scopes the dataset was built WITHOUT (irdrop, signoff): their "
+                         "checks are recorded as not applicable instead of failing. Default: none.")
     ap.add_argument("--signoff-recheck", action="store_true",
                     help="opt-in: re-run OpenROAD PDNSim to independently re-derive "
                          "the IR-drop label (needs OPENROAD_EXE; SKIPs if absent)")
@@ -2978,6 +3079,11 @@ def main():
 
     global SIGNOFF_RECHECK
     SIGNOFF_RECHECK = args.signoff_recheck
+    declared = {x.strip() for x in args.not_applicable.split(",") if x.strip()}
+    if declared - NOT_APPLICABLE_SCOPES:
+        ap.error("--not-applicable accepts only: " + ", ".join(sorted(NOT_APPLICABLE_SCOPES)))
+    NA_DECLARED.clear()
+    NA_DECLARED.update(declared)
 
     if args.batch:
         root = args.batch.rstrip("/")

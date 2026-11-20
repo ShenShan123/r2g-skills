@@ -13,7 +13,10 @@
 #     digest (_stage_provenance.py) -- the image labels are the label stage's
 #     own congestion grid and IR drop, never a second extraction.
 # Features come from ONE pre-route stage of the same run:
-#   R2G_IMAGE_FEATURE_STAGE = place (default, 3_place.odb) | cts | floorplan
+#   R2G_IMAGE_FEATURE_STAGE = place (default, 3_place.odb) | cts | floorplan | none
+# (`none` = no layout at all, all-zero feature channels: the four-stage dataset's floorplan cutoff).
+# R2G_IMAGE_OUT_DIR / R2G_IMAGE_REPORT relocate the output and the report (run_stage_images.sh uses them to
+# write one directory per prediction stage); defaults are <project>/images and reports/image_dataset.json.
 # exported to images/<stage>.def with OpenROAD's write_def. The builder refuses
 # a DEF with routed wires; the independent verifier (verify_images.py) must pass
 # or the dataset is reported invalid.
@@ -32,12 +35,14 @@ CALLER_GRAPH_PYTHON="${R2G_GRAPH_PYTHON-}"
 source "$HERE/_env.sh"
 [[ -n "$CALLER_GRAPH_PYTHON" ]] && R2G_GRAPH_PYTHON="$CALLER_GRAPH_PYTHON"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
-REPORTS_DIR="$PROJECT_DIR/reports"; LABELS_DIR="$PROJECT_DIR/labels"; OUT="$PROJECT_DIR/images"
+REPORTS_DIR="$PROJECT_DIR/reports"; LABELS_DIR="$PROJECT_DIR/labels"; OUT="${R2G_IMAGE_OUT_DIR:-$PROJECT_DIR/images}"
 mkdir -p "$REPORTS_DIR"
-REPORT="$REPORTS_DIR/image_dataset.json"
+REPORT="${R2G_IMAGE_REPORT:-$REPORTS_DIR/image_dataset.json}"
+mkdir -p "$(dirname "$REPORT")"
 STAGE="${R2G_IMAGE_FEATURE_STAGE:-place}"
 case "$STAGE" in place) ODB_NAME=3_place.odb;; cts) ODB_NAME=4_cts.odb;; floorplan) ODB_NAME=2_floorplan.odb;;
-  *) echo "ERROR: R2G_IMAGE_FEATURE_STAGE must be place|cts|floorplan (got $STAGE)" >&2; exit 1;; esac
+  none) ODB_NAME="";;
+  *) echo "ERROR: R2G_IMAGE_FEATURE_STAGE must be place|cts|floorplan|none (got $STAGE)" >&2; exit 1;; esac
 
 report() {  # status reason
   python3 - "$REPORT" "$1" "$2" "$STAGE" <<'PY'
@@ -71,8 +76,10 @@ if ! python3 "$HERE/signoff_gate.py" "$PROJECT_DIR" --run-dir "$RUN_DIR" --def "
 fi
 
 FEAT_ODB=""
-for sub in results final; do [[ -z "$FEAT_ODB" && -f "$RUN_DIR/$sub/$ODB_NAME" ]] && FEAT_ODB="$RUN_DIR/$sub/$ODB_NAME"; done
-[[ -n "$FEAT_ODB" ]] || { report skipped "no $ODB_NAME in $RUN_DIR"; echo "SKIP: no $ODB_NAME" >&2; exit 2; }
+if [[ -n "$ODB_NAME" ]]; then
+  for sub in results final; do [[ -z "$FEAT_ODB" && -f "$RUN_DIR/$sub/$ODB_NAME" ]] && FEAT_ODB="$RUN_DIR/$sub/$ODB_NAME"; done
+  [[ -n "$FEAT_ODB" ]] || { report skipped "no $ODB_NAME in $RUN_DIR"; echo "SKIP: no $ODB_NAME" >&2; exit 2; }
+fi
 
 PY="${R2G_GRAPH_PYTHON:-}"
 if [[ -z "$PY" ]] || ! "$PY" -c "import numpy" >/dev/null 2>&1; then
@@ -93,13 +100,17 @@ export ADDITIONAL_LEFS="$(echo "$RESOLVED" | sed -n 's/^ADDITIONAL_LEFS=//p')"
 [[ -n "$SC_LEF" ]] || { report skipped "SC_LEF unresolved for $PLATFORM"; exit 2; }
 
 rm -rf "$OUT"; mkdir -p "$OUT"
-FEAT_DEF="$OUT/${ODB_NAME%.odb}.def"
-printf 'read_db %s\nwrite_def %s\n' "$FEAT_ODB" "$FEAT_DEF" > "$OUT/export_def.tcl"
-"${OPENROAD_EXE:-openroad}" -no_init -exit "$OUT/export_def.tcl" > "$OUT/export_def.log" 2>&1 || true
-[[ -s "$FEAT_DEF" ]] || { report invalid "write_def of $ODB_NAME failed (images/export_def.log)"; exit 6; }
+FEAT_ARGS=()
+if [[ -n "$ODB_NAME" ]]; then
+  FEAT_DEF="$OUT/${ODB_NAME%.odb}.def"
+  printf 'read_db %s\nwrite_def %s\n' "$FEAT_ODB" "$FEAT_DEF" > "$OUT/export_def.tcl"
+  "${OPENROAD_EXE:-openroad}" -no_init -exit "$OUT/export_def.tcl" > "$OUT/export_def.log" 2>&1 || true
+  [[ -s "$FEAT_DEF" ]] || { report invalid "write_def of $ODB_NAME failed ($OUT/export_def.log)"; exit 6; }
+  FEAT_ARGS=(--feature-def "$FEAT_DEF")
+fi
 
 echo "[images] run=$RUN_DIR stage=$STAGE"
-"$PY" "$IMG_SRC/build_images.py" --feature-def "$FEAT_DEF" --feature-stage "$STAGE" \
+"$PY" "$IMG_SRC/build_images.py" "${FEAT_ARGS[@]}" --feature-stage "$STAGE" \
       --labels-dir "$LABELS_DIR" --out-dir "$OUT" --design "$(basename "$PROJECT_DIR")"
 set +e
 "$PY" "$IMG_SRC/verify_images.py" "$OUT" --labels-dir "$LABELS_DIR" --final-def "$DEF" --json "$OUT/verify.json"

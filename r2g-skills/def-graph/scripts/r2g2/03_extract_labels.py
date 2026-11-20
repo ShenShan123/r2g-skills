@@ -3028,7 +3028,8 @@ def main() -> None:
     congestion_grid_um = feature_module.resolve_congestion_grid_um(cfg)
     route_snapshot = feature_module.parse_def(label_def)
     route_lineage = feature_module.build_base_to_stage_lineage(
-        base, route_snapshot
+        base, route_snapshot,
+        feature_module.lineage_liberty_cells(config_path, cfg),  # D15
     )
     lengths, uses = extract_wirelengths(label_def)
     wirelength_rows = []

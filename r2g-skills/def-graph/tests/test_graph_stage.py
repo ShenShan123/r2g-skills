@@ -60,6 +60,39 @@ def test_clique_pairs_dedup_and_order():
     assert gl.clique_pairs([7]) == []
 
 
+def test_net_clique_rows_keeps_net_order_and_deduplicates_endpoints():
+    import build_graphs as bg
+
+    nets = pd.DataFrame({"net_name": ["n2", "empty", "n1", None]})
+    pins = pd.DataFrame([
+        ("n1", "g1", "A"), ("n2", "g2", "A"), ("n1", "g1", "A"),
+        ("n2", "g3", "Y"), (None, "g1", "A"), ("n1", "missing", "A"),
+    ], columns=["net_name", "inst_name", "pin_name"])
+    ports = pd.DataFrame([
+        ("n1", "p1"), ("n2", "p2"), ("n1", "p1"), (float("nan"), "p2"),
+    ], columns=["net_name", "iopin_name"])
+    pin_idx = {("g1", "A"): 7, ("g2", "A"): 4, ("g3", "Y"): 2}
+    port_idx = {"p1": 1, "p2": 8}
+    actual = bg._net_clique_rows(nets, pins, ports,
+                                lambda inst, pin: pin_idx.get((inst, pin)), port_idx.get)
+    # Net order follows the node table, while endpoints of each clique are
+    # sorted/deduplicated. Unmapped pins and missing/empty nets add no edges.
+    expected = pd.DataFrame([(2, 4, "n2"), (2, 8, "n2"), (4, 8, "n2"), (1, 7, "n1")],
+                            columns=["src", "dst", "net_name"])
+    pd.testing.assert_frame_equal(actual, expected)
+
+
+def test_net_clique_rows_empty_edge_tables_keep_empty_result():
+    import build_graphs as bg
+
+    actual = bg._net_clique_rows(
+        pd.DataFrame({"net_name": ["n1"]}),
+        pd.DataFrame(columns=["net_name", "inst_name", "pin_name"]),
+        pd.DataFrame(columns=["net_name", "iopin_name"]),
+        lambda inst, pin: None, lambda port: None)
+    pd.testing.assert_frame_equal(actual, pd.DataFrame([]))
+
+
 # --------------------------------------------------------------------------- #
 # Tensor tier (torch + torch_geometric required; pandas tier above still runs #
 # on machines without them).                                                   #

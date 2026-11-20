@@ -167,6 +167,8 @@ def test_verifier_passes_clean_build(toy):
     ("features", lambda a: {**a, "pin_density": np.where(a["pin_density"] > 0, a["pin_density"] - 1, 0)},
      "pin_density.total"),
     ("features", lambda a: {**a, "macro_region": np.zeros_like(a["macro_region"])}, "macro_region.array"),
+    # same total, wrong GCell: only the per-GCell check can see it (failure-patterns #68)
+    ("features", lambda a: {**a, "pin_density": np.roll(a["pin_density"], 1, axis=0)}, "pin_density.array"),
     ("labels", lambda a: {**a, "congestion": np.roll(a["congestion"], 1, axis=0)}, "congestion.equals_grid_csv"),
     ("labels", lambda a: {**a, "ir_drop": a["ir_drop"] + (np.arange(32).reshape(8, 4) == 9) * 3.0},
      "ir_drop.zero_where_no_cell"),
@@ -181,7 +183,118 @@ def test_verifier_catches_corruption(toy, channel, corrupt, expect):
     assert rc != 0 and res.get(expect) is False, res
 
 
+def test_gcell_line_point_bins_in_dbu_not_float_um():
+    """failure-patterns #68: x = 28500 dbu on a 5700-dbu grid (dbu 2000) lies ON GCell line 5.
+    In float um, 14.25 // 2.85 == 4.0, so the old code put the pin one GCell left."""
+    assert 14.25 // 2.85 == 4.0                     # the float trap this guards against
+    g = build_images.Grid({"gcell_size": [10, 10], "db_units": 2000, "grid_step_dbu": [5700, 5700],
+                           "die_dbu": [0, 0, 57000, 57000]})
+    assert g.index(28500 / 2000, 28500 / 2000) == (5, 5)
+    assert g.index(28499 / 2000, 1.0) == (4, 0)
+    assert g.index(57000 / 2000, 57000 / 2000) == (9, 9)     # the far die edge stays in the last cell
+    a = np.zeros((10, 10))
+    g.splat(a, (28500 / 2000, 0.0, 28500 / 2000 + 2.85, 2.85), 1.0)
+    assert a[5, 0] > 0 and a[4, 0] == 0
+
+
 def test_refuses_routed_feature_def(toy):
     (toy / "place.def").write_text(DEF_TMPL.replace("{ROUTE}", "+ ROUTED metal1 ( 1000 1000 ) ( 5000 * )"))
     with pytest.raises(SystemExit):
         _build(toy, "img2")
+
+
+def test_verifier_reads_polygon_pin_shapes_like_the_builder(tmp_path):
+    """failure-patterns #70: verify_images.read_lef skipped POLYGON pin shapes, so on gf180
+    (2,135 POLYGONs in the 9t cell LEF) it put those pins at the RECT-only mean or at the
+    instance origin and false-failed pin_density/rudy/pin_rudy on every design. The builder
+    (techlib.lef, OpenDB getAvgXY boxes) was right; the independent oracle was not."""
+    import verify_images
+    sys.path.insert(0, str(SKILL / "scripts" / "extract"))
+    from techlib import lef as tlef
+    p = tmp_path / "poly.lef"
+    p.write_text("""VERSION 5.8 ;
+MACRO PCELL
+  CLASS CORE ;
+  SIZE 4 BY 4 ;
+  PIN A
+    DIRECTION INPUT ;
+    PORT
+      LAYER Metal1 ;
+        POLYGON 0 0 4 0 4 1 2 1 2 3 0 3  ;
+    END
+  END A
+  PIN B
+    DIRECTION OUTPUT ;
+    PORT
+      LAYER Metal1 ;
+        RECT 3 3 4 4 ;
+        POLYGON 0.5 3.2 1.5 3.2 1.5 3.8 0.5 3.8  ;
+    END
+  END B
+END PCELL
+END LIBRARY
+""")
+    _, _, vp = verify_images.read_lef([str(p)])
+    geom = tlef.macro_pin_geometry([str(p)])["PCELL"]["pins"]
+    for pin in ("A", "B"):
+        pts = vp["PCELL"][pin]
+        assert pts, f"verifier found no shape for polygon pin {pin}"
+        vx = sum(a for a, _ in pts) / len(pts); vy = sum(b for _, b in pts) / len(pts)
+        assert abs(vx - geom[pin][0]) < 1e-9 and abs(vy - geom[pin][1]) < 1e-9, (pin, (vx, vy), geom[pin])
+    # A = boxes (0,0,4,1) and (0,1,2,3): centres (2,0.5), (1,2) -> mean (1.5, 1.25)
+    pts = vp["PCELL"]["A"]
+    assert sorted(pts) == [(1.0, 2.0), (2.0, 0.5)]
+
+
+# ---- four-stage image dataset: the floorplan cutoff reads no layout (2026-11-17) ----
+
+def _build_none(toy, out="img_none"):
+    build_images.main(["--feature-stage", "none", "--labels-dir", str(toy / "labels"),
+                       "--out-dir", str(toy / out), "--lef", str(toy / "cells.lef")])
+    return toy / out
+
+
+def test_no_layout_stage_is_zero_features_same_labels(toy):
+    full, none = _build(toy), _build_none(toy)
+    F = np.load(none / "features.npz")
+    assert set(F.files) == set(build_images.FEATURES)
+    assert all(F[k].shape == (8, 4) and not F[k].any() for k in F.files)
+    La, Lb = np.load(full / "labels.npz"), np.load(none / "labels.npz")
+    assert all(np.array_equal(La[k], Lb[k]) for k in La.files)      # one label set across stages
+    meta = json.load(open(none / "image_meta.json"))
+    assert meta["feature_stage"] == "none" and meta["sources"]["feature_def"] is None
+
+
+def test_verifier_passes_no_layout_stage(toy):
+    rc, res = _verify(toy, _build_none(toy))
+    assert rc == 0, [k for k, v in res.items() if not v]
+    assert res["none.features_all_zero"] and "cell_density.array" not in res
+
+
+def test_verifier_catches_feature_in_no_layout_stage(toy):
+    img = _build_none(toy)
+    f = img / "features.npz"
+    arrs = dict(np.load(f))
+    arrs["rudy"] = arrs["rudy"] + (np.arange(32).reshape(8, 4) == 5) * 0.1   # any spatial signal is leakage
+    np.savez(f, **arrs)
+    rc, res = _verify(toy, img)
+    assert rc != 0 and res.get("none.features_all_zero") is False, res
+
+
+def test_no_layout_stage_refuses_a_feature_def(toy):
+    with pytest.raises(SystemExit):
+        build_images.main(["--feature-stage", "none", "--feature-def", str(toy / "place.def"),
+                           "--labels-dir", str(toy / "labels"), "--out-dir", str(toy / "x")])
+
+
+def test_unplaced_instances_and_pins_are_skipped_like_the_verifier(toy):
+    """A floorplan DEF (four-stage placement cutoff) lists std cells UNPLACED; def_parse gives them x=None.
+    The builder used to divide None by dbu in pin_xy (crash). They must simply not count, as in the verifier."""
+    d = DEF_TMPL.replace("{ROUTE}", "").replace("- u2 INVX + PLACED ( 12000 3000 ) E ;", "- u2 INVX + UNPLACED ;")
+    (toy / "place.def").write_text(d)
+    img = _build(toy, "img_unplaced")
+    F = np.load(img / "features.npz")
+    assert F["cell_density"][2, 0] == 0.0                     # u2's GCell is now empty
+    assert F["pin_density"].sum() == 4                         # u2.A dropped from n2; the other 4 pins remain
+    rc, res = _verify(toy, img)
+    assert rc == 0, [k for k, v in res.items() if not v]

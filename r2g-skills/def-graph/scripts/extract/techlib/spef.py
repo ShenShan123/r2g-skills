@@ -69,18 +69,22 @@ _CUNIT_RE = re.compile(r"^\*C_UNIT\s+([0-9eE+.\-]+)\s+(\S+)\s*$")
 _RUNIT_RE = re.compile(r"^\*R_UNIT\s+([0-9eE+.\-]+)\s+(\S+)\s*$")
 
 # SPEF (write_spef) escapes '.', '$', ':', etc. with a backslash; the DEF
-# (write_def / techlib.def_parse) escapes ONLY the bus brackets '[' ']', leaving
-# '.'/'$' bare. So a SPEF net/inst name like `a\.b\[0\]\$_DFF_` must be de-escaped
-# to `a.b\[0\]$_DFF_` to JOIN the DEF-derived feature CSVs (nodes_net/nodes_pin).
-# Verified: this drives the RC->feature-CSV join from ~79-92% to 100% on
-# aes_core (sky130hd) — otherwise every hierarchical net + double-bus register
-# silently loses its RC labels (2026-07-07, failure-patterns.md).
-_ESC_NONBRACKET = re.compile(r"\\([^\[\]])")
+# (write_def / techlib.def_parse) escapes the bus brackets '[' ']' AND a literal
+# '/' inside a name ('\/', which distinguishes it from the hierarchy divider),
+# leaving '.'/'$' bare. So a SPEF net/inst name like `a\.b\[0\]\$_DFF_` must be
+# de-escaped to `a.b\[0\]$_DFF_` to JOIN the DEF-derived feature CSVs
+# (nodes_net/nodes_pin). Verified: this drives the RC->feature-CSV join from
+# ~79-92% to 100% on aes_core (sky130hd) — otherwise every hierarchical net +
+# double-bus register silently loses its RC labels (2026-07-07, failure-patterns.md).
+# 2026-11-07: '\/' is kept too (failure-patterns.md #66). De-escaping it to '/'
+# dropped the RC labels of every net with a literal slash in its name (yosys
+# `$func$/path/file.v:193$...` nets): 59 of 4,886 nets on pilot500 C00180.
+_ESC_NONBRACKET = re.compile(r"\\([^\[\]/])")
 
 
 def _deesc(name: str) -> str:
     """SPEF-escaped name -> DEF/def_parse convention (strip backslash except
-    before bus brackets '[' ']')."""
+    before bus brackets '[' ']' and a literal-slash escape '\\/')."""
     return _ESC_NONBRACKET.sub(r"\1", name) if "\\" in name else name
 
 

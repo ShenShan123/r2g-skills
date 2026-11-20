@@ -559,10 +559,11 @@ def main() -> None:
             ),
         },
     }
+    lineage_cells = FEATURES.lineage_liberty_cells(config_path, cfg)  # D15
     for physical_stage, spec in direct_specs.items():
         after, after_path = parsed_source(str(spec["config_key"]))
         assert after_path is not None
-        lineage = FEATURES.build_base_to_stage_lineage(base, after)
+        lineage = FEATURES.build_base_to_stage_lineage(base, after, lineage_cells)  # D15
         # 直达快照只保存正向base→stage映射；stage_to_base和direct_stage_nets可由
         # records[*].stage_nets/inferred_backend_stage_nets无损恢复，避免大型设计
         # 在JSON中重复存储数十万次Net名称。

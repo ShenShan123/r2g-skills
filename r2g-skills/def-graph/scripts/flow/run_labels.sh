@@ -215,6 +215,27 @@ run_soft() {  # name + targets + command...; never aborts the orchestrator
         "— NOT republished as current (failure-patterns.md #52)" >&2
     done
   fi
+  # Explicit: the loop above ends on `[[ -f .stale ]] && ...`, which is status 1 when there was
+  # nothing to quarantine. Under this script's `set -e` that killed the whole label stage after
+  # the first failed extractor (gf180 PDNSim PSM-0021; failure-patterns.md #69).
+  return 0
+}
+
+# --- Parallel workers (2026-11-15) -----------------------------------------
+# Every worker below is independent: it reads the same inputs and writes only its
+# own output file(s) and log. R2G_JOBS=N (default 1 = the historical sequential
+# order) runs up to N of them at once; the stats roll-up waits for all of them, and
+# outputs are byte-identical to a sequential run. Status lines of concurrent workers
+# may interleave.
+R2G_JOBS="${R2G_JOBS:-1}"
+[[ "$R2G_JOBS" =~ ^[0-9]+$ && "$R2G_JOBS" -ge 1 ]] || R2G_JOBS=1
+launch() {
+  if (( R2G_JOBS > 1 )); then
+    while (( $(jobs -rp | wc -l) >= R2G_JOBS )); do wait -n || true; done
+    "$@" &
+  else
+    "$@"
+  fi
 }
 
 # --- Congestion (DEF + tech.lef) -------------------------------------------
@@ -230,13 +251,13 @@ if [[ -n "$DEF" ]]; then
   # congestion over the GCells its footprint overlaps (the Congestion_Parse method).
   # Absent/unparseable -> the extractor falls back to origin-GCell mapping and warns.
   R2G_PLATFORM="$PLATFORM" TECH_LEF="$TECH_LEF" SC_LEF="$SC_LEF" ADDITIONAL_LEFS="$ADDITIONAL_LEFS" \
-    run_soft congestion "$LABELS_DIR/cell_congestion.csv" \
+    launch run_soft congestion "$LABELS_DIR/cell_congestion.csv" \
     python3 "$LABELS_SRC/extract_congestion.py" "$DEF" "$LABELS_DIR/cell_congestion.csv" "$DESIGN_NAME"
 fi
 
 # --- Wirelength (DEF) ------------------------------------------------------
 if [[ -n "$DEF" ]]; then
-  run_soft wirelength "$LABELS_DIR/wirelength.csv" \
+  launch run_soft wirelength "$LABELS_DIR/wirelength.csv" \
     python3 "$LABELS_SRC/extract_wirelength.py" "$DEF" "$LABELS_DIR/wirelength.csv" "$DESIGN_NAME"
 fi
 
@@ -251,26 +272,29 @@ if [[ -n "$ODB" ]]; then
   ODB_FILE="$ODB" R2G_LIB_FILES="$TIMING_LIBS" OUTPUT_CSV="$LABELS_DIR/timing_features.csv" \
     CLOCK_PERIOD="$CLOCK_PERIOD" CLOCK_PORT="$CLOCK_PORT" DESIGN_NAME="$DESIGN_NAME" \
     R2G_TIMING_SDC="$TIMING_SDC" \
-    run_soft timing "$LABELS_DIR/timing_features.csv" "$OPENROAD" -no_splash -exit "$LABELS_SRC/extract_timing.tcl"
+    launch run_soft timing "$LABELS_DIR/timing_features.csv" "$OPENROAD" -no_splash -exit "$LABELS_SRC/extract_timing.tcl"
 elif [[ -n "$DEF" ]]; then
-  DEF_FILE="$DEF" R2G_LIB_FILES="$TIMING_LIBS" TECH_LEF="$TECH_LEF" OUTPUT_CSV="$LABELS_DIR/timing_features.csv" \
+  DEF_FILE="$DEF" R2G_LIB_FILES="$TIMING_LIBS" TECH_LEF="$TECH_LEF" SC_LEF="$SC_LEF" ADDITIONAL_LEFS="$ADDITIONAL_LEFS" \
+    OUTPUT_CSV="$LABELS_DIR/timing_features.csv" \
     CLOCK_PERIOD="$CLOCK_PERIOD" CLOCK_PORT="$CLOCK_PORT" DESIGN_NAME="$DESIGN_NAME" \
     R2G_TIMING_SDC="$TIMING_SDC" \
-    run_soft timing "$LABELS_DIR/timing_features.csv" "$OPENROAD" -no_splash -exit "$LABELS_SRC/extract_timing.tcl"
+    launch run_soft timing "$LABELS_DIR/timing_features.csv" "$OPENROAD" -no_splash -exit "$LABELS_SRC/extract_timing.tcl"
 fi
 
 # --- IR drop (ODB) — liberty needed so PDNSim can compute cell power -------
 if [[ -n "$ODB" ]]; then
   ODB_FILE="$ODB" R2G_LIB_FILES="$TIMING_LIBS" OUTPUT_RPT="$LABELS_DIR/ir_drop.csv" \
     SUPPLY_VOLTAGE="$SUPPLY_VOLTAGE" DESIGN_NAME="$DESIGN_NAME" \
-    run_soft irdrop "$LABELS_DIR/ir_drop.csv" "$OPENROAD" -no_splash -exit "$LABELS_SRC/extract_irdrop.tcl"
+    launch run_soft irdrop "$LABELS_DIR/ir_drop.csv" "$OPENROAD" -no_splash -exit "$LABELS_SRC/extract_irdrop.tcl"
 fi
 
 # --- RC parasitic labels (SPEF) --------------------------------------------
 # ground cap (net-node), coupling cap (net-pair edge), equivalent resistance
 # (pin-pair edge). Fail-soft: extract_rc.py writes header-only CSVs when no SPEF
 # is present, so the graph stage simply leaves the RC labels/edges empty.
-run_soft rc "$LABELS_DIR/net_ground_cap.csv $LABELS_DIR/coupling_cap.csv $LABELS_DIR/equiv_res.csv" python3 "$LABELS_SRC/extract_rc.py" "${SPEF:-}" "$LABELS_DIR" "$DESIGN_NAME"
+launch run_soft rc "$LABELS_DIR/net_ground_cap.csv $LABELS_DIR/coupling_cap.csv $LABELS_DIR/equiv_res.csv" python3 "$LABELS_SRC/extract_rc.py" "${SPEF:-}" "$LABELS_DIR" "$DESIGN_NAME"
+
+wait   # all label workers (no-op when sequential)
 
 # --- Stats roll-up ---------------------------------------------------------
 python3 "$LABELS_SRC/compute_label_stats.py" "$LABELS_DIR" "$REPORTS_DIR/labels_stats.json" "$DESIGN_NAME" "$PLATFORM"

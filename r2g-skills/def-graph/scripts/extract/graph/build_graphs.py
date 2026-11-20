@@ -171,27 +171,47 @@ def _net_clique_rows(net_df, edges_pn, edges_in, endpoint_index_pn, endpoint_ind
 
     ``endpoint_index_pn(inst, pin)`` / ``endpoint_index_in(iopin)`` map an
     edges_pn / edges_in row to a node index (None = not a node in this variant).
+
+    One pass over each edge table (2026-11-15): the earlier per-net
+    ``groupby.get_group`` + ``drop_duplicates`` did the same work with a pandas
+    call per net and took ~70% of graph assembly on a 15k-cell design. Order is
+    unchanged: nets in ``net_df`` order, a net's endpoints in first-seen table
+    row order (pins, then iopins), de-duplicated by (inst, pin) / iopin name.
     """
-    rows = []
-    pn_groups = edges_pn.groupby("net_name")
-    in_groups = edges_in.groupby("net_name")
+    def _key(v):
+        # groupby/drop_duplicates treat every missing value as one key
+        return None if (v is None or v != v) else v
+
+    pn_by_net = {}
+    for net_name, inst_name, pin_name in edges_pn[["net_name", "inst_name", "pin_name"]].itertuples(
+            index=False, name=None):
+        if net_name is None or net_name != net_name:      # groupby drops missing keys
+            continue
+        pn_by_net.setdefault(net_name, {})[(_key(inst_name), _key(pin_name))] = (inst_name, pin_name)
+    in_by_net = {}
+    for net_name, iopin_name in edges_in[["net_name", "iopin_name"]].itertuples(index=False, name=None):
+        if net_name is None or net_name != net_name:
+            continue
+        in_by_net.setdefault(net_name, {})[_key(iopin_name)] = iopin_name
+
+    src, dst, names = [], [], []
     for net_name in net_df["net_name"].tolist():
         endpoints = []
-        if net_name in pn_groups.groups:
-            part = pn_groups.get_group(net_name)
-            for inst_name, pin_name in part[["inst_name", "pin_name"]].drop_duplicates().itertuples(index=False, name=None):
-                idx = endpoint_index_pn(inst_name, pin_name)
-                if idx is not None:
-                    endpoints.append(idx)
-        if net_name in in_groups.groups:
-            part = in_groups.get_group(net_name)
-            for iopin_name in part[["iopin_name"]].drop_duplicates()["iopin_name"].tolist():
-                idx = endpoint_index_in(iopin_name)
-                if idx is not None:
-                    endpoints.append(idx)
-        for s, t in clique_pairs(endpoints):
-            rows.append({"src": s, "dst": t, "net_name": net_name})
-    return pd.DataFrame(rows)
+        for inst_name, pin_name in pn_by_net.get(net_name, {}).values():
+            idx = endpoint_index_pn(inst_name, pin_name)
+            if idx is not None:
+                endpoints.append(idx)
+        for iopin_name in in_by_net.get(net_name, {}).values():
+            idx = endpoint_index_in(iopin_name)
+            if idx is not None:
+                endpoints.append(idx)
+        for s_, t_ in clique_pairs(endpoints):
+            src.append(s_)
+            dst.append(t_)
+            names.append(net_name)
+    if not src:
+        return pd.DataFrame([])
+    return pd.DataFrame({"src": src, "dst": dst, "net_name": names})
 
 
 def _edge_block(edge_df, feat_df, key_cols, cols, edge_type_id, label_builder, label_dfs, design_key):
@@ -439,17 +459,25 @@ def build_e(views7, label_dfs, graph_key, design_key, graph_id_int, feature_root
     np_ = len(pin_df)
     _fill_node_labels(y5, y5_raw, build_pin_label_values, pin_df[["inst_name", "pin_name"]], label_dfs, design_key, off, np_)
 
-    gate_rows = []
-    gp_groups = edges_gp.groupby("inst_name")
-    for inst_name in gate_df["inst_name"].tolist():
-        if inst_name not in gp_groups.groups:
+    # One pass over edges_gp (2026-11-15; was a groupby.get_group + drop_duplicates per gate).
+    # Same order: gates in gate_df order, a gate's pins in first-seen row order.
+    pins_by_gate = {}
+    for inst_name, pin_name in edges_gp[["inst_name", "pin_name"]].itertuples(index=False, name=None):
+        if inst_name is None or inst_name != inst_name:       # groupby drops missing keys
             continue
-        part = gp_groups.get_group(inst_name)
-        endpoints = [pin_idx.get((inst_name, p))
-                     for p in part[["pin_name"]].drop_duplicates()["pin_name"].tolist()]
+        key = None if (pin_name is None or pin_name != pin_name) else pin_name
+        pins_by_gate.setdefault(inst_name, {})[key] = pin_name
+    g_src, g_dst, g_inst = [], [], []
+    for inst_name in gate_df["inst_name"].tolist():
+        if inst_name not in pins_by_gate:
+            continue
+        endpoints = [pin_idx.get((inst_name, p)) for p in pins_by_gate[inst_name].values()]
         for s, t in clique_pairs([e for e in endpoints if e is not None]):
-            gate_rows.append({"src": s, "dst": t, "inst_name": inst_name})
-    gate_edge_df = pd.DataFrame(gate_rows)
+            g_src.append(s)
+            g_dst.append(t)
+            g_inst.append(inst_name)
+    gate_edge_df = (pd.DataFrame({"src": g_src, "dst": g_dst, "inst_name": g_inst})
+                    if g_src else pd.DataFrame([]))
 
     net_edge_df = _net_clique_rows(net_df, edges_pn, edges_in,
                                    lambda i, p: pin_idx.get((i, p)),
@@ -571,6 +599,15 @@ def _variant_stats(variant, data):
         stats["rc_coupling_edges"] = int((rt == RC_EDGE_TYPE_COUPLING).sum()) if rt.numel() else 0
         stats["rc_resistance_edges"] = int((rt == RC_EDGE_TYPE_RESISTANCE).sum()) if rt.numel() else 0
     return stats
+
+
+# Set by main() before forking view workers (a nested builder cannot be pickled; a
+# forked child inherits this module global instead).
+_VARIANT_BUILDER = None
+
+
+def _call_registered(v):
+    return _VARIANT_BUILDER(v)
 
 
 def main():
@@ -727,32 +764,66 @@ def main():
         written_pt.add(live)
         return live
 
+    def _build_variant(v):
+        """Build one view into staging. Returns what the parent needs to publish and
+        describe it; safe to run in a forked worker (it only reads the loaded tables)."""
+        # The homogeneous Data is ALWAYS built first — it is the verified source of
+        # truth (every filter/sort/label-join happens here). The hetero output is a
+        # pure value-preserving re-view (graph_lib.homo_to_hetero).
+        data = BUILDERS[v](views7, label_dfs, args.design, args.design, args.graph_id,
+                           args.features, rc=rc)
+        stats = dict(_variant_stats(v, data))
+        paths, staged_here = {}, {}
+
+        def _stage_local(obj, name):
+            staged = os.path.join(staging, name)
+            live = os.path.abspath(os.path.join(args.out_dir, name))
+            torch.save(obj, staged)
+            staged_here[staged] = live
+            return live
+
+        if args.kind in ("hetero", "both"):
+            hetero = gl.homo_to_hetero(data)
+            # The manifest records the LIVE path, never the staging path — a
+            # staging path leaking into a published manifest would point at a
+            # directory that no longer exists after the commit.
+            paths["hetero"] = _stage_local(hetero, f"{v}_graph.pt")
+            stats["hetero"] = _hetero_stats(hetero)
+        if args.kind in ("homo", "both"):
+            # In 'both' mode the canonical {v}_graph.pt is the hetero default; the
+            # homo lands beside it as {v}_graph_homo.pt.
+            paths["homo"] = _stage_local(
+                data, f"{v}_graph.pt" if args.kind == "homo" else f"{v}_graph_homo.pt")
+        stats["path"] = paths.get("hetero", paths.get("homo"))
+        stats["paths"] = paths
+        return v, stats, staged_here, int(data.x.shape[0]), int(data.edge_index.shape[1])
+
+    # Views are independent given the loaded tables. R2G_JOBS=N (default 1) builds up
+    # to N of them in forked workers (2026-11-15); results are merged in view order, so
+    # the files and the manifest are identical to a sequential build.
     try:
-        for v in variants:
-            # The homogeneous Data is ALWAYS built first — it is the verified source of
-            # truth (every filter/sort/label-join happens here). The hetero output is a
-            # pure value-preserving re-view (graph_lib.homo_to_hetero).
-            data = BUILDERS[v](views7, label_dfs, args.design, args.design, args.graph_id,
-                               args.features, rc=rc)
-            stats = dict(_variant_stats(v, data))
-            paths = {}
-            if args.kind in ("hetero", "both"):
-                hetero = gl.homo_to_hetero(data)
-                # The manifest records the LIVE path, never the staging path — a
-                # staging path leaking into a published manifest would point at a
-                # directory that no longer exists after the commit.
-                paths["hetero"] = _stage(hetero, f"{v}_graph.pt")
-                stats["hetero"] = _hetero_stats(hetero)
-            if args.kind in ("homo", "both"):
-                # In 'both' mode the canonical {v}_graph.pt is the hetero default; the
-                # homo lands beside it as {v}_graph_homo.pt.
-                paths["homo"] = _stage(
-                    data, f"{v}_graph.pt" if args.kind == "homo" else f"{v}_graph_homo.pt")
-            stats["path"] = paths.get("hetero", paths.get("homo"))
-            stats["paths"] = paths
+        jobs = max(1, int(os.environ.get("R2G_JOBS", "1") or 1))
+    except ValueError:
+        jobs = 1
+    jobs = min(jobs, len(variants))
+
+    try:
+        if jobs > 1:
+            import multiprocessing as mp
+            torch.set_num_threads(1)          # before fork: no thread pools in the children
+            global _VARIANT_BUILDER
+            _VARIANT_BUILDER = _build_variant     # inherited by the forked workers
+            with mp.get_context("fork").Pool(jobs) as pool:
+                built = pool.map(_call_registered, variants, chunksize=1)
+        else:
+            built = [_build_variant(v) for v in variants]
+        for v, stats, staged_here, n_nodes, n_edges in built:
+            for staged, live in staged_here.items():
+                staged_pt[staged] = live
+                written_pt.add(live)
             manifest["variants"][v] = stats
-            print(f"{v}_graph[{args.kind}]: nodes={data.x.shape[0]} "
-                  f"edges={data.edge_index.shape[1]} -> {stats['path']}")
+            print(f"{v}_graph[{args.kind}]: nodes={n_nodes} "
+                  f"edges={n_edges} -> {stats['path']}")
 
         # --- Commit ---------------------------------------------------------
         # Everything above succeeded, so every file this generation publishes now

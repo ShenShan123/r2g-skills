@@ -165,9 +165,11 @@ Semantics to know before training:
 - **The clock tree is not in the graph.** Only `net_type_id == 0` (signal) nets
   survive; power/ground/clock/reset/scan nets, FILL/TAP cells, and gates with no
   signal pins are filtered.
-- Pin positions approximate to the owning instance origin (pin-geometry offsets
-  are not computed), so `pin_x_std_um`-style stats and `hpwl_um` are
-  origin-based approximations.
+- Pin positions are the pin's true orientation-aware in-cell LEF position (OpenDB
+  `getAvgXY` contract, `techlib.lef.pin_abs_pos_um`) whenever a cell LEF resolves; only
+  without `SC_LEF`/`ADDITIONAL_LEFS` do they fall back to the owning instance origin
+  (feature-extraction.md). This bullet used to describe the pre-2026-07-14 origin-only
+  behaviour and was stale (corrected 2026-11-07).
 - `netlist_graph.pt` (from `1_2_yosys.v`) shares the feature stage's
   deterministic per-platform `cell_type_id` vocabulary
   (`techlib.cell_types.resolve_cell_type_map`), so its ids agree with
@@ -181,7 +183,10 @@ the external RTL2Graph `generate_hetero_bgraph.py` from the b-graph to all five
 views). The verified block-positional **homogeneous `Data` is still built first as
 the source of truth** (every filter/sort/label-join happens there); the hetero graph
 is a **value-preserving re-view** — `graph_lib.homo_to_hetero()` changes no number,
-and `graph_lib.hetero_to_homo()` is its exact inverse.
+and `graph_lib.hetero_to_homo()` is its exact inverse up to edge order (nodes and
+node order are reproduced exactly; edges come back regrouped by relation, each with its own
+attr/type/label row). In `R2G_GRAPH_KIND=both` builds the verifier checks the shipped
+`{v}_graph_homo.pt` against the hetero file on exactly that basis (2026-11-07).
 
 The homo↔hetero mapping:
 

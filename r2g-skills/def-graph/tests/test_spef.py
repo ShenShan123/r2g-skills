@@ -174,7 +174,19 @@ def test_deesc_matches_def_convention():
     assert spef._deesc(r"dec_block\.block_w0_reg\[0\]") == r"dec_block.block_w0_reg\[0\]"
     assert spef._deesc(r"keymem\.key_mem\[12\]\[54\]\$_DFFE_PN0P_") == r"keymem.key_mem\[12\]\[54\]$_DFFE_PN0P_"
     assert spef._deesc("plain_name") == "plain_name"   # no-op fast path
-    assert spef._deesc(r"a\/b") == "a/b"               # divider also de-escaped
+    # a literal '/' inside a name is escaped in BOTH SPEF and DEF ('\/'); it must stay
+    # escaped or the name no longer joins the DEF CSVs (failure-patterns #66, 2026-11-07).
+    assert spef._deesc(r"a\/b") == r"a\/b"
+
+
+def test_literal_slash_net_joins_def_name(tmp_path):
+    """Regression (pilot500 C00180): yosys names like `AddRoundKey$func$/path/x.v:193$1.ark.u[0]`
+    are written by write_def as `AddRoundKey$func$\/path\/x.v:193$1.ark.u\[0\]` and by
+    write_spef as `AddRoundKey\$func\$\/path\/x\.v\:193\$1\.ark\.u\[0\]`; the de-escaped SPEF name
+    must equal the DEF one."""
+    spef_name = r"AddRoundKey\$func\$\/home\/src\/x\.v\:193\$1\.ark\.u\[0\]"
+    def_name = r"AddRoundKey$func$\/home\/src\/x.v:193$1.ark.u\[0\]"
+    assert spef._deesc(spef_name) == def_name
 
 
 def test_names_are_deescaped_end_to_end(tmp_path):

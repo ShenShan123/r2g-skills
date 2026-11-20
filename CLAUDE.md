@@ -322,8 +322,8 @@ to what that prediction cutoff could legally see (`2_floorplan`/`3_place`/`4_cts
 floorplan reads no DEF). `5_route.def`/SPEF/STA are **label-only**. Labels here are RAW physical
 values with a boolean `y_valid_mask` — deliberately NOT the `y`/`y_raw` log-twin convention of b–f;
 don't "align" them. The upstream logic is vendored verbatim in `scripts/r2g2/`; **read
-`scripts/r2g2/R2G2_UPSTREAM.md` before editing it** — a new drop is re-vendored and the eleven recorded
-deltas (D1–D11) re-applied, never hand-merged. Detail: `references/four-stage-dataset.md`.
+`scripts/r2g2/R2G2_UPSTREAM.md` before editing it** — a new drop is re-vendored and the seventeen recorded
+deltas (D1–D17) re-applied, never hand-merged. Detail: `references/four-stage-dataset.md`.
 
 Its honesty gate is *two* checkers, both mandatory: `checks/validate_four_stage.py` (contract, NaN↔
 valid parity, stage input whitelist, route-DEF leakage) and `checks/summarize_four_stage_graph_data.py`
@@ -338,7 +338,7 @@ valid parity, stage input whitelist, route-DEF leakage) and `checks/summarize_fo
   dst_type)` edge stores (relation = folded entity — b `connects`; c/d/e/f from `edge_schema`; RC →
   `rc_coupling`/`rc_resistance`; view **e**'s pin↔pin gate-vs-net cliques *need* the relation in the key).
   The homogeneous `Data` below is still built first as the **verified source of truth** —
-  `graph_lib.homo_to_hetero` is a value-preserving re-view, `hetero_to_homo` the exact inverse, and
+  `graph_lib.homo_to_hetero` is a value-preserving re-view, `hetero_to_homo` its inverse up to edge order, and
   `verify_graph_dataset.py` reconstructs homo (independently) at load so the full homo check surface certifies
   it. `netlist_graph.pt` stays homogeneous (shared rtl-acquire artifact). Never make a builder emit hetero
   natively — the homo path is where every filter/sort/label-join is verified.
@@ -486,7 +486,8 @@ This skill's failure mode is a plausible-looking CSV with **wrong values**. Full
 | How to read PPA / signoff JSON                                      | `r2g-skills/signoff-loop/references/ppa-report-guide.md`  |
 | How does def-graph build the dataset (labels → features → graphs)?  | `r2g-skills/def-graph/SKILL.md`                   |
 | Four-stage causal dataset (floorplan/placement/cts/route HeteroData) | `r2g-skills/def-graph/references/four-stage-dataset.md` + `scripts/flow/run_stage_dataset.sh` |
-| Vendored R2G2.0 provenance + the 11 local deltas (D1–D11)             | `r2g-skills/def-graph/scripts/r2g2/R2G2_UPSTREAM.md` |
+| Four-stage IMAGE dataset (same stage cutoffs, GCell rasters) | `r2g-skills/def-graph/SKILL.md` §5b + `scripts/flow/run_stage_images.sh` |
+| Vendored R2G2.0 provenance + the 17 local deltas (D1–D17)             | `r2g-skills/def-graph/scripts/r2g2/R2G2_UPSTREAM.md` |
 | Dataset label/feature extraction (Y/X CSV columns, units, joins)    | `r2g-skills/def-graph/references/{label,feature}-extraction.md`  |
 | PyG graph datasets (b–f views, tensor schema, RC edges, netlist graph, torch venv) | `r2g-skills/def-graph/references/graph-dataset.md`  |
 | Per-platform tech handling (voltage, tap cells, layers, liberty, SPEF) | `r2g-skills/def-graph/scripts/extract/techlib/`   |

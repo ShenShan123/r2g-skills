@@ -413,3 +413,35 @@ def test_polygon_pin_center_follows_opendb_boxes(tmp_path):
     got = vgd._lef_pin_geometry([str(lef)])["ADDF"]["pins"]["CI"]
     assert got == pytest.approx((10.13, 2.08625))
     assert techlef.macro_pin_geometry([str(lef)])["ADDF"]["pins"]["CI"] == pytest.approx(got)
+
+
+def test_graph_kind_both_counts_as_hetero():
+    """R2G_GRAPH_KIND=both writes the hetero {v}_graph.pt plus {v}_graph_homo.pt; the
+    verifier used to require graph_kind == 'hetero' and false-failed every 'both' build
+    (found 2026-11-07 on pilot500 dev design C03005 counter)."""
+    assert vgd.graph_kind_is_hetero({"graph_kind": "both"})
+    assert vgd.graph_kind_is_hetero({"graph_kind": "hetero"})
+    assert not vgd.graph_kind_is_hetero({"graph_kind": "homo"})
+
+
+def test_verifier_spef_deesc_keeps_literal_slash():
+    """The verifier's independent SPEF oracle must follow the same DEF convention as
+    techlib.spef (failure-patterns #66): '\\/' stays escaped, '\\.'/'\\$' are stripped."""
+    assert vgd._spef_deesc(r"a\$f\$\/home\/x\.v\[0\]") == r"a$f$\/home\/x.v\[0\]"
+
+
+def test_expected_label_series_tolerates_a_quarantined_label_csv(tmp_path):
+    """failure-patterns #72: when an extractor fails, run_labels.sh quarantines its CSV (#52), and
+    the graph builder degrades it to an all-NaN slot + label_health 'missing'. The verifier's
+    expected_label_series still did a bare pd.read_csv and crashed (FileNotFoundError) on every
+    sky130hd/gf180 build whose PDNSim aborted, so NO check ran ('0/1'). A missing CSV must
+    yield an all-NaN expectation, which the y-slot checks then compare against the graph."""
+    import pandas as pd
+    (tmp_path / "cell_congestion.csv").write_text("Design,Cell,label\nd,g1,0.5\n")
+    (tmp_path / "timing_features.csv").write_text("Design,Cell,label\nd,g1,0.25\n")
+    (tmp_path / "wirelength.csv").write_text("Design,Net,label\nd,n1,1.5\n")
+    gate = pd.DataFrame({"inst_name": ["g1"]}); net = pd.DataFrame({"net_name": ["n1"]})
+    pin = pd.DataFrame({"inst_name": ["g1"], "pin_name": ["A"]}); iopin = pd.DataFrame({"iopin_name": []})
+    out = vgd.expected_label_series((gate, net, iopin, pin), str(tmp_path), "d")
+    assert out["gate", 1].isna().all()                  # ir_drop.csv absent -> NaN, not a crash
+    assert float(out["gate", 0][0]) == 0.5 and float(out["net", 3][0]) == 1.5

@@ -334,12 +334,45 @@ def resolve_yosys_hierarchy_libs(
     return unique
 
 
-def yosys_signal_names(name: str, detail: dict[str, Any]) -> list[str]:
+def single_bit_vector_names(verilog_text: str, top_module: str = "") -> frozenset[str]:
+    """D17 (local delta): names DECLARED as one-bit vectors (``input [0:0] x;``).
+
+    Yosys JSON keeps no trace of a ``[0:0]`` declaration (one bit, offset 0, not
+    upto -- the same as a scalar), so ``yosys_signal_names`` named the bit ``x``
+    while OpenROAD/OpenSTA, reading the same netlist, call it ``x[0]``. The
+    canonical port then joined no DEF PIN and no STA point (pilot500 C02816:
+    port ``i_register_ready``; NaN IO position on every stage, 24 timing paths
+    rejected, the four-stage build aborted at the 0.95 path-alignment gate).
+    """
+    text = re.sub(r"/\*.*?\*/|//[^\n]*", " ", verilog_text, flags=re.S)
+    if top_module:  # only the top module's declarations name top-level signals
+        block = re.search(
+            r"\bmodule\s+\\?" + re.escape(canonical_name(top_module)) + r"\b(.*?)\bendmodule\b", text, re.S
+        )
+        text = block.group(1) if block else text
+    names: set[str] = set()
+    for match in re.finditer(
+        r"\b(?:input|output|inout|wire|reg)\s+(?:wire\s+|reg\s+)?(?:signed\s+)?"
+        r"\[\s*(-?\d+)\s*:\s*(-?\d+)\s*\]\s*([^;]+);",
+        text,
+    ):
+        if match.group(1) != match.group(2):
+            continue
+        for token in match.group(3).split(","):
+            token = token.strip().split("=")[0].strip()
+            if token:
+                names.add(canonical_name(token))
+    return frozenset(names)
+
+
+def yosys_signal_names(
+    name: str, detail: dict[str, Any], vectors: frozenset[str] = frozenset()
+) -> list[str]:
     """Yosys stores signal bits LSB first, including ascending/nonzero ranges."""
     count = len(detail.get("bits", []))
     offset = int(detail.get("offset", 0))
     upto = bool(detail.get("upto", 0))
-    is_bus = count > 1 or offset != 0 or upto
+    is_bus = count > 1 or offset != 0 or upto or name in vectors  # D17
     return [f"{name}[{offset + (count - 1 - i if upto else i)}]" if is_bus else name
             for i in range(count)]
 
@@ -408,6 +441,7 @@ def parse_synth_verilog_with_yosys(
             f"可用module={list(modules)[:10]}"
         )
 
+    vectors = single_bit_vector_names(Path(path).read_text(encoding="utf-8", errors="replace"), top_module)  # D17
     gate_reference = unique_reference_index(set(reference_gates), "Gate")
     net_reference = unique_reference_index(set(reference_nets), "Net")
 
@@ -418,7 +452,7 @@ def parse_synth_verilog_with_yosys(
         name = canonical_name(raw_name)
         bits = list(detail.get("bits", []))
         hidden = int(detail.get("hide_name", 0))
-        indexed_names = yosys_signal_names(name, detail)
+        indexed_names = yosys_signal_names(name, detail, vectors)
         for bit, alias in zip(bits, indexed_names):
             if isinstance(bit, int):
                 bit_aliases[bit].append((alias, hidden))
@@ -516,7 +550,7 @@ def parse_synth_verilog_with_yosys(
         port_name = canonical_name(raw_name)
         bits = list(detail.get("bits", []))
         direction = canonical_name(detail.get("direction", "")).upper()
-        port_names = yosys_signal_names(port_name, detail)
+        port_names = yosys_signal_names(port_name, detail, vectors)
         for bit, bit_port_name in zip(bits, port_names):
             if isinstance(bit, str):
                 net_name = "CONST1" if bit == "1" else "CONST0"

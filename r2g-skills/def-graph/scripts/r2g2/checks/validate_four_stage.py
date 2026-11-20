@@ -88,6 +88,63 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def report_has_internal_endpoint(report_paths) -> "bool | None":
+    """D18 (local delta): did OpenSTA time ANY non-port endpoint? Scans the
+    ``Endpoint: <name> (<kind>)`` lines of the path reports; a kind without the
+    word ``port`` is an internal (register/latch/gated) endpoint. None when no
+    report can be read (unknown -> the caller keeps the strict D16 rule)."""
+
+    seen = False
+    any_read = False
+    for path in report_paths or []:
+        try:
+            text = Path(path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        any_read = True
+        for line in text.splitlines():
+            s = line.strip()
+            if s.startswith("Endpoint:") and "(" in s:
+                kind = s[s.index("(") + 1:]
+                if "port" not in kind:
+                    seen = True
+                    break
+        if seen:
+            break
+    return seen if any_read else None
+
+
+def timing_label_presence_error(graph: Any, report_internal_endpoints: "bool | None" = None) -> str:
+    """D16 (local delta): timing labels must exist somewhere, and on internal
+    pins whenever the design HAS internal timing endpoints.
+
+    Pin/IO-pin labels are endpoint slacks. A purely combinational design (every
+    endpoint is an output port, e.g. a virtual-clock datapath) legitimately has
+    no valid internal-pin label; the upstream check demanded one and aborted
+    the whole four-stage build. The guard keeps its power: with any internal
+    endpoint present (``is_timing_endpoint`` input feature) zero valid pin
+    labels still fails, and zero labels overall always fails.
+    """
+
+    pin_valid = int(graph["pin"].y_valid_mask.sum()) if "pin" in graph.node_types else 0
+    io_valid = int(graph["io_pin"].y_valid_mask.sum()) if "io_pin" in graph.node_types else 0
+    if pin_valid + io_valid == 0:
+        return "已配置Timing源但没有有效Pin/IO Pin标签"
+    if "pin" in graph.node_types and pin_valid == 0:
+        schema = list(getattr(graph["pin"], "x_schema", []))
+        if "is_timing_endpoint" in schema:
+            column = graph["pin"].x[:, schema.index("is_timing_endpoint")]
+            # D18: structural endpoints (e.g. register D pins) that STA never
+            # timed -- unclocked registers under a virtual clock -- legitimately
+            # carry no label. Only a report that DID time an internal endpoint
+            # (or an unreadable one) makes zero pin labels a join failure.
+            if bool((column > 0.5).any()) and report_internal_endpoints is not False:
+                return "已配置Timing源但内部时序端点没有有效Pin标签"
+        else:
+            return "已配置Timing源但没有有效Pin标签"
+    return ""
+
+
 def flow_recorded_sha256(run_dir: Path, flow_stage: str, artifact: str) -> str:
     """流程产出该阶段.odb时记录的sha256。
 
@@ -410,6 +467,13 @@ def main() -> None:
     expect_timing_edges = expect_timing and bool(
         cfg.get("timing_use_report_path_edges", False)
     )
+    report_internal = (
+        report_has_internal_endpoint(
+            [cfg.get("timing_max_rpt"), cfg.get("timing_min_rpt")]
+        )
+        if expect_timing
+        else None
+    )
     for stage, graph in graphs.items():
         if graph.data_contract_version != "r2g2_four_stage_hetero_pipeline_v3":
             raise ValueError(
@@ -426,10 +490,9 @@ def main() -> None:
             if int(graph["gate"].y_valid_mask[:, ir_index].sum()) == 0:
                 raise ValueError(f"{stage}已配置IR-drop源但没有有效Gate标签")
         if expect_timing:
-            for node_type in ("pin", "io_pin"):
-                valid_count = int(graph[node_type].y_valid_mask.sum())
-                if node_type == "pin" and valid_count == 0:
-                    raise ValueError(f"{stage}已配置Timing源但没有有效Pin标签")
+            problem = timing_label_presence_error(graph, report_internal)
+            if problem:
+                raise ValueError(f"{stage}{problem}")
         if expect_timing_edges and not any(
             relation == "timing_path" for _, relation, _ in graph.edge_types
         ):

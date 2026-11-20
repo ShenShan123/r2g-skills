@@ -325,3 +325,21 @@ webui/node_modules/
 webui/tsconfig.tsbuildinfo
 # the built UI ships inside the Python package so users never need Node
 !agent/r2g_agent/web/dist/
+
+# ASAP7 qualification (2026-11-20): the encrypted Calibre rule deck and third-party sources are licensed and
+# never committed; Calibre run evidence, per-run flow outputs and generated test vectors stay local (scripts,
+# reports and diagnoses are tracked).
+experiments/asap7_qualification_20261116/private_rules/
+experiments/asap7_qualification_20261116/third_party/
+experiments/asap7_qualification_20261116/calibre_evidence/
+experiments/asap7_qualification_20261116/**/backend/
+experiments/asap7_qualification_20261116/multi_aes/tb/
+*.svrf
+# large media / paper working files
+experiments/ui_jpeg_recording_20261116/
+experiments/layout_showcase_20261116/
+paper_figures_review_20261111/
+/CVPR2027_R2GSkills*.pdf
+/asap7.bz2
+paper/*.zip
+.vscode/

@@ -188,7 +188,7 @@ Key differences from b–f — do not "harmonize" them:
 `checks/summarize_four_stage_graph_data.py --root <generated>` (`structural_issues=0`).
 
 **Editing `scripts/r2g2/` requires reading `scripts/r2g2/R2G2_UPSTREAM.md` first.** That tree is a
-vendored upstream drop plus eleven recorded deltas (D1–D11); a new drop is re-vendored and the deltas
+vendored upstream drop plus eighteen recorded deltas (D1–D18); a new drop is re-vendored and the deltas
 re-applied, never hand-merged. `scripts/stage_dataset/` is our glue and is edited normally.
 
 ### 5. Image (feature-map) dataset — `scripts/flow/run_images.sh <project-dir> [platform]`
@@ -213,6 +213,31 @@ unless their marker records THIS DEF's digest). Writes `images/{features,labels}
   and IR drop — 17 checks; any failure marks the dataset `invalid` (exit 6).
   `tests/test_image_dataset.py` holds hand-computed values on a non-square toy and one negative
   control per channel.
+
+### 5b. Four-stage image dataset — `scripts/flow/run_stage_images.sh <project-dir> [platform]`
+
+The image twin of the four-stage graph dataset (2026-11-17). One image set per **prediction stage**,
+cut exactly like the graph's: a stage may read only the layout that existed before it.
+
+| Stage | Features read | Channels can contain |
+|---|---|---|
+| `floorplan` | no layout (`R2G_IMAGE_FEATURE_STAGE=none`) | all zeros: the no-spatial-information baseline |
+| `placement` | `2_floorplan.odb` | fixed cells (taps) and macros; std cells are UNPLACED and skipped; IO pins only if the flow placed them by then |
+| `cts` | `3_place.odb` | all five channels |
+| `route` | `4_cts.odb` | all five channels, clock-tree buffers included |
+
+- Each stage is one `run_images.sh` call (`R2G_IMAGE_OUT_DIR` / `R2G_IMAGE_REPORT` relocate it), so
+  run selection, provenance, the sign-off gate, label freshness and the independent verifier are
+  identical to the single-stage dataset.
+- All four stages share **one grid and one post-route label set**; the wrapper proves it, comparing
+  every stage's `labels.npz` arrays and grid digest, and fails (exit 6) on any difference.
+- The `none` stage's verifier checks are: no feature DEF recorded, every feature channel exactly zero,
+  and the label checks. A non-zero feature there is leakage and fails `none.features_all_zero`.
+- Outputs: `stage_images/<stage>/{features,labels}.npz` + `image_meta.json` + `png/` + `verify.json`,
+  `stage_images/reports/<stage>.json`, and the manifest `stage_images/stage_images.json` (also
+  `reports/stage_image_dataset.json`).
+- Needs the stage databases `2_floorplan` / `3_place` / `4_cts` `.odb` in the run's `results/`. Corpora
+  that kept only `3_place.odb` can build the single default stage, not the four.
 
 ## The five topologies (b–f)
 
@@ -259,7 +284,7 @@ The shared per-platform tech layer every stage consumes:
 |-----------|------|
 | `references/graph-dataset.md` | Building/reading the PyG b–f graphs, tensor schema, RC-parasitic label views, torch venv, provenance + audit notes. |
 | `references/four-stage-dataset.md` | Building/reading the four-stage causal HeteroData graphs (`run_stage_dataset.sh`), the causal input whitelist, the ORFS adapters, and the two mandatory checkers. |
-| `scripts/r2g2/R2G2_UPSTREAM.md` | **Before editing anything under `scripts/r2g2/`** — upstream provenance, SHA256s, and the eleven local deltas (D1–D11) that must be re-applied on a new drop. |
+| `scripts/r2g2/R2G2_UPSTREAM.md` | **Before editing anything under `scripts/r2g2/`** — upstream provenance, SHA256s, and the eighteen local deltas (D1–D18) that must be re-applied on a new drop. |
 | `references/label-extraction.md` | Building the Y side (per-cell/per-net labels + stats). |
 | `references/feature-extraction.md` | Building the X side (per-node/per-edge/metadata CSVs + stats). |
 | `scripts/extract/techlib/` | Per-platform tech/LEF/liberty/DEF parsing internals. |

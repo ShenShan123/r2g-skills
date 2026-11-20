@@ -24,6 +24,9 @@ Checks
   ir_drop       channel == per-GCell max of ir_drop.csv; max equal; zero where no cell
   axis          a non-square grid is [x][y]: a cell's own GCell is non-zero
 
+  none          (feature_stage none, the floorplan cutoff) no feature DEF recorded and every
+                feature channel exactly zero; the DEF-derived checks above do not apply
+
 Usage: verify_images.py <images_dir> --labels-dir <labels> --final-def <6_final.def>
                         [--lef ...] [--json out.json]
 Exit 0 only if every check passes.
@@ -51,6 +54,30 @@ def sha256(p):
 
 
 # ---- independent readers -------------------------------------------------------
+def _polygon_boxes(xs, ys):
+    """Rectilinear polygon -> OpenDB's boxes: horizontal bands between successive vertex y's,
+    the x-spans of each band by even-odd crossing of the vertical edges, and vertically
+    adjacent bands with an identical span merged into one box."""
+    n = len(xs)
+    if n > 1 and xs[0] == xs[-1] and ys[0] == ys[-1]:
+        xs, ys, n = xs[:-1], ys[:-1], n - 1
+    vert = [(xs[k], min(ys[k], ys[(k + 1) % n]), max(ys[k], ys[(k + 1) % n]))
+            for k in range(n) if xs[k] == xs[(k + 1) % n] and ys[k] != ys[(k + 1) % n]]
+    lev = sorted(set(ys))
+    boxes, run = [], {}
+    for lo, hi in zip(lev, lev[1:]):
+        mid = (lo + hi) / 2.0
+        cut = sorted(x for x, a, b in vert if a < mid < b)
+        spans = list(zip(cut[0::2], cut[1::2]))
+        for sp in [sp for sp in run if sp not in spans]:
+            boxes.append((sp[0], run.pop(sp), sp[1], lo))
+        for sp in spans:
+            run.setdefault(sp, lo)
+    for sp, y0 in run.items():
+        boxes.append((sp[0], y0, sp[1], lev[-1]))
+    return boxes
+
+
 def read_lef(paths):
     sizes, classes, pins = {}, {}, {}
     for p in paths:
@@ -74,6 +101,14 @@ def read_lef(paths):
                 v = [float(x) for x in t[1:] if re.match(r"^-?[\d.]+$", x)][-4:]
                 if len(v) == 4:
                     pins[cur][cur_pin].append(((v[0] + v[2]) / 2, (v[1] + v[3]) / 2))
+            elif cur and cur_pin and t[0] == "POLYGON":
+                # A rectilinear POLYGON pin shape counts as the boxes OpenDB stores for it
+                # (getAvgXY averages those). Before 2026-11-07 polygons were skipped, so on gf180
+                # (2,135 POLYGONs in the 9t cell LEF) the verifier placed those pins at the RECT-only
+                # mean or the instance origin and false-failed pin_density / rudy / pin_rudy on
+                # every design (failure-patterns #70). Own sweep, independent of techlib.lef.
+                v = [float(x) for x in t[1:] if re.match(r"^-?[\d.]+$", x)]
+                pins[cur][cur_pin].extend(((a + c) / 2, (b + d) / 2) for a, b, c, d in _polygon_boxes(v[0::2], v[1::2]))
             elif t[0] == "END" and len(t) > 1:
                 if cur_pin and t[1] == cur_pin:
                     cur_pin = None
@@ -161,6 +196,16 @@ def main(argv=None):
     dbu_g = float(g["db_units"])
     sx, sy = g["grid_step_dbu"][0] / dbu_g, g["grid_step_dbu"][1] / dbu_g
     x0, y0, x1, y1 = [v / dbu_g for v in g["die_dbu"]]
+    gx0d, gy0d = g["die_dbu"][0], g["die_dbu"][1]
+    gsxd, gsyd = g["grid_step_dbu"]
+
+    def gbin(v_um, axis):
+        # exact DBU floor bin, independent of build_images.Grid (failure-patterns #68)
+        d = round(v_um * dbu_g - (gx0d, gy0d)[axis], 6)
+        return int(d // (gsxd, gsyd)[axis])
+
+    def gidx(x, y):
+        return min(gbin(x, 0), nx - 1), min(gbin(y, 1), ny - 1)
     ex = np.minimum(x0 + sx * np.arange(nx + 1), x1)
     ey = np.minimum(y0 + sy * np.arange(ny + 1), y1)
     area = np.outer(np.diff(ex), np.diff(ey))
@@ -173,84 +218,105 @@ def main(argv=None):
            if v.shape != (nx, ny) or not np.all(np.isfinite(v)) or (v < 0).any()]
     check("structure.shape_finite_nonneg", not bad and list(meta["shape"]) == [nx, ny], bad or (nx, ny))
 
-    # provenance + leakage
-    fdef = meta["sources"]["feature_def"]["path"]
-    check("provenance.feature_def_sha", sha256(fdef) == meta["sources"]["feature_def"]["sha256"], fdef)
-    check("provenance.grid_sha", sha256(os.path.join(a.labels_dir, "congestion_grid.json"))
-          == meta["sources"]["grid"]["sha256"])
+    no_layout = meta.get("feature_stage") == "none"
     lefs = a.lef or meta["sources"]["lefs"]
     sizes, classes, lpins = read_lef(lefs)
-    dbu, comps, io, nets, routed = read_def(fdef)
-    check("leakage.feature_def_unrouted", not routed, "routed wires present" if routed else "none")
-    fills = [c for c in comps.values() if re.match(r"FILL", c[0], re.I)]
-    check("leakage.no_fill_before_route", meta["feature_stage"] == "cts" or not fills, "%d fill cells" % len(fills))
+    std = []
+    if no_layout:
+        # floorplan prediction cutoff: no layout may be read, so every feature channel must be exactly zero
+        check("provenance.no_feature_def", meta["sources"].get("feature_def") is None,
+              meta["sources"].get("feature_def"))
+        check("provenance.grid_sha", sha256(os.path.join(a.labels_dir, "congestion_grid.json"))
+              == meta["sources"]["grid"]["sha256"])
+        nonzero = [k for k, v in F.items() if float(np.abs(v).max(initial=0)) != 0.0]
+        check("none.features_all_zero", not nonzero, nonzero or "all zero")
+    else:
+        # provenance + leakage
+        fdef = meta["sources"]["feature_def"]["path"]
+        check("provenance.feature_def_sha", sha256(fdef) == meta["sources"]["feature_def"]["sha256"], fdef)
+        check("provenance.grid_sha", sha256(os.path.join(a.labels_dir, "congestion_grid.json"))
+              == meta["sources"]["grid"]["sha256"])
+        dbu, comps, io, nets, routed = read_def(fdef)
+        check("leakage.feature_def_unrouted", not routed, "routed wires present" if routed else "none")
+        fills = [c for c in comps.values() if re.match(r"FILL", c[0], re.I)]
+        check("leakage.no_fill_before_route", meta["feature_stage"] == "cts" or not fills, "%d fill cells" % len(fills))
 
-    # occupancy channels, re-derived
-    std, mac, std_area = [], [], 0.0
-    for name, (m, x, y, o) in comps.items():
-        if m not in sizes:
-            continue
-        w, h = sizes[m]
-        if o in ROT:
-            w, h = h, w
-        r = (x / dbu, y / dbu, x / dbu + w, y / dbu + h)
-        (mac if classes.get(m) == "BLOCK" else std).append(r)
-        if classes.get(m) != "BLOCK":
-            cx0, cy0 = max(r[0], x0), max(r[1], y0)
-            cx1, cy1 = min(r[2], x1), min(r[3], y1)
-            std_area += max(0, cx1 - cx0) * max(0, cy1 - cy0)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        cd = np.where(area > 0, raster_area(std, ex, ey) / area, 0)
-        mr = np.where(area > 0, raster_area(mac, ex, ey) / area, 0)
-    d = maxdiff(cd, F["cell_density"])
-    check("cell_density.array", d < 1e-4, "max|diff|=%.2e" % d)
-    d = maxdiff(mr, F["macro_region"])
-    check("macro_region.array", d < 1e-4, "max|diff|=%.2e over %d macros" % (d, len(mac)))
-    tot = float((F["cell_density"].astype(float) * area).sum()) if F["cell_density"].shape == area.shape else float("inf")
-    check("conservation.cell_area", abs(tot - std_area) <= 1e-4 * max(std_area, 1),
-          "image %.3f vs cells %.3f um2" % (tot, std_area))
+        # occupancy channels, re-derived
+        std, mac, std_area = [], [], 0.0
+        for name, (m, x, y, o) in comps.items():
+            if m not in sizes:
+                continue
+            w, h = sizes[m]
+            if o in ROT:
+                w, h = h, w
+            r = (x / dbu, y / dbu, x / dbu + w, y / dbu + h)
+            (mac if classes.get(m) == "BLOCK" else std).append(r)
+            if classes.get(m) != "BLOCK":
+                cx0, cy0 = max(r[0], x0), max(r[1], y0)
+                cx1, cy1 = min(r[2], x1), min(r[3], y1)
+                std_area += max(0, cx1 - cx0) * max(0, cy1 - cy0)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            cd = np.where(area > 0, raster_area(std, ex, ey) / area, 0)
+            mr = np.where(area > 0, raster_area(mac, ex, ey) / area, 0)
+        d = maxdiff(cd, F["cell_density"])
+        check("cell_density.array", d < 1e-4, "max|diff|=%.2e" % d)
+        d = maxdiff(mr, F["macro_region"])
+        check("macro_region.array", d < 1e-4, "max|diff|=%.2e over %d macros" % (d, len(mac)))
+        tot = float((F["cell_density"].astype(float) * area).sum()) if F["cell_density"].shape == area.shape else float("inf")
+        check("conservation.cell_area", abs(tot - std_area) <= 1e-4 * max(std_area, 1),
+              "image %.3f vs cells %.3f um2" % (tot, std_area))
 
-    # pins / RUDY, re-derived with this file's own pin geometry
-    def pin_pos(inst, pin):
-        if inst == "PIN":
-            p = io.get(pin)
-            return (p[0] / dbu, p[1] / dbu) if p else None
-        c = comps.get(inst)
-        if not c:
-            return None
-        m, x, y, o = c
-        rects = lpins.get(m, {}).get(pin)
-        if not rects or m not in sizes:
-            return (x / dbu, y / dbu)
-        px = sum(r[0] for r in rects) / len(rects)
-        py = sum(r[1] for r in rects) / len(rects)
-        qx, qy = orient_pt(px, py, o, sizes[m][0], sizes[m][1])
-        return (x / dbu + qx, y / dbu + qy)
+        # pins / RUDY, re-derived with this file's own pin geometry
+        def pin_pos(inst, pin):
+            if inst == "PIN":
+                p = io.get(pin)
+                return (p[0] / dbu, p[1] / dbu) if p else None
+            c = comps.get(inst)
+            if not c:
+                return None
+            m, x, y, o = c
+            rects = lpins.get(m, {}).get(pin)
+            if not rects or m not in sizes:
+                return (x / dbu, y / dbu)
+            px = sum(r[0] for r in rects) / len(rects)
+            py = sum(r[1] for r in rects) / len(rects)
+            qx, qy = orient_pt(px, py, o, sizes[m][0], sizes[m][1])
+            return (x / dbu + qx, y / dbu + qy)
 
-    n_pins, rudy_int, pin_rudy_tot = 0, 0.0, 0.0
-    for _name, use, conns in nets:
-        if use in ("POWER", "GROUND"):
-            continue
-        pts = [p for p in (pin_pos(i, q) for i, q in conns) if p is not None]
-        if len(pts) < 2:
-            continue
-        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
-        w, h = max(max(xs) - min(xs), sx), max(max(ys) - min(ys), sy)
-        cx, cy = (max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2
-        dens = (w + h) / (w * h)
-        bx0, by0 = max(cx - w / 2, x0), max(cy - h / 2, y0)
-        bx1, by1 = min(cx + w / 2, x1), min(cy + h / 2, y1)
-        rudy_int += dens * max(0, bx1 - bx0) * max(0, by1 - by0)
-        inside = [p for p in pts if x0 <= p[0] <= x1 and y0 <= p[1] <= y1]
-        n_pins += len(inside)
-        pin_rudy_tot += dens * len(inside)
-    got = float(F["pin_density"].sum())
-    check("pin_density.total", abs(got - n_pins) < 0.5, "image %d vs pins %d" % (got, n_pins))
-    got = float((F["rudy"].astype(float) * area).sum()) if F["rudy"].shape == area.shape else float("inf")
-    check("rudy.integral", abs(got - rudy_int) <= 1e-3 * max(rudy_int, 1), "image %.3f vs nets %.3f" % (got, rudy_int))
-    got = float(F["pin_rudy"].astype(float).sum())
-    check("pin_rudy.total", abs(got - pin_rudy_tot) <= 1e-3 * max(pin_rudy_tot, 1),
-          "image %.3f vs pins %.3f" % (got, pin_rudy_tot))
+        n_pins, rudy_int, pin_rudy_tot = 0, 0.0, 0.0
+        pd_arr, pr_arr = np.zeros((nx, ny)), np.zeros((nx, ny))
+        for _name, use, conns in nets:
+            if use in ("POWER", "GROUND"):
+                continue
+            pts = [p for p in (pin_pos(i, q) for i, q in conns) if p is not None]
+            if len(pts) < 2:
+                continue
+            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+            w, h = max(max(xs) - min(xs), sx), max(max(ys) - min(ys), sy)
+            cx, cy = (max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2
+            dens = (w + h) / (w * h)
+            bx0, by0 = max(cx - w / 2, x0), max(cy - h / 2, y0)
+            bx1, by1 = min(cx + w / 2, x1), min(cy + h / 2, y1)
+            rudy_int += dens * max(0, bx1 - bx0) * max(0, by1 - by0)
+            inside = [p for p in pts if x0 <= p[0] <= x1 and y0 <= p[1] <= y1]
+            n_pins += len(inside)
+            pin_rudy_tot += dens * len(inside)
+            for p in inside:
+                i, j = gidx(p[0], p[1])
+                pd_arr[i, j] += 1; pr_arr[i, j] += dens
+        got = float(F["pin_density"].sum())
+        check("pin_density.total", abs(got - n_pins) < 0.5, "image %d vs pins %d" % (got, n_pins))
+        # per-GCell placement of every pin, not only the total: the total cannot see a pin binned into
+        # the neighbouring GCell (failure-patterns #68, GCell-line pins)
+        bad_cells = int((np.abs(pd_arr - F["pin_density"].astype(float)) > 0.5).sum()) if F["pin_density"].shape == pd_arr.shape else -1
+        check("pin_density.array", bad_cells == 0, "%d GCells differ" % bad_cells)
+        d = maxdiff(pr_arr, F["pin_rudy"])
+        check("pin_rudy.array", d <= 1e-5 * max(1.0, float(pr_arr.max())), "max|diff|=%.2e" % d)
+        got = float((F["rudy"].astype(float) * area).sum()) if F["rudy"].shape == area.shape else float("inf")
+        check("rudy.integral", abs(got - rudy_int) <= 1e-3 * max(rudy_int, 1), "image %.3f vs nets %.3f" % (got, rudy_int))
+        got = float(F["pin_rudy"].astype(float).sum())
+        check("pin_rudy.total", abs(got - pin_rudy_tot) <= 1e-3 * max(pin_rudy_tot, 1),
+              "image %.3f vs pins %.3f" % (got, pin_rudy_tot))
 
     # labels: congestion exact
     cg = np.zeros((nx, ny)); cr = np.zeros((nx, ny))
@@ -295,7 +361,7 @@ def main(argv=None):
             x, y = float(r["X"]), float(r["Y"])
             if not (x0 <= x <= x1 and y0 <= y <= y1):
                 continue
-            i, j = min(int((x - x0) // sx), nx - 1), min(int((y - y0) // sy), ny - 1)
+            i, j = gidx(x, y)
             ir[i, j] = max(ir[i, j], float(r["IR_Drop_mV"])); seen[i, j] = True
         d = maxdiff(ir, L["ir_drop"])
         check("ir_drop.array", d < 1e-3, "max|diff|=%.2e mV" % d)
@@ -307,8 +373,7 @@ def main(argv=None):
     probe = [c for c in std[:200]]
     hits = 0
     for (rx0, ry0, rx1, ry1) in probe:
-        i = min(int(((rx0 + rx1) / 2 - x0) // sx), nx - 1)
-        j = min(int(((ry0 + ry1) / 2 - y0) // sy), ny - 1)
+        i, j = gidx((rx0 + rx1) / 2, (ry0 + ry1) / 2)
         hits += F["cell_density"].shape == (nx, ny) and F["cell_density"][i, j] > 0
     check("axis.cells_land_in_own_gcell", not probe or hits == len(probe), "%d/%d" % (hits, len(probe)))
 

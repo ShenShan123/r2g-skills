@@ -152,6 +152,28 @@ Upstream expects a hand-written JSON pointing at a curated `/data/...` tree.
   grid-boundary disconnects while bounding total degree at 20.
 * `cell_type_id` / `pin_layer_id` are **per-platform**. Never mix platforms in
   one dataset index without filtering on `platform`.
+* **Route labels aggregate a canonical net's physical pieces.** A synthesis net
+  that the backend split (buffers, CTS, repair) maps to all its pieces through the
+  transparent BUF/INV components; wirelength and ground cap are the sums over those
+  pieces, valid only when every piece is present and the lineage is unambiguous.
+  Two synthesis nets merged into one physical net, an endpoint deleted at route, or
+  a backend logic clone stay `valid=0`. Liberty-proven input-pin swaps (NOR2
+  `A1`<->`A2`, D15) are NOT ambiguous; before D15 they masked 4–12 % of a design's
+  nets. Combinational designs (all timing endpoints are output ports) carry timing
+  labels on `io_pin` only (D16).
+
+## The image twin: `run_stage_images.sh` (2026-11-17)
+
+The same four prediction stages, as GCell rasters instead of graphs (`SKILL.md` §5b). The stage cutoff
+is the one above: `floorplan` reads no layout (all-zero feature channels), `placement` reads
+`2_floorplan`, `cts` reads `3_place`, `route` reads `4_cts`. Labels are the label stage's post-route
+congestion / congestion_raw / IR drop on the congestion label's own grid: one set shared by all four
+stages, checked array-for-array by the wrapper. Unlike the graph builder it does not re-run R2G2.0;
+it calls `run_images.sh` once per stage, so it carries that dataset's verifier per stage.
+
+Verified on `picorv32_core` (sky130hd, 88 × 88 GCells): floorplan 10/10 checks (zeros, labels),
+placement / cts / route 19/19 each, shared grid + labels confirmed. The placement stage holds only the
+tap cells fixed at floorplan; this flow places IO pins later, so its pin channels are zero.
 
 ## Verified technologies
 

@@ -161,9 +161,206 @@ class _NetUnionFind:
             self.parent[right_root] = left_root
 
 
+# ---- D15 (local delta, see R2G2_UPSTREAM.md): legal input-pin permutations ----
+# The resizer / swap_pins may exchange the nets of logically equivalent input
+# pins of one instance (e.g. NOR2 A1<->A2). Anchoring base endpoints by the
+# literal (inst, pin) then lands each swapped endpoint on the OTHER base net's
+# physical net, so both base nets become "ambiguous" and their route labels are
+# masked although nothing about their routing is uncertain. A permutation is
+# accepted only when (a) the instance keeps the same multiset of input nets by
+# name, and (b) every Liberty output function of the stage master is invariant
+# under it (exhaustive truth table); anything else keeps the old behaviour.
+
+def _liberty_function(expr: str):
+    """Compile a Liberty boolean ``function`` string to (pins, evaluator)."""
+
+    tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_\[\]]*|[01]|[!'&*|+^()]", expr or "")
+    position = 0
+
+    def peek() -> str:
+        return tokens[position] if position < len(tokens) else ""
+
+    def take() -> str:
+        nonlocal position
+        position += 1
+        return tokens[position - 1]
+
+    def primary():
+        token = take()
+        if token == "!":
+            inner = primary()
+            node = lambda v, f=inner: not f(v)
+        elif token == "(":
+            node = expression()
+            if take() != ")":
+                raise ValueError("unbalanced Liberty function: " + expr)
+        elif token in ("0", "1"):
+            node = lambda v, c=(token == "1"): c
+        elif re.match(r"[A-Za-z_]", token):
+            node = lambda v, name=token: v[name]
+        else:
+            raise ValueError("unsupported Liberty function token: " + token)
+        while peek() == "'":
+            take()
+            node = lambda v, f=node: not f(v)
+        return node
+
+    def conjunction():
+        node = primary()
+        while peek() in ("&", "*") or (peek() and peek() not in ("|", "+", "^", ")")):
+            if peek() in ("&", "*"):
+                take()
+            right = primary()
+            node = lambda v, a=node, b=right: a(v) and b(v)
+        return node
+
+    def exclusive():
+        node = conjunction()
+        while peek() == "^":
+            take()
+            right = conjunction()
+            node = lambda v, a=node, b=right: a(v) != b(v)
+        return node
+
+    def expression():
+        node = exclusive()
+        while peek() in ("|", "+"):
+            take()
+            right = exclusive()
+            node = lambda v, a=node, b=right: a(v) or b(v)
+        return node
+
+    evaluator = expression()
+    if position != len(tokens):
+        raise ValueError("trailing Liberty function tokens: " + expr)
+    pins = sorted({t for t in tokens if re.match(r"[A-Za-z_]", t)})
+    return pins, evaluator
+
+
+def _permutation_is_symmetry(cell: dict[str, Any], inputs: list[str], sigma: dict[str, str]) -> bool:
+    """True iff every output function of ``cell`` is unchanged when input pin q
+    takes the value previously seen on pin sigma[q]."""
+
+    functions = [
+        info.get("function", "")
+        for info in cell.get("pins", {}).values()
+        if str(info.get("direction", "")).upper() == "OUTPUT"
+    ]
+    if not functions or any(not f for f in functions) or len(inputs) > 10:
+        return False
+    try:
+        compiled = [_liberty_function(f) for f in functions]
+    except ValueError:
+        return False
+    for _, evaluator in compiled:
+        for bits in range(1 << len(inputs)):
+            values = {pin: bool(bits >> k & 1) for k, pin in enumerate(inputs)}
+            permuted = {q: values[sigma.get(q, q)] for q in inputs}
+            try:
+                if evaluator(values) != evaluator(permuted):
+                    return False
+            except KeyError:
+                return False
+    return True
+
+
+def legal_pin_permutation_remap(
+    base: Any, snapshot: dict[str, Any], cells: dict[str, Any] | None
+) -> dict[Endpoint, Endpoint]:
+    """{base endpoint: stage endpoint} for Liberty-proven input-pin swaps."""
+
+    if not cells:
+        return {}
+    base_pins: dict[str, dict[str, str]] = defaultdict(dict)
+    for net_name, instance, pin_name in zip(
+        base.connection_net_names, base.connection_inst_names, base.connection_pin_names
+    ):
+        base_pins[str(instance)][str(pin_name)] = canonical_name(str(net_name))
+    stage_pins: dict[str, dict[str, str]] = defaultdict(dict)
+    for net_name, info in snapshot["nets"].items():
+        for instance, pin_name in info.get("connections", []):
+            stage_pins[str(instance)][str(pin_name)] = canonical_name(str(net_name))
+    remap: dict[Endpoint, Endpoint] = {}
+    for instance, before in base_pins.items():
+        component = snapshot["components"].get(instance)
+        if component is None:
+            continue
+        cell = cells.get(str(component.get("master", ""))) or cells.get(
+            canonical_name(str(component.get("master", "")))
+        )
+        if not cell:
+            continue
+        inputs = sorted(
+            pin for pin, info in cell.get("pins", {}).items()
+            if str(info.get("direction", "")).upper() == "INPUT"
+        )
+        after = stage_pins.get(instance, {})
+        if len(inputs) < 2 or any(p not in before or p not in after for p in inputs):
+            continue
+        if all(before[p] == after[p] for p in inputs):
+            continue
+        if sorted(before[p] for p in inputs) != sorted(after[p] for p in inputs):
+            continue
+        # sigma[q] = the base pin whose net now sits on stage pin q
+        free = list(inputs)
+        sigma: dict[str, str] = {}
+        for q in inputs:
+            match = next((p for p in free if before[p] == after[q] and p == q), None) or next(
+                (p for p in free if before[p] == after[q]), None
+            )
+            if match is None:
+                break
+            sigma[q] = match
+            free.remove(match)
+        if len(sigma) != len(inputs) or not _permutation_is_symmetry(cell, inputs, sigma):
+            continue
+        for q, p in sigma.items():
+            if p != q:
+                remap[("pin", instance, p)] = ("pin", instance, q)
+    return remap
+
+
+def resolve_liberty_paths(config_path: Path, cfg: dict[str, Any]) -> list[Path]:
+    """The Liberty files of a sample config (shared by 02 and, via D15, 03/05)."""
+
+    lib_raw = cfg.get("lib", "")
+    lib_values = lib_raw if isinstance(lib_raw, list) else [lib_raw]
+    lib_paths = [
+        resolve_path(config_path, str(value), True) for value in lib_values
+    ]
+    hierarchy_lib_dir_raw = str(
+        cfg.get("yosys_hierarchy_lib_dir", "")
+    ).strip()
+    if hierarchy_lib_dir_raw:
+        hierarchy_lib_dir = Path(hierarchy_lib_dir_raw)
+        if not hierarchy_lib_dir.is_absolute():
+            hierarchy_lib_dir = (
+                config_path.parent / hierarchy_lib_dir
+            ).resolve()
+        if not hierarchy_lib_dir.is_dir():
+            raise FileNotFoundError(
+                f"宏Liberty目录不存在: {hierarchy_lib_dir}"
+            )
+        lib_paths.extend(glob_liberty(hierarchy_lib_dir))
+    resolved_lib_paths = list(
+        dict.fromkeys(
+            path.resolve() for path in lib_paths if path is not None
+        )
+    )
+    return resolved_lib_paths
+
+
+def lineage_liberty_cells(config_path: Path, cfg: dict[str, Any]) -> dict[str, Any]:
+    """D15: Liberty cells for the pin-permutation-aware lineage (03/05 callers)."""
+
+    paths = resolve_liberty_paths(config_path, cfg)
+    return parse_liberty(paths)["cells"] if paths else {}
+
+
 def build_base_to_stage_lineage(
     base: Any,
     snapshot: dict[str, Any],
+    cells: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """返回base Net到阶段物理Net的直接端点+透明组件扩展映射。
 
@@ -178,6 +375,7 @@ def build_base_to_stage_lineage(
     stage_net_names = sorted(str(name) for name in snapshot["nets"])
     stage_endpoint_map = stage_endpoint_to_net(snapshot)
     endpoints_by_base = base_endpoints_by_net(base)
+    pin_remap = legal_pin_permutation_remap(base, snapshot, cells)  # D15
 
     union_find = _NetUnionFind(stage_net_names)
     nets_by_added_component: dict[str, set[str]] = defaultdict(set)
@@ -211,7 +409,7 @@ def build_base_to_stage_lineage(
     root_base_anchors: dict[str, set[str]] = defaultdict(set)
     for base_net in base_net_names:
         for endpoint in endpoints_by_base.get(base_net, []):
-            stage_net = stage_endpoint_map.get(endpoint)
+            stage_net = stage_endpoint_map.get(pin_remap.get(endpoint, endpoint))
             if stage_net is None:
                 continue
             direct_stage_nets[base_net].add(stage_net)
@@ -298,6 +496,7 @@ def build_base_to_stage_lineage(
                 for record in records.values()
             ),
             "unassigned_stage_net_count": len(unassigned_stage_nets),
+            "legal_pin_permutation_endpoints": len(pin_remap),
             "transparent_added_component_count": len(
                 transparent_added_components
             ),
@@ -2331,30 +2530,7 @@ def main() -> None:
     place = snapshot
     route = snapshot
 
-    lib_raw = cfg.get("lib", "")
-    lib_values = lib_raw if isinstance(lib_raw, list) else [lib_raw]
-    lib_paths = [
-        resolve_path(config_path, str(value), True) for value in lib_values
-    ]
-    hierarchy_lib_dir_raw = str(
-        cfg.get("yosys_hierarchy_lib_dir", "")
-    ).strip()
-    if hierarchy_lib_dir_raw:
-        hierarchy_lib_dir = Path(hierarchy_lib_dir_raw)
-        if not hierarchy_lib_dir.is_absolute():
-            hierarchy_lib_dir = (
-                config_path.parent / hierarchy_lib_dir
-            ).resolve()
-        if not hierarchy_lib_dir.is_dir():
-            raise FileNotFoundError(
-                f"宏Liberty目录不存在: {hierarchy_lib_dir}"
-            )
-        lib_paths.extend(glob_liberty(hierarchy_lib_dir))
-    resolved_lib_paths = list(
-        dict.fromkeys(
-            path.resolve() for path in lib_paths if path is not None
-        )
-    )
+    resolved_lib_paths = resolve_liberty_paths(config_path, cfg)
     if not resolved_lib_paths:
         raise ValueError("没有可用于特征提取的Liberty文件")
     lib = parse_liberty(resolved_lib_paths)
@@ -2913,7 +3089,7 @@ def main() -> None:
             "ambiguous_stage_net_count": 0,
         }
     else:
-        lineage = build_base_to_stage_lineage(base, snapshot)
+        lineage = build_base_to_stage_lineage(base, snapshot, lib["cells"])
         lineage_records = lineage["records"]
         lineage_summary = lineage["summary"]
     stage_net_geometry_cache: dict[str, dict[str, Any]] = {}

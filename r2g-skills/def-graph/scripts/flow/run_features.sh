@@ -186,10 +186,29 @@ run_soft() {  # name + command...; never aborts the orchestrator
   fi
 }
 
+
+# --- Parallel workers (2026-11-15) -----------------------------------------
+# Every worker below is independent: it reads the same inputs and writes only its
+# own output file(s) and log. R2G_JOBS=N (default 1 = the historical sequential
+# order) runs up to N of them at once; the stats roll-up waits for all of them, and
+# outputs are byte-identical to a sequential run. Status lines of concurrent workers
+# may interleave.
+R2G_JOBS="${R2G_JOBS:-1}"
+[[ "$R2G_JOBS" =~ ^[0-9]+$ && "$R2G_JOBS" -ge 1 ]] || R2G_JOBS=1
+launch() {
+  if (( R2G_JOBS > 1 )); then
+    while (( $(jobs -rp | wc -l) >= R2G_JOBS )); do wait -n || true; done
+    "$@" &
+  else
+    "$@"
+  fi
+}
+
 for w in metadata nodes_gate nodes_net nodes_iopin nodes_pin \
          edges_gate_pin edges_pin_net edges_iopin_net; do
-  run_soft "$w" python3 "$FEATURES_SRC/$w.py" "$DEF" "$FEATURES_DIR/$w.csv" "$DESIGN_NAME"
+  launch run_soft "$w" python3 "$FEATURES_SRC/$w.py" "$DEF" "$FEATURES_DIR/$w.csv" "$DESIGN_NAME"
 done
+wait
 
 # --- Stats roll-up ---------------------------------------------------------
 python3 "$FEATURES_SRC/compute_feature_stats.py" "$FEATURES_DIR" \
