@@ -66,3 +66,18 @@ def test_a_design_without_a_recorded_job_is_refused(replay):
     other = tmp / "nangate45_C2"; other.mkdir()
     r = tools.start_job([{"path": str(other), "name": "nangate45_C2"}], platform="nangate45", output="signoff")
     assert "error" in r and _log(tmp)[-1]["event"] == "no_recorded_job"
+
+
+def test_a_model_chosen_name_attaches_by_source_directory(replay):
+    tools, jid, src, tmp = replay
+    r = tools.start_job([{"path": str(src), "name": "my_top"}], platform="nangate45", output="signoff")
+    assert r["job_id"] == jid and _log(tmp)[0]["divergence"] == {"name": ["my_top", "nangate45_C1"]}
+
+
+def test_a_replay_only_platform_is_offered_and_answered(replay, tmp_path, monkeypatch):
+    tools, jid, src, tmp = replay
+    m = tmp_path / "map2.json"
+    m.write_text(json.dumps({"asap7_C1": {"job_id": jid, "platform": "asap7", "output": "signoff"}}))
+    monkeypatch.setenv("R2G_REPLAY_MAP", str(m)); monkeypatch.setattr(tools, "_REPLAY", None)
+    assert tools.replay_platforms()[-1] == "asap7"
+    assert tools.flow_params("asap7")["defaults"] is None

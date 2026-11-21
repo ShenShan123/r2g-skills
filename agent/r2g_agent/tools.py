@@ -53,6 +53,14 @@ def replay_map() -> dict:
     return _REPLAY
 
 
+def replay_platforms() -> list:
+    """Process platforms the tool schemas offer: the supported ones, plus (replay only) any platform a
+    recorded job in R2G_REPLAY_MAP ran on (asap7's recipe stage is replayed from recorded runs; R2G's
+    own flow does not run it)."""
+    extra = sorted({r.get("platform") for r in replay_map().values()} - set(platforms.PLATFORMS) - {None})
+    return list(platforms.PLATFORMS) + extra
+
+
 def replay_log(rec: dict) -> None:
     p = os.environ.get("R2G_REPLAY_LOG")
     if p:
@@ -111,7 +119,7 @@ def list_examples() -> dict:
                             "path": {"type": "string", "description": "RTL directory or file path"},
                             "top": {"type": "string", "description": "top module (optional; inferred if omitted)"},
                             "name": {"type": "string", "description": "display name (optional)"}}}},
-            "platform": {"type": "string", "enum": list(platforms.PLATFORMS), "description": "process platform"},
+            "platform": {"type": "string", "enum": replay_platforms(), "description": "process platform"},
             "output": {"type": "string", "enum": ["graph", "image", "signoff"],
                        "description": "dataset type: 'graph' = PyG graph datasets (b..f views + netlist graph); "
                                       "'image' = CircuitNet-style GCell feature maps (features from the placement "
@@ -138,12 +146,16 @@ def start_job(designs: list, platform: str = "nangate45", output: str = "graph",
     if not sources:
         return {"error": "no designs given"}
     if replay_map():
-        recs = [replay_map().get(s["name"]) for s in sources]
+        # a recorded job is found by design name, or by its source directory's name (the measurement copies each
+        # design to inputs/<name>): a model that picks its own design name would get a real job in a live run
+        recs = [replay_map().get(s["name"]) or replay_map().get(Path(s["path"]).name) for s in sources]
         if len(sources) != 1 or not recs[0]:
             replay_log({"event": "no_recorded_job", "designs": [s["name"] for s in sources]})
             return {"error": "replay: no recorded job for %s" % [s["name"] for s in sources]}
         rec = recs[0]
         div = {k: [v, rec.get(k)] for k, v in (("platform", platform), ("output", output)) if rec.get(k) not in (None, v)}
+        if sources[0]["name"] not in replay_map():
+            div["name"] = [sources[0]["name"], Path(sources[0]["path"]).name]
         if params:
             div["params"] = [params, None]
         replay_log({"event": "attach", "design": sources[0]["name"], "job_id": rec["job_id"], "divergence": div})
@@ -163,8 +175,12 @@ def start_job(designs: list, platform: str = "nangate45", output: str = "graph",
       "by cell count, 50% utilization, area allowance, power-grid minimum, SDC margins) and what each "
       "may be set to. Use it to explain the defaults, or before passing `params` to start_job/start_batch "
       "when the user wants their own (e.g. a fixed clock period).",
-      _obj({"platform": {"type": "string", "enum": list(platforms.PLATFORMS)}}))
+      _obj({"platform": {"type": "string", "enum": replay_platforms()}}))
 def flow_params(platform: str = "nangate45") -> dict:
+    if platform not in platforms.PLATFORMS and platform in replay_platforms():
+        replay_log({"event": "flow_params_replay_platform", "platform": platform})
+        return {"platform": platform, "defaults": None,
+                "note": "replay: this platform's recorded jobs ran with its frozen baseline parameters; start_job uses them"}
     from . import profile
     return profile.describe(platform)
 
@@ -189,7 +205,7 @@ def scan_batch(path: str) -> dict:
       "thousands of designs; they queue under the machine-wide concurrency limit and survive a server "
       "restart. Designs whose top module cannot be decided are skipped and listed.",
       _obj({"path": {"type": "string"}, "output": {"type": "string", "enum": ["graph", "image"]},
-            "platform": {"type": "string", "enum": list(platforms.PLATFORMS)}, "title": {"type": "string"},
+            "platform": {"type": "string", "enum": replay_platforms()}, "title": {"type": "string"},
             "params": {"type": "object", "description": "flow parameters overriding r2g's measured defaults (omit to use the defaults; call flow_params first). Keys: period_ns, period_tiers, utilization, area_allowance, pdn_floor_um, die_side_um, io_pct, setup_uncertainty_pct, hold_uncertainty_ns, place_density_lb_addon"}}, ["path", "output"]))
 def start_batch(path: str, output: str = "graph", platform: str = "nangate45", title: str = "",
                 params: dict | None = None) -> dict:
