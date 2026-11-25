@@ -29,7 +29,7 @@ self-repair, and verified ML datasets from your Verilog.
 - [Using r2g](#using-r2g)
 - [Datasets](#datasets)
 - [Why the results can be trusted](#why-the-results-can-be-trusted)
-- [Claude Code skills](#claude-code-skills)
+- [Codex skills](#codex-skills)
 - [Platform support](#platform-support)
 - [Validation](#validation)
 - [Repository layout](#repository-layout)
@@ -44,7 +44,7 @@ self-repair, and verified ML datasets from your Verilog.
 | **Self-repairing** | Reads its own logs, diagnoses failures, applies a learned repair recipe, re-runs and re-checks. Every run feeds a knowledge store that makes the next repair better. |
 | **Datasets you can train on** | Signed-off designs become PyTorch Geometric **graph** datasets or GCell **image** datasets, each independently re-verified. |
 | **Your choice of model** | DeepSeek, Qwen, Kimi, GLM, Doubao, OpenAI, Gemini, Claude, or a local Ollama model. Configure it once and it works. |
-| **Three ways in** | A web app, a command line, or Claude Code / any MCP client. |
+| **Three ways in** | A web app, a command line, or Codex, Claude Code and any other MCP client. |
 
 ## How it works
 
@@ -167,7 +167,7 @@ r2g check-model                          # test connectivity and tool calling
 r2g run --example counter8               # run directly, without chat
 r2g status                               # list jobs
 r2g chat                                 # chat in the terminal
-r2g mcp                                  # serve as an MCP server for Claude Code, Cursor, …
+r2g mcp                                  # serve as an MCP server for Codex, Claude Code, Cursor, …
 ```
 
 ## Datasets
@@ -196,10 +196,11 @@ snapshots of one design, as graphs or as images), each limited to what that stag
 
 Design document: [`docs/agent/AGENT_DESIGN.md`](docs/agent/AGENT_DESIGN.md).
 
-## Claude Code skills
+## Codex skills
 
-The engine under the agent ships as four [Claude Code](https://claude.com/claude-code) skills. You can use
-them directly: ask Claude *"set up the EDA tools"*, then *"synthesize this UART at 100 MHz on nangate45"*.
+The engine under the agent ships as four agent skills in the standard `SKILL.md` format, tested with
+[OpenAI Codex](https://github.com/openai/codex) running GPT. You can use them directly: ask Codex *"set up the
+EDA tools"*, then *"synthesize this UART at 100 MHz on nangate45"*.
 
 | Skill | What it does |
 |---|---|
@@ -209,11 +210,20 @@ them directly: ask Claude *"set up the EDA tools"*, then *"synthesize this UART 
 | [`def-graph`](r2g-skills/def-graph/SKILL.md) | Builds PyG graph and image datasets from signed-off DEF/LEF/SPEF |
 
 ```bash
-bash r2g-skills/install.sh --user          # all four skills into ~/.claude/skills/
+bash r2g-skills/install.sh --codex --user          # all four skills into ~/.codex/skills/ (or $CODEX_HOME/skills/)
 ```
 
-Then restart Claude Code or run `/reload`. Other modes: `--project .` (scoped to one project), `--link`
-(symlink, so edits apply without reinstalling), `--force` (overwrite) and `--uninstall`.
+Then start a new Codex session; skills are read when a session starts. Other modes: `--project .` (installs into
+`./.agents/skills/`, scoped to one repository), `--link` (symlink, so edits apply without reinstalling), `--force`
+(overwrite) and `--uninstall`. The same skills also work in Claude Code: drop `--codex` to install into
+`~/.claude/skills/` (or `./.claude/skills/` with `--project`).
+
+The flow writes its working files into the OpenROAD-flow-scripts checkout (`$ORFS_ROOT/flow`). Codex's default
+sandbox only lets the agent write inside the workspace, so make that folder writable too:
+
+```bash
+codex --add-dir "$ORFS_ROOT/flow"          # or add it to sandbox_workspace_write.writable_roots in ~/.codex/config.toml
+```
 
 <details>
 <summary><b>Prerequisites</b></summary>
@@ -254,7 +264,7 @@ volume, never a full `$HOME`. Drop `--dry-run` to install the missing tiers and 
 sudo apt install build-essential cmake git python3 python3-pip iverilog klayout tcl-dev libboost-dev flex bison
 git clone --recursive https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts ~/OpenROAD-flow-scripts
 cd ~/OpenROAD-flow-scripts && sudo ./etc/DependencyInstaller.sh && ./build_openroad.sh --local
-echo 'export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"' >> ~/.claude/skills/signoff-loop/references/env.local.sh
+echo 'export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"' >> ~/.codex/skills/signoff-loop/references/env.local.sh
 ```
 
 **Path C: OSS CAD Suite plus a separate OpenROAD binary:**
@@ -278,7 +288,7 @@ export OPENROAD_EXE="/usr/bin/openroad"
 export KLAYOUT_CMD="/usr/bin/klayout"
 ```
 
-**`env.local.sh`.** It lives at `~/.claude/skills/signoff-loop/references/env.local.sh`; copy it from
+**`env.local.sh`.** It lives at `~/.codex/skills/signoff-loop/references/env.local.sh`; copy it from
 `env.local.sh.template`. Every key is optional; set only what autodetection gets wrong. To keep the file
 anywhere else, export `R2G_ENV_FILE=/path/to/your-env.sh`.
 
@@ -311,7 +321,7 @@ unauthenticated GitHub listing is rate-limited.
 **Verify the setup:**
 
 ```bash
-bash ~/.claude/skills/signoff-loop/scripts/flow/check_env.sh
+bash ~/.codex/skills/signoff-loop/scripts/flow/check_env.sh
 ```
 
 Every *required* line must read `ok` before a flow runs; optional `skip` lines are fine. nangate45 needs only
@@ -326,10 +336,10 @@ the required tools plus KLayout.
 </details>
 
 <details>
-<summary><b>Using the scripts without Claude Code</b></summary>
+<summary><b>Using the scripts without an agent</b></summary>
 
 ```bash
-SKILL=~/.claude/skills/signoff-loop
+SKILL=~/.codex/skills/signoff-loop
 PROJ=design_cases/my_counter
 
 python3 $SKILL/scripts/project/init_project.py my_counter          # scaffold
@@ -352,7 +362,7 @@ bash $SKILL/scripts/flow/run_lvs.sh $PROJ nangate45
 bash $SKILL/scripts/flow/run_rcx.sh $PROJ nangate45
 
 R2G_GRAPH_PYTHON=/path/to/venv/bin/python \
-bash ~/.claude/skills/def-graph/scripts/flow/run_graphs.sh $PROJ nangate45              # dataset
+bash ~/.codex/skills/def-graph/scripts/flow/run_graphs.sh $PROJ nangate45              # dataset
 # -> dataset/{b..f}_graph.pt (HeteroData; R2G_GRAPH_KIND=homo|both), netlist_graph.pt, graph_manifest.json
 ```
 
@@ -471,7 +481,7 @@ r2g-skills/
 ├── install.sh            # one-command installer for the agent and toolchain
 ├── agent/                # the r2g agent: CLI, web server, MCP server, model adapters
 ├── webui/                # web app source (built into agent/r2g_agent/web/dist)
-├── r2g-skills/           # the four Claude Code skills (installed into ~/.claude/skills/)
+├── r2g-skills/           # the four agent skills (installed into ~/.codex/skills/ or ~/.claude/skills/)
 │   ├── eda-install/      #   detect → install → verify the toolchain
 │   ├── rtl-acquire/      #   corpus-scale RTL acquisition, synthesis-only netlist graphs
 │   ├── signoff-loop/     #   RTL → GDS, signoff, the repair loop and knowledge store

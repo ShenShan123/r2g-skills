@@ -25,8 +25,7 @@ metadata:
     - The label/feature stages are fail-soft — a missing input degrades one column, never aborts.
     - The graph-assembly stage SKIPs cleanly (with an install HINT) when the torch venv is absent.
     - Platform-agnostic: liberty/LEF/supply-voltage are resolved from the ORFS platform config.
-    - Two dataset products: the b–f views (run_graphs.sh) and the four-stage causal graphs
-      (run_stage_dataset.sh, vendored R2G2.0 — see scripts/r2g2/R2G2_UPSTREAM.md before editing it).
+    - "Two dataset products: the b–f views (run_graphs.sh) and the four-stage causal graphs (run_stage_dataset.sh, vendored R2G2.0 — see scripts/r2g2/R2G2_UPSTREAM.md before editing it)."
 ---
 # def-graph Skill
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Install the r2g-skills Claude Code skills (eda-install + signoff-loop + def-graph + rtl-acquire).
+# Install the r2g-skills agent skills (eda-install + signoff-loop + def-graph + rtl-acquire) for Claude Code
+# (default) or OpenAI Codex (--codex). Both read the same SKILL.md format; only the install location differs.
 #
 # Standalone — depends only on bash, ln, cp, mkdir, rm.
 # Run it from inside the r2g-skills/ directory (or pass --src DIR).
@@ -20,15 +21,17 @@ SKILLS_CSV="$(IFS=,; echo "${SKILLS[*]}")"
 
 print_help() {
   cat <<EOF
-Install the ${PLUGIN_NAME} Claude Code skills (${SKILLS[*]}).
+Install the ${PLUGIN_NAME} agent skills for Claude Code (default) or Codex (--codex): ${SKILLS[*]}.
 
 Usage:
-  $(basename "$0") [--user | --project DIR] [--link] [--force] [--src DIR]
-  $(basename "$0") --uninstall [--user | --project DIR]
+  $(basename "$0") [--codex] [--user | --project DIR] [--link] [--force] [--src DIR]
+  $(basename "$0") [--codex] --uninstall [--user | --project DIR]
 
 Options:
-  --user           Install to \$HOME/.claude/skills/{${SKILLS_CSV}}.
-  --project DIR    Install to DIR/.claude/skills/{${SKILLS_CSV}}.
+  --codex          Install for OpenAI Codex instead of Claude Code.
+  --user           Claude Code: \$HOME/.claude/skills/{${SKILLS_CSV}}.
+                   Codex:       \${CODEX_HOME:-\$HOME/.codex}/skills/{${SKILLS_CSV}}.
+  --project DIR    Claude Code: DIR/.claude/skills/...   Codex: DIR/.agents/skills/...
   --link           Symlink instead of copy (recommended while developing the skills).
   --force          Overwrite an existing install at the destination.
   --src DIR        Source r2g-skills directory (default: this script's directory).
@@ -43,11 +46,13 @@ mode="install"
 scope=""
 project_dir=""
 do_link=0
+agent="claude"
 do_force=0
 src_dir="$SRC_DEFAULT"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --codex)       agent="codex"; shift ;;
     --user)        scope="user"; shift ;;
     --project)     scope="project"; project_dir="${2:-}"; shift 2 ;;
     --link)        do_link=1; shift ;;
@@ -71,12 +76,12 @@ done
 if [[ -z "$scope" ]]; then
   if [[ ! -t 0 ]]; then
     scope="user"
-    echo "Non-interactive: defaulting to user install (~/.claude/skills)."
+    echo "Non-interactive: defaulting to user install."
     echo "Pass --project DIR to scope to a single project instead."
   else
-    echo "Install ${PLUGIN_NAME} into which Claude Code scope?"
-    echo "  [1] user      (\$HOME/.claude/skills)"
-    echo "  [2] project   (./.claude/skills)"
+    echo "Install ${PLUGIN_NAME} for ${agent} into which scope?"
+    echo "  [1] user"
+    echo "  [2] project   (the current directory)"
     printf "Choice [1]: "
     read -r choice
     case "${choice:-1}" in
@@ -89,7 +94,10 @@ fi
 
 if [[ "$scope" == "project" ]]; then
   : "${project_dir:=$PWD}"
-  dest_root="$(cd -- "$project_dir" && pwd)/.claude/skills"
+  if [[ "$agent" == "codex" ]]; then dest_root="$(cd -- "$project_dir" && pwd)/.agents/skills"
+  else dest_root="$(cd -- "$project_dir" && pwd)/.claude/skills"; fi
+elif [[ "$agent" == "codex" ]]; then
+  dest_root="${CODEX_HOME:-$HOME/.codex}/skills"
 else
   dest_root="$HOME/.claude/skills"
 fi
@@ -132,12 +140,12 @@ cat <<EOF
 Install complete (${SKILLS[*]}).
 
 Next steps:
-  1. Restart Claude Code (or run /reload) so the skills are picked up.
+  1. Claude Code: restart it (or run /reload). Codex: start a new session (skills are read at session start).
   2. Detect + provision the EDA toolchain (eda-install):
        bash "$src_dir/eda-install/bootstrap.sh" --dry-run   # plan only; drop --dry-run to install + pin
      or just verify what is already discoverable:
        bash "$dest_root/eda-install/scripts/flow/check_env.sh"
-  3. In a Claude Code session, ask e.g. "set up the EDA tools" (eda-install),
+  3. In a Claude Code or Codex session, ask e.g. "set up the EDA tools" (eda-install),
      "take this RTL through to GDS on nangate45" (signoff-loop),
      "build the graph dataset for this design" (def-graph), or
      "expand the netlist-graph corpus from these RTL repos" (rtl-acquire).

@@ -29,7 +29,7 @@
 - [使用 r2g](#使用-r2g)
 - [两种数据集](#两种数据集)
 - [结论为什么可信](#结论为什么可信)
-- [Claude Code 技能](#claude-code-技能)
+- [Codex 技能](#codex-技能)
 - [平台支持](#平台支持)
 - [验证情况](#验证情况)
 - [仓库结构](#仓库结构)
@@ -44,7 +44,7 @@
 | **自动修复** | 读日志、诊断失败、选用学到的修法、重跑并复核；每次运行都写入经验库，下一次修得更好。 |
 | **可直接训练的数据集** | 签核通过的设计转成 PyTorch Geometric **图数据集**或 GCell **图像数据集**，逐项独立复核。 |
 | **模型自选** | DeepSeek、通义千问、Kimi、智谱 GLM、豆包、OpenAI、Gemini、Claude 或本地 Ollama，配置一次即可使用。 |
-| **三种用法** | 网页、命令行，或接入 Claude Code / 任意 MCP 客户端。 |
+| **三种用法** | 网页、命令行，或接入 Codex、Claude Code 等任意 MCP 客户端。 |
 
 ## 工作流程
 
@@ -162,7 +162,7 @@ r2g check-model                          # 测试模型连通与工具调用
 r2g run --example counter8               # 不经过对话，直接运行
 r2g status                               # 查看任务
 r2g chat                                 # 在终端里对话
-r2g mcp                                  # 作为 MCP 服务器，接入 Claude Code、Cursor 等
+r2g mcp                                  # 作为 MCP 服务器，接入 Codex、Claude Code、Cursor 等
 ```
 
 ## 两种数据集
@@ -187,10 +187,10 @@ r2g mcp                                  # 作为 MCP 服务器，接入 Claude 
 
 设计文档：[`docs/agent/AGENT_DESIGN.md`](docs/agent/AGENT_DESIGN.md)。
 
-## Claude Code 技能
+## Codex 技能
 
-agent 背后的引擎以四个 [Claude Code](https://claude.com/claude-code) 技能发布，也可以直接使用：
-先对 Claude 说“装好 EDA 工具”，再说“在 nangate45 上把这个 UART 按 100 MHz 综合到 GDS”。
+agent 背后的引擎以四个标准 `SKILL.md` 格式的技能发布，已在 [OpenAI Codex](https://github.com/openai/codex)
+（GPT）中测试通过，也可以直接使用：先对 Codex 说“装好 EDA 工具”，再说“在 nangate45 上把这个 UART 按 100 MHz 综合到 GDS”。
 
 | 技能 | 作用 |
 |---|---|
@@ -200,11 +200,19 @@ agent 背后的引擎以四个 [Claude Code](https://claude.com/claude-code) 技
 | [`def-graph`](r2g-skills/def-graph/SKILL.md) | 从签核通过的 DEF/LEF/SPEF 构建 PyG 图数据集与图像数据集 |
 
 ```bash
-bash r2g-skills/install.sh --user          # 四个技能安装到 ~/.claude/skills/
+bash r2g-skills/install.sh --codex --user          # 四个技能安装到 ~/.codex/skills/（或 $CODEX_HOME/skills/）
 ```
 
-之后重启 Claude Code 或执行 `/reload`。其他方式：`--project .`（仅限当前项目）、`--link`
-（符号链接，修改无需重装）、`--force`（覆盖）、`--uninstall`（卸载）。
+之后新开一个 Codex 会话即可（技能在会话开始时读取）。其他方式：`--project .`（安装到 `./.agents/skills/`，
+仅限当前仓库）、`--link`（符号链接，修改无需重装）、`--force`（覆盖）、`--uninstall`（卸载）。这些技能同样
+适用于 Claude Code：去掉 `--codex` 即安装到 `~/.claude/skills/`（配合 `--project` 时为 `./.claude/skills/`）。
+
+流程会在 OpenROAD-flow-scripts 目录（`$ORFS_ROOT/flow`）中写入工作文件，而 Codex 默认沙箱只允许写工作区，
+需要把该目录也设为可写：
+
+```bash
+codex --add-dir "$ORFS_ROOT/flow"          # 或在 ~/.codex/config.toml 的 sandbox_workspace_write.writable_roots 中加入
+```
 
 <details>
 <summary><b>依赖</b></summary>
@@ -245,7 +253,7 @@ bash r2g-skills/bootstrap.sh --dry-run     # 检测工具、PDK、torch 环境�
 sudo apt install build-essential cmake git python3 python3-pip iverilog klayout tcl-dev libboost-dev flex bison
 git clone --recursive https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts ~/OpenROAD-flow-scripts
 cd ~/OpenROAD-flow-scripts && sudo ./etc/DependencyInstaller.sh && ./build_openroad.sh --local
-echo 'export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"' >> ~/.claude/skills/signoff-loop/references/env.local.sh
+echo 'export ORFS_ROOT="$HOME/OpenROAD-flow-scripts"' >> ~/.codex/skills/signoff-loop/references/env.local.sh
 ```
 
 **方式 C：OSS CAD Suite 加单独的 OpenROAD：**
@@ -269,7 +277,7 @@ export OPENROAD_EXE="/usr/bin/openroad"
 export KLAYOUT_CMD="/usr/bin/klayout"
 ```
 
-**`env.local.sh`**：位于 `~/.claude/skills/signoff-loop/references/env.local.sh`，从 `env.local.sh.template` 复制。
+**`env.local.sh`**：位于 `~/.codex/skills/signoff-loop/references/env.local.sh`，从 `env.local.sh.template` 复制。
 所有键都是可选的，只需填写自动探测出错的项。也可以放在任意位置，然后 `export R2G_ENV_FILE=/path/to/your-env.sh`。
 
 | 变量 | 依次检查（第一个命中即用） |
@@ -301,7 +309,7 @@ bash /tmp/miniconda.sh -b -p "$HOME/miniconda3"
 **验证配置：**
 
 ```bash
-bash ~/.claude/skills/signoff-loop/scripts/flow/check_env.sh
+bash ~/.codex/skills/signoff-loop/scripts/flow/check_env.sh
 ```
 
 运行流程前，所有**必需**项都必须显示 `ok`；可选项显示 `skip` 不影响。nangate45 只需必需工具加 KLayout。
@@ -315,10 +323,10 @@ bash ~/.claude/skills/signoff-loop/scripts/flow/check_env.sh
 </details>
 
 <details>
-<summary><b>不通过 Claude Code，直接使用脚本</b></summary>
+<summary><b>不通过 agent，直接使用脚本</b></summary>
 
 ```bash
-SKILL=~/.claude/skills/signoff-loop
+SKILL=~/.codex/skills/signoff-loop
 PROJ=design_cases/my_counter
 
 python3 $SKILL/scripts/project/init_project.py my_counter          # 生成项目骨架
@@ -341,7 +349,7 @@ bash $SKILL/scripts/flow/run_lvs.sh $PROJ nangate45
 bash $SKILL/scripts/flow/run_rcx.sh $PROJ nangate45
 
 R2G_GRAPH_PYTHON=/path/to/venv/bin/python \
-bash ~/.claude/skills/def-graph/scripts/flow/run_graphs.sh $PROJ nangate45              # 数据集
+bash ~/.codex/skills/def-graph/scripts/flow/run_graphs.sh $PROJ nangate45              # 数据集
 # -> dataset/{b..f}_graph.pt（HeteroData；R2G_GRAPH_KIND=homo|both）、netlist_graph.pt、graph_manifest.json
 ```
 
@@ -455,7 +463,7 @@ r2g-skills/
 ├── install.sh            # agent 与工具链的一键安装器
 ├── agent/                # r2g agent：命令行、网页服务、MCP 服务、模型适配
 ├── webui/                # 网页前端源码（构建到 agent/r2g_agent/web/dist）
-├── r2g-skills/           # 四个 Claude Code 技能（安装到 ~/.claude/skills/）
+├── r2g-skills/           # 四个 agent 技能（安装到 ~/.codex/skills/ 或 ~/.claude/skills/）
 │   ├── eda-install/      #   检测 → 安装 → 验证工具链
 │   ├── rtl-acquire/      #   大规模 RTL 获取与仅综合网表图
 │   ├── signoff-loop/     #   RTL → GDS、签核、修复循环与经验库
