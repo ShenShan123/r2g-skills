@@ -161,6 +161,12 @@ def start_job(designs: list, platform: str = "nangate45", output: str = "graph",
                     return {"error": "no Verilog/SystemVerilog (.v/.sv) files under %s" % p}
             except ValueError as e:
                 return {"error": str(e)}
+            if not replay_map():
+                # the top module is settled before the design takes a queue slot: an undecidable top used to
+                # surface minutes later as "内部错误：cannot infer the top module", a wrong one as a synthesis failure
+                err = _check_top(p, top, check_named=len(designs) <= 200)
+                if err:
+                    return {"error": err}
             sources.append({"name": d.get("name") or p.stem, "path": str(p.resolve()), "top": top})
         else:
             return {"error": "each design needs 'example' or 'path'"}
@@ -434,6 +440,26 @@ def disk_usage() -> dict:
 def cancel_job(job_id: str) -> dict:
     result = RT.pipeline.cancel(job_id)
     return {"job_id": job_id, **result} if result else {"error": "no such job"}
+
+
+def _check_top(p: Path, top: str | None, check_named: bool = True) -> str | None:
+    """None when the design's top module is decided, else the message for the user."""
+    from . import batch
+    try:
+        if top is None:
+            c = batch._candidate(p, p.name if p.is_dir() else p.stem)
+            if c["problem"]:
+                tops, _ = project_mod.module_candidates(project_mod.find_hdl(p))
+                return "%s：%s。请为该设计指定顶层模块 top%s" % (
+                    p.name, c["problem"], "（候选：%s）" % ", ".join(tops[:20]) if tops else "")
+        elif check_named:
+            _, defined = project_mod.module_candidates(project_mod.find_hdl(p))
+            if defined and top not in defined:
+                return "%s：RTL 中没有名为 %s 的模块（已定义：%s）" % (
+                    p.name, top, ", ".join(defined[:20]) + ("…" if len(defined) > 20 else ""))
+    except (ValueError, OSError) as e:
+        return "%s：%s" % (p.name, e)
+    return None
 
 
 @tool("Run designs of an earlier job again as a NEW job with the same platform, output and parameters "

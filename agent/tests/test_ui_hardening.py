@@ -432,3 +432,16 @@ def test_deleting_a_job_removes_its_emptied_orfs_design_folder_only(monkeypatch,
     assert not (flow / "designs/nangate45/d").exists() and (flow / "designs/nangate45").is_dir()
     assert (shared / "someone_else__x").is_dir() and not (shared / project.name).exists()
     pipe.pool.shutdown()
+
+
+def test_job_with_an_undecidable_or_missing_top_is_refused_at_submit(monkeypatch):
+    """2026-11-25 (live API test): a folder with two uninstantiated modules was accepted and failed minutes later as
+    "内部错误：cannot infer the top module"; a top that no file defines was accepted and failed in synthesis."""
+    c = _client(monkeypatch)
+    two = b"module top_a(input a, output y); assign y = a; endmodule\nmodule top_b(input a, output y); assign y = ~a; endmodule\n"
+    u = c.post("/api/upload", files=_files(("d/two.v", two))).json()
+    r = c.post("/api/jobs", json={"designs": [{"path": u["path"] + "/d"}]})
+    assert r.status_code == 400 and "top_a" in r.json()["detail"] and "top_b" in r.json()["detail"]
+    r = c.post("/api/jobs", json={"designs": [{"path": u["path"] + "/d", "top": "nosuch"}]})
+    assert r.status_code == 400 and "nosuch" in r.json()["detail"]
+    assert c.post("/api/jobs", json={"designs": [{"path": u["path"] + "/d", "top": "top_b"}]}).status_code == 200
