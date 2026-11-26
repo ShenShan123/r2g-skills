@@ -57,6 +57,11 @@ class StopUnconfirmed(Exception):
     pass
 
 
+class ShuttingDown(Exception):
+    """The server is stopping: leave the design as it is (running, owner gone);
+    the next server restarts it without counting the stop as a crash."""
+
+
 MAX_RESTARTS = 2
 
 
@@ -203,12 +208,14 @@ class Pipeline:
         # skills refuse to write); every stage reads and writes this copy
         self.knowledge = knowledge.ensure() if ingest else {"action": "disabled"}
         self._cancel: set[str] = set()
+        self._shutting_down = False
         self.stop_grace = 10.0
         self._lock = threading.Lock()
 
     # -- public -------------------------------------------------------------
     def submit(self, sources: list[dict], platform: str = "nangate45", title: str = "",
-               output: str = "graph", params: dict | None = None, session_id: str | None = None) -> str:
+               output: str = "graph", params: dict | None = None, session_id: str | None = None,
+               retry_of: str | None = None) -> str:
         """sources: [{"name":..., "path":..., "top": optional}]"""
         if output not in OUTPUTS:
             raise ValueError("output must be one of %s" % ", ".join(OUTPUTS))
@@ -219,10 +226,13 @@ class Pipeline:
             while name in seen:
                 name += "_x"
             seen.add(name)
-            designs.append({"name": name, "detail": {"source": str(s["path"]), "top": s.get("top")}})
+            designs.append({"name": name, "detail": {"source": str(s["path"]), "top": s.get("top"),
+                                                     "requested_top": s.get("top")}})
         spec = {"platform": platform, "output": output, "sources": sources, "params": params or {}}
         if session_id:
             spec['session_id'] = session_id
+        if retry_of:
+            spec['retry_of'] = retry_of
         jid = self.store.create_job(title or "%d 个设计 · %s · %s" % (len(designs), platform, output),
                                     spec, designs)
         ws = r2g_home() / "workspace" / jid
@@ -240,6 +250,12 @@ class Pipeline:
     def shutdown(self) -> None:
         """Server stopping: stop every running stage group (the designs restart on
         the next start, so nothing may keep writing to their FLOW_VARIANT)."""
+        self._shutting_down = True
+        try:
+            # a deliberate stop is not a crash: the restart does not count against MAX_RESTARTS
+            self.store.mark_owner_stopped(OWNER)
+        except Exception:                                       # noqa: BLE001
+            pass
         with self._lock:
             procs = list(self._procs.values())
         for p in procs:
@@ -302,7 +318,9 @@ class Pipeline:
         n_ok = sts.count(PASSED)
         status = CANCELLED if self.store.cancel_requested(jid) else ("done" if n_ok else FAILED)
         result = {"passed": n_ok, "total": len(sts)}
-        if n_ok and not self.store.deletion('job', jid):
+        # a signoff-only job builds no dataset: packaging it failed on the missing
+        # dataset/ folder and every such job read "package_error"
+        if n_ok and (j.get("spec") or {}).get("output") != "signoff" and not self.store.deletion('job', jid):
             from .package import package_job
             try:
                 result["package"] = str(package_job(self.store, jid))
@@ -364,13 +382,23 @@ class Pipeline:
                     else:
                         self.store.event(jid, d["name"], "job", "warn", "停止尚未确认，保留执行记录供核对")
                     continue
-                if d["status"] == RUNNING:
-                    stop_orphan(det.get("pgid"), d["project"])
+                if d["status"] == RUNNING and det.get("pgid"):
+                    # the dead server's stage, found by its execution marker too: GNU `timeout`
+                    # puts the ORFS make tree in its own process group, so stopping only the
+                    # recorded group left it running, still holding the run_orfs.sh workspace
+                    # lock, and the restarted design failed at once with "another run holds
+                    # the ORFS workspace" (kill -9 test, 2026-11-25)
+                    if not stop_execution(det.get("pgid"), d["project"], self.stop_grace,
+                                          expected_start=det.get("process_start"),
+                                          execution_id=det.get("execution_id")):
+                        stop_orphan(det.get("pgid"), d["project"])
                 if not det.get("source") or not d.get("project"):
                     self.store.set_design(jid, d["name"], status=FAILED,
                                           detail={"failed_stage": d["stage"], "reason": "记录不完整，无法恢复（可重新提交）"})
                     continue
-                restarts = int(det.get("restarts") or 0) + (1 if d["status"] == RUNNING else 0)
+                # a design stopped by a clean server shutdown restarts without a strike
+                crashed = d["status"] == RUNNING and not det.get("graceful_stop")
+                restarts = int(det.get("restarts") or 0) + (1 if crashed else 0)
                 if restarts > MAX_RESTARTS:
                     msg = "运行中被中断了 %d 次，不再重试（可单独重新提交）" % restarts
                     self.store.set_design(jid, d["name"], status=FAILED,
@@ -378,10 +406,11 @@ class Pipeline:
                     self.store.event(jid, d["name"], d["stage"], "fail", msg)
                     continue
                 self.store.set_design(jid, d["name"], status="pending", stage="prepare",
-                                      detail={"restarts": restarts})
+                                      detail={"restarts": restarts, "graceful_stop": None})
                 self.store.event(jid, d["name"], "prepare", "warn",
                                  "服务重启后从头重新运行" if d["status"] == RUNNING else "服务重启后继续排队")
-                self.pool.submit(self._run_design, jid, d["name"], Path(det["source"]), det.get("top"),
+                top = det["requested_top"] if "requested_top" in det else det.get("top")
+                self.pool.submit(self._run_design, jid, d["name"], Path(det["source"]), top,
                                  Path(d["project"]), spec.get("platform", "nangate45"), spec.get("output", "graph"))
                 n += 1
             if n:
@@ -471,6 +500,8 @@ class Pipeline:
                                                      'timestamp': time.time()}) + '\n')
                     raise StopUnconfirmed("无法确认子进程已停止，未标记为已取消")
                 p.wait()
+        if self._shutting_down:
+            raise ShuttingDown()
         self._check_cancel(jid)
         return rc
 
@@ -510,6 +541,8 @@ class Pipeline:
     def _run_design_locked(self, jid: str, name: str, src: Path, top: str | None, pdir: Path,
                            platform: str, output: str = "graph") -> None:
         def stop():
+            if self._shutting_down:
+                raise ShuttingDown()
             self._check_cancel(jid)
 
         def waiting():
@@ -533,7 +566,7 @@ class Pipeline:
                         if freed:
                             self.store.event(jid, name, "job", "info", "已删除中间版图文件 %.1f MB（数据集与报告保留）"
                                              % (freed / 1e6))
-                except StopUnconfirmed:
+                except (StopUnconfirmed, ShuttingDown):
                     safe_cleanup = False
                     raise
                 finally:
@@ -542,6 +575,8 @@ class Pipeline:
                     if freed:
                         self.store.event(jid, name, "job", "info",
                                          "已清理 ORFS 目录中的重复中间文件 %.1f MB" % (freed / 1e6))
+        except ShuttingDown:
+            return
         except Cancelled:
             self.store.set_design(jid, name, status=CANCELLED)
             self.store.event(jid, name, "job", "cancel", "已取消")
@@ -549,6 +584,8 @@ class Pipeline:
             self.store.set_design(jid, name, detail={"reason": str(e)})
             self.store.event(jid, name, "job", "warn", str(e))
         except Exception as e:                                   # noqa: BLE001
+            if self._shutting_down:
+                return
             if self.store.cancel_requested(jid):
                 self.store.set_design(jid, name, status=CANCELLED)
                 self.store.event(jid, name, "job", "cancel", "已取消")
@@ -608,7 +645,11 @@ class Pipeline:
                         self._ok(jid, name, "synth", "检测到源码解析失败，尝试 Slang 前端", {"recipe": h["id"]})
                         rc = self._sh(jid, name, "frontend", attempt["command"], pdir)
                         if rc != 0:
-                            raise ValueError("Slang 转换失败（rc=%s），见 agent_logs/frontend.log" % rc)
+                            # say what is wrong with the RTL (file:line from either parser), not
+                            # only that the fallback parser failed: a plain syntax error used to
+                            # read "Slang 转换失败（rc=1），见 agent_logs/frontend.log"
+                            raise ValueError("综合失败：%s；Slang 前端也无法解析（rc=%s，见 agent_logs/frontend.log）"
+                                             % (self._frontend_error(pdir) or self._last_error(pdir), rc))
                         meta = proj.activate_slang(pdir, attempt)
                     except (OSError, ValueError) as exc:
                         self._fail(jid, name, "synth", str(exc), {
@@ -885,7 +926,7 @@ class Pipeline:
         try:
             rc = self._sh(jid, name, "ingest", ["python3", str(ing), str(pdir), "--db",
                                                 knowledge.env()["R2G_KNOWLEDGE_DB"]], pdir, timeout=600)
-        except Cancelled:
+        except (Cancelled, ShuttingDown):
             raise
         except Exception as e:                                    # noqa: BLE001
             rc, err = -1, str(e)
@@ -930,6 +971,16 @@ class Pipeline:
             return "\n".join(p.read_text(errors="replace").splitlines()[-n:])
         except OSError:
             return ""
+
+    @staticmethod
+    def _frontend_error(pdir: Path) -> str:
+        """The first `file:line:col: error: what` of the Slang frontend log, path dropped."""
+        try:
+            text = (pdir / "agent_logs" / "frontend.log").read_text(errors="replace")
+        except OSError:
+            return ""
+        m = re.search(r"([^\s/]+:\d+(?::\d+)?): error: ([^\n]{0,140})", text)
+        return "%s：%s" % (m.group(1), m.group(2).strip()) if m else ""
 
     @staticmethod
     def _last_error(pdir: Path) -> str:

@@ -31,10 +31,48 @@ def _candidate(d: Path, name: str) -> dict:
     return c
 
 
+def _root(path) -> Path:
+    """A folder named by the user: required, absolute (a relative one would be
+    resolved against the server's own working directory), an existing directory."""
+    text = str(path or "").strip()
+    if not text:
+        raise ValueError("请填写服务器上的目录路径")
+    p = Path(text).expanduser()
+    if not p.is_absolute():
+        raise ValueError("请填写绝对路径（以 / 开头）：%s" % text)
+    p = p.resolve()
+    if not p.exists():
+        raise ValueError("目录不存在：%s" % p)
+    if not p.is_dir():
+        raise ValueError("不是一个目录：%s" % p)
+    return p
+
+
+def inspect(path) -> dict:
+    """One folder (or file) as ONE design: its HDL files, the top module r2g
+    would pick, and -- when it cannot pick -- the candidates the user chooses from."""
+    text = str(path or "").strip()
+    p = Path(text).expanduser()
+    if not text or not p.is_absolute():
+        raise ValueError("请填写绝对路径（以 / 开头）：%s" % text)
+    p = p.resolve()
+    if not p.exists():
+        raise ValueError("路径不存在：%s" % p)
+    if not project.probe_hdl(p):
+        raise ValueError("没有找到 .v / .sv 文件：%s" % p)
+    files = project.find_hdl(p)
+    tops, defined = project.module_candidates(files)
+    c = _candidate(p, p.name if p.is_dir() else p.stem)
+    c.update(candidates=tops, modules=len(defined),
+             file_names=[str(f.relative_to(p)) if p.is_dir() else f.name for f in files][:50])
+    if not defined:
+        c["problem"] = "没有找到任何 module 定义（文件为空或不是 Verilog）"
+    return c
+
+
 def scan(root: Path) -> dict:
-    root = Path(root).expanduser().resolve()
-    if not root.is_dir():
-        raise ValueError("不是一个目录：%s" % root)
+    root = _root(root)
+    project.probe_hdl(root, max_entries=2_000_000)     # refuse "/" before walking it per subfolder
     subs = sorted(d for d in root.iterdir() if d.is_dir() and not d.name.startswith((".", "_")))
     designs = [_candidate(d, d.name) for d in subs if project.find_hdl(d)]
     if not designs and project.find_hdl(root):

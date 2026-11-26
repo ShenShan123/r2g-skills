@@ -212,6 +212,12 @@ class JobStore:
                             (new_owner, time.time(), jid, name, old_owner))
             return cur.rowcount == 1
 
+    def mark_owner_stopped(self, owner: str) -> None:
+        """Flag this process's running designs as stopped by a clean shutdown."""
+        with self._lock, self._conn(write=True) as c:
+            c.execute("UPDATE designs SET detail=json_set(COALESCE(detail,'{}'), '$.graceful_stop', 1) "
+                      "WHERE status='running' AND json_extract(COALESCE(detail,'{}'), '$.owner')=?", (owner,))
+
     def job(self, jid: str) -> dict | None:
         with self._conn() as c:
             r = c.execute("SELECT * FROM jobs WHERE id=?", (jid,)).fetchone()
@@ -222,12 +228,35 @@ class JobStore:
         out["designs"] = [_row(d) for d in ds]
         return out
 
-    def jobs(self, limit: int = 50) -> list[dict]:
+    @staticmethod
+    def _job_filter(status: str | None, q: str | None) -> tuple[str, list]:
+        where, args = [], []
+        if status == "active":
+            where.append("status IN ('running','pending','cancelling','finalizing')")
+        elif status:
+            where.append("status=?")
+            args.append(status)
+        if q:
+            where.append("(title LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\')")
+            like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            args += [like, like]
+        return (" WHERE " + " AND ".join(where)) if where else "", args
+
+    def count_jobs(self, status: str | None = None, q: str | None = None) -> int:
+        where, args = self._job_filter(status, q)
         with self._conn() as c:
-            rs = c.execute("SELECT * FROM jobs ORDER BY created DESC LIMIT ?", (limit,)).fetchall()
+            return c.execute("SELECT COUNT(*) FROM jobs" + where, args).fetchone()[0]
+
+    def jobs(self, limit: int = 50, offset: int = 0, status: str | None = None, q: str | None = None) -> list[dict]:
+        where, args = self._job_filter(status, q)
+        with self._conn() as c:
+            rs = c.execute("SELECT * FROM jobs%s ORDER BY created DESC LIMIT ? OFFSET ?" % where,
+                           (*args, limit, offset)).fetchall()
             out = []
             for r in rs:
                 j = _row(r)
+                dl = c.execute("SELECT status FROM deletions WHERE kind='job' AND target=?", (r["id"],)).fetchone()
+                j["deletion"] = dl["status"] if dl else None
                 counts = c.execute("SELECT status, COUNT(*) n FROM designs WHERE job_id=? GROUP BY status",
                                    (r["id"],)).fetchall()
                 j["counts"] = {x["status"]: x["n"] for x in counts}

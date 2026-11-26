@@ -33,7 +33,13 @@ export default function Layout() {
     document.documentElement.dataset.theme = theme;
     try { localStorage.setItem("r2g-theme-v2", theme); } catch { /* private mode */ }
   }, [theme]);
-  useEffect(() => { api.config().then((c) => setModel(c.model_resolved)).catch(() => {}); }, []);
+  // re-read after Settings saves (the sidebar used to keep showing the old model until a reload)
+  useEffect(() => {
+    const load = () => api.config().then((c) => setModel(c.model_resolved)).catch(() => {});
+    load(); window.addEventListener("r2g-config", load);
+    return () => window.removeEventListener("r2g-config", load);
+  }, []);
+  const ready = !!model?.model && (model.has_key || model.needs_key === false);
   const navCls = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition ${isActive
       ? "bg-accent/10 text-accent font-medium" : "text-muted hover:bg-panel2 hover:text-fg"}`;
@@ -59,8 +65,8 @@ export default function Layout() {
             <span className="min-w-0 flex-1">
               {t("设置")}
               <span className="flex items-center gap-1.5 text-xs font-normal text-faint">
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${model?.has_key ? "bg-ok" : "bg-warn"}`} />
-                <span className="truncate">{model ? (model.has_key ? model.model : t("模型未配置")) : "…"}</span>
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${ready ? "bg-ok" : "bg-warn"}`} />
+                <span className="truncate">{model ? (ready ? model.model : t("模型未配置")) : "…"}</span>
               </span>
             </span>
           </NavLink>

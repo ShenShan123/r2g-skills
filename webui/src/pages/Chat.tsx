@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Send, Paperclip, X, ChevronDown, ChevronRight, Plus, MessageSquare, ExternalLink, AlertCircle,
-         Loader2, CheckCircle2, XCircle, Brain, History } from "lucide-react";
+         Loader2, CheckCircle2, XCircle, Brain, History, Square } from "lucide-react";
 import { api, chatStream } from "../lib/api";
 import { Md, Logo } from "../components/ui";
 import DeleteResource from "../components/DeleteResource";
@@ -11,13 +11,14 @@ type Part =
   | { kind: "text"; text: string }
   | { kind: "thinking"; text: string }
   | { kind: "tool"; id: string; name: string; args: any; result?: any };
-type Msg = { role: "user" | "assistant"; parts: Part[]; error?: string };
+type Msg = { role: "user" | "assistant"; parts: Part[]; error?: string; stopped?: boolean };
 
 const TOOL_LABEL: Record<string, string> = {
   list_examples: "查看内置示例", start_job: "提交任务", job_status: "查询任务进度", list_jobs: "列出任务",
   design_detail: "查看设计详情", read_log: "读取日志", diagnose: "请修复引擎诊断", knowledge_lookup: "查询故障知识库",
   cancel_job: "取消任务", dataset_info: "查询数据集", check_environment: "检查工具链", read_rtl: "读取源码",
   search_rtl: "在 GitHub 上搜索 RTL", fetch_rtl: "下载仓库并列出设计", disk_usage: "查看磁盘占用",
+  scan_batch: "扫描批量目录", start_batch: "提交批量任务", flow_params: "查看流程参数", retry_designs: "重新运行设计",
 };
 const SUGGEST = [
   "帮我在 GitHub 上找一个小的 UART 设计，跑一遍生成图数据集",
@@ -55,11 +56,24 @@ export default function Chat() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [att, setAtt] = useState<{ path: string; name: string; files: number } | null>(null);
+  const [att, setAtt] = useState<{ path: string; name: string; files: number; id: string } | null>(null);
+  // an attachment uploaded but never sent is removed again (replaced, cleared, or the page left)
+  const unsent = useRef<string | null>(null);
+  const dropAttachment = () => { if (unsent.current) api.deleteUpload(unsent.current, true).catch(() => {}); unsent.current = null; };
+  useEffect(() => {
+    window.addEventListener("pagehide", dropAttachment);
+    return () => { window.removeEventListener("pagehide", dropAttachment); dropAttachment(); };
+  }, []);
   const [attBusy, setAttBusy] = useState(false);
   const [attErr, setAttErr] = useState("");
   const [hist, setHist] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [elsewhere, setElsewhere] = useState(false);   // this conversation is still answering (sent before a reload)
+  const [openErr, setOpenErr] = useState("");
   const end = useRef<HTMLDivElement>(null);
+  // the stream on screen; switching conversations stops READING it (the server finishes the turn)
+  const reading = useRef<{ token: number; abort: AbortController } | null>(null);
+  const tokens = useRef(0);
   const dirInput = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
 
@@ -74,8 +88,38 @@ export default function Chat() {
     if (q) { setInput(q); setSid(null); setMsgs([]); setParams({}, { replace: true }); setTimeout(() => box.current?.focus(), 0); }
   }, [params, setParams]);
 
+  function detach() {
+    reading.current?.abort.abort();
+    reading.current = null;
+    setBusy(false); setStopping(false); setElsewhere(false);
+  }
+  function fresh() { detach(); setSid(null); setMsgs([]); setHist(false); setOpenErr(""); }
+
   async function open(id: string) {
-    setHist(false); setSid(id); const s = await api.session(id); setMsgs(fromStored(s.messages));
+    detach(); setHist(false); setSid(id); setOpenErr("");
+    try {
+      const s = await api.session(id);
+      setMsgs(fromStored(s.messages)); setElsewhere(!!s.busy);
+    } catch (e: any) { setMsgs([]); setOpenErr(tb(e.message)); }
+  }
+  // a conversation still answering (sent from another tab, or before a reload): show it when it ends
+  useEffect(() => {
+    if (!elsewhere || !sid) return;
+    let alive = true;
+    const timer = setInterval(async () => {
+      try {
+        const s = await api.session(sid);
+        if (!alive) return;
+        if (!s.busy) { setMsgs(fromStored(s.messages)); setElsewhere(false); loadSessions(); }
+      } catch { /* deleted or offline: keep the banner until the user moves on */ }
+    }, 2000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [elsewhere, sid]);
+
+  async function stop() {
+    if (!sid || stopping) return;
+    setStopping(true);
+    try { await api.stopChat(sid); } catch { setStopping(false); }
   }
 
   async function attach(list: File[]) {
@@ -86,17 +130,34 @@ export default function Chat() {
     try {
       const up = await api.upload(keep);
       const rel = ((keep[0] as any).webkitRelativePath || keep[0].name) as string;
-      setAtt({ path: up.path, name: rel.split("/")[0], files: up.files.length });
+      const folder = rel.includes("/") ? rel.split("/")[0] : "";
+      // the folder itself, so the design is named after it (not after the upload id)
+      const path = folder ? `${up.path}/${folder}` : up.path;
+      // a folder with no module at all can never run: say so now, not after a failed job
+      const info = await api.inspect(path).catch(() => null);
+      if (info && info.modules === 0) {
+        api.deleteUpload(up.id).catch(() => {});
+        setAttErr(tb(info.problem) || t("这个文件夹里没有 .v / .sv 文件")); return;
+      }
+      dropAttachment(); unsent.current = up.id;
+      setAtt({ path, name: folder || rel, files: up.files.length, id: up.id });
     } catch (e: any) { setAttErr(tb(e.message)); } finally { setAttBusy(false); }
   }
 
   async function send(typed: string) {
-    if ((!typed.trim() && !att) || busy) return;
+    if ((!typed.trim() && !att) || busy || elsewhere) return;
     // the model reads the attachment as a path it can pass to start_job
     const text = att ? `[附件] 已上传 RTL 文件夹 ${att.name}（${att.files} 个文件），路径：${att.path}\n${typed}` : typed;
-    setInput(""); setAtt(null); setBusy(true);
+    const token = ++tokens.current;
+    const abort = new AbortController();
+    reading.current = { token, abort };
+    const mine = () => reading.current?.token === token;
+    if (att) unsent.current = null;          // sent: the job (or the conversation) now refers to it
+    setInput(""); setAtt(null); setBusy(true); setStopping(false);
     setMsgs((m) => [...m, { role: "user", parts: [{ kind: "text", text }] }, { role: "assistant", parts: [] }]);
-    const upd = (f: (a: Msg) => void) => setMsgs((m) => {
+    // events of a stream the user has moved away from are dropped, never written into another conversation
+    const upd = (f: (a: Msg) => void) => mine() && setMsgs((m) => {
+      if (!m.length || m[m.length - 1].role !== "assistant") return m;
       const c = m.slice(); const a = { ...c[c.length - 1], parts: c[c.length - 1].parts.slice() }; f(a); c[c.length - 1] = a; return c;
     });
     const append = (kind: "text" | "thinking", delta: string) => upd((a) => {
@@ -106,7 +167,9 @@ export default function Chat() {
     });
     try {
       await chatStream(text, sid, (e) => {
+        if (!mine()) return;
         if (e.type === "session") setSid(e.session_id);
+        else if (e.type === "stopped") upd((a) => { a.stopped = true; });
         else if (e.type === "text") append("text", e.delta);
         else if (e.type === "thinking") append("thinking", e.delta);
         else if (e.type === "tool_call") upd((a) => { a.parts.push({ kind: "tool", id: e.id, name: e.name, args: e.arguments }); });
@@ -114,14 +177,17 @@ export default function Chat() {
           a.parts = a.parts.map((p) => (p.kind === "tool" && p.id === e.id ? { ...p, result: e.result } : p));
         });
         else if (e.type === "error") upd((a) => { a.error = tb(e.message); });
-      });
-    } catch (err: any) { upd((a) => { a.error = tb(err.message); }); }
-    setBusy(false); loadSessions();
+      }, abort.signal);
+    } catch (err: any) {
+      if (err?.name !== "AbortError") upd((a) => { a.error = tb(err.message); });
+    }
+    if (mine()) { reading.current = null; setBusy(false); setStopping(false); }
+    loadSessions();
   }
 
   const history = (
     <>
-      <div className="p-3"><button className="btn-ghost w-full justify-center" onClick={() => { setSid(null); setMsgs([]); setHist(false); }}>
+      <div className="p-3"><button className="btn-ghost w-full justify-center" onClick={fresh}>
         <Plus size={15} /> {t("新对话")}</button></div>
       <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
         {sessions.filter((s) => s.title).map((s) => (
@@ -129,9 +195,9 @@ export default function Chat() {
           <button onClick={() => open(s.id)}
             className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm ${sid === s.id ? "bg-panel2 text-fg" : "text-muted"}`}>
             <MessageSquare size={14} className="shrink-0" /><span className="truncate">{s.title.replace(/^\[附件\] 已上传 RTL 文件夹 ([^（\s]+).*$/s, "📎 $1")}</span></button>
-          <DeleteResource kind="session" id={s.id} title={s.title} compact onDeleted={() => {
+          <DeleteResource kind="session" id={s.id} title={s.title} compact state={s.deletion} onDeleted={() => {
             setSessions(ss => ss.filter(x => x.id !== s.id));
-            if (sid === s.id) { setSid(null); setMsgs([]); setBusy(false); }
+            if (sid === s.id) fresh();
           }} />
           </div>))}
       </div>
@@ -148,11 +214,12 @@ export default function Chat() {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-2 border-b border-line px-3 py-2 lg:hidden">
           <button className="btn-ghost px-3 py-1.5" onClick={() => setHist(true)}><History size={15} /> {t("历史")}</button>
-          <button className="btn-ghost px-3 py-1.5" onClick={() => { setSid(null); setMsgs([]); }}><Plus size={15} /> {t("新对话")}</button>
+          <button className="btn-ghost px-3 py-1.5" onClick={fresh}><Plus size={15} /> {t("新对话")}</button>
         </div>
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
-            {msgs.length === 0 && (
+            {openErr && <div role="alert" className="mb-4 rounded-xl bg-bad/10 px-3 py-2 text-sm text-bad">{openErr}</div>}
+            {msgs.length === 0 && !openErr && (
               <div className="mt-8 text-center md:mt-14">
                 <div className="flex justify-center"><Logo size={44} /></div>
                 <h1 className="mt-4 text-xl font-bold md:text-2xl">{t("有什么可以帮你？")}</h1>
@@ -177,6 +244,7 @@ export default function Chat() {
                       : <ToolStep key={k} p={p} />)}
                     {busy && i === msgs.length - 1 && !m.error && m.parts.length === 0 && (
                       <div className="flex items-center gap-2 text-sm text-muted"><Loader2 size={14} className="animate-spin" /> {t("正在思考…")}</div>)}
+                    {m.stopped && <div className="text-xs text-faint">{t("（已停止）")}</div>}
                     {m.error && (
                       <div className="flex items-start gap-2 rounded-xl bg-bad/10 px-3 py-2 text-sm text-bad">
                         <AlertCircle size={16} className="mt-0.5 shrink-0" />
@@ -185,6 +253,10 @@ export default function Chat() {
                   </div>
                 </div>))}
             </div>
+            {elsewhere && (
+              <div className="mt-6 flex items-center gap-2 text-sm text-muted"><Loader2 size={14} className="animate-spin" />
+                {t("这个对话的上一条消息仍在回答中，完成后会自动显示。")}
+                <button type="button" className="text-accent hover:underline" onClick={stop}>{t("停止")}</button></div>)}
             <div ref={end} />
           </div>
         </div>
@@ -193,7 +265,7 @@ export default function Chat() {
             <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-sm">
               {attBusy && <span className="flex items-center gap-1.5 text-muted"><Loader2 size={13} className="animate-spin" /> {t("上传中…")}</span>}
               {att && <span className="chip bg-accent/10 text-accent"><Paperclip size={12} />{att.name}{t(" · {n} 个文件", { n: att.files })}
-                <button type="button" className="ml-1" aria-label={t("移除附件")} onClick={() => setAtt(null)}><X size={12} /></button></span>}
+                <button type="button" className="ml-1" aria-label={t("移除附件")} onClick={() => { dropAttachment(); setAtt(null); }}><X size={12} /></button></span>}
               {attErr && <span className="text-bad">{attErr}</span>}
             </div>)}
           <form className="mx-auto flex max-w-3xl items-end gap-2" onSubmit={(e) => { e.preventDefault(); send(input); }}>
@@ -206,7 +278,12 @@ export default function Chat() {
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
               placeholder={att ? t("说说要对这个设计做什么，例如：跑一遍生成图数据集") : t("输入问题，Enter 发送")}
               className="input min-h-[44px] resize-none py-2.5 text-[15px]" />
-            <button className="btn-primary h-[44px] shrink-0 px-4" aria-label={t("发送")} disabled={busy || (!input.trim() && !att)}><Send size={17} /></button>
+            {busy ? (
+              <button type="button" className="btn-ghost h-[44px] shrink-0 px-4" aria-label={t("停止回答")} title={t("停止回答（已经说的会保留）")}
+                onClick={stop} disabled={stopping || !sid}>
+                {stopping ? <Loader2 size={17} className="animate-spin" /> : <Square size={15} />}<span className="hidden sm:inline">{stopping ? t("正在停止…") : t("停止")}</span></button>
+            ) : (
+              <button className="btn-primary h-[44px] shrink-0 px-4" aria-label={t("发送")} disabled={elsewhere || (!input.trim() && !att)}><Send size={17} /></button>)}
           </form>
         </div>
       </div>

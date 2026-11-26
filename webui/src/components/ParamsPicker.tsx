@@ -107,6 +107,8 @@ export default function ParamsPicker({ value, onChange, platform = "nangate45" }
 export function cleanParams(p: Params | null): Params | undefined {
   if (!p) return undefined;
   const out: Params = {};
-  for (const [k, v] of Object.entries(p)) if (v !== null && v !== "" && v !== undefined) out[k] = v;
+  // inputs hold strings: send numbers, so the job record and dataset index carry 0.4, not "0.4"
+  for (const [k, v] of Object.entries(p)) if (v !== null && v !== "" && v !== undefined)
+    out[k] = typeof v === "string" && v.trim() !== "" && !isNaN(Number(v)) ? Number(v) : v;
   return Object.keys(out).length ? out : undefined;
 }

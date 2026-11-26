@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import hashlib
 import math
+import os
 import re
 import shutil
 from pathlib import Path
@@ -157,12 +158,8 @@ def _strip_param_overrides(text: str) -> str:
     return "".join(out)
 
 
-def infer_top(files: list[Path], hint: str | None = None) -> tuple[str, str]:
-    """(top, how). The module no other module instantiates.
-
-    If several are uninstantiated (e.g. an unused helper module in a library
-    file) and exactly one is named like `hint` (the folder), take it and say
-    so. Otherwise ambiguity is an error, never a guess."""
+def module_candidates(files: list[Path]) -> tuple[list[str], list[str]]:
+    """(uninstantiated modules, every defined module), in source order."""
     defined, used = [], set()
     for f in files:
         if f.suffix.lower() in (".vh", ".svh"):
@@ -173,7 +170,37 @@ def infer_top(files: list[Path], hint: str | None = None) -> tuple[str, str]:
             for typ, _inst in _INST_RE.findall(body.split("endmodule")[0]):
                 if typ not in _KEYWORDS:
                     used.add(typ)
-    tops = [m for m in dict.fromkeys(defined) if m not in used]
+    defined = list(dict.fromkeys(defined))
+    return [m for m in defined if m not in used], defined
+
+
+def probe_hdl(src: Path, max_entries: int = 200_000) -> int:
+    """Number of HDL files under `src`, walking at most `max_entries` entries.
+
+    Raises ValueError for a folder too large to be one design or one batch
+    (a mistyped "/" would otherwise make the server walk the whole disk)."""
+    src = Path(src)
+    if src.is_file():
+        return 1 if src.suffix.lower() in HDL_SUFFIXES else 0
+    seen = found = 0
+    for root, dirs, names in os.walk(src):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        seen += len(dirs) + len(names)
+        if seen > max_entries:
+            raise ValueError("目录下文件太多（超过 %d 个），请指向更具体的目录：%s" % (max_entries, src))
+        found += sum(1 for n in names if Path(n).suffix.lower() in HDL_SUFFIXES)
+    return found
+
+
+def infer_top(files: list[Path], hint: str | None = None) -> tuple[str, str]:
+    """(top, how). The module no other module instantiates.
+
+    If several are uninstantiated (e.g. an unused helper module in a library
+    file) and exactly one is named like `hint` (the folder), take it and say
+    so. Otherwise ambiguity is an error, never a guess."""
+    tops, defined = module_candidates(files)
+    if not defined:
+        raise ValueError("no module definition found in the HDL files")
     if len(tops) == 1:
         return tops[0], "自动识别（唯一未被例化的模块）"
     if hint:

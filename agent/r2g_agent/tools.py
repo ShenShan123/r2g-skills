@@ -18,6 +18,7 @@ from contextvars import ContextVar
 from pathlib import Path
 
 from . import diagnosis, knowledge, platforms
+from . import project as project_mod
 from .jobs import JobStore
 from .paths import examples_dir, repo_root, signoff_scripts, skills_dir
 from .pipeline import STAGE_LABEL, Pipeline
@@ -129,18 +130,38 @@ def list_examples() -> dict:
             "title": {"type": "string"}, "params": {"type": "object", "description": "flow parameters overriding r2g's measured defaults (omit to use the defaults; call flow_params first). Keys: period_ns, period_tiers, utilization, area_allowance, pdn_floor_um, die_side_um, io_pct, setup_uncertainty_pct, hold_uncertainty_ns, place_density_lb_addon"}}, ["designs"]))
 def start_job(designs: list, platform: str = "nangate45", output: str = "graph", title: str = "",
               params: dict | None = None) -> dict:
+    if not isinstance(designs, list):
+        return {"error": "designs must be a list of {example|path, top, name} objects"}
+    if len(designs) > 5000:
+        return {"error": "at most 5000 designs per job (got %d)" % len(designs)}
     sources = []
     for d in designs:
+        if not isinstance(d, dict):
+            return {"error": "each design must be an object with 'example' or 'path'"}
+        bad = [k for k in ("example", "path", "top", "name") if d.get(k) is not None and not isinstance(d[k], str)]
+        if bad:
+            return {"error": "design field %s must be a string" % bad[0]}
+        top = (d.get("top") or "").strip() or None
+        if top and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_$]*", top):
+            return {"error": "not a valid Verilog module name for top: %r" % top}
         if d.get("example"):
-            p = examples_dir() / d["example"]
-            if not p.is_dir():
+            if not re.fullmatch(r"[A-Za-z0-9_]+", d["example"]) or not (examples_dir() / d["example"]).is_dir():
                 return {"error": "no such example: %s" % d["example"]}
-            sources.append({"name": d.get("name") or d["example"], "path": str(p), "top": d.get("top")})
+            p = examples_dir() / d["example"]
+            sources.append({"name": d.get("name") or d["example"], "path": str(p), "top": top})
         elif d.get("path"):
             p = Path(d["path"]).expanduser()
+            if not p.is_absolute():
+                return {"error": "path must be absolute: %s" % d["path"]}
             if not p.exists():
                 return {"error": "path does not exist: %s" % p}
-            sources.append({"name": d.get("name") or p.stem, "path": str(p.resolve()), "top": d.get("top")})
+            try:
+                # (replay attaches a recorded job by name and reads no RTL)
+                if not replay_map() and not project_mod.probe_hdl(p):
+                    return {"error": "no Verilog/SystemVerilog (.v/.sv) files under %s" % p}
+            except ValueError as e:
+                return {"error": str(e)}
+            sources.append({"name": d.get("name") or p.stem, "path": str(p.resolve()), "top": top})
         else:
             return {"error": "each design needs 'example' or 'path'"}
     if not sources:
@@ -415,6 +436,53 @@ def cancel_job(job_id: str) -> dict:
     return {"job_id": job_id, **result} if result else {"error": "no such job"}
 
 
+@tool("Run designs of an earlier job again as a NEW job with the same platform, output and parameters "
+      "(the old job and its results stay as they are). By default every failed or cancelled design; "
+      "or name the designs to re-run.",
+      _obj({"job_id": {"type": "string"},
+            "designs": {"type": "array", "items": {"type": "string"}, "description": "design names (optional)"}},
+           ["job_id"]))
+def retry_designs(job_id: str, designs: list | None = None) -> dict:
+    j = RT.store.job(job_id)
+    if not j:
+        return {"error": "no such job"}
+    if RT.store.deletion("job", job_id):
+        return {"error": "job is being deleted"}
+    if designs is not None and (not isinstance(designs, list) or not all(isinstance(n, str) for n in designs)):
+        return {"error": "designs must be a list of design names"}
+    if designs:
+        names = set(designs)
+        unknown = names - {d["name"] for d in j["designs"]}
+        if unknown:
+            return {"error": "no such design in job: %s" % ", ".join(sorted(unknown))}
+        picks = [d for d in j["designs"] if d["name"] in names]
+        busy = [d["name"] for d in picks if d["status"] in ("pending", "running")]
+        if busy:
+            return {"error": "still running in this job: %s" % ", ".join(busy)}
+    else:
+        picks = [d for d in j["designs"] if d["status"] in ("failed", "cancelled")]
+        if not picks:
+            return {"error": "no failed or cancelled design to re-run in this job"}
+    sources = []
+    for d in picks:
+        det = d.get("detail") or {}
+        src = det.get("source")
+        if not src or not Path(src).exists():
+            return {"error": "the RTL of %s is no longer on disk (%s); submit it again" % (d["name"], src)}
+        top = det["requested_top"] if "requested_top" in det else det.get("top")
+        sources.append({"name": d["name"], "path": src, "top": top})
+    spec = j.get("spec") or {}
+    try:
+        jid = RT.pipeline.submit(sources, platform=spec.get("platform", "nangate45"),
+                                 output=spec.get("output", "graph"), params=spec.get("params") or None,
+                                 title="重新运行 · %s" % re.sub(r"^(重新运行 · )+", "", j["title"] or ""), session_id=CURRENT_SESSION.get(),
+                                 retry_of=job_id)
+    except ValueError as e:
+        return {"error": str(e)}
+    return {"job_id": jid, "designs": [s["name"] for s in sources], "retry_of": job_id,
+            "note": "running in background; use job_status to follow progress"}
+
+
 @tool("Where the finished dataset of a job is and what it contains (only designs that passed sign-off "
       "and verification are included).", _obj({"job_id": {"type": "string"}}, ["job_id"]))
 def dataset_info(job_id: str) -> dict:
@@ -435,6 +503,13 @@ def dataset_info(job_id: str) -> dict:
 @tool("Check that the EDA toolchain needed for the platform is installed and working.",
       _obj({"platform": {"type": "string"}}))
 def check_environment(platform: str = "nangate45") -> dict:
+    if platform not in platforms.PLATFORMS and platform in replay_platforms():
+        # replay: the recorded jobs ran on that platform's own apparatus, which this host's check_env.sh does not cover
+        replay_log({"event": "check_environment_replay_platform", "platform": platform})
+        return {"ok": True, "platform": platform, "replay": True,
+                "summary": "replay: this platform's recorded jobs ran on its signoff apparatus (for asap7: ORFS + "
+                           "Calibre with the official r1p7 DRC/LVS decks); start_job attaches them",
+                "knowledge": knowledge.summary()}
     r = subprocess.run(["bash", str(signoff_scripts() / "flow" / "check_env.sh"), "--platform", platform],
                        cwd=repo_root(), capture_output=True, text=True, timeout=300)
     lines = [l for l in r.stdout.splitlines() if l.strip()]

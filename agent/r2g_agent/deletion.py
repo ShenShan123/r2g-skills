@@ -10,7 +10,7 @@ from pathlib import Path
 from . import housekeeping
 from .lifecycle import resource_lock
 from .paths import r2g_home
-from .processes import execution_members, group_members, proc_start, stop_orphan
+from .processes import ProcessInspectionError, execution_members, group_members, proc_start, stop_orphan
 
 ORFS_ARTIFACT_KINDS = ('designs', 'results', 'logs', 'reports', 'objects')
 
@@ -108,6 +108,33 @@ def artifact_paths(job: dict, home: Path | None = None, flow: Path | None = None
     return sorted(paths)
 
 
+UPLOAD_ID = re.compile(r'\d{10}-[0-9a-f]{6}')
+ATTACHMENT = re.compile(r'^\[附件\] .*?路径：(\S+)', re.M)
+
+
+def uploaded_sources(job: dict, other_specs: list[dict], home: Path | None = None) -> list[Path]:
+    """The browser uploads (R2G_HOME/uploads/<id>) this job's designs were read
+    from and no other job reads: they are r2g's own copies, so they go with the
+    job. A folder on the server that the user named by path is never touched."""
+    home = (home or r2g_home()).resolve()
+    root = home / 'uploads'
+    if root.is_symlink() or not root.is_dir():
+        return []
+
+    def upload_of(path: str):
+        try:
+            rel = Path(path).absolute().relative_to(root)
+        except ValueError:
+            return None
+        return root / rel.parts[0] if rel.parts and UPLOAD_ID.fullmatch(rel.parts[0]) else None
+
+    mine = {u for u in (upload_of(s.get('path') or '') for s in (job.get('spec') or {}).get('sources', [])) if u}
+    for spec in other_specs:
+        for source in (spec or {}).get('sources', []):
+            mine.discard(upload_of(source.get('path') or ''))
+    return sorted(_safe_path(u, home) for u in mine if u.exists() or u.is_symlink())
+
+
 class DeletionManager:
     def __init__(self, store, sessions, pipeline):
         self.store, self.sessions, self.pipeline = store, sessions, pipeline
@@ -163,6 +190,13 @@ class DeletionManager:
                         self.store.set_deletion(kind, target, 'done')
             except BlockingIOError:
                 continue  # A stage, archive, or conversation is still exiting.
+            except ProcessInspectionError as exc:
+                self.store.set_deletion(kind, target, 'pending', '仍在确认相关进程已全部退出：' + str(exc))
+                # Another process of this user was unreadable for a moment (an EDA tool
+                # mid-exec on a shared host): absence is unproven NOW, not wrong. Stay
+                # pending and look again on the next pass instead of failing the request,
+                # which made "delete" fail at random on a busy machine (203, 2026-11-25).
+                continue
             except Exception as exc:
                 self.store.set_deletion(kind, target, 'error', str(exc))
 
@@ -184,6 +218,16 @@ class DeletionManager:
                 waiting = True
         if waiting:
             return False
+        # folders attached in this conversation that no job uses: r2g's own copies, go with it
+        with self.store._conn() as c:
+            specs = [json.loads(r[0]) for r in c.execute('SELECT spec FROM jobs')]
+        attached = {'spec': {'sources': [{'path': p} for m in self.sessions.load(sid) if m.get('role') == 'user'
+                                         for p in ATTACHMENT.findall(m.get('content') or '')]}}
+        for path in uploaded_sources(attached, specs):
+            if path.is_symlink() or path.is_file():
+                path.unlink()
+            elif path.exists():
+                shutil.rmtree(path)
         self.sessions.erase(sid)
         return True
 
@@ -232,11 +276,21 @@ class DeletionManager:
                     if deletion and deletion['status'] == 'pending':
                         return False  # Let the dependent job stop and disappear first.
                     raise ValueError('任务 ' + other['id'] + ' 仍引用这些产物，请先删除该关联任务')
+        paths = paths + uploaded_sources(job, [json.loads(o['spec']) for o in others])
         for path in paths:
             if path.is_symlink() or path.is_file():
                 path.unlink()
             elif path.exists():
                 shutil.rmtree(path)
+        # The ORFS checkout's <kind>/<platform>/<design>/ folder that held only this
+        # job's variant would stay behind empty; remove it only if empty (never recursive).
+        flow = housekeeping.orfs_flow_dir()
+        for path in paths:
+            if flow and path.parent != flow and path.is_relative_to(flow) and path.parent.parent.parent.parent == flow:
+                try:
+                    path.parent.rmdir()
+                except OSError:
+                    pass
         # Re-discover after cleanup rather than trusting a successful unlink
         # call or incomplete run metadata. Keep the database row retryable if
         # any writer or failed filesystem removal has left generated artifacts.

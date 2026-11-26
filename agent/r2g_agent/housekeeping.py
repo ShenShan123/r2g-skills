@@ -156,11 +156,20 @@ def orfs_flow_dir() -> Path | None:
     """The ORFS flow directory the skills use (signoff-loop's pinned env.local.sh)."""
     import re
     from .paths import skills_dir
-    pin = skills_dir() / "signoff-loop" / "references" / "env.local.sh"
+    # the same places the skills' _env.sh reads, in its order: the environment,
+    # R2G_ENV_FILE (a deployment's declared tool file), then the pinned env.local.sh.
+    # Without R2G_ENV_FILE here, a deployment configured only through it had no flow
+    # dir: free-space checks skipped the ORFS disk and deleting an interrupted job
+    # could not find its ORFS variant directories.
     root = os.environ.get("ORFS_ROOT")
-    if not root and pin.is_file():
-        m = re.search(r'^export ORFS_ROOT="?([^"\n]+)"?', pin.read_text(), re.M)
-        root = m.group(1) if m else None
+    pins = [Path(os.environ["R2G_ENV_FILE"])] if os.environ.get("R2G_ENV_FILE") else []
+    pins.append(skills_dir() / "signoff-loop" / "references" / "env.local.sh")
+    for pin in pins:
+        if root:
+            break
+        if pin.is_file():
+            m = re.search(r'^export ORFS_ROOT="?([^"\n]+)"?', pin.read_text(), re.M)
+            root = m.group(1) if m else None
     return Path(root) / "flow" if root and (Path(root) / "flow").is_dir() else None
 
 

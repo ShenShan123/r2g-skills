@@ -81,3 +81,12 @@ def test_a_replay_only_platform_is_offered_and_answered(replay, tmp_path, monkey
     monkeypatch.setenv("R2G_REPLAY_MAP", str(m)); monkeypatch.setattr(tools, "_REPLAY", None)
     assert tools.replay_platforms()[-1] == "asap7"
     assert tools.flow_params("asap7")["defaults"] is None
+
+
+def test_check_environment_for_a_replay_only_platform_reports_the_recorded_apparatus(replay, tmp_path, monkeypatch):
+    tools, jid, src, tmp = replay
+    m = tmp_path / "map3.json"
+    m.write_text(json.dumps({"asap7_C1": {"job_id": jid, "platform": "asap7", "output": "signoff"}}))
+    monkeypatch.setenv("R2G_REPLAY_MAP", str(m)); monkeypatch.setattr(tools, "_REPLAY", None)
+    r = tools.check_environment("asap7")
+    assert r["ok"] and r["replay"] and _log(tmp)[-1]["event"] == "check_environment_replay_platform"

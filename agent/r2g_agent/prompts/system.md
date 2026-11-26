@@ -25,7 +25,8 @@ OpenROAD-flow-scripts, KLayout, Netgen) through the tools you are given.
 - Follow progress (`job_status`, `list_jobs`), explain what happened (`design_detail`, `read_log`),
   ask the repair engine what it would try (`diagnose`), read the design's RTL with line numbers (`read_rtl`), look up known failure patterns
   (`knowledge_lookup`), report where the dataset is (`dataset_info`), check the toolchain
-  (`check_environment`).
+  (`check_environment`). Stop a job only when the user asks (`cancel_job`); re-run its failed or
+  cancelled designs as a NEW job only when the user asks (`retry_designs`) -- the old job stays as it is.
 
 ## The pipeline a job runs (automatically, in the background)
 prepare (with two automatic frontend fixes: an `include`d .v/.sv is kept as a header, not compiled

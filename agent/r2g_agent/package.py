@@ -85,6 +85,8 @@ def _package_job(store: JobStore, jid: str, partial: bool = False) -> Path:
 
 def package_design(store: JobStore, jid: str, name: str) -> Path:
     from .lifecycle import resource_lock
+    if not store.job(jid):          # no lock file for an id that names no job
+        raise ValueError('任务不存在或已删除')
     with resource_lock('job', jid):
         if store.deletion('job', jid) or not store.job(jid):
             raise ValueError('任务正在删除或已删除')

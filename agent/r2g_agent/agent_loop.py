@@ -125,25 +125,40 @@ def _clip(obj) -> str:
     return s
 
 
-def run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
+def run_turn(adapter, sessions: SessionStore, sid: str, user_text: str, should_stop=lambda: False):
     from .lifecycle import resource_lock
     try:
         with resource_lock('session', sid, exclusive=True, blocking=False):
             if sessions.is_deleting(sid) or not sessions.exists(sid):
                 yield {'type': 'error', 'message': '对话正在删除或已删除'}
                 return
-            yield from _run_turn(adapter, sessions, sid, user_text)
+            yield from _run_turn(adapter, sessions, sid, user_text, should_stop)
     except BlockingIOError:
         yield {'type': 'error', 'message': '该对话正在处理上一条消息'}
 
 
-def _run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
-    """Generator of UI events for one user turn."""
+STOPPED_NOTE = "（已停止）"
+
+
+def _run_turn(adapter, sessions: SessionStore, sid: str, user_text: str, should_stop=lambda: False):
+    """Generator of UI events for one user turn. `should_stop()` true ends the
+    turn at the next event or tool boundary; what was said so far is kept."""
     messages = sessions.load(sid)
     messages.append({"role": "user", "content": user_text})
     title = user_text[:40]
+
+    def stopped(text: str = "", thinking: str = ""):
+        messages.append({"role": "assistant", "content": (text + "\n\n" if text else "") + STOPPED_NOTE,
+                         "thinking": thinking, "tool_calls": []})
+        sessions.save(sid, messages, title)
+        return {"type": "stopped"}
+
     for step in range(MAX_STEPS):
         if sessions.is_deleting(sid):
+            return
+        if should_stop():
+            yield stopped()
+            yield {"type": "done"}
             return
         text, thinking, calls, err = "", "", [], None
         call_id = uuid.uuid4().hex
@@ -153,23 +168,33 @@ def _run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
             'protocol': getattr(mc, 'protocol', None), 'step': step + 1,
             'usage_reported': False, 'stream_complete': False,
         })
-        for ev in adapter.stream(messages, tools.specs(), system_prompt()):
-            if sessions.is_deleting(sid):
-                return
-            if ev["type"] == "text":
-                text += ev["delta"]
-                yield ev
-            elif ev["type"] == "thinking":
-                thinking += ev["delta"]
-                yield ev
-            elif ev["type"] == "tool_call":
-                calls.append(ev)
-            elif ev["type"] == "error":
-                err = ev["message"]
-            elif ev["type"] == "usage":
-                ev = {**ev, "call_id": call_id, "step": step + 1}
-                sessions.record_usage(sid, call_id, ev)
-                yield ev
+        stream = adapter.stream(messages, tools.specs(), system_prompt())
+        try:
+            for ev in stream:
+                if sessions.is_deleting(sid):
+                    return
+                if should_stop():
+                    yield stopped(text, thinking)
+                    yield {"type": "done"}
+                    return
+                if ev["type"] == "text":
+                    text += ev["delta"]
+                    yield ev
+                elif ev["type"] == "thinking":
+                    thinking += ev["delta"]
+                    yield ev
+                elif ev["type"] == "tool_call":
+                    calls.append(ev)
+                elif ev["type"] == "error":
+                    err = ev["message"]
+                elif ev["type"] == "usage":
+                    ev = {**ev, "call_id": call_id, "step": step + 1}
+                    sessions.record_usage(sid, call_id, ev)
+                    yield ev
+        finally:
+            close = getattr(stream, "close", None)
+            if close:
+                close()           # a stopped turn also ends the model's HTTP stream
         if err:
             yield {"type": "error", "message": err}
             sessions.save(sid, messages, title)
@@ -179,8 +204,16 @@ def _run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
                                         for c in calls]})
         if not calls:
             break
-        for c in calls:
+        for i, c in enumerate(calls):
             if sessions.is_deleting(sid):
+                return
+            if should_stop():
+                # every call the model made needs an answer, or the next turn's request is malformed
+                for rest in calls[i:]:
+                    messages.append({"role": "tool", "tool_call_id": rest["id"], "name": rest["name"],
+                                     "content": _clip({"error": "stopped by the user before this tool ran"})})
+                yield stopped()
+                yield {"type": "done"}
                 return
             yield {"type": "tool_call", "id": c["id"], "name": c["name"], "arguments": c["arguments"]}
             token = tools.CURRENT_SESSION.set(sid)
@@ -195,3 +228,88 @@ def _run_turn(adapter, sessions: SessionStore, sid: str, user_text: str):
         yield {"type": "text", "delta": "\n\n（已达到单轮工具调用上限，先停在这里。）"}
     sessions.save(sid, messages, title)
     yield {"type": "done"}
+
+
+class TurnRun:
+    """One chat turn running on its own thread.
+
+    The HTTP response only follows it: a browser that closes the tab, reloads
+    or loses its connection mid-answer no longer abandons the turn's generator
+    (which kept the conversation's lock held, so every later message read
+    "该对话正在处理上一条消息" until the server restarted). The turn finishes,
+    is saved, and the conversation is free again; `stop()` ends it early."""
+
+    def __init__(self, events):
+        self.events: list[dict] = []
+        self.done = False
+        self._stop = threading.Event()
+        self._cond = threading.Condition()
+        self._source = events
+        self.started = time.time()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    @property
+    def stopping(self) -> bool:
+        return self._stop.is_set()
+
+    def run(self) -> None:
+        try:
+            for ev in self._source(self._stop.is_set):
+                with self._cond:
+                    self.events.append(ev)
+                    self._cond.notify_all()
+        except Exception as e:                                   # noqa: BLE001
+            with self._cond:
+                self.events.append({"type": "error", "message": "内部错误：%s" % e})
+        finally:
+            with self._cond:
+                self.done = True
+                self._cond.notify_all()
+
+    def follow(self, keepalive: float = 15.0):
+        """Events from the start; None now and then while waiting (a keep-alive)."""
+        i = 0
+        while True:
+            with self._cond:
+                if i >= len(self.events) and not self.done:
+                    self._cond.wait(keepalive)
+                batch, finished = self.events[i:], self.done
+            i += len(batch)
+            if not batch and not finished:
+                yield None
+            yield from batch
+            if finished and i >= len(self.events):
+                return
+
+
+class TurnRegistry:
+    def __init__(self):
+        self._runs: dict[str, TurnRun] = {}
+        self._lock = threading.Lock()
+
+    def start(self, adapter, sessions: SessionStore, sid: str, text: str) -> TurnRun | None:
+        """None if this conversation is still answering the previous message."""
+        with self._lock:
+            cur = self._runs.get(sid)
+            if cur and not cur.done:
+                return None
+            run = TurnRun(lambda should_stop: run_turn(adapter, sessions, sid, text, should_stop))
+            old = time.time() - 3600
+            for k in [k for k, r in self._runs.items() if r.done and r.started < old]:
+                del self._runs[k]
+            self._runs[sid] = run
+        threading.Thread(target=run.run, daemon=True, name="r2g-chat-" + sid).start()
+        return run
+
+    def busy(self, sid: str) -> bool:
+        run = self._runs.get(sid)
+        return bool(run and not run.done)
+
+    def stop(self, sid: str) -> bool:
+        run = self._runs.get(sid)
+        if run and not run.done:
+            run.stop()
+            return True
+        return False

@@ -123,14 +123,14 @@ function EnlargedView({ view, url, name, index, total, onPrevious, onNext, onClo
   </div>, document.body);
 }
 
-export default function StageViews({ jobId, d }: { jobId: string; d: Design }) {
-  const [expanded, setExpanded] = useState(false);
+export default function StageViews({ jobId, d, defaultExpanded = false }: { jobId: string; d: Design; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [views, setViews] = useState<View[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState("");
   const timelineId = useId();
   const closeImage = useCallback(() => setSelected(null), []);
-  useEffect(() => { setExpanded(false); setSelected(null); setViews([]); setError(""); }, [jobId, d.name]);
+  useEffect(() => { setExpanded(defaultExpanded); setSelected(null); setViews([]); setError(""); }, [jobId, d.name, defaultExpanded]);
   useEffect(() => {
     if (!expanded) return;
     let alive = true;

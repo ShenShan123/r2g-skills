@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, Square, X, Image as ImageIcon, FileText, LayoutGrid, Grid3x3, ChevronDown, ChevronRight,
-         CheckCircle2, XCircle, AlertTriangle, Circle, MessagesSquare, Wand2, Loader2, Search, PackageOpen } from "lucide-react";
-import { api, askAgent, Design, fmtClock, Job, jobStatus, JobEvent, OUTPUT_LABEL } from "../lib/api";
+         CheckCircle2, XCircle, AlertTriangle, Circle, MessagesSquare, Wand2, Loader2, Search, PackageOpen, RotateCcw, RefreshCw } from "lucide-react";
+import { api, ApiError, askAgent, Design, fmtClock, Job, jobStatus, JobEvent, OUTPUT_LABEL, PLATFORM_LABEL } from "../lib/api";
 import { StatusBadge, Stat, isActive } from "../components/ui";
 import DeleteResource from "../components/DeleteResource";
+import ConfirmDialog from "../components/ConfirmDialog";
 import StageViews from "../components/StageViews";
 import { getLang, t, tb } from "../lib/i18n";
 
@@ -29,26 +30,66 @@ export default function JobDetail() {
   const [showLog, setShowLog] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const [confirmStop, setConfirmStop] = useState(false);
+  const [missing, setMissing] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [retry, setRetry] = useState<{ busy: boolean; error: string }>({ busy: false, error: "" });
   const lastEv = useRef(0);
+  const deleteRequested = useRef(false);
 
   useEffect(() => {
     let alive = true; lastEv.current = 0; setEvents([]); setCancelBusy(false); setCancelError("");
+    setJob(null); setMissing(false); setLoadError(""); setSel(null); deleteRequested.current = false;
     let t: any;
     // the page keeps at most the last 500 events; a big batch polls more slowly
     const tick = async () => {
       try {
         const [j, ev] = await Promise.all([api.job(id), api.events(id, lastEv.current, lastEv.current ? 0 : 300)]);
         if (!alive) return;
-        setJob(j);
+        setJob(j); setLoadError("");
         if (ev.length) { lastEv.current = ev[ev.length - 1].id; setEvents((p) => [...p, ...ev].slice(-500)); }
-        t = setTimeout(tick, (j.designs?.length ?? 0) > BIG ? 5000 : 2000);
-      } catch { t = setTimeout(tick, 5000); }
+        // a finished job changes only if someone deletes or re-packages it: poll slowly
+        t = setTimeout(tick, !isActive(j.status) && !j.deletion ? 15000 : (j.designs?.length ?? 0) > BIG ? 5000 : 2000);
+      } catch (e) {
+        if (!alive) return;
+        if (e instanceof ApiError && e.status === 404) {
+          // deleted: by this page's own trash button -> back to the list; otherwise say so
+          if (deleteRequested.current) navigate("/jobs", { replace: true }); else setMissing(true);
+          return;
+        }
+        setLoadError(e instanceof Error ? e.message : String(e));
+        t = setTimeout(tick, 5000);
+      }
     };
     tick();
     return () => { alive = false; clearTimeout(t); };
   }, [id]);
 
-  if (!job) return <div className="p-10 text-muted">{t("加载中…")}</div>;
+  async function stopJob() {
+    setConfirmStop(false); setCancelBusy(true); setCancelError("");
+    try {
+      const response = await api.cancel(id);
+      if (response.error) throw new Error(tb(response.error));
+      setJob(await api.job(id));
+    } catch (e) { setCancelError(e instanceof Error ? tb(e.message) : t("停止请求失败，请重试")); }
+    finally { setCancelBusy(false); }
+  }
+  async function rerun(designs?: string[]) {
+    setRetry({ busy: true, error: "" });
+    try { const r = await api.retry(id, designs); navigate(`/jobs/${r.job_id}`); setRetry({ busy: false, error: "" }); }
+    catch (e) { setRetry({ busy: false, error: e instanceof Error ? tb(e.message) : String(e) }); }
+  }
+
+  if (missing) return (
+    <div className="mx-auto max-w-4xl px-4 py-10 md:px-8">
+      <Link to="/jobs" className="inline-flex items-center gap-1 text-sm text-muted hover:text-fg"><ArrowLeft size={15} /> {t("全部任务")}</Link>
+      <div className="card mt-4 p-8 text-center">
+        <div className="text-lg font-semibold">{t("任务不存在或已被删除")}</div>
+        <div className="mt-1 font-mono text-xs text-faint">{id}</div>
+        <Link to="/jobs" className="btn-primary mt-5">{t("返回任务列表")}</Link>
+      </div>
+    </div>);
+  if (!job) return <div className="p-10 text-muted">{loadError ? <span className="text-bad">{t("加载失败，正在重试：")}{tb(loadError)}</span> : t("加载中…")}</div>;
   const ds = job.designs ?? [];
   const passed = ds.filter((d) => d.status === "passed").length;
   const failed = ds.filter((d) => d.status === "failed").length;
@@ -62,21 +103,28 @@ export default function JobDetail() {
   const minutes = Math.max(0, Math.round(((active ? Date.now() / 1000 : job.updated) - started) / 60));
   const selected = ds.find((d) => d.name === sel) ?? null;
   const now = [...events].reverse().find((e) => e.kind === "start");
+  const signoffOnly = job.spec?.output === "signoff";
+  const rerunnable = failed + cancelled;
+  const deleting = job.deletion === "pending";
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 md:px-8 md:py-8">
       <Link to="/jobs" className="inline-flex items-center gap-1 text-sm text-muted hover:text-fg"><ArrowLeft size={15} /> {t("全部任务")}</Link>
+      {loadError && <div role="status" className="mt-2 rounded-lg bg-warn/10 px-3 py-2 text-xs text-warn">
+        {t("暂时连不上 r2g 服务，显示的是最后一次读到的状态；正在重试（服务重启后任务会自动接着跑）。")}</div>}
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="truncate text-xl font-bold md:text-2xl">{tb(job.title)}</h1>
-          <div className="mt-1 text-xs text-faint">{t(OUTPUT_LABEL[job.spec?.output ?? "graph"])} · {job.spec?.platform} ·{" "}
+          <div className="mt-1 text-xs text-faint">{t(OUTPUT_LABEL[job.spec?.output ?? "graph"] ?? job.spec?.output)} · {PLATFORM_LABEL[job.spec?.platform] ?? job.spec?.platform} ·{" "}
             {Object.keys(job.spec?.params ?? {}).length
               ? <span className="text-accent2">{t("自定义参数：")}{Object.entries(job.spec.params).map(([k, v]) => `${PARAM_ZH[k] ? t(PARAM_ZH[k]) : k} ${typeof v === "object" ? t("已改") : v}`).join(t("、"))}</span>
-              : t("r2g 经验参数")} · {job.id}</div>
+              : t("r2g 经验参数")} · {job.id}
+            {job.spec?.retry_of && <> · <Link className="text-accent hover:underline" to={`/jobs/${job.spec.retry_of}`}>{t("重新运行自 {id}", { id: job.spec.retry_of })}</Link></>}</div>
         </div>
         <div className="flex items-center gap-2">
-          <StatusBadge status={jobStatus(job)} />
-          <DeleteResource kind="job" id={id} title={job.title} onDeleted={() => navigate('/jobs')} />
+          {deleting ? <span className="chip bg-bad/10 text-bad">{t("删除中")}</span> : <StatusBadge status={jobStatus(job)} />}
+          <DeleteResource kind="job" id={id} title={job.title} state={job.deletion}
+            onRequested={() => { deleteRequested.current = true; }} onDeleted={() => navigate("/jobs", { replace: true })} />
         </div>
       </div>
 
@@ -93,35 +141,41 @@ export default function JobDetail() {
             <>
               <div className="font-semibold">{job.status === "cancelled" ? t("任务已停止：{n} 个设计已取消", { n: cancelled }) : passed ? t("完成：{n}/{total} 个设计通过", { n: passed, total: ds.length }) : t("没有设计通过（{n}/{total} 失败）", { n: failed, total: ds.length })}</div>
               <div className="mt-1 text-sm text-muted">
-                {job.status === "cancelled" ? t("已完成的结果和报告保留。") : passed ? t("通过的设计都已签核（DRC、LVS 干净）并通过数据集校验，已打包。") : t("点开失败的设计查看原因，或让 agent 帮你分析。")}
-                {passed > 0 && failed > 0 && t(" {n} 个失败的设计不在数据集里。", { n: failed })}{t(" 用时 {m} 分钟。", { m: minutes })}
+                {job.status === "cancelled" ? t("已完成的结果和报告保留。") : passed ? (signoffOnly ? t("通过的设计都已签核（DRC、LVS 干净）。") : t("通过的设计都已签核（DRC、LVS 干净）并通过数据集校验，已打包。")) : t("点开失败的设计查看原因，或让 agent 帮你分析。")}
+                {passed > 0 && failed > 0 && !signoffOnly && t(" {n} 个失败的设计不在数据集里。", { n: failed })}{t(" 用时 {m} 分钟。", { m: minutes })}
               </div>
             </>)}
         </div>
-        {active && passed > 0 && <PartialDownload id={id} />}
-        {active && <button className="btn-ghost" disabled={cancelBusy || stopping}
+        {active && passed > 0 && !signoffOnly && <PartialDownload id={id} />}
+        {active && !deleting && <button className="btn-ghost" disabled={cancelBusy || stopping}
           title={t("取消所有排队设计，并停止运行中的设计；已完成的结果保留")}
-          onClick={async () => {
-            setCancelBusy(true); setCancelError("");
-            try {
-              const response = await api.cancel(id);
-              if (response.error) throw new Error(tb(response.error));
-              setJob(await api.job(id));
-            } catch (e) { setCancelError(e instanceof Error ? tb(e.message) : t("停止请求失败，请重试")); }
-            finally { setCancelBusy(false); }
-          }}>
+          onClick={() => setConfirmStop(true)}>
           {cancelBusy || stopping ? <Loader2 size={14} className="animate-spin" /> : <Square size={14} />}
           {cancelBusy ? t("提交停止请求…") : stopping ? t("正在停止…") : t("停止整个任务")}
         </button>}
-        {job.result?.package && <a className="btn-primary" href={`/api/jobs/${id}/download`}><Download size={16} /> {t("下载数据集")}</a>}
+        {!active && !deleting && rerunnable > 0 && (
+          <button className="btn-ghost" disabled={retry.busy} onClick={() => rerun()}
+            title={t("用相同的平台、数据集类型和参数，把失败和已取消的设计作为一个新任务重新运行；本任务保持不变")}>
+            {retry.busy ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+            {t("重新运行 {n} 个未通过的设计", { n: rerunnable })}</button>)}
+        {job.result?.package && <a className="btn-primary" href={`/api/jobs/${id}/download`} download><Download size={16} /> {t("下载数据集")}</a>}
       </div>
       {cancelError && <div role="alert" className="mt-2 text-sm text-bad">{t("停止失败：")}{cancelError}</div>}
+      {retry.error && <div role="alert" className="mt-2 text-sm text-bad">{t("重新运行失败：")}{retry.error}</div>}
+      {job.result?.package_error && <div role="alert" className="mt-2 text-sm text-bad">{t("打包数据集失败：")}{tb(job.result.package_error)}</div>}
+      {confirmStop && (
+        <ConfirmDialog title={t("停止整个任务？")} confirmLabel={t("停止任务")} onConfirm={stopJob} onCancel={() => setConfirmStop(false)}>
+          <p className="break-words font-medium text-fg">{tb(job.title)}</p>
+          <p>{t("排队中的 {p} 个设计会取消，运行中的 {r} 个设计会立即停止（它们的 EDA 进程会被结束）。已经完成的设计、报告和数据集保留。", { p: pending, r: running })}</p>
+          <p>{t("停止后不能继续；需要时可以把未通过的设计重新运行。")}</p>
+        </ConfirmDialog>)}
       <div className="mt-3 text-sm text-muted">{t("DRC + LVS 双清：")}<strong className="text-ok">{dual}</strong>{t(" · 数据集通过：{p} · 失败：{f}", { p: passed, f: failed })}
         <span className="ml-2 text-xs">{t("双清与数据集校验分别统计。")}</span></div>
 
       {ds.length > BIG ? <BatchList jobId={id} ds={ds} onOpen={setSel} /> : (
         <div className="mt-4 space-y-3">
-          {ds.map((d) => <DesignCard key={d.name} jobId={id} d={d} onOpen={() => setSel(d.name)} />)}
+          {ds.map((d) => <DesignCard key={d.name} jobId={id} d={d} onOpen={() => setSel(d.name)}
+            onRetry={!active && !deleting && ["failed", "cancelled"].includes(d.status) ? () => rerun([d.name]) : undefined} retryBusy={retry.busy} />)}
         </div>)}
 
       <div className="mt-6">
@@ -153,11 +207,20 @@ const PAGE = 50;
 
 function PartialDownload({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   return (
-    <button className="btn-ghost" disabled={busy} title={t("把目前已通过的设计先打包下载")}
-      onClick={async () => { setBusy(true); try { const r = await api.packageNow(id); window.location.href = r.url; } finally { setBusy(false); } }}>
-      {busy ? <Loader2 size={15} className="animate-spin" /> : <PackageOpen size={15} />} {t("下载已完成的部分")}
-    </button>);
+    <div>
+      <button className="btn-ghost" disabled={busy} title={t("把目前已通过的设计先打包下载")}
+        onClick={async () => {
+          setBusy(true); setError("");
+          try { const r = await api.packageNow(id); window.location.href = r.url; }
+          catch (e) { setError(e instanceof Error ? tb(e.message) : String(e)); }
+          finally { setBusy(false); }
+        }}>
+        {busy ? <Loader2 size={15} className="animate-spin" /> : <PackageOpen size={15} />} {busy ? t("正在打包…") : t("下载已完成的部分")}
+      </button>
+      {error && <p role="alert" className="mt-1 text-xs text-bad">{t("打包失败：")}{error}</p>}
+    </div>);
 }
 
 /** Group key of a failure: the stage and the message without file names, line
@@ -254,7 +317,8 @@ function plain(d: Design): string {
   return t("正在{stage}…", { stage: STAGE_ZH[d.stage] ? t(STAGE_ZH[d.stage]) : d.stage });
 }
 
-function DesignCard({ jobId, d, onOpen }: { jobId: string; d: Design; onOpen: () => void }) {
+function DesignCard({ jobId, d, onOpen, onRetry, retryBusy }: { jobId: string; d: Design; onOpen: () => void;
+  onRetry?: () => void; retryBusy?: boolean }) {
   const s = d.detail?.sizing; const so = d.detail?.signoff;
   const fixes: any[] = [...(d.detail?.frontend_fixes ?? []), ...(d.detail?.flow_fixes ?? [])];
   const repaired = Array.isArray(d.detail?.repair) && d.detail.repair.length > 0;
@@ -284,24 +348,47 @@ function DesignCard({ jobId, d, onOpen }: { jobId: string; d: Design; onOpen: ()
             {repaired && <li>{t("签核未通过后自动诊断并修复（{n} 步，见详情）", { n: d.detail.repair.length })}</li>}
           </ul>
         </div>)}
-      {d.status === "failed" && (
-        <Link className="btn-ghost mt-3" to={askAgent(t("任务 {job} 里的设计 {name} 失败了，帮我分析原因并告诉我怎么改", { job: jobId, name: d.name }))}>
-          <MessagesSquare size={15} /> {t("让 agent 分析原因")}</Link>)}
+      {(d.status === "failed" || onRetry) && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {d.status === "failed" && (
+            <Link className="btn-ghost" to={askAgent(t("任务 {job} 里的设计 {name} 失败了，帮我分析原因并告诉我怎么改", { job: jobId, name: d.name }))}>
+              <MessagesSquare size={15} /> {t("让 agent 分析原因")}</Link>)}
+          {onRetry && (
+            <button className="btn-ghost" disabled={retryBusy} onClick={onRetry} title={t("作为一个新任务重新运行这个设计")}>
+              <RotateCcw size={15} /> {t("重新运行这个设计")}</button>)}
+        </div>)}
     </div>
   );
 }
 
-const LOG_STAGES = ["synth", "flow", "signoff", "repair", "graph", "verify"];
+const LOG_STAGES = ["synth", "flow", "signoff", "repair", "graph", "verify", "ingest"];
 
 function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; output: string; onClose: () => void }) {
   const [tab, setTab] = useState<"overview" | "images" | "layout" | "log">(output === "image" ? "images" : "overview");
   const [rep, setRep] = useState<any>(null);
   const [logStage, setLogStage] = useState("flow");
   const [log, setLog] = useState("");
+  const [logBusy, setLogBusy] = useState(false);
+  const [logTick, setLogTick] = useState(0);
+  const running = d.status === "running";
   useEffect(() => { setRep(null); api.reports(jobId, d.name).then(setRep).catch(() => {}); }, [jobId, d.name, d.status]);
   useEffect(() => {
-    if (tab === "log") api.log(jobId, d.name, logStage).then((r) => setLog(r.log_tail ?? r.error ?? "")).catch(() => setLog(""));
-  }, [tab, logStage, jobId, d.name, d.stage]);
+    if (tab !== "log") return;
+    let alive = true;
+    setLogBusy(true);
+    api.log(jobId, d.name, logStage)
+      .then((r) => { if (alive) setLog(r.log_tail ?? (r.error ? tb(r.error) : "")); })
+      .catch((e) => { if (alive) setLog(t("日志读取失败：") + (e instanceof Error ? e.message : String(e))); })
+      .finally(() => { if (alive) setLogBusy(false); });
+    // a running stage keeps writing: follow it
+    const timer = running ? setTimeout(() => setLogTick((n) => n + 1), 4000) : undefined;
+    return () => { alive = false; clearTimeout(timer); };
+  }, [tab, logStage, jobId, d.name, d.stage, running, logTick]);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("[role=alertdialog],[role=dialog][aria-modal=true]:not([data-panel])")) onClose(); };
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  }, [onClose]);
   const s = d.detail?.sizing;
   const sum = useMemo(() => rep?.ppa?.summary ?? {}, [rep]);
   const geo = rep?.ppa?.geometry ?? {};
@@ -309,12 +396,13 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/40 backdrop-blur-[2px]" onClick={onClose}>
-      <div className="flex h-full w-full flex-col border-l border-line bg-panel md:w-[640px]" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-line px-6 py-4">
-          <div><div className="font-mono text-lg font-semibold">{d.name}</div><div className="text-xs text-muted">{d.project}</div></div>
-          <div className="flex items-center gap-2"><StatusBadge status={d.status} />
-            {d.status === "passed" && <a className="btn-ghost px-3 py-1.5" href={`/api/jobs/${jobId}/designs/${d.name}/download`}><Download size={14} /> {t("下载")}</a>}
-            <button className="rounded-lg p-1.5 text-muted hover:bg-panel2" onClick={onClose}><X size={18} /></button></div>
+      <div role="dialog" aria-modal="true" aria-label={t("设计 {name} 的详情", { name: d.name })} data-panel
+        className="flex h-full w-full flex-col border-l border-line bg-panel md:w-[640px]" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 border-b border-line px-6 py-4">
+          <div className="min-w-0"><div className="truncate font-mono text-lg font-semibold">{d.name}</div><div className="break-all text-xs text-muted">{d.project}</div></div>
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap"><StatusBadge status={d.status} />
+            {d.status === "passed" && <a className="btn-ghost px-3 py-1.5" href={`/api/jobs/${encodeURIComponent(jobId)}/designs/${encodeURIComponent(d.name)}/download`} download><Download size={14} /> {t("下载")}</a>}
+            <button className="rounded-lg p-1.5 text-muted hover:bg-panel2" aria-label={t("关闭")} title={t("关闭（Esc）")} onClick={onClose}><X size={18} /></button></div>
         </div>
         <div className="flex gap-1 border-b border-line px-4">
           {([["overview", t("概览"), LayoutGrid], ...(output === "image" ? [["images", t("图像"), Grid3x3]] : []),
@@ -385,13 +473,16 @@ function DesignPanel({ jobId, d, output, onClose }: { jobId: string; d: Design; 
                 </div>)}
             </div>)}
           {tab === "images" && <ImagesTab jobId={jobId} d={d} />}
-          {tab === "layout" && <StageViews jobId={jobId} d={d} />}
+          {tab === "layout" && <StageViews jobId={jobId} d={d} defaultExpanded />}
           {tab === "log" && (
             <div>
-              <div className="mb-3 flex flex-wrap gap-1.5">
+              <div className="mb-3 flex flex-wrap items-center gap-1.5">
                 {LOG_STAGES.map((st) => (
-                  <button key={st} onClick={() => setLogStage(st)}
+                  <button key={st} aria-pressed={logStage === st} onClick={() => setLogStage(st)}
                     className={`chip ${logStage === st ? "bg-accent/15 text-accent" : "bg-panel2 text-muted hover:text-fg"}`}>{STAGE_ZH[st] ? t(STAGE_ZH[st]) : st}</button>))}
+                <button type="button" className="ml-auto flex items-center gap-1 text-xs text-muted hover:text-fg" onClick={() => setLogTick((n) => n + 1)}
+                  title={running ? t("运行中每 4 秒自动刷新") : t("刷新")}>
+                  <RefreshCw size={13} className={logBusy ? "animate-spin" : ""} />{running ? t("自动刷新中") : t("刷新")}</button>
               </div>
               <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap rounded-xl bg-bg p-4 font-mono text-[11.5px] leading-5 text-muted">{log || t("（暂无日志）")}</pre>
             </div>)}
