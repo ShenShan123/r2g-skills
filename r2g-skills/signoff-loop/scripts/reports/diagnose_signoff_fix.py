@@ -554,6 +554,64 @@ def _route_plan(route: dict, cfg: dict, exclude: set) -> dict:
     return plan
 
 
+# ASAP7 repair recipes (2026-11-20; assets/platforms/asap7/README.md has the evidence and provenance). Graded by the
+# official Calibre r1p7 decks; every recipe is a ROUTER-INPUT change (LEF / placement padding) -- the GDS, deck and
+# netlist are never touched. Eligibility is read from the CURRENT Calibre DRC result (rule families present), never
+# by cycling through the table, and a recipe whose edit is already in the cumulative config is not offered again.
+# Order = the development chain the recorded arms followed: GATE/upper metal first, then V1, then padding 2.
+ASAP7_ASSETS = Path(__file__).resolve().parents[2] / "assets" / "platforms" / "asap7"
+ASAP7_UM_TECH_LEF = str(ASAP7_ASSETS / "recipes" / "asap7_tech_um_skip.lef")
+ASAP7_V1_SC_LEF = str(ASAP7_ASSETS / "recipes" / "asap7sc7p5t_R_pin_window_obsbloat10.lef")
+_ASAP7_UM_RULE = re.compile(r"^M[5-7]\.", re.I)
+
+
+def _asap7_families(cats: dict) -> set:
+    fam = set()
+    for k in cats or {}:
+        u = k.upper()
+        fam.add("UM" if _ASAP7_UM_RULE.match(u) else "GATE" if u.startswith("GATE.") else
+                "V1" if u.startswith("V1.") else "OTHER")
+    return fam
+
+
+def _asap7_drc_strategies(cats: dict, cfg: dict, exclude: set) -> list:
+    fam = _asap7_families(cats)
+    try:
+        pad = int(float(cfg.get("CELL_PAD_IN_SITES_DETAIL_PLACEMENT") or 0))
+    except ValueError:
+        pad = 0
+    um_on = cfg.get("TECH_LEF") == ASAP7_UM_TECH_LEF
+    out = []
+    if "GATE" in fam and pad < 1:
+        out.append({"id": "asap7_gate_pad1_um",
+                    "rationale": ("GATE.* present: a lone 1-site FILLERxp5 between cells trips GATE.S.3; one site of "
+                                  "detail-placement padding (honoured by DPL, CTS and GRT legalisation) removes the "
+                                  "one-site gaps; the upper-metal router LEF rides along as in the recorded combo arm "
+                                  "(89/283 mixed designs clean)."),
+                    "config_edits": {"CELL_PAD_IN_SITES_DETAIL_PLACEMENT": "1", "TECH_LEF": ASAP7_UM_TECH_LEF},
+                    "rerun_from": "floorplan", "recheck": "drc", "auto_apply": True, "platform": "asap7"})
+    if "UM" in fam and not um_on and not any(x["id"] == "asap7_gate_pad1_um" for x in out):
+        out.append({"id": "asap7_upper_metal_skip",
+                    "rationale": ("M5-M7 min-PRL / tip-to-tip rules the router LEF cannot express: router spacing on "
+                                  "M5-M7 raised by 1 nm so adjacent tracks are never both used (recorded: 131/145 "
+                                  "upper-metal-only designs clean). Router input only."),
+                    "config_edits": {"TECH_LEF": ASAP7_UM_TECH_LEF},
+                    "rerun_from": "floorplan", "recheck": "drc", "auto_apply": True, "platform": "asap7"})
+    if "V1" in fam and cfg.get("SC_LEF") != ASAP7_V1_SC_LEF:
+        out.append({"id": "asap7_v1_obs_bloat",
+                    "rationale": ("V1.* present: the router places VIA12 too close to V1 cuts inside FAx1/NAND3x2/NOR3x2/"
+                                  "XNOR2x1/XOR2x1 that their LEF omits; the cell LEF gains those V1/M2 shapes as OBS, "
+                                  "V1 OBS grown 10 nm (recorded: 97/107 clean). Router input only."),
+                    "config_edits": {"SC_LEF": ASAP7_V1_SC_LEF},
+                    "rerun_from": "floorplan", "recheck": "drc", "auto_apply": True, "platform": "asap7"})
+    if "GATE" in fam and pad == 1:
+        out.append({"id": "asap7_gate_pad2",
+                    "rationale": "GATE.* remains after one site of padding: two sites (recorded: 12/64 clean).",
+                    "config_edits": {"CELL_PAD_IN_SITES_DETAIL_PLACEMENT": "2"},
+                    "rerun_from": "floorplan", "recheck": "drc", "auto_apply": True, "platform": "asap7"})
+    return [x for x in out if x["id"] not in exclude and not _applied(cfg, x["config_edits"])]
+
+
 def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
     status = drc.get("status", "unknown")
     cats = drc.get("categories") or {}
@@ -566,6 +624,15 @@ def _drc_plan(drc: dict, cfg: dict, exclude: set) -> dict:
         return plan
     if status in ("stuck", "timeout"):
         plan["residual_reason"] = f"drc_{status}_tooling_out_of_v1_scope"
+        return plan
+    if status in ("fail", "failed") and (cfg.get("PLATFORM") or "").lower() == "asap7":
+        plan["strategies"] = _asap7_drc_strategies(cats, cfg, exclude)
+        plan["asap7_families"] = sorted(_asap7_families(cats))
+        if not plan["strategies"]:
+            plan["status"] = "residual"
+            plan["residual_reason"] = ("asap7: no eligible recipe left for rule families %s (applied recipes are not "
+                                       "re-offered; candidates still under validation are not offered)"
+                                       % ", ".join(plan["asap7_families"]))
         return plan
     if status in ("fail", "failed"):
         if _all_antenna(cats):
