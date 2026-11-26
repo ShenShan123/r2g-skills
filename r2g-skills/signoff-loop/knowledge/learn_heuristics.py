@@ -65,6 +65,21 @@ def _fetch_learnable_rows(conn) -> list[dict]:
     return [r for r in rows if not _is_arm_project(r.get("project_path"))]
 
 
+def _fmax_verify_rows(conn) -> list[dict]:
+    """fmax_search --verify triples for the platform slack model; [] unless
+    R2G_LEARN_FMAX_VERIFY=1 (default off = legacy heuristics byte-identical)."""
+    if os.environ.get("R2G_LEARN_FMAX_VERIFY", "").strip() not in ("1", "true", "yes", "on"):
+        return []
+    try:
+        cur = conn.execute("SELECT * FROM runs WHERE eval_arm = 'fmax_verify' "
+                           "AND floorplan_setup_ws IS NOT NULL AND place_setup_ws IS NOT NULL "
+                           "AND finish_setup_ws IS NOT NULL")
+    except Exception:
+        return []
+    cols = [c[0] for c in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
 def _bench_project_paths(conn) -> set[str]:
     """project_paths of held-out bench runs, to exclude their fix trajectories from
     recipe learning. Tolerant of a DB predating the is_bench column."""
@@ -605,6 +620,16 @@ def learn(db_path: Path | str,
         for r in rows:
             per = r.get("clock_period_ns")
             if _is_success(r) and per is not None and 0 < per <= PLATFORM_POOL_MAX_PERIOD_NS:
+                platform_pool.setdefault(r.get("platform") or "unknown", []).append(r)
+        # fmax_search --verify records a measured (floorplan, place, finish) slack
+        # triple tagged eval_arm='fmax_verify'; the P0-14 eval-arm exclusion above
+        # drops it, so the documented "--verify self-corrects the deterioration model"
+        # never happened (2026-11-25). Opt-in (R2G_LEARN_FMAX_VERIFY=1): pool those
+        # triples into the PLATFORM slack model only -- closed or not, both are real
+        # erosion measurements -- never into family/recipe learning.
+        for r in _fmax_verify_rows(conn):
+            per = r.get("clock_period_ns")
+            if per is not None and 0 < per <= PLATFORM_POOL_MAX_PERIOD_NS:
                 platform_pool.setdefault(r.get("platform") or "unknown", []).append(r)
         platforms: dict[str, dict] = {}
         for plat, succ in platform_pool.items():

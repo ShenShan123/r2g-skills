@@ -306,3 +306,244 @@ def test_record_period_relax_noop_without_ok_search(tmp_path):
     assert fs.record_period_relax(proj, 5.0, 5.5, "period_relax") is False
     (proj / "reports" / "fmax_search.json").write_text('{"status": "inconclusive"}')
     assert fs.record_period_relax(proj, 5.0, 5.5, "period_relax") is False
+
+
+# --- 2026-11-25 optimisation: lazy confirm grid + ECP-refined verification ---------------
+
+def _grid_probe(threshold, calls):
+    import fmax_model as fm
+    def pl(period):
+        calls.append(period)
+        ws = period - threshold
+        return {"place_ws": ws, "place_tns": 0.0 if ws >= 0 else -1.0,
+                "status": fm.classify_probe(ws, 0.0 if ws >= 0 else -1.0, period)}
+    return pl
+
+
+@pytest.mark.parametrize("threshold", [4.0, 5.05, 5.12, 5.2, 6.0])
+def test_lazy_confirm_returns_identical_edge_with_fewer_probes(threshold):
+    """For any deterministic monotone probe the lazy (loosest-first, stop at first pass)
+    grid returns the SAME edge as the eager grid, never with more probes."""
+    eager_calls, lazy_calls = [], []
+    eager = fs.confirm_grid(5.1, _grid_probe(threshold, eager_calls), width=0.02, n=3)
+    st = {}
+    lazy = fs.confirm_grid(5.1, _grid_probe(threshold, lazy_calls), width=0.02, n=3,
+                           lazy=True, stats=st)
+    assert lazy == pytest.approx(eager)
+    assert len(lazy_calls) <= len(eager_calls) == 3
+    assert st["probes"] == len(lazy_calls) and st["lazy"] is True
+
+
+def test_lazy_confirm_one_probe_when_loosest_passes():
+    calls = []
+    edge = fs.confirm_grid(5.1, _grid_probe(4.0, calls), width=0.02, n=3, lazy=True)
+    assert calls == [pytest.approx(5.1 * 1.02)] and edge == pytest.approx(5.1 * 1.02)
+
+
+def test_lazy_confirm_nonmonotone_still_matches_eager():
+    """A noisy probe where only the middle point passes: both modes return it."""
+    import fmax_model as fm
+    def make(calls):
+        def pl(p):
+            calls.append(p)
+            ok = abs(p - 5.1) < 1e-9
+            return {"place_ws": 0.1 if ok else -0.1, "place_tns": 0.0 if ok else -1.0,
+                    "status": "pass" if ok else "fail"}
+        return pl
+    a, b = [], []
+    assert fs.confirm_grid(5.1, make(a), lazy=True) == pytest.approx(
+        fs.confirm_grid(5.1, make(b)))
+    assert len(a) == 2 and len(b) == 3
+
+
+def test_place_probe_memo_skips_repeat_period(tmp_path, monkeypatch):
+    runs = []
+    def fake_run_probe(v, platform, stages, **kw):
+        runs.append(v.name)
+        return {"place_ws": 0.2, "place_tns": 0.0, "floorplan_ws": 0.5, "completed": True}
+    monkeypatch.setattr(fs, "run_probe", fake_run_probe)
+    monkeypatch.setattr(fs, "clone_variant", lambda base, p: tmp_path / f"v{p}")
+    stats = {}
+    _, pl = fs._make_real_probes(tmp_path, "nangate45", timeout_s=10, place_fast=False,
+                                 created=[], memo=True, stats=stats)
+    r1, r2 = pl(1.5), pl(1.5)
+    assert r1 == r2 and len(runs) == 1
+    assert stats["orfs_runs"] == 1 and stats["memo_hits"] == 1
+    # memo off (legacy): every call runs ORFS
+    runs.clear()
+    _, pl0 = fs._make_real_probes(tmp_path, "nangate45", timeout_s=10, place_fast=False,
+                                  created=[])
+    pl0(1.5); pl0(1.5)
+    assert len(runs) == 2
+
+
+def test_ecp_refine_period_directions():
+    import fmax_model as fm
+    # closed with 0.3 ns slack at 2.0 -> tighten to (2.0-0.3)*1.02
+    assert fm.ecp_refine_period(2.0, 0.3, closed=True) == pytest.approx(1.7 * 1.02)
+    # closed but gain < 1% -> no extra flow
+    assert fm.ecp_refine_period(2.0, 0.01, closed=True) is None
+    # setup miss -> loosen to ECP*(1+m), at least +1%
+    assert fm.ecp_refine_period(2.0, -0.2, closed=False) == pytest.approx(2.2 * 1.02)
+    assert fm.ecp_refine_period(2.0, -0.001, closed=False) == pytest.approx(2.001 * 1.02)
+    assert fm.ecp_refine_period(2.0, -0.001, closed=False, margin=0.0) == pytest.approx(2.0 * 1.01)
+    # hold miss / unknown slack -> nothing a period change can fix
+    assert fm.ecp_refine_period(2.0, 0.3, closed=False, hold_ws=-0.05) is None
+    assert fm.ecp_refine_period(2.0, None, closed=False) is None
+
+
+def _ok_report(base, period=2.0):
+    import json
+    (base / "reports").mkdir(parents=True, exist_ok=True)
+    (base / "reports" / "fmax_search.json").write_text(json.dumps({
+        "status": "ok", "winner": {"period": period, "fmax_place_proxy": 0.6},
+        "labels": ["x"]}))
+
+
+def test_record_verify_ecp_tightens_winner(tmp_path):
+    import json
+    _ok_report(tmp_path, 1.96)
+    calls = []
+    def fake_verify(base, platform, period):
+        calls.append(period)
+        return {"period": period, "closed": True, "finish_ws": 0.05, "finish_tns": 0.0,
+                "hold_ws": 0.1, "wall_s": 1.0}
+    v = {"period": 2.0, "closed": True, "finish_ws": 0.4, "finish_tns": 0.0, "hold_ws": 0.1}
+    out = fs._record_verify(tmp_path, "nangate45", v, ecp_refine=True, margin=0.02,
+                            verify_fn=fake_verify)
+    assert calls == [pytest.approx(1.6 * 1.02)]
+    d = json.loads((tmp_path / "reports" / "fmax_search.json").read_text())
+    assert d["winner"]["period"] == pytest.approx(1.632)
+    assert d["winner"]["source"] == "ecp_refine_verified"
+    assert d["proxy_winner"]["period"] == 1.96
+    assert d["verify"]["verified_period"] == pytest.approx(1.632)
+    assert out["verified_period"] == pytest.approx(1.632)
+
+
+def test_record_verify_ecp_failed_refine_keeps_verified_period(tmp_path):
+    import json
+    _ok_report(tmp_path, 1.96)
+    fake = lambda b, p, t: {"period": t, "closed": False, "finish_ws": -0.02,
+                            "finish_tns": -0.1, "hold_ws": 0.1}
+    v = {"period": 2.0, "closed": True, "finish_ws": 0.4, "finish_tns": 0.0, "hold_ws": 0.1}
+    fs._record_verify(tmp_path, "nangate45", v, ecp_refine=True, margin=0.02, verify_fn=fake)
+    d = json.loads((tmp_path / "reports" / "fmax_search.json").read_text())
+    assert d["winner"]["period"] == 2.0 and len(d["verify"]["tries"]) == 2
+    assert d["winner"]["source"] == "verify_confirm_edge"
+
+
+def test_record_verify_without_ecp_keeps_legacy_winner(tmp_path):
+    import json
+    _ok_report(tmp_path, 1.96)
+    def boom(*a):
+        raise AssertionError("no extra flow without --ecp-refine")
+    v = {"period": 2.0, "closed": True, "finish_ws": 0.4, "finish_tns": 0.0, "hold_ws": 0.1}
+    fs._record_verify(tmp_path, "nangate45", v, ecp_refine=False, margin=0.02, verify_fn=boom)
+    d = json.loads((tmp_path / "reports" / "fmax_search.json").read_text())
+    assert d["winner"]["period"] == 1.96 and "proxy_winner" not in d
+    assert d["verify"]["verified_period"] == 2.0
+
+
+def test_verify_winner_survives_readonly_knowledge_store(tmp_path, monkeypatch):
+    """A refused knowledge write (shipped-store guard) must not lose the verify result."""
+    import json, sqlite3, types, sys
+    base = tmp_path / "d"
+    (base / "constraints").mkdir(parents=True)
+    (base / "constraints" / "config.mk").write_text("export DESIGN_NAME = d\n")
+    (base / "constraints" / "constraint.sdc").write_text("set clk_period 2.0\n")
+    rd = tmp_path / "run"
+    (rd / "logs").mkdir(parents=True)
+    (rd / "logs" / "6_report.json").write_text(json.dumps({
+        "finish__timing__setup__ws": 0.1, "finish__timing__setup__tns": 0.0,
+        "finish__timing__hold__ws": 0.02}))
+    monkeypatch.setattr(fs, "run_probe", lambda *a, **k: {"floorplan_ws": 0.5, "place_ws": 0.3})
+    monkeypatch.setattr(fs, "_latest_run_dir", lambda v: rd)
+    kdb = types.ModuleType("knowledge_db")
+    kdb.infer_family = lambda *a, **k: None
+    kdb.load_families = lambda: {}
+    def _connect():
+        raise sqlite3.OperationalError("attempt to write a readonly database")
+    kdb.connect = _connect
+    monkeypatch.setitem(sys.modules, "knowledge_db", kdb)
+    out = fs.verify_winner(base, "nangate45", 2.0)
+    assert out["closed"] is True and out["finish_ws"] == 0.1 and out["period"] == 2.0
+
+
+def test_record_verify_ecp_all_miss_marks_winner_unverified(tmp_path):
+    """Codex review 2026-11-25: when no full flow closes, the proxy winner must be
+    labelled unverified, never silently look verified."""
+    import json
+    _ok_report(tmp_path, 1.96)
+    fake = lambda b, p, t: {"period": t, "closed": False, "finish_ws": -0.1,
+                            "finish_tns": -1.0, "hold_ws": 0.1}
+    v = {"period": 2.0, "closed": False, "finish_ws": -0.2, "finish_tns": -2.0, "hold_ws": 0.1}
+    out = fs._record_verify(tmp_path, "nangate45", v, ecp_refine=True, margin=0.02, verify_fn=fake)
+    d = json.loads((tmp_path / "reports" / "fmax_search.json").read_text())
+    assert out["verified_period"] is None and d["verify"]["verified_period"] is None
+    assert d["winner"]["period"] == 1.96 and d["winner"]["source"] == "proxy_unverified"
+    assert any("unverified" in l for l in d["labels"])
+
+
+def test_verify_winner_incomplete_flow_is_not_closed(tmp_path, monkeypatch):
+    """Codex review 2026-11-25: passing finish numbers from a failed run never count."""
+    import json, types, sys
+    base = tmp_path / "d"
+    (base / "constraints").mkdir(parents=True)
+    (base / "constraints" / "config.mk").write_text("export DESIGN_NAME = d\n")
+    (base / "constraints" / "constraint.sdc").write_text("set clk_period 2.0\n")
+    rd = tmp_path / "run"
+    (rd / "logs").mkdir(parents=True)
+    (rd / "logs" / "6_report.json").write_text(json.dumps({
+        "finish__timing__setup__ws": 0.1, "finish__timing__setup__tns": 0.0}))
+    monkeypatch.setattr(fs, "run_probe", lambda *a, **k: {"completed": False})
+    monkeypatch.setattr(fs, "_latest_run_dir", lambda v: rd)
+    monkeypatch.setattr(fs, "record_verify_triple", lambda *a, **k: "x")
+    kdb = types.ModuleType("knowledge_db")
+    kdb.infer_family = lambda *a, **k: None
+    kdb.load_families = lambda: {}
+    kdb.ensure_schema = lambda c: None
+    class _C:
+        def close(self): pass
+    kdb.connect = lambda: _C()
+    monkeypatch.setitem(sys.modules, "knowledge_db", kdb)
+    assert fs.verify_winner(base, "nangate45", 2.0)["closed"] is False
+
+
+def test_heuristics_path_env_is_honored(tmp_path, monkeypatch):
+    monkeypatch.delenv("R2G_HEURISTICS_PATH", raising=False)
+    assert fs._heuristics_kw() == {}
+    monkeypatch.setenv("R2G_HEURISTICS_PATH", str(tmp_path / "h.json"))
+    assert fs._heuristics_kw() == {"heuristics_path": str(tmp_path / "h.json")}
+
+
+@pytest.mark.parametrize("argv_extra,env,expect", [
+    ([], None, True), ([], "0", False), (["--eager-confirm"], None, False),
+    (["--lazy-confirm"], "0", True)])
+def test_lazy_confirm_cli_default_and_opt_out(tmp_path, monkeypatch, argv_extra, env, expect):
+    import sys, types
+    (tmp_path / "constraints").mkdir()
+    (tmp_path / "constraints" / "config.mk").write_text("export DESIGN_NAME = alu\n")
+    (tmp_path / "constraints" / "constraint.sdc").write_text("set clk_period 10.0\n")
+    if env is None:
+        monkeypatch.delenv("R2G_FMAX_LAZY_CONFIRM", raising=False)
+    else:
+        monkeypatch.setenv("R2G_FMAX_LAZY_CONFIRM", env)
+    monkeypatch.setattr(sys, "argv", ["fmax_search.py", str(tmp_path), "nangate45", *argv_extra])
+    monkeypatch.setattr(fs, "assert_safe_knobs", lambda _: None)
+    monkeypatch.setattr("fmax_search.seed_period", lambda *a, **kw: 10.0)
+    seen = {}
+    def _probes(*a, **kw):
+        seen["memo"] = kw.get("memo")
+        return (lambda p: None), (lambda p: {})
+    monkeypatch.setattr(fs, "_make_real_probes", _probes)
+    monkeypatch.setattr(fs, "search", lambda *a, **kw: {"status": "inconclusive", "log": []})
+    kdb = types.ModuleType("knowledge_db")
+    kdb.infer_family = lambda *a, **kw: None
+    kdb.load_families = lambda: {}
+    kdb.get_family_heuristics = lambda *a, **kw: None
+    kdb.get_platform_heuristics = lambda *a, **kw: None
+    monkeypatch.setitem(sys.modules, "knowledge_db", kdb)
+    import fmax_model as fm_mod
+    monkeypatch.setattr(fm_mod, "select_model", lambda *a, **kw: (None, "default-static"))
+    fs.main()
+    assert seen["memo"] is expect

@@ -6332,6 +6332,27 @@ itself. Batch operators should still gate dispatch on free space. Tests:
 `test_fmax_search.py::test_cleanup_variants_removes_orfs_scratch`,
 `test_cleanup_variants_ignores_foreign_orfs_path`.
 
+### P0-2f — `--verify` never closed its own loop (2026-11-25 optimisation A/B)
+Four defects found while A/B-testing the Fmax search on 34 nangate45 + 16 sky130hd
+designs (203, `docs/r2g_optimization_20261125.md`):
+1. **Verify crashed after the full flow.** `record_verify_triple` writes the shipped,
+   git-tracked `knowledge.sqlite`; knowledge_db's guard refuses that unless
+   `R2G_KNOWLEDGE_DB` is set, and the exception threw away the flow just paid for (and
+   `fmax_search.json` never learned the outcome). Now a warning.
+2. **Verify triples were never learned.** They are tagged `eval_arm='fmax_verify'`, and
+   `_fetch_learnable_rows`' P0-14 eval-arm filter drops every such row, so the
+   documented self-correction was inert — nangate45 stayed on the static
+   `max(0.10 ns, 1 %)` place→finish floor (20 % of a 0.5 ns period) with the pooled model
+   stuck at n=10 < 20. Opt-in fix `R2G_LEARN_FMAX_VERIFY=1` pools them into the PLATFORM
+   slack model only (held-out: +11.8 % verified Fmax, 12/12 still closed).
+3. **`fmax_search` ignored `R2G_HEURISTICS_PATH`**, unlike suggest_config / ingest /
+   fix_log_manager / engineer_loop, so a privately re-learned model never reached it.
+4. **An incomplete verify flow could read as closed** (Codex review): `closed` ignored
+   run_orfs' exit status. Now required.
+Tests: `test_fmax_search.py::test_verify_winner_survives_readonly_knowledge_store`,
+`::test_verify_winner_incomplete_flow_is_not_closed`, `::test_heuristics_path_env_is_honored`,
+`test_learn_heuristics.py::test_fmax_verify_triples_feed_platform_pool_only_when_opted_in`.
+
 ### P0-2e — Netgen `top_pin_mismatch` had no repair at all (2026-10-01)
 `extract_lvs` reports Netgen failures as status `mismatch` (class `top_pin_mismatch` when
 "Top level cell failed pin matching"), but `_lvs_plan` only acted on `fail`/`failed`, so

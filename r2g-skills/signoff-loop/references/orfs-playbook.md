@@ -372,6 +372,48 @@ re-searches such designs (clean, inconclusive, config.mk edited after the search
 once per design; old report kept as `fmax_search.pre_repair.json`) and re-queues
 them — follow it with `run`.
 
+### Lazy confirm grid and ECP-refined verification (2026-11-25)
+
+**Lazy confirm (default ON; `--eager-confirm` / `R2G_FMAX_LAZY_CONFIRM=0` restores the
+legacy grid).** After the root-find,
+the confirm grid probes `t*·{0.98, 1.00, 1.02}` and keeps the LOOSEST passing period
+(or the loosest point when none passes). Probing loosest-first and stopping at the
+first pass returns that identical edge for any deterministic probe, so the two
+tighter probes are pure cost whenever the loosest passes. Repeated periods are
+memoized within one search. Note the confirm edge was, and still is, only used by
+`--verify`; the report `winner` stays `t*` unless `--ecp-refine` replaces it.
+
+**ECP refine (`--ecp-refine`, needs `--verify`).** The deterioration model is a
+conservative prior: nangate45 has no learnable pooled model yet (n=10 < 20), so its
+place→finish erosion uses the static `max(0.10 ns, 1%)` floor — 20 % of a 0.5 ns
+period. The effective clock period `ECP = period − verified worst slack` (the
+figure of merit OpenROAD AutoTuner, ORFS-agent and AuDoPEDA report) says where the
+next full flow belongs: one extra full flow at `ECP·(1+margin)` (default margin
+0.02; skipped when the gain is < 1 %; a hold miss never triggers it). If that flow
+closes it becomes the `winner` (`source: ecp_refine_verified`, `fmax_verified`);
+otherwise the first verified period stays (`source: verify_confirm_edge`; with no
+closed flow at all the proxy stays and is labelled `proxy_unverified`). A flow that
+did not complete never counts as closed. The tighter period can expose a HOLD miss
+(seen once in the Codex run, vga3) — the fallback then keeps the confirm edge. A setup MISS at the confirm edge is
+loosened to the ECP target instead of the old "back off one notch" hint. Every
+full-flow try is kept in `fmax_search.json["verify"]["tries"]`. A/B evidence:
+`docs/r2g_optimization_20261125.md`.
+
+**Learning from the verify triples (`R2G_LEARN_FMAX_VERIFY=1`).** `record_verify_triple`
+tags its row `eval_arm='fmax_verify'`, and the learner's P0-14 filter drops every
+eval-arm row — so the "self-correction" above never reached `heuristics.json`. With the
+flag, `learn_heuristics.py` pools those triples (closed or not — both are real erosion
+measurements) into the PLATFORM slack model only, never into family/recipe learning.
+On a held-out split (17 train / 12 test nangate45 designs) the re-learned model
+(`d_pl_fin` p90 0.043 ns / 4.9 % instead of the static 0.10 ns) gave +11.8 % median
+verified Fmax with 12/12 verify flows still closed. `fmax_search.py` now honours
+`R2G_HEURISTICS_PATH` like the other readers, so a privately re-learned model is used.
+
+**Verify no longer dies on a refused knowledge write.** `record_verify_triple`
+writes into `knowledge.sqlite`; when that store is the shipped, git-tracked copy
+the guard refuses (set `R2G_KNOWLEDGE_DB`), and before 2026-11-25 the exception
+discarded the full flow that had just run. It is now a warning.
+
 ### Honest-label taxonomy
 
 The result (`reports/fmax_search.json`) labels its Fmax with how trustworthy it

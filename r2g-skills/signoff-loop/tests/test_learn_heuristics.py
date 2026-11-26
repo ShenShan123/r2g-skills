@@ -400,3 +400,32 @@ def test_platform_pool_excludes_long_period_runs(tmp_knowledge_dir):
     assert sd["n"] == 3
     assert sd["d_pl_fin"]["ns_p90"] < 0.05          # long-period 5-12 ns erosion excluded
     conn.close()
+
+
+def test_fmax_verify_triples_feed_platform_pool_only_when_opted_in(tmp_knowledge_dir, monkeypatch):
+    """2026-11-25: fmax_search --verify triples (eval_arm='fmax_verify') were excluded by the
+    P0-14 eval-arm filter, so --verify never corrected the deterioration model. With
+    R2G_LEARN_FMAX_VERIFY=1 they pool into the PLATFORM slack model (closed or not), and
+    still never into family learning; default off keeps heuristics byte-identical."""
+    import knowledge_db, learn_heuristics
+    conn = knowledge_db.connect(tmp_knowledge_dir / "runs.sqlite")
+    knowledge_db.ensure_schema(conn, schema_path=tmp_knowledge_dir / "schema.sql")
+    for i in range(22):
+        fin = 0.05 if i % 2 else -0.01
+        conn.execute(
+            "INSERT INTO runs (run_id, project_path, design_name, design_family, platform, "
+            "ingested_at, clock_period_ns, floorplan_setup_ws, place_setup_ws, finish_setup_ws, "
+            "wns_ns, drc_status, lvs_status, eval_arm) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (f"v{i}", f"verify:d{i}", f"d{i}", "vfam", "nangate45", "2026-11-25T00:00:00Z",
+             0.8, 0.3, 0.06, fin, fin, "clean" if fin >= 0 else "fail", "clean", "fmax_verify"))
+    conn.commit(); conn.close()
+    out = tmp_knowledge_dir / "heuristics.json"
+    monkeypatch.delenv("R2G_LEARN_FMAX_VERIFY", raising=False)
+    off = learn_heuristics.learn(tmp_knowledge_dir / "runs.sqlite", out)
+    assert "nangate45" not in (off.get("platforms") or {})
+    monkeypatch.setenv("R2G_LEARN_FMAX_VERIFY", "1")
+    on = learn_heuristics.learn(tmp_knowledge_dir / "runs.sqlite", out)
+    sd = on["platforms"]["nangate45"]["slack_deterioration"]
+    assert sd["n"] == 22
+    assert abs(sd["d_pl_fin"]["ns_p90"] - 0.07) < 1e-9     # 0.06 - (-0.01)
+    assert "vfam" not in on["families"]                      # never family learning

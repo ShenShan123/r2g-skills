@@ -148,6 +148,15 @@ def _add_paths() -> None:
             sys.path.insert(0, str(sub))
 
 
+def _heuristics_kw() -> dict:
+    """Read heuristics from R2G_HEURISTICS_PATH when set, like suggest_config,
+    ingest_run, fix_log_manager and engineer_loop do (2026-11-25: the search read only
+    the shipped heuristics.json, so a model re-learned into a private store -- what
+    knowledge_db's write guard tells users to set up -- never reached the search)."""
+    hp = os.environ.get("R2G_HEURISTICS_PATH")
+    return {"heuristics_path": hp} if hp else {}
+
+
 def seed_period(project: Path, platform: str, family: str | None = None) -> float:
     """Tier-0 seed: aggressive end of the family's learned closing_period if
     available, else the design's nominal SDC period."""
@@ -158,7 +167,7 @@ def seed_period(project: Path, platform: str, family: str | None = None) -> floa
             cfg_name = _config_value(project / "constraints" / "config.mk", "DESIGN_NAME") or ""
             fams = knowledge_db.load_families()
             family = knowledge_db.infer_family(cfg_name, fams)
-        cp = knowledge_db.get_closing_period(family, platform)
+        cp = knowledge_db.get_closing_period(family, platform, **_heuristics_kw())
         if cp and cp.get("min"):
             return float(cp["min"])
     except Exception:
@@ -246,17 +255,34 @@ def search(project: Path, platform: str, *, seed_period: float,
     return res
 
 
-def confirm_grid(t_star: float, place_probe, model=None, *, width=0.02, n=3) -> float:
+def confirm_grid(t_star: float, place_probe, model=None, *, width=0.02, n=3,
+                 lazy: bool = False, stats: dict | None = None) -> float:
     """Probe a small grid around t_star; return the looser (larger-period)
-    passing edge. Sequential here; the CLI runs these in parallel."""
-    lo = t_star * (1 - width)
-    hi = t_star * (1 + width)
-    periods = [lo + (hi - lo) * i / (n - 1) for i in range(n)] if n > 1 else [t_star]
+    passing edge (or the loosest grid point when none passes). Sequential.
+
+    lazy=True (R2G_FMAX_LAZY_CONFIRM=1 / --lazy-confirm, 2026-11-25): the answer is
+    max(passing periods), so probing the grid loosest-FIRST and stopping at the first
+    pass returns the identical edge for any deterministic probe while skipping the
+    tighter points — typically 1 place probe instead of n. `stats` (optional dict)
+    receives {'probes': k, 'periods': [...]} for the report."""
+    periods = fm.confirm_order(t_star, width=width, n=n)
+    hi = periods[-1]
+    probed: list[float] = []
     best_pass = None
-    for p in sorted(periods):  # ascending = looser last
-        r = place_probe(p)
-        if r.get("status") == "pass":
-            best_pass = p if best_pass is None else max(best_pass, p)
+    if lazy:
+        for p in sorted(periods, reverse=True):      # loosest first
+            probed.append(p)
+            if place_probe(p).get("status") == "pass":
+                best_pass = p
+                break
+    else:
+        for p in sorted(periods):  # ascending = looser last
+            probed.append(p)
+            r = place_probe(p)
+            if r.get("status") == "pass":
+                best_pass = p if best_pass is None else max(best_pass, p)
+    if stats is not None:
+        stats.update(probes=len(probed), periods=probed, lazy=lazy)
     return best_pass if best_pass is not None else hi
 
 
@@ -293,26 +319,55 @@ def cleanup_variants(variants: list[Path]) -> None:
 
 
 def _make_real_probes(base: Path, platform: str, *, timeout_s: int,
-                      place_fast: bool, created: list[Path]):
+                      place_fast: bool, created: list[Path],
+                      memo: bool = False, stats: dict | None = None):
     """Build floorplan_probe/place_probe that clone a variant per period, run
-    ORFS, read the proxy, and record the variant dir for cleanup."""
+    ORFS, read the proxy, and record the variant dir for cleanup.
+
+    memo=True (with --lazy-confirm): a place probe at a period already probed in
+    this search returns the recorded result instead of re-running ORFS (a
+    deterministic flow gives the same answer). `stats` accumulates ORFS probe
+    runs and their wall time for the report."""
+    import time as _time
+    cache: dict[str, dict] = {}
+    if stats is not None:
+        stats.setdefault("orfs_runs", 0)
+        stats.setdefault("orfs_wall_s", 0.0)
+        stats.setdefault("memo_hits", 0)
+
+    def _account(t0):
+        if stats is not None:
+            stats["orfs_runs"] += 1
+            stats["orfs_wall_s"] = round(stats["orfs_wall_s"] + _time.monotonic() - t0, 1)
+
     def floorplan_probe(period):
         v = clone_variant(base, period)
         created.append(v)
+        t0 = _time.monotonic()
         out = run_probe(v, platform, "synth floorplan",
                         timeout_s=timeout_s, place_fast=place_fast)
+        _account(t0)
         return out.get("floorplan_ws")
 
     def place_probe(period):
+        key = f"{float(period):.6g}"
+        if memo and key in cache:
+            if stats is not None:
+                stats["memo_hits"] += 1
+            return dict(cache[key])
         v = clone_variant(base, period)
         if v not in created:
             created.append(v)
+        t0 = _time.monotonic()
         out = run_probe(v, platform, "synth floorplan place",
                         timeout_s=timeout_s, place_fast=place_fast)
+        _account(t0)
         status = fm.classify_probe(out.get("place_ws"), out.get("place_tns"),
                                    period, completed=out.get("completed", True))
-        return {"place_ws": out.get("place_ws"), "place_tns": out.get("place_tns"),
-                "status": status}
+        res = {"place_ws": out.get("place_ws"), "place_tns": out.get("place_tns"),
+               "status": status}
+        cache[key] = dict(res)
+        return res
     return floorplan_probe, place_probe
 
 
@@ -364,9 +419,12 @@ def record_period_relax(project: Path, old: float, new: float, source: str) -> b
 def verify_winner(base: Path, platform: str, period: float) -> dict:
     """Run ONE full signoff flow at the winning period, read finish timing, and
     record the verified triple. Returns {'closed', 'finish_ws', ...}."""
+    import time as _time
     v = clone_variant(base, period)
+    _t0 = _time.monotonic()
     out = run_probe(v, platform, "synth floorplan place cts route finish",
                     timeout_s=int(os.environ.get("FMAX_VERIFY_TIMEOUT", "14400")))
+    wall_s = round(_time.monotonic() - _t0, 1)
     rd = _latest_run_dir(v)
     # Read finish timing from 6_report.json. Gate on setup AND hold (spec §6).
     import json
@@ -378,7 +436,9 @@ def verify_winner(base: Path, platform: str, period: float) -> dict:
             fin_ws = d.get("finish__timing__setup__ws")
             fin_tns = d.get("finish__timing__setup__tns")
             hold_ws = d.get("finish__timing__hold__ws")
-    closed = (fin_ws is not None and fin_ws >= 0
+    # A flow that did not complete (non-zero run_orfs exit, timeout) never counts as
+    # closed even if a 6_report.json with passing numbers exists (Codex review 2026-11-25).
+    closed = (out.get("completed", True) and fin_ws is not None and fin_ws >= 0
               and fin_tns is not None and fin_tns >= 0
               and (hold_ws is None or hold_ws >= 0))
     _add_paths()
@@ -386,16 +446,103 @@ def verify_winner(base: Path, platform: str, period: float) -> dict:
     fam = knowledge_db.infer_family(
         _config_value(base / "constraints" / "config.mk", "DESIGN_NAME") or "",
         knowledge_db.load_families())
-    conn = knowledge_db.connect()
-    knowledge_db.ensure_schema(conn)
-    record_verify_triple(conn, design_name=base.name, design_family=fam,
-                         platform=platform, period=period,
-                         floorplan_ws=out.get("floorplan_ws"),
-                         place_ws=out.get("place_ws"), finish_ws=fin_ws)
-    conn.close()
+    # The verified triple is a by-product for the deterioration model; failing to
+    # store it (e.g. knowledge_db's guard refusing writes to the shipped, git-tracked
+    # store when R2G_KNOWLEDGE_DB is unset) must not throw away the full flow that was
+    # just paid for -- before 2026-11-25 it crashed here and the verify outcome was lost.
+    import sqlite3 as _sqlite3
+    try:
+        conn = knowledge_db.connect()
+        try:
+            knowledge_db.ensure_schema(conn)
+            record_verify_triple(conn, design_name=base.name, design_family=fam,
+                                 platform=platform, period=period,
+                                 floorplan_ws=out.get("floorplan_ws"),
+                                 place_ws=out.get("place_ws"), finish_ws=fin_ws)
+        finally:
+            conn.close()
+    except _sqlite3.Error as exc:
+        print(f"WARNING: verify triple not recorded in the knowledge store ({exc})",
+              file=sys.stderr)
     print(f"Verify @ {period:.4g} ns: finish_ws={fin_ws} -> "
           f"{'CONFIRMED' if closed else 'MISS (back off one notch)'}")
-    return {"closed": closed, "finish_ws": fin_ws, "variant": v}
+    return {"closed": closed, "finish_ws": fin_ws, "finish_tns": fin_tns,
+            "hold_ws": hold_ws, "period": period, "variant": v, "wall_s": wall_s}
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    v = os.environ.get(name, "").strip().lower()
+    if not v:
+        return default
+    return v in ("1", "true", "yes", "on")
+
+
+def _update_report(project: Path, mutate) -> None:
+    """Apply `mutate(dict)` to reports/fmax_search.json in place (atomic tmp -> rename)."""
+    import json
+    rep = Path(project) / "reports" / "fmax_search.json"
+    try:
+        data = json.loads(rep.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    mutate(data)
+    tmp = rep.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    os.replace(tmp, rep)
+
+
+def _verify_entry(v: dict) -> dict:
+    return {k: v.get(k) for k in ("period", "closed", "finish_ws", "finish_tns", "hold_ws",
+                                  "wall_s")}
+
+
+def _record_verify(base: Path, platform: str, v: dict, *, ecp_refine: bool,
+                   margin: float, verify_fn=None) -> dict:
+    """Write the --verify outcome into the report and, with ecp_refine, run ONE more
+    full flow at the ECP-corrected period (fmax_model.ecp_refine_period).
+
+    With ecp_refine the winner becomes the tightest period a FULL flow verified as
+    closed (label 'verified'); the proxy winner is kept as `proxy_winner`. Without it
+    only an additive `verify` block is written (winner unchanged = legacy behavior)."""
+    verify_fn = verify_fn or verify_winner
+    tries = [_verify_entry(v)]
+    best = v["period"] if v.get("closed") else None
+    best_src = "verify_confirm_edge" if best is not None else None
+    if ecp_refine:
+        t2 = fm.ecp_refine_period(v["period"], v.get("finish_ws"), closed=bool(v.get("closed")),
+                                  hold_ws=v.get("hold_ws"), margin=margin)
+        if t2 is not None:
+            print(f"ECP refine: {v['period']:.4g} -> {t2:.4g} "
+                  f"(slack {v.get('finish_ws')}, margin {margin:g})")
+            v2 = verify_fn(base, platform, t2)
+            tries.append(_verify_entry(v2))
+            if v2.get("closed") and (best is None or t2 < best):
+                best, best_src = t2, "ecp_refine_verified"
+    tu = _platform_time_unit_ns(platform)
+
+    def _mut(d):
+        d["verify"] = {"tries": tries, "ecp_refine": ecp_refine, "ecp_margin": margin,
+                       "verified_period": best}
+        if ecp_refine and best is not None and d.get("status") == "ok":
+            d.setdefault("proxy_winner", d.get("winner"))
+            d["winner"] = {"period": best, "period_ns": best * tu,
+                           "fmax_verified": 1.0 / (best * tu),
+                           "fmax_predicted_signoff": 1.0 / (best * tu),
+                           "fmax_place_proxy": (d.get("proxy_winner") or {}).get("fmax_place_proxy"),
+                           # which full flow won: the ECP try, or the confirm-edge verify
+                           # when the tighter ECP try missed (Codex review 2026-11-25)
+                           "source": best_src}
+            how = "ECP-refined" if best_src == "ecp_refine_verified" else "confirm edge; ECP try missed"
+            d["labels"] = [f"Fmax_verified: {1.0 / (best * tu):.4g} (period {best * tu:.4g} ns) "
+                           f"[full-flow verified, {how}]"] + list(d.get("labels") or [])
+        elif ecp_refine and best is None and isinstance(d.get("winner"), dict):
+            # No full flow closed: the winner stays the UNVERIFIED proxy, said explicitly.
+            d["winner"]["source"] = "proxy_unverified"
+            d["labels"] = list(d.get("labels") or []) + [
+                f"verify: no full flow closed ({len(tries)} tries) - winner is the "
+                "unverified proxy"]
+    _update_report(base, _mut)
+    return {"tries": tries, "verified_period": best}
 
 
 def main() -> int:
@@ -411,6 +558,24 @@ def main() -> int:
     p.add_argument("--probe-timeout", type=int, default=3600)
     p.add_argument("--record-relax", nargs=3, metavar=("OLD", "NEW", "SOURCE"),
                    help="append a post-search period loosening to fmax_search.json and exit")
+    # Default ON since the 2026-11-25 A/B (28/28 nangate45 designs: identical t* and
+    # edge, -29 % search ORFS wall); --eager-confirm / R2G_FMAX_LAZY_CONFIRM=0 restores
+    # the legacy 3-probe grid.
+    p.add_argument("--lazy-confirm", dest="lazy_confirm", action="store_true",
+                   default=_env_flag("R2G_FMAX_LAZY_CONFIRM", default=True),
+                   help="Probe the confirm grid loosest-first and stop at the first pass "
+                        "(same edge, fewer ORFS probes); also memoizes repeated periods. "
+                        "Default on; env R2G_FMAX_LAZY_CONFIRM=0 to disable.")
+    p.add_argument("--eager-confirm", dest="lazy_confirm", action="store_false",
+                   help="Legacy confirm grid: probe all three points.")
+    p.add_argument("--ecp-refine", action="store_true",
+                   default=_env_flag("R2G_FMAX_ECP_REFINE"),
+                   help="With --verify: run ONE more full flow at the effective clock "
+                        "period (period - verified slack, +margin) and make the tightest "
+                        "VERIFIED-closed period the winner. Env: R2G_FMAX_ECP_REFINE=1.")
+    p.add_argument("--ecp-margin", type=float,
+                   default=float(os.environ.get("R2G_FMAX_ECP_MARGIN", "0.02")),
+                   help="Fractional guard band added to the ECP target (default 0.02).")
     args = p.parse_args()
 
     if args.record_relax:
@@ -428,14 +593,16 @@ def main() -> int:
         _config_value(base / "constraints" / "config.mk", "DESIGN_NAME") or "",
         knowledge_db.load_families())
     model, provenance = fm.select_model(
-        knowledge_db.get_family_heuristics(fam, args.platform),
-        platform_entry=knowledge_db.get_platform_heuristics(args.platform))
+        knowledge_db.get_family_heuristics(fam, args.platform, **_heuristics_kw()),
+        platform_entry=knowledge_db.get_platform_heuristics(args.platform, **_heuristics_kw()))
     seed = seed_period(base, args.platform, family=fam)
 
     created: list[Path] = []
+    probe_stats: dict = {}
     fp_probe, pl_probe = _make_real_probes(
         base, args.platform, timeout_s=args.probe_timeout,
-        place_fast=args.place_fast, created=created)
+        place_fast=args.place_fast, created=created,
+        memo=args.lazy_confirm, stats=probe_stats)
     try:
         res = search(base, args.platform, seed_period=seed,
                      floorplan_probe=fp_probe, place_probe=pl_probe,
@@ -456,12 +623,24 @@ def main() -> int:
         raise
 
     if res["status"] == "ok":
-        edge = confirm_grid(res["t_star"], pl_probe, model=model)
+        search_stats = dict(probe_stats)          # probes spent before the confirm grid
+        cstats: dict = {}
+        edge = confirm_grid(res["t_star"], pl_probe, model=model,
+                            lazy=args.lazy_confirm, stats=cstats)
         print(f"Fmax (predicted-signoff) ~ {1.0 / edge:.4g}  (period {edge:.4g} ns)  [{provenance}]")
+        # Additive telemetry: what the confirm grid decided and what the search cost.
+        _update_report(base, lambda d: d.update(
+            confirm={"edge": edge, **cstats},
+            probe_stats={**probe_stats,
+                         "search_orfs_runs": search_stats.get("orfs_runs", 0),
+                         "search_orfs_wall_s": search_stats.get("orfs_wall_s", 0.0)}))
         if args.verify:
             print("Running full signoff verify at the winning period…")
-            verify_winner(base, args.platform, edge)  # Task 12
+            v = verify_winner(base, args.platform, edge)  # Task 12
+            _record_verify(base, args.platform, v, ecp_refine=args.ecp_refine,
+                           margin=args.ecp_margin)
     else:
+        _update_report(base, lambda d: d.update(probe_stats=dict(probe_stats)))
         print(f"Fmax search status: {res['status']} — see reports/fmax_search.json")
 
     if not args.keep_variants:

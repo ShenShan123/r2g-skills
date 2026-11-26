@@ -165,6 +165,30 @@ Knobs: `--probe-timeout`, `--place-fast` (whole-search conservative lower bound
 for hang-prone designs), `--keep-variants`. The search is sequential; cross-design
 parallelism is achieved by running multiple invocations concurrently.
 
+Two accelerators from the 2026-11-25 A/B (`docs/r2g_optimization_20261125.md`):
+- Lazy confirm grid — **default ON** (opt out: `--eager-confirm` or
+  `R2G_FMAX_LAZY_CONFIRM=0`, inherited by `engineer_loop fmax-drain`): probes the ±2%
+  confirm grid loosest-first and stops at the first pass — the same edge as the eager
+  grid for a deterministic flow (28/28 nangate45 designs identical), 32 confirm probes
+  instead of 84 and −29 % search ORFS wall.
+- `--ecp-refine` (opt-in) (with `--verify`; env `R2G_FMAX_ECP_REFINE=1`, `--ecp-margin` default
+  0.02) runs ONE more full flow at the effective clock period `(period − verified
+  slack)·(1+margin)` — tighter when the verify closed with slack, looser when it missed
+  setup — and makes the tightest full-flow-VERIFIED period the `winner`
+  (`winner.source` = `ecp_refine_verified`, or `verify_confirm_edge` when the tighter
+  try missed, or `proxy_unverified` when no full flow closed; the proxy is kept as
+  `proxy_winner`). Measured: +20.6 % median verified Fmax on nangate45 (n=28), +7.6 %
+  on sky130hd (n=15), for one extra full flow per design.
+- `R2G_LEARN_FMAX_VERIFY=1` (opt-in, `learn_heuristics.py`) pools the `--verify`
+  triples into the platform deterioration model (they were silently excluded as
+  eval-arm rows, so `--verify` never self-corrected the model). Held-out nangate45:
+  +11.8 % median verified Fmax with no extra flow. The search reads heuristics from
+  `R2G_HEURISTICS_PATH` when set.
+`reports/fmax_search.json` now also records `confirm` (edge, probes), `probe_stats`
+(the search's own place/floorplan probes: ORFS runs + wall — full verify flows are
+NOT included, each `verify.tries[]` entry carries its own `wall_s`) and, with
+`--verify`, a `verify` block (every full-flow try).
+
 ### 6. Run Signoff Checks (DRC, LVS, RCX)
 
 After a successful backend run, run signoff checks in order:

@@ -91,6 +91,41 @@ def select_model(entry: dict | None,
     return None, f"default-static(family n={n}<{n_min_family})"
 
 
+def confirm_order(t_star: float, *, width: float = 0.02, n: int = 3) -> list[float]:
+    """The confirm-grid periods around t_star, ascending (loosest last)."""
+    lo, hi = t_star * (1 - width), t_star * (1 + width)
+    return [lo + (hi - lo) * i / (n - 1) for i in range(n)] if n > 1 else [t_star]
+
+
+def ecp_refine_period(period: float, finish_ws: float | None, *, closed: bool,
+                      hold_ws: float | None = None, margin: float = 0.02,
+                      min_gain: float = 0.01, floor: float = 0.05) -> float | None:
+    """Effective-clock-period (ECP) correction after one verified full flow.
+
+    ECP = period - worst setup slack is the standard post-route figure of merit
+    (OpenROAD AutoTuner / ORFS-agent / AuDoPEDA report it as the achieved clock).
+    One full flow at `period` therefore says where the next full flow should go:
+      * closed with positive slack  -> tighten to ECP*(1+margin), but only when that
+        is at least `min_gain` faster (else the extra flow buys nothing);
+      * missed on SETUP             -> loosen to ECP*(1+margin) (>= period*(1+min_gain)),
+        replacing the 'back off one notch' hint with a measured target.
+    A hold miss (hold_ws < 0) is not a clock-period problem -> None. Returns the next
+    period to verify, or None when no refinement is warranted. Pure; no I/O."""
+    if finish_ws is None or period is None:
+        return None
+    if hold_ws is not None and hold_ws < 0:
+        return None
+    ecp = float(period) - float(finish_ws)
+    target = max(ecp * (1.0 + margin), floor)
+    if closed:
+        if finish_ws <= 0 or target > float(period) * (1.0 - min_gain):
+            return None
+        return target
+    if finish_ws >= 0:          # not closed but setup is fine (e.g. TNS rounding) -> leave it
+        return None
+    return max(target, float(period) * (1.0 + min_gain))
+
+
 def estimate_fmax_fp(t_ref: float, floorplan_ws: float) -> float:
     """Floorplan-stage Fmax point estimate = period - worst slack."""
     return t_ref - floorplan_ws
