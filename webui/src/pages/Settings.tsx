@@ -55,7 +55,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 md:px-8 md:py-10">
+    <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-10">
       <h1 className="text-2xl font-bold">{t("设置")}</h1>
 
       <section className="card mt-5 space-y-5 p-5 md:p-6">

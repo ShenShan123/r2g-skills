@@ -37,7 +37,7 @@ export default function Jobs() {
 
   const filtered = status !== "" || q.trim() !== "";
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-10">
+    <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">{t("任务")}</h1>
         <Link to="/" className="btn-primary"><Plus size={16} /> {t("新建任务")}</Link>

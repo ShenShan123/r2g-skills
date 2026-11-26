@@ -91,7 +91,7 @@ export default function Home() {
 
   const info = rtl?.info;
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-10">
+    <div className="mx-auto max-w-5xl px-4 py-6 md:px-8 md:py-10">
       <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{t("把 RTL 变成签核过的数据集")}</h1>
       <p className="mt-2 text-[15px] text-muted">
         {t("综合、布局布线、DRC/LVS 签核、失败自动修复、生成数据集并逐项校验，全部自动完成。")}

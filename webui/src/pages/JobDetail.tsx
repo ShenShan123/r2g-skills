@@ -81,7 +81,7 @@ export default function JobDetail() {
   }
 
   if (missing) return (
-    <div className="mx-auto max-w-4xl px-4 py-10 md:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-10 md:px-8">
       <Link to="/jobs" className="inline-flex items-center gap-1 text-sm text-muted hover:text-fg"><ArrowLeft size={15} /> {t("全部任务")}</Link>
       <div className="card mt-4 p-8 text-center">
         <div className="text-lg font-semibold">{t("任务不存在或已被删除")}</div>
@@ -108,7 +108,7 @@ export default function JobDetail() {
   const deleting = job.deletion === "pending";
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 md:px-8 md:py-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 md:px-8 md:py-8">
       <Link to="/jobs" className="inline-flex items-center gap-1 text-sm text-muted hover:text-fg"><ArrowLeft size={15} /> {t("全部任务")}</Link>
       {loadError && <div role="status" className="mt-2 rounded-lg bg-warn/10 px-3 py-2 text-xs text-warn">
         {t("暂时连不上 r2g 服务，显示的是最后一次读到的状态；正在重试（服务重启后任务会自动接着跑）。")}</div>}

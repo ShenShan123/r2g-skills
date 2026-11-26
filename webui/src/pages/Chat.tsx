@@ -217,7 +217,7 @@ export default function Chat() {
           <button className="btn-ghost px-3 py-1.5" onClick={fresh}><Plus size={15} /> {t("新对话")}</button>
         </div>
         <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
+          <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8">
             {openErr && <div role="alert" className="mb-4 rounded-xl bg-bad/10 px-3 py-2 text-sm text-bad">{openErr}</div>}
             {msgs.length === 0 && !openErr && (
               <div className="mt-8 text-center md:mt-14">
@@ -262,13 +262,13 @@ export default function Chat() {
         </div>
         <div className="border-t border-line bg-panel/60 px-3 py-3 md:px-6 md:py-4">
           {(att || attErr || attBusy) && (
-            <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-sm">
+            <div className="mx-auto mb-2 flex max-w-4xl items-center gap-2 text-sm">
               {attBusy && <span className="flex items-center gap-1.5 text-muted"><Loader2 size={13} className="animate-spin" /> {t("上传中…")}</span>}
               {att && <span className="chip bg-accent/10 text-accent"><Paperclip size={12} />{att.name}{t(" · {n} 个文件", { n: att.files })}
                 <button type="button" className="ml-1" aria-label={t("移除附件")} onClick={() => { dropAttachment(); setAtt(null); }}><X size={12} /></button></span>}
               {attErr && <span className="text-bad">{attErr}</span>}
             </div>)}
-          <form className="mx-auto flex max-w-3xl items-end gap-2" onSubmit={(e) => { e.preventDefault(); send(input); }}>
+          <form className="mx-auto flex max-w-4xl items-end gap-2" onSubmit={(e) => { e.preventDefault(); send(input); }}>
             <label className="btn-ghost h-[44px] shrink-0 cursor-pointer px-3" title={t("上传一个 RTL 文件夹，agent 可以直接拿它提交任务")}>
               <Paperclip size={17} /><span className="hidden sm:inline">{t("上传 RTL")}</span>
               <input ref={dirInput} type="file" multiple className="hidden"
